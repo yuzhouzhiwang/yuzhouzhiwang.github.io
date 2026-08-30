@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算法详解 · Sensor Algorithms | 时光</title>
+<style>
+  :root {
+    --bg: #120b07;
+    --bg-soft: #1f150c;
+    --card: rgba(255,255,255,0.045);
+    --card-border: rgba(255,255,255,0.09);
+    --text: #e8ecf8;
+    --text-dim: #9aa5c3;
+    --accent: #fb923c;
+    --accent-2: #f472b6;
+    --accent-3: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --radius: 16px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(244,114,182,.13), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(251,146,60,.12), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(18,11,7,.74);
+    border-bottom: 1px solid var(--card-border);
+  }
+  nav .inner {
+    max-width: 1120px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  }
+  nav .brand { font-weight: 700; font-size: 17px; letter-spacing: .5px; }
+  nav .brand span { color: var(--accent); }
+  nav a { color: var(--text-dim); text-decoration: none; font-size: 14px; transition: color .2s; }
+  nav a:hover { color: var(--accent); }
+  nav a.on { color: var(--accent); }
+  nav .spacer { flex: 1; }
+  nav .sep { color: rgba(255,255,255,.15); font-size: 12px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 56px 0 8px; }
+
+  .section-title { font-size: 25px; font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+  .section-title .idx {
+    font-family: var(--mono); font-size: 14px; color: var(--accent);
+    border: 1px solid rgba(251,146,60,.4); padding: 3px 10px; border-radius: 999px;
+  }
+  .section-sub { color: var(--text-dim); margin-bottom: 26px; font-size: 15px; }
+
+  header.hero { padding: 80px 24px 48px; text-align: center; }
+  .hero h1 {
+    font-size: clamp(34px, 6vw, 54px); font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(120deg, #fff 20%, var(--accent) 50%, var(--accent-2) 80%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub { margin: 16px auto 26px; max-width: 640px; color: var(--text-dim); font-size: 17px; }
+  .hero-tip {
+    display: inline-block; font-size: 13px; color: var(--text-dim);
+    border: 1px dashed rgba(251,146,60,.4); border-radius: 12px; padding: 10px 18px;
+    background: rgba(251,146,60,.06);
+  }
+  .hero-tip b { color: var(--accent); }
+
+  /* ---------- 算法卡片 ---------- */
+  .grid { display: grid; gap: 18px; }
+  .g-3 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .g-4 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 22px; transition: transform .25s, border-color .25s;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(251,146,60,.45); }
+  .card .icon { font-size: 24px; margin-bottom: 10px; }
+  .card h3 { font-size: 16px; margin-bottom: 8px; }
+  .card p, .card li { color: var(--text-dim); font-size: 13.5px; }
+  .card ul { list-style: none; margin-top: 6px; }
+  .card li { padding: 3px 0 3px 18px; position: relative; }
+  .card li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
+  .card code {
+    display: block; font-family: var(--mono); font-size: 12px; color: var(--accent-3);
+    background: rgba(0,0,0,.3); border-radius: 8px; padding: 8px 12px; margin-top: 10px;
+    overflow-x: auto; white-space: nowrap;
+  }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .pro { color: var(--accent-3); }
+  .con { color: var(--danger); }
+
+  /* ---------- 实验面板 ---------- */
+  .exp {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 24px; margin-bottom: 24px;
+  }
+  .exp-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; flex-wrap: wrap; }
+  .exp-num {
+    width: 34px; height: 34px; flex: none; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    background: rgba(251,146,60,.12); border: 2px solid var(--accent); color: var(--accent);
+    font-family: var(--mono); font-weight: 800;
+  }
+  .exp-head h3 { font-size: 18px; }
+  .exp-head .tag { font-size: 11px; color: var(--accent-2); border: 1px solid rgba(244,114,182,.4); border-radius: 999px; padding: 2px 10px; }
+  .exp-desc { color: var(--text-dim); font-size: 13.5px; margin-bottom: 16px; margin-left: 48px; }
+
+  .chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; flex-wrap: wrap; }
+  .legend-item { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+  .legend-item .swl { width: 14px; height: 4px; border-radius: 2px; }
+  .legend-item.off { opacity: .3; }
+  canvas { width: 100%; display: block; border-radius: 10px; background: rgba(0,0,0,.25); }
+  canvas.chart300 { height: 300px; }
+  canvas.chart260 { height: 260px; }
+
+  .exp-stats { display: flex; gap: 14px; margin-top: 12px; flex-wrap: wrap; font-size: 13px; color: var(--text-dim); }
+  .exp-stats b { color: var(--text); font-family: var(--mono); }
+  .exp-stats .good b { color: var(--accent-3); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+  button {
+    font-family: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+    background: rgba(255,255,255,.06); border: 1px solid var(--card-border);
+    padding: 8px 16px; border-radius: 10px; transition: all .2s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.active { background: var(--accent); border-color: var(--accent); color: #1a0f05; font-weight: 700; }
+  input[type=range] { accent-color: var(--accent); width: 130px; }
+  .ctl { font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ctl b { color: var(--text); font-family: var(--mono); }
+  .ctl .cap { width: 44px; text-align: right; }
+
+  footer { margin-top: 64px; border-top: 1px solid var(--card-border); padding: 26px 0 40px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; }
+  .reveal.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+<div style="background:rgba(7,11,20,.82);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.09);"><div style="max-width:1120px;margin:0 auto;padding:9px 24px;display:flex;align-items:center;gap:12px;font-size:13px;"><a href="/" style="color:#e8ecf8;text-decoration:none;font-weight:700;letter-spacing:.5px;">⏳ 时光</a><span style="color:rgba(255,255,255,.22);">/</span><a href="/sensor/index.html" style="color:var(--accent);text-decoration:none;font-weight:600;">传感器知识中心</a><span style="flex:1;"></span><a href="/" style="color:#9aa5c3;text-decoration:none;">← 返回主页</a></div></div>
+
+<nav>
+  <div class="inner">
+    <div class="brand">🧮 算法详解<span>·Algorithms</span></div>
+    <a href="index.html">🏠 首页</a><span class="sep">|</span>
+    <a href="pressure-sensor.html">压力</a><span class="sep">|</span>
+    <a href="flow-sensor.html">流量</a><span class="sep">|</span>
+    <a href="fluid-sensor.html">流体</a><span class="sep">|</span>
+    <a href="learning-path.html">学习路径</a><span class="sep">|</span>
+    <a href="algorithm.html" class="on">算法</a><span class="sep">|</span>
+    <a href="standards.html">标准</a>
+    <div class="spacer"></div>
+    <a href="#lib">算法库</a>
+    <a href="#exp1">滤波实验</a>
+    <a href="#exp2">标定实验</a>
+    <a href="#exp3">温补实验</a>
+    <a href="#exp4">融合实验</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <h1>传感器算法详解</h1>
+  <p class="sub">从滤波去噪到标定补偿、从温漂修正到多传感器融合 —— 每个算法都配有可交互的在线实验。</p>
+  <div class="hero-tip">💡 四个实验全部<b>纯前端实时计算</b>，可直接体验算法效果，无需安装任何软件。</div>
+</header>
+
+<main class="wrap">
+
+  <section id="lib">
+    <h2 class="section-title"><span class="idx">01</span>算法库总览</h2>
+    <p class="section-sub">滤波 → 标定 → 补偿 → 融合，传感器数据的四道工序。</p>
+    <div class="grid g-4">
+      <div class="card reveal">
+        <div class="icon">✂️</div><h3>限幅滤波</h3>
+        <p>相邻采样差超过阈值 Δ 视为野值，用上次值替代。专治脉冲毛刺。</p>
+        <ul><li class="pro">✔ 实现极简、开销极小</li><li class="con">✘ 对连续噪声无效</li></ul>
+        <code>if |xₙ-xₙ₋₁|&gt;Δ → xₙ=xₙ₋₁</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">〰️</div><h3>滑动平均</h3>
+        <p>最近 N 点取均值，平滑随机噪声。窗口越大越平滑，但延迟越大。</p>
+        <ul><li class="pro">✔ 平滑高斯噪声效果好</li><li class="con">✘ 对脉冲不敏感、有相位延迟</li></ul>
+        <code>yₙ = (xₙ₋ₙ₊₁+…+xₙ)/N</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🎯</div><h3>中值滤波</h3>
+        <p>窗口内排序取中值，对脉冲噪声极有效，且保留信号阶跃。</p>
+        <ul><li class="pro">✔ 抗毛刺、保阶跃</li><li class="con">✘ 需排序，窗口不宜过大</li></ul>
+        <code>yₙ = median(xₙ₋ₙ₊₁…xₙ)</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🧠</div><h3>卡尔曼滤波</h3>
+        <p>融合系统模型与测量做最优估计，增益自适应，噪声与响应兼顾。</p>
+        <ul><li class="pro">✔ 最优估计、适合动态系统</li><li class="con">✘ 需调 Q/R 参数</li></ul>
+        <code>K=P/(P+R); x+=K(z-x); P*=(1-K)</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">📈</div><h3>最小二乘标定</h3>
+        <p>标准源多点采样，拟合"物理量-输出"直线/多项式，消除偏置与非线性。</p>
+        <ul><li class="pro">✔ 通用、精度高</li><li class="con">✘ 依赖标准源的精度</li></ul>
+        <code>P = a·V + b（OLS）</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🌡️</div><h3>温度补偿</h3>
+        <p>内置测温，用多项式/查表修正零点与灵敏度温漂。</p>
+        <ul><li class="pro">✔ 显著提升全温区精度</li><li class="con">✘ 需温漂模型与标定数据</li></ul>
+        <code>P_c = (P-β·ΔT)/(1+α·ΔT)</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🔀</div><h3>加权融合</h3>
+        <p>按方差倒数加权合并多源数据，噪声小的传感器权重高。</p>
+        <ul><li class="pro">✔ 方差最优、实现简单</li><li class="con">✘ 需估计各源噪声</li></ul>
+        <code>ŷ = Σwᵢzᵢ, wᵢ∝1/σᵢ²</code>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🚨</div><h3>故障诊断</h3>
+        <p>超限报警、漂移检测、断线识别，保障系统可靠运行。</p>
+        <ul><li class="pro">✔ 提升系统可用性</li><li class="con">✘ 阈值需经验整定</li></ul>
+        <code>|y-μ| &gt; k·σ → 故障</code>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实验 1：滤波对比 -->
+  <section id="exp1">
+    <h2 class="section-title"><span class="idx">02</span>实验一：滤波算法实时对比</h2>
+    <p class="section-sub">真实值 = 双正弦叠加；叠加高斯噪声与随机脉冲毛刺。对比限幅、滑动平均、中值、卡尔曼四种算法。</p>
+    <div class="exp reveal">
+      <div class="exp-head">
+        <div class="exp-num">1</div>
+        <h3>去噪效果对比</h3>
+        <span class="tag">滤波</span>
+      </div>
+      <div class="exp-desc">点击图例开关曲线；拖动滑块调节噪声幅度。</div>
+      <div class="chart-legend">
+        <span class="legend-item" data-key="raw"><span class="swl" style="background:#64748b"></span>原始</span>
+        <span class="legend-item" data-key="limit"><span class="swl" style="background:#f87171"></span>限幅 Δ=6</span>
+        <span class="legend-item" data-key="ma"><span class="swl" style="background:#22d3ee"></span>滑动平均 N=10</span>
+        <span class="legend-item" data-key="med"><span class="swl" style="background:#fbbf24"></span>中值 N=7</span>
+        <span class="legend-item" data-key="kal"><span class="swl" style="background:#34d399"></span>卡尔曼</span>
+      </div>
+      <canvas id="fchart" class="chart300"></canvas>
+      <div class="controls">
+        <button id="noise-more">加大噪声</button>
+        <button id="noise-less">减小噪声</button>
+        <span class="ctl">噪声 <input id="noiseRange" type="range" min="0" max="100" value="35"><b id="noiseVal">35%</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实验 2：最小二乘标定 -->
+  <section id="exp2">
+    <h2 class="section-title"><span class="idx">03</span>实验二：最小二乘标定拟合</h2>
+    <p class="section-sub">用标准压力源施加 0~100 kPa 的 20 个压力点，记录传感器输出电压（含噪声），用最小二乘拟合 "P = a·V + b" 标定直线。</p>
+    <div class="exp reveal">
+      <div class="exp-head">
+        <div class="exp-num">2</div>
+        <h3>标定曲线拟合</h3>
+        <span class="tag">标定</span>
+      </div>
+      <div class="exp-desc">橙色散点 = 采样数据；红色虚线 = 真实关系；绿色实线 = 拟合直线。观察拟合公式与残差。</div>
+      <canvas id="calChart" class="chart260"></canvas>
+      <div class="exp-stats">
+        <span>拟合公式 <b id="calFormula">P = a·V + b</b></span>
+        <span>拟合优度 R² <b id="calR2">--</b></span>
+        <span class="good">标定后最大误差 <b id="calErr">--</b></span>
+      </div>
+      <div class="controls">
+        <button id="cal-resample">重新采样</button>
+        <span class="ctl">测量噪声 <input id="calNoise" type="range" min="1" max="40" value="12"><b id="calNoiseVal">12</b></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实验 3：温度补偿 -->
+  <section id="exp3">
+    <h2 class="section-title"><span class="idx">04</span>实验三：温度漂移与补偿</h2>
+    <p class="section-sub">假设真实压力恒为 50 kPa，传感器存在灵敏度温漂 α 与零点温漂 β。对比补偿前后的全温区误差。</p>
+    <div class="exp reveal">
+      <div class="exp-head">
+        <div class="exp-num">3</div>
+        <h3>温漂补偿效果</h3>
+        <span class="tag">补偿</span>
+      </div>
+      <div class="exp-desc">横轴为温度（-40 ~ 85℃），纵轴为测量误差（kPa）。拖动滑块改变温漂系数。</div>
+      <div class="chart-legend">
+        <span><span class="swl" style="background:#f87171"></span>未补偿误差</span>
+        <span><span class="swl" style="background:#34d399"></span>补偿后误差</span>
+      </div>
+      <canvas id="tcChart" class="chart260"></canvas>
+      <div class="exp-stats">
+        <span>未补偿最大误差 <b id="tcRaw" style="color:var(--danger)">--</b></span>
+        <span class="good">补偿后最大误差 <b id="tcComp">--</b></span>
+      </div>
+      <div class="controls">
+        <span class="ctl">灵敏度温漂 α <input id="tcAlpha" type="range" min="0" max="80" value="25"><b id="tcAlphaVal">0.0025</b>/℃</span>
+        <span class="ctl">零点温漂 β <input id="tcBeta" type="range" min="0" max="100" value="40"><b id="tcBetaVal">0.04</b> kPa/℃</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 实验 4：加权融合 -->
+  <section id="exp4">
+    <h2 class="section-title"><span class="idx">05</span>实验四：多传感器加权融合</h2>
+    <p class="section-sub">两个传感器测量同一物理量（真实值 50），噪声水平不同。按"方差倒数加权"融合，权重自动偏向更准的传感器。</p>
+    <div class="exp reveal">
+      <div class="exp-head">
+        <div class="exp-num">4</div>
+        <h3>融合估计</h3>
+        <span class="tag">融合</span>
+      </div>
+      <div class="exp-desc">蓝 = 传感器 A（噪声大），橙 = 传感器 B（噪声小），绿 = 加权融合结果。切换噪声场景观察权重变化。</div>
+      <div class="chart-legend">
+        <span><span class="swl" style="background:#60a5fa"></span>传感器 A</span>
+        <span><span class="swl" style="background:#fb923c"></span>传感器 B</span>
+        <span><span class="swl" style="background:#34d399"></span>融合输出</span>
+        <span>权重 A <b id="fusWA" style="color:var(--text)">--</b> / B <b id="fusWB" style="color:var(--text)">--</b></span>
+      </div>
+      <canvas id="fusChart" class="chart260"></canvas>
+      <div class="exp-stats">
+        <span>A 标准差 <b id="fusSdA">--</b></span>
+        <span>B 标准差 <b id="fusSdB">--</b></span>
+        <span class="good">融合标准差 <b id="fusSdF">--</b></span>
+      </div>
+      <div class="controls">
+        <button id="fus-eq" class="active">噪声均衡</button>
+        <button id="fus-aworse">A 噪声更大</button>
+        <button id="fus-bworse">B 噪声更大</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>🧮 传感器算法详解 — <a href="index.html" style="color:var(--accent)">返回首页</a> · <a href="learning-path.html" style="color:var(--accent-2)">学习路径</a></p>
+  <p style="margin-top:6px;">所有实验均为前端实时计算，仅用于算法原理演示</p>
+  <p style="margin-top:10px;color:var(--text-dim);">© 2026 <a href="/" style="color:var(--accent);text-decoration:none;">时光个人主页</a> · 内容仅作学习交流</p>
+</footer>
+
+<script>
+/* ============ 工具：画布缩放 ============ */
+function setupCanvas(cv) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = cv.getBoundingClientRect();
+  cv.width = rect.width * dpr;
+  cv.height = rect.height * dpr;
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+function grid(ctx, w, h, padT, padB) {
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.font = '10px monospace';
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + (h - padT - padB) - ((h - padT - padB) * g / 4);
+    ctx.beginPath(); ctx.moveTo(8, y); ctx.lineTo(w - 8, y); ctx.stroke();
+    ctx.fillText((g * 25).toFixed(0), 4, y - 3);
+  }
+}
+
+/* ================= 实验一：滤波对比 ================= */
+const fcv = document.getElementById('fchart');
+const fctx = setupCanvas(fcv);
+window.addEventListener('resize', () => { setupCanvas(fcv); drawExp1(); });
+
+let noise = 0.35, t = 0;
+const s1 = { raw: [], limit: [], ma: [], med: [], kal: [] };
+const shown = { raw: true, limit: true, ma: true, med: true, kal: true };
+let maWin = [], medWin = [];
+const MA_N = 10, MED_N = 7;
+let kx = 0, kP = 1;
+const KQ = 0.0015, KR = 0.06;
+const MAXP = 160;
+
+function trueSig(i) { return 5 + Math.sin(i / 14) * 2.2 + Math.sin(i / 5.3) * 0.9; }
+function gauss() { let g = 0; for (let i = 0; i < 6; i++) g += Math.random(); return (g - 3) / 1.5; }
+
+function genExp1() {
+  t++;
+  const s = trueSig(t);
+  let z = s + gauss() * noise * 2;
+  if (Math.random() < 0.02) z = s + (Math.random() - 0.5) * 18;
+
+  // 限幅
+  const prev = s1.raw.length ? s1.raw[s1.raw.length - 1] : s;
+  let lim = Math.abs(z - prev) > 6 ? prev : z;
+
+  maWin.push(z); if (maWin.length > MA_N) maWin.shift();
+  const ma = maWin.reduce((a, b) => a + b, 0) / maWin.length;
+
+  medWin.push(z); if (medWin.length > MED_N) medWin.shift();
+  const med = [...medWin].sort((a, b) => a - b)[Math.floor(medWin.length / 2)];
+
+  kP += KQ; const K = kP / (kP + KR);
+  kx += K * (z - kx); kP *= (1 - K);
+
+  s1.raw.push(z); s1.limit.push(lim); s1.ma.push(ma); s1.med.push(med); s1.kal.push(kx);
+  Object.values(s1).forEach(a => { if (a.length > MAXP) a.shift(); });
+}
+const COL1 = { raw: '#64748b', limit: '#f87171', ma: '#22d3ee', med: '#fbbf24', kal: '#34d399' };
+
+function drawExp1() {
+  const w = fcv.clientWidth, h = fcv.clientHeight;
+  grid(fctx, w, h, 12, 22);
+  const iw = w - 16, ih = h - 34;
+  const n = s1.raw.length;
+  if (n < 2) return;
+  const step = iw / (MAXP - 1);
+  const yOf = v => 12 + ih - (ih * (v / 12));
+  Object.keys(s1).forEach(key => {
+    if (!shown[key]) return;
+    fctx.beginPath();
+    s1[key].forEach((v, i) => {
+      const x = 8 + i * step, y = yOf(v);
+      i === 0 ? fctx.moveTo(x, y) : fctx.lineTo(x, y);
+    });
+    fctx.strokeStyle = COL1[key];
+    fctx.lineWidth = key === 'raw' ? 1.2 : 2;
+    fctx.shadowColor = COL1[key] + '66';
+    fctx.shadowBlur = key === 'raw' ? 0 : 6;
+    fctx.stroke();
+    fctx.shadowBlur = 0;
+  });
+}
+document.querySelectorAll('#exp1 .legend-item').forEach(el => {
+  el.addEventListener('click', () => {
+    const key = el.dataset.key;
+    shown[key] = !shown[key];
+    el.classList.toggle('off', !shown[key]);
+  });
+});
+const noiseRange = document.getElementById('noiseRange');
+document.getElementById('noiseVal').textContent = noiseRange.value + '%';
+noiseRange.addEventListener('input', () => {
+  noise = noiseRange.value / 100;
+  document.getElementById('noiseVal').textContent = noiseRange.value + '%';
+});
+document.getElementById('noise-more').addEventListener('click', () => {
+  noiseRange.value = Math.min(100, +noiseRange.value + 20);
+  noiseRange.dispatchEvent(new Event('input'));
+});
+document.getElementById('noise-less').addEventListener('click', () => {
+  noiseRange.value = Math.max(0, +noiseRange.value - 20);
+  noiseRange.dispatchEvent(new Event('input'));
+});
+
+/* ================= 实验二：最小二乘标定 ================= */
+const ccv = document.getElementById('calChart');
+const cctx = setupCanvas(ccv);
+window.addEventListener('resize', () => { setupCanvas(ccv); drawExp2(); });
+
+let calPts = [];
+const CAL_A = 0.02, CAL_B = 0.5;   // 真实 V = a*P + b
+let calNoise = 12;
+
+function sampleCal() {
+  calPts = [];
+  for (let i = 0; i < 20; i++) {
+    const P = (i / 19) * 100;                    // 0~100 kPa
+    const V = CAL_A * P + CAL_B + (Math.random() - 0.5) * calNoise / 100;
+    calPts.push({ P, V });
+  }
+  // OLS: P = a*V + b
+  const n = calPts.length;
+  let mx = 0, my = 0;
+  calPts.forEach(p => { mx += p.V; my += p.P; });
+  mx /= n; my /= n;
+  let num = 0, den = 0;
+  calPts.forEach(p => { num += (p.V - mx) * (p.P - my); den += (p.V - mx) ** 2; });
+  const a = num / den, b = my - a * mx;
+  // R²
+  let ssTot = 0, ssRes = 0;
+  calPts.forEach(p => { ssTot += (p.P - my) ** 2; ssRes += (p.P - (a * p.V + b)) ** 2; });
+  const r2 = 1 - ssRes / ssTot;
+  let maxErr = 0;
+  calPts.forEach(p => { maxErr = Math.max(maxErr, Math.abs(p.P - (a * p.V + b))); });
+  calPts.fit = { a, b, r2, maxErr };
+}
+sampleCal();
+
+function drawExp2() {
+  const w = ccv.clientWidth, h = ccv.clientHeight;
+  cctx.clearRect(0, 0, w, h);
+  const padL = 46, padR = 14, padT = 14, padB = 30;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  // 轴
+  cctx.strokeStyle = 'rgba(255,255,255,.3)';
+  cctx.lineWidth = 1;
+  cctx.beginPath(); cctx.moveTo(padL, padT); cctx.lineTo(padL, padT + ih); cctx.lineTo(padL + iw, padT + ih); cctx.stroke();
+  cctx.fillStyle = 'rgba(255,255,255,.5)';
+  cctx.font = '11px monospace';
+  cctx.fillText('P (kPa)', padL + 6, padT + 12);
+  cctx.fillText('V (V)', padL + iw - 34, padT + ih + 18);
+  const X = v => padL + (v - 0) / 0.05 * iw;       // V 范围 0~0.05? 实际 0.5~2.5
+  const X2 = v => padL + (v - 0.4) / 2.2 * iw;     // V 0.4~2.6
+  const Y = p => padT + ih - (p / 110) * ih;
+  // 刻度
+  for (let p = 0; p <= 100; p += 20) {
+    cctx.strokeStyle = 'rgba(255,255,255,.08)';
+    cctx.beginPath(); cctx.moveTo(padL, Y(p)); cctx.lineTo(padL + iw, Y(p)); cctx.stroke();
+    cctx.fillStyle = 'rgba(255,255,255,.4)';
+    cctx.fillText(p, padL - 34, Y(p) + 3);
+  }
+  // 真实关系（红虚线）
+  cctx.setLineDash([5, 5]);
+  cctx.strokeStyle = 'rgba(248,113,113,.8)';
+  cctx.lineWidth = 1.5;
+  cctx.beginPath();
+  [0, 100].forEach((p, i) => {
+    const v = CAL_A * p + CAL_B;
+    const x = X2(v), y = Y(p);
+    i === 0 ? cctx.moveTo(x, y) : cctx.lineTo(x, y);
+  });
+  cctx.stroke();
+  cctx.setLineDash([]);
+  // 采样点
+  calPts.forEach(pt => {
+    cctx.beginPath();
+    cctx.arc(X2(pt.V), Y(pt.P), 3.5, 0, Math.PI * 2);
+    cctx.fillStyle = 'rgba(251,146,60,.9)';
+    cctx.fill();
+  });
+  // 拟合直线（绿）
+  const f = calPts.fit;
+  cctx.strokeStyle = '#34d399';
+  cctx.lineWidth = 2.5;
+  cctx.shadowColor = 'rgba(52,211,153,.5)';
+  cctx.shadowBlur = 8;
+  cctx.beginPath();
+  [0, 100].forEach((p, i) => {
+    const v = (p - f.b) / f.a;
+    const x = X2(v), y = Y(p);
+    i === 0 ? cctx.moveTo(x, y) : cctx.lineTo(x, y);
+  });
+  cctx.stroke();
+  cctx.shadowBlur = 0;
+
+  document.getElementById('calFormula').textContent = `P = ${f.a.toFixed(4)}·V ${f.b >= 0 ? '+' : '−'} ${Math.abs(f.b).toFixed(2)}`;
+  document.getElementById('calR2').textContent = f.r2.toFixed(4);
+  document.getElementById('calErr').textContent = f.maxErr.toFixed(2) + ' kPa';
+}
+document.getElementById('cal-resample').addEventListener('click', () => { sampleCal(); drawExp2(); });
+const calNoiseEl = document.getElementById('calNoise');
+document.getElementById('calNoiseVal').textContent = calNoiseEl.value;
+calNoiseEl.addEventListener('input', () => {
+  calNoise = +calNoiseEl.value;
+  document.getElementById('calNoiseVal').textContent = calNoiseEl.value;
+  sampleCal(); drawExp2();
+});
+
+/* ================= 实验三：温度补偿 ================= */
+const tcv = document.getElementById('tcChart');
+const tctx = setupCanvas(tcv);
+window.addEventListener('resize', () => { setupCanvas(tcv); drawExp3(); });
+
+let tcAlpha = 0.0025, tcBeta = 0.04;
+function tcError(T, comp) {
+  const dT = T - 25;
+  const raw = 50 * (1 + tcAlpha * dT) + tcBeta * dT;  // 未补偿读数
+  if (!comp) return raw - 50;
+  const compVal = (raw - tcBeta * dT) / (1 + tcAlpha * dT);
+  return compVal - 50;
+}
+function drawExp3() {
+  const w = tcv.clientWidth, h = tcv.clientHeight;
+  tctx.clearRect(0, 0, w, h);
+  const padL = 40, padR = 12, padT = 12, padB = 26;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  const T0 = -40, T1 = 85;
+  const X = T => padL + (T - T0) / (T1 - T0) * iw;
+  // 误差范围：取未补偿最大
+  let maxE = 0;
+  for (let T = T0; T <= T1; T += 1) maxE = Math.max(maxE, Math.abs(tcError(T, false)));
+  maxE = Math.ceil(maxE * 1.15);
+  const Y = e => padT + ih / 2 - (e / maxE) * (ih / 2);
+  // 网格与零线
+  for (let g = -maxE; g <= maxE; g += Math.max(1, Math.round(maxE / 4))) {
+    const y = Y(g);
+    tctx.strokeStyle = g === 0 ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.07)';
+    tctx.beginPath(); tctx.moveTo(padL, y); tctx.lineTo(padL + iw, y); tctx.stroke();
+    tctx.fillStyle = 'rgba(255,255,255,.4)';
+    tctx.font = '10px monospace';
+    tctx.fillText(g, 4, y + 3);
+  }
+  // 温度轴刻度
+  tctx.fillStyle = 'rgba(255,255,255,.4)';
+  [-40, -20, 0, 25, 50, 85].forEach(T => {
+    tctx.fillText(T, X(T) - 8, padT + ih + 14);
+  });
+  function plot(comp, color) {
+    tctx.beginPath();
+    let first = true, maxAbs = 0;
+    for (let T = T0; T <= T1; T += 0.5) {
+      const e = tcError(T, comp);
+      maxAbs = Math.max(maxAbs, Math.abs(e));
+      const x = X(T), y = Y(e);
+      first ? tctx.moveTo(x, y) : tctx.lineTo(x, y);
+      first = false;
+    }
+    tctx.strokeStyle = color;
+    tctx.lineWidth = 2.2;
+    tctx.shadowColor = color + '66';
+    tctx.shadowBlur = 6;
+    tctx.stroke();
+    tctx.shadowBlur = 0;
+    return maxAbs;
+  }
+  const rRaw = plot(false, '#f87171');
+  const rComp = plot(true, '#34d399');
+  document.getElementById('tcRaw').textContent = rRaw.toFixed(2) + ' kPa';
+  document.getElementById('tcComp').textContent = rComp.toFixed(2) + ' kPa';
+}
+const tcAlphaEl = document.getElementById('tcAlpha');
+const tcBetaEl = document.getElementById('tcBeta');
+document.getElementById('tcAlphaVal').textContent = (tcAlphaEl.value / 10000).toFixed(4);
+document.getElementById('tcBetaVal').textContent = (tcBetaEl.value / 1000).toFixed(2);
+tcAlphaEl.addEventListener('input', () => {
+  tcAlpha = tcAlphaEl.value / 10000;
+  document.getElementById('tcAlphaVal').textContent = tcAlpha.toFixed(4);
+  drawExp3();
+});
+tcBetaEl.addEventListener('input', () => {
+  tcBeta = tcBetaEl.value / 1000;
+  document.getElementById('tcBetaVal').textContent = tcBeta.toFixed(2);
+  drawExp3();
+});
+
+/* ================= 实验四：加权融合 ================= */
+const fuv = document.getElementById('fusChart');
+const fuctx = setupCanvas(fuv);
+window.addEventListener('resize', () => { setupCanvas(fuv); drawExp4(); });
+
+let fusMode = 'eq';
+const fusSd = { eq: [2.2, 0.7], aworse: [4.0, 0.7], bworse: [2.2, 1.8] };
+const fusA = [], fusB = [], fusF = [];
+const FUS_N = 120;
+let fusT = 0;
+
+function genExp4() {
+  fusT++;
+  const [sa, sb] = fusSd[fusMode];
+  const wa = (1 / sa ** 2) / (1 / sa ** 2 + 1 / sb ** 2);
+  const wb = 1 - wa;
+  const a = 50 + gauss() * sa;
+  const b = 50 + gauss() * sb;
+  const f = wa * a + wb * b;
+  fusA.push(a); fusB.push(b); fusF.push(f);
+  if (fusA.length > FUS_N) { fusA.shift(); fusB.shift(); fusF.shift(); }
+}
+function drawExp4() {
+  const w = fuv.clientWidth, h = fuv.clientHeight;
+  fuctx.clearRect(0, 0, w, h);
+  const padL = 8, padR = 8, padT = 12, padB = 22;
+  const iw = w - padL - padR, ih = h - padT - padB;
+  fuctx.strokeStyle = 'rgba(255,255,255,.07)';
+  fuctx.fillStyle = 'rgba(255,255,255,.35)';
+  fuctx.font = '10px monospace';
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + ih - (ih * g / 4);
+    fuctx.beginPath(); fuctx.moveTo(padL, y); fuctx.lineTo(w - padR, y); fuctx.stroke();
+    fuctx.fillText((40 + g * 7).toFixed(0), 4, y - 3);
+  }
+  // 真值线
+  fuctx.setLineDash([4, 4]);
+  fuctx.strokeStyle = 'rgba(255,255,255,.3)';
+  const yT = padT + ih - (ih * (50 - 40) / 28);
+  fuctx.beginPath(); fuctx.moveTo(padL, yT); fuctx.lineTo(w - padR, yT); fuctx.stroke();
+  fuctx.setLineDash([]);
+  fuctx.fillText('真值 50', w - 52, yT - 4);
+
+  const step = iw / (FUS_N - 1);
+  const yOf = v => padT + ih - (ih * (v - 40) / 28);
+  const draw = (arr, color, lw) => {
+    if (arr.length < 2) return;
+    fuctx.beginPath();
+    arr.forEach((v, i) => {
+      const x = padL + i * step, y = yOf(v);
+      i === 0 ? fuctx.moveTo(x, y) : fuctx.lineTo(x, y);
+    });
+    fuctx.strokeStyle = color;
+    fuctx.lineWidth = lw;
+    fuctx.shadowColor = color + '55';
+    fuctx.shadowBlur = 5;
+    fuctx.stroke();
+    fuctx.shadowBlur = 0;
+  };
+  draw(fusA, 'rgba(96,165,250,.55)', 1.4);
+  draw(fusB, 'rgba(251,146,60,.55)', 1.4);
+  draw(fusF, '#34d399', 2.4);
+
+  const [sa, sb] = fusSd[fusMode];
+  const wa = (1 / sa ** 2) / (1 / sa ** 2 + 1 / sb ** 2);
+  const sd = arr => Math.sqrt(arr.reduce((a, b) => a + (b - 50) ** 2, 0) / arr.length);
+  document.getElementById('fusWA').textContent = (wa * 100).toFixed(1) + '%';
+  document.getElementById('fusWB').textContent = ((1 - wa) * 100).toFixed(1) + '%';
+  document.getElementById('fusSdA').textContent = sd(fusA).toFixed(2);
+  document.getElementById('fusSdB').textContent = sd(fusB).toFixed(2);
+  document.getElementById('fusSdF').textContent = sd(fusF).toFixed(2);
+}
+const fusBtns = { 'fus-eq': 'eq', 'fus-aworse': 'aworse', 'fus-bworse': 'bworse' };
+Object.entries(fusBtns).forEach(([id, m]) => {
+  document.getElementById(id).addEventListener('click', () => {
+    fusMode = m;
+    document.querySelectorAll('#exp4 .controls button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  });
+});
+
+/* ============ 滚动显现 ============ */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('show'); io.unobserve(e.target); }
+}), { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ============ 启动 ============ */
+for (let i = 0; i < 50; i++) genExp1();
+for (let i = 0; i < FUS_N; i++) genExp4();
+drawExp1(); drawExp2(); drawExp3(); drawExp4();
+setInterval(() => { genExp1(); drawExp1(); genExp4(); drawExp4(); }, 100);
+</script>
+</body>
+</html>

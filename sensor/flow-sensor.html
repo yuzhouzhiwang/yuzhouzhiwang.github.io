@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>流量传感器 · Flow Sensor | 时光</title>
+<style>
+  :root {
+    --bg: #081018;
+    --bg-soft: #0e1a26;
+    --card: rgba(255,255,255,0.045);
+    --card-border: rgba(255,255,255,0.09);
+    --text: #e8ecf8;
+    --text-dim: #9aa5c3;
+    --accent: #22d3ee;
+    --accent-2: #a78bfa;
+    --accent-3: #34d399;
+    --warn: #fbbf24;
+    --danger: #f87171;
+    --radius: 16px;
+    --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, rgba(167,139,250,.16), transparent 60%),
+      radial-gradient(900px 500px at -10% 20%, rgba(34,211,238,.13), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    min-height: 100vh;
+  }
+
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    backdrop-filter: blur(14px);
+    background: rgba(8,16,24,.72);
+    border-bottom: 1px solid var(--card-border);
+  }
+  nav .inner {
+    max-width: 1120px; margin: 0 auto; padding: 14px 24px;
+    display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  }
+  nav .brand { font-weight: 700; font-size: 17px; letter-spacing: .5px; }
+  nav .brand span { color: var(--accent); }
+  nav a { color: var(--text-dim); text-decoration: none; font-size: 14px; transition: color .2s; }
+  nav a:hover { color: var(--accent); }
+  nav a.on { color: var(--accent); }
+  nav .spacer { flex: 1; }
+  nav .sep { color: rgba(255,255,255,.15); font-size: 12px; }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 64px 0 8px; }
+
+  .section-title { font-size: 26px; font-weight: 800; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; }
+  .section-title .idx {
+    font-family: var(--mono); font-size: 14px; color: var(--accent);
+    border: 1px solid rgba(34,211,238,.4); padding: 3px 10px; border-radius: 999px;
+  }
+  .section-sub { color: var(--text-dim); margin-bottom: 30px; font-size: 15px; }
+
+  header.hero { padding: 84px 24px 56px; text-align: center; position: relative; overflow: hidden; }
+  .hero h1 {
+    font-size: clamp(34px, 6vw, 56px); font-weight: 900; letter-spacing: 1px;
+    background: linear-gradient(120deg, #fff 20%, var(--accent) 50%, var(--accent-2) 80%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .sub { margin: 18px auto 30px; max-width: 660px; color: var(--text-dim); font-size: 17px; }
+  .chips { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .chip { font-size: 13px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--card-border); background: var(--card); color: var(--text-dim); }
+  .chip b { color: var(--accent); font-weight: 600; }
+
+  .grid { display: grid; gap: 18px; }
+  .g-2 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  .g-3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 24px; transition: transform .25s, border-color .25s;
+    backdrop-filter: blur(6px);
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(34,211,238,.45); }
+  .card .icon { font-size: 26px; margin-bottom: 12px; }
+  .card h3 { font-size: 17px; margin-bottom: 10px; }
+  .card p, .card li { color: var(--text-dim); font-size: 14px; }
+  .card ul { list-style: none; }
+  .card li { padding: 4px 0 4px 18px; position: relative; }
+  .card li::before { content: "▸"; position: absolute; left: 0; color: var(--accent); }
+  .tag {
+    display: inline-block; font-size: 11px; padding: 2px 9px; border-radius: 999px;
+    background: rgba(34,211,238,.14); color: var(--accent); margin: 2px 4px 2px 0;
+    border: 1px solid rgba(34,211,238,.25);
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--card-border); }
+  th { color: var(--accent); font-weight: 600; white-space: nowrap; }
+  td { color: var(--text-dim); }
+  td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+  tr:hover td { background: rgba(34,211,238,.05); }
+
+  /* ---------- 演示区 ---------- */
+  .demo { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 22px; align-items: stretch; margin-bottom: 40px; }
+  .demo-panel { background: var(--card); border: 1px solid var(--card-border); border-radius: var(--radius); padding: 22px; }
+
+  .pipe-wrap { text-align: center; }
+  .pipe-box { position: relative; display: inline-block; }
+  .flow-value { font-family: var(--mono); font-size: 42px; font-weight: 700; color: var(--accent); margin-top: 6px; }
+  .flow-unit { color: var(--text-dim); font-size: 14px; margin-left: 4px; }
+  .flow-sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; }
+  .tot-row { display: flex; justify-content: center; gap: 18px; margin-top: 10px; flex-wrap: wrap; font-size: 13px; color: var(--text-dim); }
+  .tot-row b { color: var(--text); font-family: var(--mono); font-size: 16px; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; justify-content: center; }
+  button {
+    font-family: inherit; font-size: 13px; color: var(--text); cursor: pointer;
+    background: rgba(255,255,255,.06); border: 1px solid var(--card-border);
+    padding: 8px 16px; border-radius: 10px; transition: all .2s;
+  }
+  button:hover { border-color: var(--accent); color: var(--accent); }
+  button.active { background: var(--accent); border-color: var(--accent); color: #04121f; font-weight: 700; }
+
+  .chart-legend { display: flex; gap: 16px; font-size: 12px; color: var(--text-dim); margin-bottom: 8px; flex-wrap: wrap; }
+  .chart-legend span b { color: var(--text); font-family: var(--mono); }
+  canvas#chart { width: 100%; height: 300px; display: block; border-radius: 10px; background: rgba(0,0,0,.25); }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 18px; }
+  .stat { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 14px; text-align: center; }
+  .stat .v { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--text); }
+  .stat .k { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+  footer { margin-top: 72px; border-top: 1px solid var(--card-border); padding: 26px 0 40px; text-align: center; color: var(--text-dim); font-size: 13px; }
+  .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; }
+  .reveal.show { opacity: 1; transform: none; }
+
+  @media (max-width: 860px) {
+    .demo { grid-template-columns: 1fr; }
+    .stats { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div style="background:rgba(7,11,20,.82);backdrop-filter:blur(12px);border-bottom:1px solid rgba(255,255,255,.09);"><div style="max-width:1120px;margin:0 auto;padding:9px 24px;display:flex;align-items:center;gap:12px;font-size:13px;"><a href="/" style="color:#e8ecf8;text-decoration:none;font-weight:700;letter-spacing:.5px;">⏳ 时光</a><span style="color:rgba(255,255,255,.22);">/</span><a href="/sensor/index.html" style="color:var(--accent);text-decoration:none;font-weight:600;">传感器知识中心</a><span style="flex:1;"></span><a href="/" style="color:#9aa5c3;text-decoration:none;">← 返回主页</a></div></div>
+
+<nav>
+  <div class="inner">
+    <div class="brand">🌊 流量传感器<span>·Flow</span></div>
+    <a href="index.html">🏠 首页</a><span class="sep">|</span>
+    <a href="pressure-sensor.html">压力</a><span class="sep">|</span>
+    <a href="flow-sensor.html" class="on">流量</a><span class="sep">|</span>
+    <a href="fluid-sensor.html">流体</a><span class="sep">|</span>
+    <a href="learning-path.html">学习路径</a><span class="sep">|</span>
+    <a href="algorithm.html">算法</a><span class="sep">|</span>
+    <a href="standards.html">标准</a>
+    <div class="spacer"></div>
+    <a href="#intro">简介</a>
+    <a href="#principle">原理</a>
+    <a href="#params">参数</a>
+    <a href="#app">应用</a>
+    <a href="#demo">演示</a>
+  </div>
+</nav>
+
+<header class="hero">
+  <h1>流量传感器</h1>
+  <p class="sub">用于测量管道中流体（液体 / 气体 / 蒸汽）的流速与累积流量，是能源计量、工业过程控制与水务管理中最关键的一类仪表。</p>
+  <div class="chips">
+    <span class="chip">量程比 <b>10:1 ~ 100:1</b></span>
+    <span class="chip">精度 <b>±0.1% ~ ±2%</b></span>
+    <span class="chip">介质 <b>液体 / 气体 / 蒸汽</b></span>
+    <span class="chip">输出 <b>脉冲 / 4-20mA / RS485</b></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section id="intro">
+    <h2 class="section-title"><span class="idx">01</span>什么是流量传感器</h2>
+    <p class="section-sub">Flow Meter / Flow Sensor —— 实时测量单位时间内通过截面的流体体积或质量。</p>
+    <div class="grid g-3">
+      <div class="card reveal"><div class="icon">📊</div><h3>体积流量</h3><p>单位时间内通过的流体体积（m³/h、L/min），受温度、压力与介质密度影响。</p></div>
+      <div class="card reveal"><div class="icon">⚖️</div><h3>质量流量</h3><p>单位时间通过的流体质量（kg/h），与温度压力无关，贸易计量首选。</p></div>
+      <div class="card reveal"><div class="icon">🧮</div><h3>累积流量</h3><p>对瞬时流量积分得到总量，用于水表、气表、加油机等计费场景。</p></div>
+    </div>
+  </section>
+
+  <section id="principle">
+    <h2 class="section-title"><span class="idx">02</span>工作原理</h2>
+    <p class="section-sub">主流流量测量技术一览。</p>
+    <div class="grid g-3">
+      <div class="card reveal">
+        <div class="icon">🌀</div><h3>涡轮式 <span class="tag">脉冲计数</span></h3>
+        <p>流体推动叶轮旋转，转速与流速成正比，磁电探头输出脉冲。精度高、量程宽，适合清洁低粘度液体。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🧲</div><h3>电磁式 <span class="tag">无压损</span></h3>
+        <p>法拉第电磁感应：导电流体切割磁场产生电动势，正比于流速。适合污水、浆料、腐蚀性介质。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">📡</div><h3>超声波式 <span class="tag">非接触</span></h3>
+        <p>时差法测顺逆流声波传播时间差，或利用多普勒频移。可夹装在外管壁，适合大管径与腐蚀介质。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🌪️</div><h3>涡街式 <span class="tag">气体/蒸汽</span></h3>
+        <p>卡门涡街：钝体后旋涡脱落频率与流速成正比。无可动部件，适合气体与饱和蒸汽测量。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🔥</div><h3>热式 <span class="tag">质量流量</span></h3>
+        <p>加热元件的散热速率与质量流量相关，直接输出质量流量。适合低流量气体与微流量测量。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🧱</div><h3>差压式 <span class="tag">最传统</span></h3>
+        <p>孔板 / 文丘里管产生压差，流量与压差平方根成正比。技术成熟、成本低，应用最广。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🛰️</div><h3>科氏力式 <span class="tag">精度之王</span></h3>
+        <p>流体流经振动测量管产生科氏力引起相位差，直接测量质量流量，精度达 ±0.1%，用于贸易结算。</p>
+      </div>
+      <div class="card reveal">
+        <div class="icon">🛞</div><h3>转子式</h3>
+        <p>浮子/转子随流量升降，平衡位置指示流量。结构简单直观，适合小流量与实验室计量。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="params">
+    <h2 class="section-title"><span class="idx">03</span>关键技术参数</h2>
+    <p class="section-sub">流量计选型要点。</p>
+    <div class="card reveal" style="overflow-x:auto;padding:8px 8px;">
+      <table>
+        <tr><th>参数</th><th>说明</th><th>典型值</th></tr>
+        <tr><td>量程比 Turndown</td><td>最大 / 最小可测流量之比</td><td>10:1 ~ 100:1</td></tr>
+        <tr><td>精度 Accuracy</td><td>测量值与真值的偏差</td><td>±0.1% ~ ±2% FS</td></tr>
+        <tr><td>可测介质</td><td>导电性、清洁度、含气量等限制</td><td>电导率 &gt; 5 µS/cm（电磁式）</td></tr>
+        <tr><td>管径范围</td><td>适用的管道通径</td><td>DN2 ~ DN3000</td></tr>
+        <tr><td>温度 / 压力</td><td>介质工况限制</td><td>-40~200℃ / ≤ 25 MPa</td></tr>
+        <tr><td>压损</td><td>传感器对管路的阻力</td><td>电磁/超声 ≈ 0</td></tr>
+        <tr><td>输出信号</td><td>脉冲、4-20mA、HART、Modbus</td><td>频率 / 电流 / 总线</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section id="app">
+    <h2 class="section-title"><span class="idx">04</span>应用场景</h2>
+    <p class="section-sub">从家用燃气表到跨海管道。</p>
+    <div class="grid g-3">
+      <div class="card reveal"><div class="icon">🚰</div><h3>水务管理</h3><p>自来水厂、管网分区计量、智慧水务大表与小表。</p></div>
+      <div class="card reveal"><div class="icon">⛽</div><h3>石油化工</h3><p>原油输送、化工原料配比、贸易交接计量。</p></div>
+      <div class="card reveal"><div class="icon">🔥</div><h3>能源计量</h3><p>天然气、蒸汽、热力结算，碳排放核算。</p></div>
+      <div class="card reveal"><div class="icon">🏢</div><h3>暖通空调</h3><p>冷热水流量、风机盘管计量、楼宇能耗管理。</p></div>
+      <div class="card reveal"><div class="icon">🥤</div><h3>食品饮料</h3><p>灌装线、巴氏杀菌、CIP 清洗流量控制。</p></div>
+      <div class="card reveal"><div class="icon">🏥</div><h3>医疗器械</h3><p>输液泵、呼吸机气体流量、血泵监测。</p></div>
+    </div>
+  </section>
+
+  <section id="demo">
+    <h2 class="section-title"><span class="idx">05</span>实时数据演示</h2>
+    <p class="section-sub">模拟一台 DN50 涡轮流量计：切换工况观察流速、叶轮转速与累积流量。</p>
+
+    <div class="demo">
+      <div class="demo-panel pipe-wrap">
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:6px;">瞬时流量</div>
+        <div class="pipe-box">
+          <svg id="pipe" viewBox="0 0 300 150" width="300" height="150" style="max-width:100%"></svg>
+        </div>
+        <div class="flow-value"><span id="flow">0.00</span><span class="flow-unit">m³/h</span></div>
+        <div class="flow-sub">叶轮转速 <span id="rpm" style="color:var(--accent-2);font-family:var(--mono)">0</span> r/min</div>
+        <div class="tot-row">
+          <span>本日累积 <b id="totDay">0.000</b> m³</span>
+          <span>本次累积 <b id="totRun">0.000</b> m³</span>
+        </div>
+        <div class="controls">
+          <button id="mode-off" class="active">关闭</button>
+          <button id="mode-low">低速</button>
+          <button id="mode-mid">中速</button>
+          <button id="mode-high">高速</button>
+          <button id="mode-pulse">脉动</button>
+        </div>
+      </div>
+
+      <div class="demo-panel chart-box">
+        <div class="chart-legend">
+          <span>瞬时流量 <b id="legend-cur" style="color:var(--accent)">--</b> m³/h</span>
+          <span>峰值 <b id="legend-max" style="color:var(--warn)">--</b></span>
+          <span>均值 <b id="legend-avg" style="color:var(--accent-2)">--</b></span>
+        </div>
+        <canvas id="chart"></canvas>
+        <div class="stats">
+          <div class="stat"><div class="v" id="stat-avg">--</div><div class="k">平均流量 (m³/h)</div></div>
+          <div class="stat"><div class="v" id="stat-max">--</div><div class="k">峰值流量 (m³/h)</div></div>
+          <div class="stat"><div class="v" id="stat-tot">--</div><div class="k">本次累积 (m³)</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p>🌊 流量传感器 · 技术科普页 — <a href="index.html" style="color:var(--accent)">返回传感器首页</a></p>
+  <p style="margin-top:6px;">数据为前端模拟演示，仅用于直观展示流量计特性</p>
+  <p style="margin-top:10px;color:var(--text-dim);">© 2026 <a href="/" style="color:var(--accent);text-decoration:none;">时光个人主页</a> · 内容仅作学习交流</p>
+</footer>
+
+<script>
+/* ============ 数据模型 ============ */
+const MAX_FLOW = 30;          // 满量程 30 m³/h
+let mode = 'off';
+let t = 0;
+let curFlow = 0;
+let rpm = 0;
+let totRun = 0, totDay = 0;
+let lastTick = performance.now();
+const MAX_POINTS = 120;
+const history = [];
+
+/* ============ 管道 + 叶轮 (SVG) ============ */
+const svg = document.getElementById('pipe');
+const NS = 'http://www.w3.org/2000/svg';
+const PIPE_Y = 95, PIPE_H = 46, PIPE_L = 20, PIPE_R = 280;
+let particles = [];
+let bladeAngle = 0;
+
+(function buildPipe() {
+  // 管壁
+  const rect = document.createElementNS(NS, 'rect');
+  rect.setAttribute('x', PIPE_L); rect.setAttribute('y', PIPE_Y - PIPE_H / 2);
+  rect.setAttribute('width', PIPE_R - PIPE_L); rect.setAttribute('height', PIPE_H);
+  rect.setAttribute('rx', PIPE_H / 2);
+  rect.setAttribute('fill', 'rgba(34,211,238,.05)');
+  rect.setAttribute('stroke', 'rgba(34,211,238,.55)');
+  rect.setAttribute('stroke-width', '3');
+  svg.appendChild(rect);
+  // 流向箭头
+  const arrow = document.createElementNS(NS, 'text');
+  arrow.setAttribute('x', PIPE_L + 22); arrow.setAttribute('y', PIPE_Y - 40);
+  arrow.setAttribute('font-size', '13'); arrow.setAttribute('fill', 'rgba(255,255,255,.5)');
+  arrow.textContent = '流向 →';
+  svg.appendChild(arrow);
+  // 涡轮罩
+  const tc = document.createElementNS(NS, 'circle');
+  tc.setAttribute('cx', 150); tc.setAttribute('cy', PIPE_Y);
+  tc.setAttribute('r', PIPE_H / 2 - 4);
+  tc.setAttribute('fill', 'rgba(0,0,0,.3)');
+  tc.setAttribute('stroke', 'rgba(255,255,255,.4)');
+  tc.setAttribute('stroke-width', '2');
+  svg.appendChild(tc);
+  // 8 片叶片（group 旋转）
+  const group = document.createElementNS(NS, 'g');
+  group.setAttribute('id', 'blades');
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const b = document.createElementNS(NS, 'line');
+    b.setAttribute('x1', 150); b.setAttribute('y1', PIPE_Y);
+    b.setAttribute('x2', 150 + Math.cos(a) * (PIPE_H / 2 - 8));
+    b.setAttribute('y2', PIPE_Y - Math.sin(a) * (PIPE_H / 2 - 8));
+    b.setAttribute('stroke', '#22d3ee');
+    b.setAttribute('stroke-width', '3.5');
+    b.setAttribute('stroke-linecap', 'round');
+    group.appendChild(b);
+  }
+  svg.appendChild(group);
+  // 粒子容器
+  for (let i = 0; i < 26; i++) {
+    const p = document.createElementNS(NS, 'circle');
+    p.setAttribute('r', '2.4');
+    p.setAttribute('fill', 'rgba(34,211,238,.9)');
+    svg.appendChild(p);
+    particles.push({ el: p, x: Math.random() * 260 + PIPE_L, y: PIPE_Y + (Math.random() - 0.5) * (PIPE_H - 14) });
+  }
+})();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const now = performance.now();
+  const dt = Math.min((now - lastTick) / 16.7, 3);
+  lastTick = now;
+
+  // 叶轮旋转
+  const speedNorm = Math.min(curFlow / MAX_FLOW, 1);
+  bladeAngle += speedNorm * 0.28 * dt;
+  document.getElementById('blades').setAttribute('transform', `rotate(${(bladeAngle * 180 / Math.PI) % 360} 150 ${PIPE_Y})`);
+
+  // 粒子流动
+  const speed = speedNorm * (2.6 + Math.random() * 0.6) * dt;
+  particles.forEach(p => {
+    p.x += speed;
+    if (p.x > PIPE_R - 6) { p.x = PIPE_L + 4; p.y = PIPE_Y + (Math.random() - 0.5) * (PIPE_H - 14); }
+    p.el.setAttribute('cx', p.x);
+    p.el.setAttribute('cy', p.y);
+    const alpha = 0.25 + speedNorm * 0.65;
+    p.el.setAttribute('fill', `rgba(34,211,238,${alpha})`);
+  });
+}
+animate();
+
+/* ============ 趋势图 ============ */
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+function sizeCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width * dpr;
+  canvas.height = rect.height * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+sizeCanvas();
+window.addEventListener('resize', sizeCanvas);
+
+function drawChart() {
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  const padL = 8, padR = 8, padT = 12, padB = 22;
+  const iw = w - padL - padR, ih = h - padT - padB;
+
+  ctx.strokeStyle = 'rgba(255,255,255,.07)';
+  ctx.fillStyle = 'rgba(255,255,255,.35)';
+  ctx.font = '10px monospace';
+  for (let g = 0; g <= 4; g++) {
+    const y = padT + ih - (ih * g / 4);
+    ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+    ctx.fillText((MAX_FLOW * g / 4).toFixed(0), 4, y - 3);
+  }
+
+  const n = history.length;
+  if (n < 2) return;
+  const step = iw / (MAX_POINTS - 1);
+  const yOf = v => padT + ih - (ih * v / (MAX_FLOW * 1.15));
+
+  ctx.beginPath();
+  history.forEach((v, i) => {
+    const x = padL + i * step, y = yOf(v);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.strokeStyle = '#22d3ee';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = 'rgba(34,211,238,.5)';
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  const lx = padL + (n - 1) * step, ly = yOf(history[n - 1]);
+  ctx.beginPath(); ctx.arc(lx, ly, 3.5, 0, Math.PI * 2);
+  ctx.fillStyle = '#34d399'; ctx.fill();
+}
+
+/* ============ 模拟器 ============ */
+function nextFlow() {
+  t += 1;
+  let target = 0;
+  if (mode === 'low')   target = 4 + Math.random() * 1;
+  if (mode === 'mid')   target = 12 + Math.sin(t / 9) * 2 + Math.random() * 0.8;
+  if (mode === 'high')  target = 22 + Math.random() * 2.5;
+  if (mode === 'pulse') target = t % 60 < 22 ? 18 + Math.random() * 2 : 0.5 + Math.random() * 0.5;
+  curFlow += (target - curFlow) * 0.22;
+  if (curFlow < 0.02) curFlow = 0;
+
+  // 累积（每 tick 视为 1/30 小时，简化为演示量）
+  const inc = curFlow / 30 / 3600 * 1000; // 演示用 m³
+  totRun += inc;
+  totDay += inc;
+
+  rpm = curFlow * 42; // 演示换算
+  history.push(curFlow);
+  if (history.length > MAX_POINTS) history.shift();
+  return curFlow;
+}
+
+function updateUI(v) {
+  document.getElementById('flow').textContent = v.toFixed(2);
+  document.getElementById('rpm').textContent = rpm.toFixed(0);
+  document.getElementById('totRun').textContent = totRun.toFixed(3);
+  document.getElementById('totDay').textContent = totDay.toFixed(3);
+  document.getElementById('legend-cur').textContent = v.toFixed(2);
+
+  const avg = history.reduce((a, b) => a + b, 0) / Math.max(history.length, 1);
+  const max = Math.max(...history);
+  document.getElementById('legend-max').textContent = max.toFixed(2);
+  document.getElementById('legend-avg').textContent = avg.toFixed(2);
+  document.getElementById('stat-avg').textContent = avg.toFixed(2);
+  document.getElementById('stat-max').textContent = max.toFixed(2);
+  document.getElementById('stat-tot').textContent = totRun.toFixed(3);
+}
+
+/* ============ 控制 ============ */
+const btnMap = { 'mode-off': 'off', 'mode-low': 'low', 'mode-mid': 'mid', 'mode-high': 'high', 'mode-pulse': 'pulse' };
+Object.entries(btnMap).forEach(([id, m]) => {
+  document.getElementById(id).addEventListener('click', () => {
+    mode = m;
+    document.querySelectorAll('.controls button').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  });
+});
+
+/* ============ 滚动显现 ============ */
+const io = new IntersectionObserver(es => es.forEach(e => {
+  if (e.isIntersecting) { e.target.classList.add('show'); io.unobserve(e.target); }
+}), { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ============ 启动 ============ */
+setInterval(() => { updateUI(nextFlow()); drawChart(); }, 120);
+for (let i = 0; i < 20; i++) nextFlow();
+updateUI(curFlow);
+drawChart();
+</script>
+</body>
+</html>
