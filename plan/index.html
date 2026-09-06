@@ -73,6 +73,12 @@ body{
   background:rgba(0,240,255,.12);border:1px solid var(--border2);
   color:var(--cyan);padding:2px 10px;border-radius:8px;font-size:12px;
 }
+.sched-link{
+  margin-left:auto;color:var(--text2);text-decoration:none;
+  font-size:12px;font-weight:600;padding:4px 12px;border-radius:8px;
+  border:1px solid var(--border);transition:all .25s;
+}
+.sched-link:hover{color:var(--cyan);border-color:var(--border2)}
 
 /* ===== 统计面板 ===== */
 .stats{
@@ -92,6 +98,9 @@ body{
 .stat-num.green{color:var(--green)}
 .stat-num.purple{color:var(--purple)}
 .stat-num.orange{color:var(--orange)}
+.stat-num.red{color:var(--red)}
+.stat-card.clickable{cursor:pointer}
+.stat-card.clickable:hover{border-color:rgba(255,120,120,.4)}
 .stat-label{font-size:11px;color:var(--text3);margin-top:4px;letter-spacing:1px}
 
 /* ===== 能力自评 ===== */
@@ -337,6 +346,7 @@ textarea.review-input{min-height:80px;border-color:rgba(74,222,128,.25)}
     <span class="tag">📌 排班规则</span>
     <span>本周（9.1–9.6）为<b>小周</b>，之后大小周交替：<b>小→大→小→大</b>…</span>
     <span>小周周六上班·弹性，大周周六全天项目实操</span>
+    <a href="./schedule.html" class="sched-link">📖 大小周说明 →</a>
   </div>
   <div class="notice-inner" style="margin-top:8px;background:linear-gradient(90deg,rgba(52,211,153,.08),rgba(0,240,255,.08));border-color:rgba(52,211,153,.25)">
     <span class="tag" style="background:rgba(52,211,153,.12);border-color:rgba(52,211,153,.4);color:#34d399">⚡ 边面试边学边干</span>
@@ -582,6 +592,25 @@ textarea.review-input{min-height:80px;border-color:rgba(74,222,128,.25)}
   </div>
 </div>
 
+<!-- ===== 未打卡记录模态框 ===== -->
+<div class="modal-overlay" id="undoneOverlay" onclick="if(event.target===this)closeUndone()">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <span class="modal-date" id="uTitle">未打卡记录</span>
+        <small id="uSub">--</small>
+      </div>
+      <button class="modal-close" onclick="closeUndone()">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:420px;overflow-y:auto">
+      <div id="uList" style="font-size:12px;color:var(--text2)">加载中...</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="closeUndone()">✓ 知道了</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ===== 计划数据 ===== */
 var PLAN = {
@@ -639,6 +668,7 @@ function calcStats(){
   var taskCount = {fitness:0, digital:0, turing:0, bagu:0, apply:0, pyqt:0, project:0, review:0};
   var taskDone = {fitness:0, digital:0, turing:0, bagu:0, apply:0, pyqt:0, project:0, review:0};
   var maxStreak = 0, curStreak = 0;
+  var undoneList = [];
   
   dates.forEach(function(ds){
     var planDay = plan[ds];
@@ -657,11 +687,18 @@ function calcStats(){
     });
     if(dayDone){ doneDays++; curStreak++; } else { curStreak = 0; }
     if(curStreak > maxStreak) maxStreak = curStreak;
+    if(!dayDone && tasks.length > 0){
+      undoneList.push({date: ds, plan: planDay.plan, weekday: planDay.weekday, wt: planDay.weekType});
+    }
   });
+  
+  var undoneDays = undoneList.length;
+  var undoneRate = total ? Math.round(undoneDays/total*100) : 0;
   
   return {
     total: total, doneDays: doneDays,
     rate: total ? Math.round(doneDays/total*100) : 0,
+    undoneDays: undoneDays, undoneRate: undoneRate, undoneList: undoneList,
     totalTasks: totalTasks, doneTasks: doneTasks,
     taskRate: totalTasks ? Math.round(doneTasks/totalTasks*100) : 0,
     maxStreak: maxStreak,
@@ -675,6 +712,8 @@ function renderStats(){
   var html = '';
   html += '<div class="stat-card"><div class="stat-num cyan">'+s.rate+'%</div><div class="stat-label">'+phaseName+' 打卡完成率</div></div>';
   html += '<div class="stat-card"><div class="stat-num green">'+s.doneDays+'</div><div class="stat-label">完成天数 / '+s.total+'</div></div>';
+  html += '<div class="stat-card clickable" onclick="openUndone()"><div class="stat-num red">'+s.undoneDays+'</div><div class="stat-label">未打卡记录 · 点击查看</div></div>';
+  html += '<div class="stat-card"><div class="stat-num red">'+s.undoneRate+'%</div><div class="stat-label">未打卡率</div></div>';
   html += '<div class="stat-card"><div class="stat-num purple">'+s.maxStreak+'</div><div class="stat-label">最长连续打卡</div></div>';
   html += '<div class="stat-card"><div class="stat-num orange">'+s.taskDone.project+'</div><div class="stat-label">0到1项目 / '+s.taskCount.project+'</div></div>';
   html += '<div class="stat-card"><div class="stat-num">'+s.taskDone.bagu+'</div><div class="stat-label">面试八股 / '+s.taskCount.bagu+'</div></div>';
@@ -687,6 +726,35 @@ function renderStats(){
   var pText = document.getElementById('progressText');
   pFill.style.width = s.rate + '%';
   pText.textContent = s.rate + '%';
+}
+
+/* ===== 未打卡记录 ===== */
+function openUndone(){
+  var s = calcStats();
+  var el = document.getElementById('uList');
+  var sub = document.getElementById('uSub');
+  if(!el) return;
+  var phaseName = CURRENT_PHASE === 'jinjiu' ? '金九银十' : '金三银四';
+  sub.textContent = phaseName + ' · 共 ' + s.undoneDays + ' 天未完成全部任务';
+  if(!s.undoneList.length){
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:var(--green);font-size:13px;">🎉 全部打卡完成，没有遗漏！</div>';
+  } else {
+    var h = '';
+    s.undoneList.forEach(function(u){
+      h += '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,120,120,.15);background:rgba(255,120,120,.05);margin-bottom:6px;">';
+      h += '<div style="flex:0 0 88px;font-weight:700;color:#fff;font-size:12px;">' + u.date + '</div>';
+      h += '<div style="flex:0 0 58px;font-size:11px;color:var(--text3);padding-top:1px;">' + u.weekday + '<br>' + (u.wt==='大周'?'大周':'小周') + '</div>';
+      h += '<div style="flex:1 1 0;font-size:11px;color:var(--text2);line-height:1.5;">' + u.plan + '</div>';
+      h += '</div>';
+    });
+    el.innerHTML = h;
+  }
+  var ov = document.getElementById('undoneOverlay');
+  if(ov) ov.classList.add('open');
+}
+function closeUndone(){
+  var ov = document.getElementById('undoneOverlay');
+  if(ov) ov.classList.remove('open');
 }
 
 /* ===== 日历渲染 ===== */
