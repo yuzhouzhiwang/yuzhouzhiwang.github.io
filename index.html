@@ -2010,7 +2010,7 @@ if (true) {
 
 }</script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script></div>
 <script>
-/* ===== 时光 · 实时资讯 ===== */
+/* ===== 时光 · 实时资讯（真实数据版） ===== */
 (function(){
   function pad(n){return n<10?'0'+n:n}
   function updateTime(){
@@ -2024,24 +2024,77 @@ if (true) {
   var days=Math.floor((new Date()-start)/86400000);
   var de=document.getElementById('shg-stat-days');
   if(de) de.textContent=days;
-  // 动态资讯轮换
+
+  // GitHub 实时数据
+  var GH={pushed:'--', repo:0, followers:0, commit:'--'};
+  function fmtTime(iso){
+    if(!iso) return '--';
+    var d=new Date(iso);
+    return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  }
+  function ghGet(url, done){
+    fetch(url,{headers:{'Accept':'application/vnd.github+json'}})
+      .then(function(r){return r.json();})
+      .then(done)
+      .catch(function(){});
+  }
+  function statVal(id){
+    var el=document.getElementById(id);
+    return (el && el.textContent) ? el.textContent.trim() : '--';
+  }
+  function refreshDynamic(){
+    var e1=document.getElementById('shg-ticker-dynamic');
+    var e2=document.getElementById('shg-ticker-dynamic2');
+    if(!e1&&!e2) return;
+    var txt=dynamics[di]();
+    if(e1) e1.innerHTML=txt;
+    if(e2) e2.innerHTML=txt;
+  }
+  function fetchGitHub(){
+    // 仓库最后推送时间 -> 网站资讯「最后更新时间」+ 轮换条
+    ghGet('https://api.github.com/repos/yuzhouzhiwang/yuzhouzhiwang.github.io', function(d){
+      if(d && d.pushed_at){
+        GH.pushed=fmtTime(d.pushed_at);
+        var el=document.getElementById('last-push-date');
+        if(el) el.textContent=GH.pushed;
+        refreshDynamic();
+      }
+    });
+    // 最近一次提交信息
+    ghGet('https://api.github.com/repos/yuzhouzhiwang/yuzhouzhiwang.github.io/commits?per_page=1', function(d){
+      if(d && d[0] && d[0].commit){
+        GH.commit=(d[0].commit.message||'').split('\n')[0];
+        refreshDynamic();
+      }
+    });
+    // 账号总览（公开仓库数/粉丝数）
+    ghGet('https://api.github.com/users/yuzhouzhiwang', function(d){
+      if(d){
+        GH.repo=d.public_repos||0;
+        GH.followers=d.followers||0;
+      }
+      refreshDynamic();
+    });
+  }
+
+  // 动态资讯轮换：真实数据优先
   var dynamics=[
-    '当前在线访客：<span class="hl">'+(Math.floor(Math.random()*20)+5)+'</span> 人',
-    '今日文章浏览：<span class="hl">'+(Math.floor(Math.random()*200)+50)+'</span> 次',
-    '最新更新：<span class="hl">后台管理系统</span> 已上线',
-    '求职板块：<span class="hl">'+['广州','深圳','惠州','东莞'][Math.floor(Math.random()*4)]+'</span> 数据分析师岗位热招中',
-    '嵌入式板块：<span class="hl">HC32F005</span> 压力传感器教程更新中',
+    function(){return '本站访客：<span class="hl">'+(statVal('busuanzi_value_site_uv'))+'</span> 人';},
+    function(){return '本站总访问量：<span class="hl">'+(statVal('busuanzi_value_site_pv'))+'</span> 次';},
+    function(){return '最后更新：<span class="hl">'+GH.pushed+'</span>';},
+    function(){return 'GitHub：<span class="hl">'+GH.repo+'</span> 个仓库 · <span class="hl">'+GH.followers+'</span> 位粉丝';},
+    function(){var c=GH.commit; if(c!=='--'&&c.length>18){c=c.slice(0,18)+'…';} return '最新提交：<span class="hl">'+c+'</span>';},
+    function(){return '求职板块：数据分析师岗位持续关注中';},
+    function(){return '嵌入式板块：HC32F005 压力传感器教程更新中';}
   ];
   var di=0;
   function rotateDynamic(){
-    var e1=document.getElementById('shg-ticker-dynamic');
-    var e2=document.getElementById('shg-ticker-dynamic2');
-    if(e1) e1.innerHTML=dynamics[di];
-    if(e2) e2.innerHTML=dynamics[di];
     di=(di+1)%dynamics.length;
+    refreshDynamic();
   }
-  rotateDynamic();
+  refreshDynamic();
   setInterval(rotateDynamic,5000);
+
   // 统计数字（从页面元素提取）
   function countStat(sel,target){
     var el=document.querySelector(sel);
@@ -2061,6 +2114,9 @@ if (true) {
     if(pe&&posts.length) pe.textContent=posts.length;
     else if(pe) pe.textContent=document.querySelectorAll('.recent-post-item').length||'6';
   },800);
+
+  // 拉取 GitHub 实时数据
+  fetchGitHub();
 })();
 </script>
 
