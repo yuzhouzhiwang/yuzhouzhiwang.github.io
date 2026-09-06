@@ -32,6 +32,13 @@
 │   ├── learning-path.html         #   学习路径
 │   ├── algorithm.html             #   算法演示（交互式）
 │   └── standards.html             #   标准规范
+├── jobs/                          # 💼 求职资讯（10个岗位分页 + BOSS直聘 + 招聘季倒计时）
+│   ├── index.html                 #   求职总页（金九银十/金三银四精确倒计时）
+│   ├── mes.html it-ops.html erp.html dropship.html      # 岗位分页
+│   ├── embedded.html electronics.html data-analyst.html # 岗位分页
+│   └── no-experience.html customer-service.html archive-scanner.html
+├── plan/                          # ⏳ 硬件基础打卡计划（日历打卡应用）
+│   └── index.html                 #   日历视图 · 完成打钩 · 不足/备注/复盘 · 金九银十/金三银四
 ├── posts/                         # 🆕 后台发布的新文章（自动生成）
 ├── admin/                         # 🔐 后台管理系统（发布文章用）
 │   └── index.html                 #   写文章 / 管理文章 / 设置
@@ -99,6 +106,7 @@ python -m http.server 8000
 ## ✨ 已做的优化
 
 - **站名与品牌**：站名「时光」，作者信息、SEO meta、页脚版权统一更新
+- **硬件基础打卡计划**：新增 `/plan/` 打卡应用——基于 Excel 计划生成 152 天日历，金九银十（2026.9–11）/ 金三银四（2027.3–4）两阶段切换，任务打钩、今日不足、备注、周日复盘，localStorage 本地持久化，支持导出 JSON 备份
 - **国内访问加速**：所有 jsdelivr CDN 静态资源已下载到 `libs/` 本地自托管；图片懒加载、预连接国内服务
 - **封面图体系**：失效的第三方图床图片已全部替换为本地分类封面（数据库 / 网页设计 / markdown / 21天 等）
 - **旧文章归档**：2023.12 之前的旧文章已从首页 / 归档 / 标签 / 分类隐藏（文件仍在，可直接访问），待新内容通过后台发布
