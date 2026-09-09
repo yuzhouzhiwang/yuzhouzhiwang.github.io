@@ -38,7 +38,9 @@
 │   ├── embedded.html electronics.html data-analyst.html # 岗位分页
 │   └── no-experience.html customer-service.html archive-scanner.html
 ├── peripherals.html               # 🔌 嵌入式常用外设速查（聚合页，首页入口）
+│   └── peripherals/               #   18个外设详情页：原理/时序图/配置/项目示例/面试自查
 ├── protocols.html                 # 📡 嵌入式常用协议速查（含对比表，首页入口）
+│   └── protocols/                 #   22个协议详情页：原理/时序图/帧结构/示例/面试自查
 ├── plan/                          # ⏳ 硬件基础打卡计划（日历打卡应用）
 │   ├── index.html                 #   日历视图 · 完成打钩 · 不足/备注/复盘 · 金九银十/金三银四 · 八股题库
 │   ├── priority.html              #   社招双优先级总览
@@ -116,7 +118,8 @@ python -m http.server 8000
 - **国内访问加速**：所有 jsdelivr CDN 静态资源已下载到 `libs/` 本地自托管；图片懒加载、预连接国内服务
 - **封面图体系**：失效的第三方图床图片已全部替换为本地分类封面（数据库 / 网页设计 / markdown / 21天 等）
 - **旧文章归档**：2023.12 之前的旧文章已从首页 / 归档 / 标签 / 分类隐藏（文件仍在，可直接访问），待新内容通过后台发布
-- **嵌入式外设/协议聚合页**：新增 /peripherals.html（GPIO/TIM/ADC/PWM/UART/SPI/I2C/CAN/USB 等外设速查）与 /protocols.html（板内/工业/无线/网络协议 + 对比表），首页卡片入口
+- **嵌入式外设/协议聚合页**：新增 /peripherals.html（GPIO/TIM/ADC/PWM/UART/SPI/I2C/CAN/USB 等外设速查）与 /protocols.html（板内/工业/无线/网络协议 + 对比表），首页速查横条入口
+- **40个详情页**：每个外设/协议独立页面——核心原理、SVG时序图（波形/帧结构/流程图）、配置要点、项目示例代码、面试高频问答、可勾选自查清单（localStorage）
 - **打卡页八股题库**：新增「📖 八股题库」tab——5 大分组 27 道高频面试题，带要点提示、勾选背诵进度（localStorage）、一键重置
 - **全站响应式**：新增全站响应式增强，手机 / 平板 / 电脑全适配，修复横向溢出
 - **SEO**：canonical / og 链接指向正式域名，补充站点描述
