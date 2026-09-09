@@ -98,6 +98,29 @@ body{
   background:rgba(0,240,255,.1);box-shadow:0 0 10px rgba(0,240,255,.15);
 }
 
+/* ===== 八股题库面板 ===== */
+.bagu-panel{max-width:1200px;margin:16px auto 36px;padding:0 20px}
+.bagu-head{display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:18px}
+.bagu-title{font-size:16px;font-weight:800;color:var(--text)}
+.bagu-progress{flex:1;min-width:220px;display:flex;align-items:center;gap:10px}
+.bagu-progress span{font-size:13px;color:var(--cyan);font-weight:700;white-space:nowrap}
+.bagu-bar{flex:1;height:8px;background:var(--card2);border-radius:6px;overflow:hidden}
+.bagu-fill{height:100%;background:linear-gradient(90deg,#00f0ff,#a855f7);border-radius:6px;transition:width .3s}
+.bagu-reset{font-size:12px;color:var(--text3);padding:6px 14px;border:1px solid var(--border);border-radius:8px;background:transparent;cursor:pointer}
+.bagu-reset:hover{color:#f87171;border-color:rgba(248,113,113,.4)}
+.bagu-group{margin-bottom:20px}
+.bagu-group-title{font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.bagu-group-title .gcount{font-size:11px;color:var(--text3);font-weight:400}
+.bagu-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px}
+.bagu-item{display:flex;align-items:flex-start;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;cursor:pointer;transition:all .2s;user-select:none}
+.bagu-item:hover{border-color:var(--border2)}
+.bagu-item.done{opacity:.55;border-color:rgba(74,222,128,.35);background:linear-gradient(135deg,rgba(74,222,128,.06),rgba(0,240,255,.06))}
+.bagu-check{width:20px;height:20px;border-radius:6px;border:2px solid var(--border2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:#06121a;margin-top:1px;transition:all .2s}
+.bagu-item.done .bagu-check{background:#4ade80;border-color:#4ade80}
+.bagu-item .q{font-size:13px;color:var(--text);font-weight:600;line-height:1.5}
+.bagu-item .a{font-size:12px;color:var(--text3);margin-top:3px;line-height:1.6}
+@media(max-width:600px){.bagu-head{gap:10px}.bagu-progress{min-width:100%}}
+
 /* ===== 社招攻略入口 ===== */
 .strategy-entry{
   max-width:1200px;margin:28px auto 36px;padding:0 20px;
@@ -381,6 +404,9 @@ textarea.review-input{min-height:80px;border-color:rgba(74,222,128,.25)}
       <div class="phase-tab" data-phase="jinsan" onclick="switchPhase('jinsan')">
         🌸 金三银四 <span class="tab-range">2027.3-4</span>
       </div>
+      <div class="phase-tab" data-phase="bagu" onclick="switchPhase('bagu')">
+        📖 八股题库 <span class="tab-range">面试背诵</span>
+      </div>
     </div>
   </div>
 </div>
@@ -624,6 +650,18 @@ textarea.review-input{min-height:80px;border-color:rgba(74,222,128,.25)}
 
 <!-- ===== 日历 ===== -->
 <div class="calendar-wrap" id="calendarWrap"></div>
+
+<!-- ===== 八股题库面板 ===== -->
+<div class="bagu-panel" id="baguPanel" style="display:none">
+  <div class="bagu-head">
+    <div class="bagu-title">📖 八股题库 · 面试高频背诵</div>
+    <div class="bagu-progress"><span id="baguCount">0/0</span>
+      <div class="bagu-bar"><div class="bagu-fill" id="baguFill" style="width:0%"></div></div>
+    </div>
+    <button class="bagu-reset" onclick="resetBagu()">↺ 重置</button>
+  </div>
+  <div id="baguList"></div>
+</div>
 
 <!-- ===== 每日详情模态框 ===== -->
 <div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
@@ -1045,12 +1083,103 @@ function clearDay(){
 }
 
 /* ===== 阶段切换 ===== */
+/* ===== 八股题库 ===== */
+var BAGU_ITEMS = [
+  {g:'C语言', items:[
+    {q:'指针与数组的区别？', a:'数组名是常量地址不可变；指针是变量可移动。函数传参会退化为指针，sizeof行为不同'},
+    {q:'volatile 的作用？', a:'告诉编译器该变量可能被外部修改（中断/寄存器/多线程），禁止优化到寄存器缓存，每次从内存重新读'},
+    {q:'static 的三种用法？', a:'局部静态：生命周期延长、只初始化一次；文件内函数/全局变量：作用域限本文件；C++静态成员'},
+    {q:'内存分区有哪些？', a:'代码区/常量区/全局静态区(含BSS)/栈/堆。局部变量在栈，malloc在堆，全局在静态区'},
+    {q:'malloc/free 注意事项？', a:'配对使用防泄漏；释放后置NULL防野指针；检查返回NULL；嵌入式慎用易碎片'},
+    {q:'结构体对齐规则？', a:'按最大成员对齐，可用#pragma pack或__attribute__((packed))压缩；通信协议结构体常需打包'},
+  ]},
+  {g:'中断与定时器', items:[
+    {q:'中断响应流程？', a:'触发→压栈保护现场→查中断向量表→执行ISR→恢复现场→返回。ISR要短，只置标志位'},
+    {q:'中断嵌套与临界区？', a:'高优先级可打断低优先级（需硬件支持）；共享变量用关中断/临界区保护防竞争'},
+    {q:'定时器分频计算？', a:'定时时间=(ARR+1)×(PSC+1)/时钟频率。72MHz下PSC=71、ARR=999→1ms'},
+    {q:'PWM 占空比怎么算？', a:'占空比=CCR/(ARR+1)。CCR比较值，ARR自动重装载值'},
+    {q:'看门狗原理？', a:'定时器超时未喂狗则复位MCU。IWDG独立时钟不可关；WWDG有窗口期，喂早了也会复位'},
+  ]},
+  {g:'通信协议', items:[
+    {q:'UART/SPI/I2C 本质区别？', a:'UART异步无时钟线靠波特率对齐；SPI同步4线全双工最快；I2C同步2线开漏半双工可多从机'},
+    {q:'I2C 为什么开漏要上拉？', a:'开漏只能拉低，上拉电阻提供高电平；支持线与仲裁；阻值影响速率与功耗'},
+    {q:'SPI 四种模式怎么区分？', a:'CPOL时钟极性 + CPHA采样相位共4种组合，主从必须一致，否则数据错'},
+    {q:'CAN 仲裁机制？', a:'显性位(0)覆盖隐性位(1)，报文ID小的优先级高；多主同时发送时ID仲裁决定'},
+    {q:'RS485 为什么能传1200m？', a:'差分信号抗共模干扰，接收门限±200mV；半双工需方向控制'},
+    {q:'Modbus RTU 帧格式？', a:'地址+功能码+数据+CRC16(低字节在前)。03读保持寄存器/06写单个/10写多个'},
+  ]},
+  {g:'模数电', items:[
+    {q:'运放虚短虚断？', a:'负反馈下：虚短V+=V-（输入差压近似0）；虚断输入电流≈0（输入阻抗高）。算增益靠这两条'},
+    {q:'同相/反相放大增益？', a:'反相：G=-Rf/R1；同相：G=1+Rf/R1，输入阻抗高'},
+    {q:'ADC 采样换算？', a:'电压=ADC值×Vref/满量程。12位满量程4096，Vref=3.3V时1LSB≈0.8mV'},
+    {q:'滤波器怎么选？', a:'RC一阶简单便宜；LC适合高频；有源运放滤波精度高。截止频率fc=1/(2πRC)'},
+    {q:'三极管 vs MOS 开关？', a:'三极管电流驱动、饱和压降0.2V；MOS电压驱动、导通电阻小发热低，电源开关首选MOS'},
+  ]},
+  {g:'综合面试', items:[
+    {q:'自我介绍（STAR）？', a:'30秒版+2分钟版：我是谁→做过什么(2个项目)→最擅长(嵌入式软硬件)→为什么适合这岗位'},
+    {q:'项目「现象→定位→解决」？', a:'每个项目备3个案例：现象描述→排查路径→根因修复，如电源纹波大→查地回路→加滤波'},
+    {q:'为什么离职/为什么来？', a:'成长导向不抱怨：想深入嵌入式软硬件全栈，看中岗位技术栈与成长空间'},
+    {q:'你最大的缺点？', a:'真实+改进闭环：如模数电基础弱→正用数模电仿真+教材系统补，已能独立分析信号链'},
+    {q:'反问环节问什么？', a:'团队技术栈/项目阶段/新人培养/加班强度，显示你有备而来'},
+  ]},
+];
+var BAGU_KEY = 'shiguang_bagu';
+function baguState(){
+  try{ return JSON.parse(localStorage.getItem(BAGU_KEY)) || {}; }catch(e){ return {}; }
+}
+function renderBagu(){
+  var box = document.getElementById('baguList');
+  if(!box) return;
+  var st = baguState();
+  var total = 0, done = 0, html = '';
+  BAGU_ITEMS.forEach(function(g){
+    var cnt = 0, dcnt = 0, itemsHtml = '';
+    g.items.forEach(function(it, idx){
+      var key = g.g + '_' + idx;
+      cnt++; total++;
+      var d = !!st[key];
+      if(d) dcnt++;
+      itemsHtml += '<div class="bagu-item' + (d?' done':'') + '" onclick="toggleBagu(this,\'' + key + '\')">' +
+        '<span class="bagu-check">' + (d?'✓':'') + '</span>' +
+        '<span><div class="q">' + it.q + '</div><div class="a">' + it.a + '</div></span></div>';
+    });
+    done += dcnt;
+    html += '<div class="bagu-group"><div class="bagu-group-title">' + g.g +
+      ' <span class="gcount">' + dcnt + '/' + cnt + ' 已背</span></div><div class="bagu-list">' + itemsHtml + '</div></div>';
+  });
+  box.innerHTML = html;
+  var c = document.getElementById('baguCount');
+  if(c) c.textContent = done + '/' + total;
+  var f = document.getElementById('baguFill');
+  if(f) f.style.width = (total ? Math.round(done/total*100) : 0) + '%';
+}
+function toggleBagu(el, key){
+  var st = baguState();
+  st[key] = !st[key];
+  try{ localStorage.setItem(BAGU_KEY, JSON.stringify(st)); }catch(e){}
+  renderBagu();
+}
+function resetBagu(){
+  if(!confirm('确认清空全部八股背诵记录？')) return;
+  try{ localStorage.removeItem(BAGU_KEY); }catch(e){}
+  renderBagu();
+}
+
 function switchPhase(phase){
   CURRENT_PHASE = phase;
   document.querySelectorAll('.phase-tab').forEach(function(tab){
     tab.classList.toggle('active', tab.dataset.phase === phase);
   });
-  renderCalendar();
+  var cal = document.getElementById('calendarWrap');
+  var bp = document.getElementById('baguPanel');
+  if(phase === 'bagu'){
+    if(cal) cal.style.display = 'none';
+    if(bp){ bp.style.display = 'block'; renderBagu(); }
+  }else{
+    if(bp) bp.style.display = 'none';
+    if(cal) cal.style.display = '';
+    renderCalendar();
+  }
 }
 
 /* ===== 工具函数 ===== */
