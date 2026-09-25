@@ -6,8 +6,8 @@
  * 结构：CLOUD_DATA = { version, lastUpdated, phase, PLAN, FESTIVALS, WORKDAYS }
  * ============================================================ */
 var CLOUD_DATA = {
-  version: 10,
-  lastUpdated: '2026-09-24 09:30:04',
+  version: 11,
+  lastUpdated: '2026-09-25 09:38:55',
   generatedBy: 'github-actions',
   phase: 'jinjiu',
   PLAN: {
