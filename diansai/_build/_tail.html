@@ -1,0 +1,551 @@
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<script>
+(function(){
+  "use strict";
+  var T = window.TOPICS || [];
+  var P = window.PAGE_DATA || {};
+  var REC = P.RECOMMEND || {}, CIRC = P.CIRCUITS || [], COMP = P.COMPONENTS || [];
+  var BASIC = P.BASIC || [], TIADI = P.TIADI || [];
+  var PRI_LABEL = {1:"重点推荐", 2:"推荐", 3:"参考"};
+  var SEC_INFO = {
+    "消费": {label:"消费电子", cls:"t-consumer", color:"#2563eb"},
+    "工业": {label:"工业电子", cls:"t-industrial", color:"#ea580c"},
+    "车规": {label:"车规电子", cls:"t-automotive", color:"#059669"}
+  };
+  function esc(s){
+    return String(s == null ? "" : s)
+      .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+      .replace(/"/g,"&quot;").replace(/'/g,"&#39;");
+  }
+  function $id(id){ return document.getElementById(id); }
+  function bySec(s){ return T.filter(function(t){ return t.sectors.indexOf(s) >= 0; }); }
+
+  /* ================= 路由 ================= */
+  var VIEW_IDS = ["home","consumer","industrial","automotive","cross","basic","tiadi","circuits"];
+  var inited = {};
+  function route(){
+    var h = (location.hash || "").replace(/^#\//, "");
+    var v = VIEW_IDS.indexOf(h) >= 0 ? h : "home";
+    VIEW_IDS.forEach(function(id){
+      var el = $id("view-" + id);
+      if(el) el.classList.toggle("active", id === v);
+    });
+    document.querySelectorAll(".nav-links a").forEach(function(a){
+      a.classList.toggle("active", a.getAttribute("data-v") === v);
+    });
+    if(!inited[v]){ inited[v] = true; initView(v); }
+    window.scrollTo(0, 0);
+  }
+  window.addEventListener("hashchange", route);
+
+  function initView(v){
+    if(v === "home"){ renderHome(); initHomeCharts(); }
+    else if(v === "consumer" || v === "industrial" || v === "automotive"){ renderIndustry(v); }
+    else if(v === "cross"){ renderCross(); initCrossCharts(); }
+    else if(v === "basic"){ renderBasic(); initBasicCharts(); }
+    else if(v === "tiadi"){ renderTIADI(); initTIADICharts(); }
+    else if(v === "circuits"){ renderCircuits(); initCircuitsCharts(); }
+  }
+
+  /* ================= 通用清单组件（搜索/筛选/排序/分页） ================= */
+  function buildList(conf){
+    // conf: {id, data, sectors: null(不显示领域筛选) | {消费:1,工业:1,车规:1}, pageSize:10}
+    var st = {q:"", p:"all", sortKey:"year", sortDir:-1, page:1};
+    if(conf.sectors) st.sec = {消费:1, 工业:1, 车规:1};
+    var root = $id(conf.id);
+    var ps = conf.pageSize || 10;
+
+    function match(t){
+      if(st.q && t.title.indexOf(st.q) < 0 && t.scene.indexOf(st.q) < 0) return false;
+      if(st.p !== "all" && t.priority !== parseInt(st.p, 10)) return false;
+      if(st.sec){
+        var hit = false;
+        t.sectors.forEach(function(s){ if(st.sec[s]) hit = true; });
+        if(!hit) return false;
+      }
+      return true;
+    }
+    function yearVal(t){ var n = parseInt(t.year, 10); return isNaN(n) ? 0 : n; }
+    function codeVal(t){ if(t.code === "合集") return 999; var n = parseInt(t.code, 10); return isNaN(n) ? 999 : n; }
+    function sorted(list){
+      var k = st.sortKey, dir = st.sortDir;
+      return list.slice().sort(function(a,b){
+        var va, vb;
+        if(k === "year"){ va = yearVal(a); vb = yearVal(b); }
+        else if(k === "code"){ va = codeVal(a); vb = codeVal(b); }
+        else if(k === "pri"){ va = a.priority; vb = b.priority; }
+        else { va = a.title; vb = b.title; }
+        if(va < vb) return -1 * dir;
+        if(va > vb) return 1 * dir;
+        return 0;
+      });
+    }
+    function render(){
+      var list = sorted(conf.data.filter(match));
+      var total = list.length, pc = Math.max(1, Math.ceil(total / ps));
+      if(st.page > pc) st.page = pc;
+      var start = (st.page - 1) * ps, slice = list.slice(start, start + ps);
+      var html = "";
+      slice.forEach(function(t){
+        var tags = t.sectors.map(function(s){
+          return '<span class="tag ' + SEC_INFO[s].cls + '">' + SEC_INFO[s].label + '</span>';
+        }).join("");
+        html += "<tr>" +
+          '<td class="year">' + esc(t.year) + '</td>' +
+          '<td class="code">' + esc(t.code) + '</td>' +
+          '<td class="t">' + esc(t.title) + '</td>' +
+          '<td><div class="tags">' + tags + '</div></td>' +
+          '<td class="scene">' + esc(t.scene) + '</td>' +
+          '<td><span class="pri p-' + t.priority + '">' + PRI_LABEL[t.priority] + '</span></td>' +
+          '<td class="note">' + esc(t.note || "") + '</td>' +
+        "</tr>";
+      });
+      tbody.innerHTML = html || '<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:22px">没有符合条件的题目</td></tr>';
+      cnt.textContent = "显示 " + total + " / " + conf.data.length + " 条";
+      var ph = "";
+      function btn(label, pg, dis, on){
+        ph += '<button' + (dis ? ' disabled' : '') + (on ? ' class="on"' : '') + ' data-pg="' + pg + '">' + label + '</button>';
+      }
+      btn("«", 1, st.page === 1, false);
+      btn("‹", st.page - 1, st.page === 1, false);
+      var from = Math.max(1, st.page - 3), to = Math.min(pc, st.page + 3);
+      for(var i = from; i <= to; i++) btn(String(i), i, false, i === st.page);
+      btn("›", st.page + 1, st.page === pc, false);
+      btn("»", pc, st.page === pc, false);
+      ph += '<span class="pi">第 ' + st.page + ' / ' + pc + ' 页</span>';
+      pager.innerHTML = ph;
+      Array.prototype.forEach.call(pager.querySelectorAll("button[data-pg]"), function(b){
+        b.addEventListener("click", function(){
+          if(!b.disabled){ st.page = parseInt(b.getAttribute("data-pg"), 10); render(); }
+        });
+      });
+    }
+
+    /* 构建外壳 */
+    var chips = "";
+    if(conf.sectors){
+      chips = '<div class="grp"><span class="glab">领域</span>' +
+        ['消费','工业','车规'].map(function(s){
+          return '<span class="chip s-' + (s === "车规" ? "automotive" : s === "工业" ? "industrial" : "consumer") + ' on" data-f="' + s + '">' + SEC_INFO[s].label + '</span>';
+        }).join("") + '</div>';
+    }
+    root.innerHTML =
+      '<div class="filters">' +
+        '<div class="search"><input type="text" placeholder="搜索题目 / 公司化场景关键词…"></div>' +
+        chips +
+        '<div class="grp"><span class="glab">优先级</span>' +
+          '<span class="chip p-all on" data-p="all">全部</span>' +
+          '<span class="chip p-1" data-p="1">重点推荐</span>' +
+          '<span class="chip p-2" data-p="2">推荐</span>' +
+          '<span class="chip p-3" data-p="3">参考</span>' +
+        '</div>' +
+        '<span class="cnt" style="margin-left:auto"></span>' +
+      '</div>' +
+      '<div class="tbl-scroll"><table><thead><tr>' +
+        '<th data-k="year">年份 <span class="arr"></span></th>' +
+        '<th data-k="code">题号</th>' +
+        '<th data-k="title">题目</th>' +
+        '<th>领域</th><th>公司化落地场景</th>' +
+        '<th data-k="pri">优先级 <span class="arr"></span></th>' +
+        '<th>备注</th>' +
+      '</tr></thead><tbody></tbody></table></div>' +
+      '<div class="pager"></div>';
+
+    var tbody = root.querySelector("tbody");
+    var cnt = root.querySelector(".cnt");
+    var pager = root.querySelector(".pager");
+    root.querySelector(".search input").addEventListener("input", function(e){
+      st.q = e.target.value.trim(); st.page = 1; render();
+    });
+    if(conf.sectors){
+      Array.prototype.forEach.call(root.querySelectorAll(".filters .chip[data-f]"), function(ch){
+        ch.addEventListener("click", function(){
+          var s = ch.getAttribute("data-f");
+          var active = Object.keys(st.sec).filter(function(k){ return st.sec[k]; }).length;
+          if(st.sec[s] && active <= 1) return;
+          st.sec[s] = st.sec[s] ? 0 : 1;
+          ch.classList.toggle("on"); st.page = 1; render();
+        });
+      });
+    }
+    Array.prototype.forEach.call(root.querySelectorAll(".filters .chip[data-p]"), function(ch){
+      ch.addEventListener("click", function(){
+        Array.prototype.forEach.call(root.querySelectorAll(".filters .chip[data-p]"), function(x){ x.classList.remove("on"); });
+        ch.classList.add("on");
+        st.p = ch.getAttribute("data-p"); st.page = 1; render();
+      });
+    });
+    Array.prototype.forEach.call(root.querySelectorAll("thead th[data-k]"), function(th){
+      th.addEventListener("click", function(){
+        var k = th.getAttribute("data-k");
+        if(st.sortKey === k){ st.sortDir = -st.sortDir; }
+        else { st.sortKey = k; st.sortDir = (k === "title") ? 1 : -1; }
+        Array.prototype.forEach.call(root.querySelectorAll("thead th[data-k] .arr"), function(x){ x.textContent = ""; });
+        th.querySelector(".arr").textContent = st.sortDir === -1 ? " ▼" : " ▲";
+        render();
+      });
+    });
+    render();
+  }
+
+  /* ================= 视图：总览 ================= */
+  function renderHome(){
+    var multi = T.filter(function(t){ return t.sectors.length >= 2; }).length;
+    var che = bySec("车规").length;
+    var key = T.filter(function(t){ return t.priority === 1; }).length;
+    var card = function(s){
+      var list = bySec(s), k = list.filter(function(t){ return t.priority === 1; }).length;
+      return '<a class="entry" href="#/' + sKey(s) + '">' +
+        '<h3><span class="dot" style="background:' + SEC_INFO[s].color + '"></span>' + SEC_INFO[s].label + '</h3>' +
+        '<div class="n">' + list.length + '<small style="font-size:14px;color:#64748b"> 题</small></div>' +
+        '<p>重点推荐 ' + k + ' 题，含分行业动手顺序</p>' +
+        '<div class="go">进入 ' + SEC_INFO[s].label + ' 子页 →</div></a>';
+    };
+    function sKey(s){ return s === "车规" ? "automotive" : s === "工业" ? "industrial" : "consumer"; }
+    $id("view-home").innerHTML =
+      '<header class="hero" style="margin:0 -20px;padding-left:20px;padding-right:20px">' +
+        '<div class="kicker">NUEDC Topics × 三大电子</div>' +
+        '<h1>电赛历年真题 × 三大电子 公司化筛选</h1>' +
+        '<div class="sub">从全国大学生电子设计竞赛 1994–2026 历年真题中，按 消费电子 / 工业电子 / 车规电子 三大行业方向归类，标注每道题可落地的公司化场景，并给出分行业动手顺序与电路元器件学习路径，供后续逐个做出来。</div>' +
+        '<div class="tagline-dots"><span>数据来源：zuoliangyu.github.io/NUEDC_TOPIC</span><span>收录年份：1994–2026</span><span>分类条目：' + T.length + '</span><span>电路模块：' + CIRC.length + '</span><span>基础题（仿真学习）：' + BASIC.length + '</span></div>' +
+      '</header>' +
+      '<section class="stats">' +
+        '<div class="stat"><div class="num">' + T.length + '<small> 条</small></div><div class="lab">全部分类条目（1994–2026）</div></div>' +
+        '<div class="stat"><div class="num">' + key + '<small> 道</small></div><div class="lab">重点推荐（直接对应公司产品/测试设备）</div></div>' +
+        '<div class="stat"><div class="num">' + multi + '<small> 道</small></div><div class="lab">跨领域题目（同时适用 ≥2 大方向）</div></div>' +
+        '<div class="stat blue"><div class="num">' + che + '<small> 道</small></div><div class="lab">车规电子相关（新能源/智能驾驶热点）</div></div>' +
+      '</section>' +
+      '<div class="charts" style="margin-top:18px">' +
+        '<div class="card"><div class="sec-title">历年真题 × 三大领域分布</div><div class="sec-sub">2009–2026 各年真题的领域标签计数（一道题可属多个领域）</div><div class="chart-box" id="chart1"><div class="fallback" id="fb1">图表库加载失败：请联网后刷新；下方清单不受影响。</div></div></div>' +
+        '<div class="card"><div class="sec-title">公司化优先级分布</div><div class="sec-sub">全部 ' + T.length + ' 条分类条目的优先级构成</div><div class="chart-box" id="chart2"><div class="fallback" id="fb2">图表库加载失败：请联网后刷新；下方清单不受影响。</div></div></div>' +
+      '</div>' +
+      '<div class="entry-grid">' +
+        card("消费") + card("工业") + card("车规") +
+        '<a class="entry full" href="#/cross"><div><h3><span class="dot" style="background:#7c3aed"></span>跨领域电子</h3><p style="margin-top:2px">同时适用 ≥2 大方向的题目，是「一通多通」的高价值题</p></div><div class="n">' + multi + ' 题</div><div class="go">进入跨领域子页 →</div></a>' +
+        '<a class="entry full" href="#/basic"><div><h3><span class="dot" style="background:#b45309"></span>基础题 · 仿真学习分类</h3><p style="margin-top:2px">纯电路、零硬件基础可用仿真软件完成，无公司场景，按入门/进阶/挑战三档学习</p></div><div class="n">' + BASIC.length + ' 题</div><div class="go">进入基础题子页 →</div></a>' +
+        '<a class="entry full" href="#/tiadi"><div><h3><span class="dot" style="background:#1d4ed8"></span>TI·ADI 方案归类（电路选型）</h3><p style="margin-top:2px">对应真题 + 市面 TI/ADI 器件归类 + 粗略解答步骤，为后续自己写电路设计打底</p></div><div class="n">' + TIADI.length + ' 类</div><div class="go">进入 TI·ADI 选型子页 →</div></a>' +
+        '<a class="entry full" href="#/circuits"><div><h3><span class="dot" style="background:#0f766e"></span>电路与元器件学习路径</h3><p style="margin-top:2px">电赛真题背后的 ' + CIRC.length + ' 个电路模块、45 项常用元器件速查</p></div><div class="go">进入电路与元器件子页 →</div></a>' +
+      '</div>' +
+      '<div class="card">' +
+        '<div class="sec-title">全量清单（可搜索 / 筛选 / 排序 / 分页）</div>' +
+        '<div class="sec-sub">按领域归类子页：<a href="#/consumer">消费电子</a> · <a href="#/industrial">工业电子</a> · <a href="#/automotive">车规电子</a> · <a href="#/cross">跨领域</a> · <a href="#/basic">基础题</a> · <a href="#/tiadi">TI·ADI选型</a> · <a href="#/circuits">电路与元器件</a></div>' +
+        '<div id="list-home"></div>' +
+      '</div>';
+    buildList({id:"list-home", data:T, sectors:{消费:1,工业:1,车规:1}, pageSize:10});
+  }
+
+  function initHomeCharts(){
+    if(!window.echarts){ $id("fb1").style.display = "block"; $id("fb2").style.display = "block"; return; }
+    var years = [];
+    for(var y = 2009; y <= 2026; y++) years.push(String(y));
+    var cnt = {"消费":{}, "工业":{}, "车规":{}};
+    years.forEach(function(y){ cnt["消费"][y] = 0; cnt["工业"][y] = 0; cnt["车规"][y] = 0; });
+    T.forEach(function(t){
+      if(/^\d{4}$/.test(t.year)){
+        t.sectors.forEach(function(s){ if(cnt[s] && cnt[s][t.year] != null) cnt[s][t.year]++; });
+      }
+    });
+    var series = ["消费","工业","车规"].map(function(s){
+      return {name: SEC_INFO[s].label, type:"bar", stack:"t", barWidth:14,
+        itemStyle:{color: SEC_INFO[s].color},
+        data: years.map(function(y){ return cnt[s][y]; })};
+    });
+    var c1 = echarts.init($id("chart1"));
+    c1.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"axis", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      legend:{top:0, right:0, itemWidth:12, itemHeight:8, textStyle:{fontSize:12}},
+      grid:{left:6, right:6, top:34, bottom:0, containLabel:true},
+      xAxis:{type:"category", data:years, axisLabel:{fontSize:11, hideOverlap:true, color:"#64748b"}, axisLine:{lineStyle:{color:"#cbd5e1"}}, axisTick:{show:false}},
+      yAxis:{type:"value", minInterval:1, axisLabel:{fontSize:11, color:"#64748b"}, splitLine:{lineStyle:{color:"#eef2f7"}}},
+      series:series
+    });
+    var c2 = echarts.init($id("chart2"));
+    c2.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"item", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      legend:{bottom:0, left:"center", itemWidth:12, itemHeight:8, textStyle:{fontSize:12}},
+      series:[{
+        type:"pie", radius:["46%","68%"], center:["50%","46%"],
+        label:{fontSize:12, formatter:function(p){ return p.name + "\n" + p.value + " 道"; }},
+        labelLine:{length:12, length2:8},
+        data:[1,2,3].map(function(p){
+          return {name: PRI_LABEL[p], value: T.filter(function(t){ return t.priority === p; }).length,
+            itemStyle:{color: p === 1 ? "#dc2626" : p === 2 ? "#d97706" : "#94a3b8"}};
+        })
+      }]
+    });
+    window.addEventListener("resize", function(){ c1.resize(); c2.resize(); });
+  }
+
+  /* ================= 视图：分行业子页 ================= */
+  function renderIndustry(v){
+    var key = v === "consumer" ? "consumer" : v === "industrial" ? "industrial" : "automotive";
+    var s = v === "consumer" ? "消费" : v === "industrial" ? "工业" : "车规";
+    var rec = REC[key];
+    var list = bySec(s);
+    var headHtml =
+      '<div class="view-head">' +
+        '<div class="kicker" style="font-size:12px;letter-spacing:.14em;color:' + SEC_INFO[s].color + ';text-transform:uppercase;margin-bottom:4px">' + SEC_INFO[s].label + '</div>' +
+        '<h2>' + SEC_INFO[s].label + ' · 适合做的真题清单</h2>' +
+        '<p>本行业共 ' + list.length + ' 题（含与其他行业重叠的多领域题）。先从「动手顺序推荐」逐个做出来，再在下方清单里按需选做；电路基础见 <a href="#/circuits">电路与元器件</a> 子页。</p>' +
+      '</div>';
+    var stepsHtml = "";
+    if(rec){
+      stepsHtml = '<div class="card"><div class="sec-title">' + rec.title + '</div><div class="sec-sub">' + rec.desc + '</div><div class="steps-v">';
+      var colors = {consumer:"#2563eb", industrial:"#ea580c", automotive:"#059669"};
+      rec.steps.forEach(function(st, i){
+        stepsHtml += '<div class="stepv"><div class="no" style="background:' + colors[key] + '">' + (i + 1) + '</div><div class="bd">' +
+          '<div class="tt"><span class="code">' + st.code + '</span>' + esc(st.title) + '</div>' +
+          '<div class="wh">为什么：' + esc(st.why) + '</div>' +
+          '<div class="ln"><b>核心知识点：</b>' + esc(st.learn) + '</div>' +
+        '</div></div>';
+      });
+      stepsHtml += '</div></div>';
+    }
+    $id("view-" + v).innerHTML = headHtml + stepsHtml +
+      '<div class="card"><div class="sec-title">' + SEC_INFO[s].label + ' 全量清单</div><div class="sec-sub">搜索 / 优先级筛选 / 排序 / 分页</div><div id="list-' + v + '"></div></div>';
+    buildList({id:"list-" + v, data:list, sectors:null, pageSize:10});
+  }
+
+  /* ================= 视图：跨领域 ================= */
+  function renderCross(){
+    var multi = T.filter(function(t){ return t.sectors.length >= 2; });
+    var both = multi.filter(function(t){ return t.sectors.length === 2; });
+    var all3 = multi.filter(function(t){ return t.sectors.length === 3; });
+    $id("view-cross").innerHTML =
+      '<div class="view-head">' +
+        '<div class="kicker" style="font-size:12px;letter-spacing:.14em;color:#7c3aed;text-transform:uppercase;margin-bottom:4px">Cross-Domain</div>' +
+        '<h2>跨领域电子 · 一通多通的题目</h2>' +
+        '<p>同时适用消费、工业、车规中 ≥2 个方向的题目：一套硬件/一个方案对应多个行业场景，公司化复用价值最高。</p>' +
+      '</div>' +
+      '<section class="stats" style="margin-top:14px">' +
+        '<div class="stat"><div class="num">' + multi.length + '<small> 题</small></div><div class="lab">跨领域题目（≥2 方向）</div></div>' +
+        '<div class="stat"><div class="num">' + both.length + '<small> 题</small></div><div class="lab">两领域组合题</div></div>' +
+        '<div class="stat"><div class="num">' + all3.length + '<small> 题</small></div><div class="lab">三大领域通吃题</div></div>' +
+        '<div class="stat blue"><div class="num">' + multi.filter(function(t){ return t.priority === 1; }).length + '<small> 道</small></div><div class="lab">其中重点推荐</div></div>' +
+      '</section>' +
+      '<div class="card"><div class="sec-title">跨领域组合分布</div><div class="sec-sub">题目覆盖领域的组合情况（组合可多选）</div><div class="chart-box" id="chart3"><div class="fallback" id="fb3">图表库加载失败：请联网后刷新。</div></div></div>' +
+      '<div class="card"><div class="sec-title">跨领域全量清单</div><div class="sec-sub">搜索 / 优先级筛选 / 排序 / 分页</div><div id="list-cross"></div></div>';
+    buildList({id:"list-cross", data:multi, sectors:null, pageSize:10});
+  }
+  function initCrossCharts(){
+    if(!window.echarts){ $id("fb3").style.display = "block"; return; }
+    function combo(a, b){ return T.filter(function(t){ return t.sectors.indexOf(a) >= 0 && t.sectors.indexOf(b) >= 0; }).length; }
+    var labels = ["消费+工业", "消费+车规", "工业+车规", "消费+工业+车规"];
+    var vals = [combo("消费","工业"), combo("消费","车规"), combo("工业","车规"),
+      T.filter(function(t){ return t.sectors.length === 3; }).length];
+    var c3 = echarts.init($id("chart3"));
+    c3.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"axis", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      grid:{left:6, right:30, top:10, bottom:0, containLabel:true},
+      xAxis:{type:"value", minInterval:1, axisLabel:{fontSize:11, color:"#64748b"}, splitLine:{lineStyle:{color:"#eef2f7"}}},
+      yAxis:{type:"category", data:labels, axisLabel:{fontSize:12, color:"#334155"}, axisLine:{lineStyle:{color:"#cbd5e1"}}, axisTick:{show:false}},
+      series:[{type:"bar", barWidth:18, itemStyle:{color:"#7c3aed", borderRadius:[0,4,4,0]},
+        label:{show:true, position:"right", fontSize:12, color:"#475569"},
+        data: vals}]
+    });
+    window.addEventListener("resize", function(){ c3.resize(); });
+  }
+
+  /* ================= 视图：基础题（纯电路 / 仿真学习） ================= */
+  function renderBasic(){
+    var LEVEL = ["入门", "进阶", "挑战"];
+    var chips = '<span class="chip cat-on" data-lv="all">全部（' + BASIC.length + '）</span>' +
+      LEVEL.map(function(l){
+        return '<span class="chip" data-lv="' + l + '">' + l + '（' + BASIC.filter(function(x){ return x.level === l; }).length + '）</span>';
+      }).join("");
+    $id("view-basic").innerHTML =
+      '<div class="view-head">' +
+        '<div class="kicker" style="font-size:12px;letter-spacing:.14em;color:#b45309;text-transform:uppercase;margin-bottom:4px">Simulation-First Basics</div>' +
+        '<h2>基础题 · 纯电路仿真学习分类</h2>' +
+        '<p>这些题是<strong>纯电路类</strong>：不依赖小车/无人机等实体装置，用 TINA-TI / LTspice / Multisim 等仿真软件就能完成核心学习，<strong>没有公司化落地场景</strong>，适合没有硬件基础的人先看懂电路、会选型、会搭仿真。做完基础题再进 <a href="#/tiadi">TI·ADI 电路选型</a> 练真实器件，最后回到各行业清单做公司化题。</p>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">基础题清单（按难度）</div><div class="sec-sub">点击难度筛选；每题给出建议仿真软件与学习要点</div>' +
+        '<div class="cat-chips">' + chips + '</div>' +
+        '<div id="basic-list" style="min-height:60px"></div>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">难度分布</div><div class="sec-sub">入门 / 进阶 / 挑战 三档题量</div><div class="chart-box" id="chart5"><div class="fallback" id="fb5">图表库加载失败：请联网后刷新。</div></div></div>';
+    renderBasicList("all");
+    Array.prototype.forEach.call(document.querySelectorAll("#view-basic .cat-chips .chip"), function(ch){
+      ch.addEventListener("click", function(){
+        Array.prototype.forEach.call(document.querySelectorAll("#view-basic .cat-chips .chip"), function(x){ x.classList.remove("cat-on"); });
+        ch.classList.add("cat-on");
+        renderBasicList(ch.getAttribute("data-lv"));
+      });
+    });
+  }
+  function renderBasicList(lv){
+    var list = BASIC.filter(function(x){ return lv === "all" || x.level === lv; });
+    var LEVEL_COLOR = {入门:"#15803d", 进阶:"#b45309", 挑战:"#dc2626"};
+    var html = list.map(function(b){
+      return '<div class="circ"><h4><span class="code" style="margin-right:8px">' + esc(b.code) + '</span>' + esc(b.title) +
+        '<span class="lv lv-' + b.level + '">' + b.level + '</span></h4>' +
+        '<div class="row"><b>仿真软件：</b>' + esc(b.sw) + '</div>' +
+        '<div class="row"><b>仿真学习要点：</b>' + esc(b.points) + '</div>' +
+      '</div>';
+    }).join("");
+    $id("basic-list").innerHTML = html || '<p style="color:#94a3b8;padding:10px 0">该难度暂无题目</p>';
+  }
+  function initBasicCharts(){
+    if(!window.echarts){ $id("fb5").style.display = "block"; return; }
+    var c5 = echarts.init($id("chart5"));
+    c5.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"item", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      legend:{bottom:0, left:"center", itemWidth:12, itemHeight:8, textStyle:{fontSize:12}},
+      series:[{
+        type:"pie", radius:["46%","68%"], center:["50%","46%"],
+        label:{fontSize:12, formatter:function(p){ return p.name + "\n" + p.value + " 题"; }},
+        labelLine:{length:12, length2:8},
+        data:["入门","进阶","挑战"].map(function(l){
+          return {name: l, value: BASIC.filter(function(x){ return x.level === l; }).length,
+            itemStyle:{color: l === "入门" ? "#15803d" : l === "进阶" ? "#b45309" : "#dc2626"}};
+        })
+      }]
+    });
+    window.addEventListener("resize", function(){ c5.resize(); });
+  }
+
+  /* ================= 视图：TI·ADI 选型（电路选型） ================= */
+  function renderTIADI(){
+    var cats = [];
+    TIADI.forEach(function(c){ if(cats.indexOf(c.cat) < 0) cats.push(c.cat); });
+    var chips = '<span class="chip cat-on" data-cat="all">全部（' + TIADI.length + '）</span>' +
+      cats.map(function(c){
+        return '<span class="chip" data-cat="' + c + '">' + c + '</span>';
+      }).join("");
+    $id("view-tiadi").innerHTML =
+      '<div class="view-head">' +
+        '<div class="kicker" style="font-size:12px;letter-spacing:.14em;color:#1d4ed8;text-transform:uppercase;margin-bottom:4px">TI & ADI Design-In</div>' +
+        '<h2>TI·ADI 方案归类 · 电路选型</h2>' +
+        '<p>把电赛真题按电路类别归并，结合市面上 TI / ADI 两家原厂的真实器件给出<strong>粗略解答步骤（电路选型思路）</strong>：定指标 → 选拓扑 → 选主芯片 → 选外围 → 仿真验证。先在这里看懂"为什么选这颗料"，后续自己写电路设计时直接套用。零基础先走 <a href="#/basic">基础题</a> 仿真入门，电路原理看 <a href="#/circuits">电路与元器件</a>。工具：TI 用 WEBENCH / TINA-TI / PSPICE for TI，ADI 用 LTspice（都免费）。</p>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">方案归类（按电路类别）</div><div class="sec-sub">点击类别筛选；TI / ADI 双方案对照 + 粗略解答步骤</div>' +
+        '<div class="cat-chips">' + chips + '</div>' +
+        '<div id="tiadi-list" style="min-height:60px"></div>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">各类别覆盖真题数</div><div class="sec-sub">每个电路类别归并的真题数量（题目最多的类别先学）</div><div class="chart-box" id="chart6"><div class="fallback" id="fb6">图表库加载失败：请联网后刷新。</div></div></div>' +
+      '<div class="card"><div class="sec-sub" style="margin:0">车规方向选型注意：优先 AEC-Q100 认证器件；所有型号均为市面通用参考件，具体以原厂数据手册为准。</div></div>';
+    renderTIADIList("all");
+    Array.prototype.forEach.call(document.querySelectorAll("#view-tiadi .cat-chips .chip"), function(ch){
+      ch.addEventListener("click", function(){
+        Array.prototype.forEach.call(document.querySelectorAll("#view-tiadi .cat-chips .chip"), function(x){ x.classList.remove("cat-on"); });
+        ch.classList.add("cat-on");
+        renderTIADIList(ch.getAttribute("data-cat"));
+      });
+    });
+  }
+  function renderTIADIList(cat){
+    var list = TIADI.filter(function(x){ return cat === "all" || x.cat === cat; });
+    var html = list.map(function(c){
+      var steps = c.steps.map(function(s, i){
+        return '<li><span class="no">' + (i + 1) + '</span>' + esc(s) + '</li>';
+      }).join("");
+      return '<div class="tiadi">' +
+        '<h4>' + esc(c.cat) + '<span class="tt2" style="float:right;font-weight:400">对应真题：' + esc(c.topics) + '</span></h4>' +
+        '<div class="cols">' +
+          '<div class="col ti"><div class="vh">TI 方案</div>' + esc(c.ti) + '</div>' +
+          '<div class="col adi"><div class="vh">ADI 方案</div>' + esc(c.adi) + '</div>' +
+        '</div>' +
+        '<div class="st"><b>粗略解答步骤（电路选型思路）：</b><ol>' + steps + '</ol></div>' +
+      '</div>';
+    }).join("");
+    $id("tiadi-list").innerHTML = html || '<p style="color:#94a3b8;padding:10px 0">该类别暂无方案</p>';
+  }
+  function initTIADICharts(){
+    if(!window.echarts){ $id("fb6").style.display = "block"; return; }
+    function cnt(s){ var n = (s.match(/\d{4}-[A-Z]|\d{4}/g) || []).length; return n; }
+    var names = [], vals = [];
+    TIADI.forEach(function(c){ names.push(c.cat); vals.push(cnt(c.topics)); });
+    var c6 = echarts.init($id("chart6"));
+    c6.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"axis", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      grid:{left:6, right:40, top:10, bottom:0, containLabel:true},
+      xAxis:{type:"value", minInterval:1, axisLabel:{fontSize:11, color:"#64748b"}, splitLine:{lineStyle:{color:"#eef2f7"}}},
+      yAxis:{type:"category", data:names, axisLabel:{fontSize:11, color:"#334155"}, axisLine:{lineStyle:{color:"#cbd5e1"}}, axisTick:{show:false}},
+      series:[{type:"bar", barWidth:12, itemStyle:{color:"#1d4ed8", borderRadius:[0,4,4,0]},
+        label:{show:true, position:"right", fontSize:11, color:"#475569"},
+        data: vals}]
+    });
+    window.addEventListener("resize", function(){ c6.resize(); });
+  }
+
+  /* ================= 视图：电路与元器件 ================= */
+  function renderCircuits(){
+    var cats = [];
+    CIRC.forEach(function(c){ if(cats.indexOf(c.cat) < 0) cats.push(c.cat); });
+    var chips = '<span class="chip cat-on" data-cat="all">全部（' + CIRC.length + '）</span>' +
+      cats.map(function(c){
+        return '<span class="chip" data-cat="' + c + '">' + c + '（' + CIRC.filter(function(x){ return x.cat === c; }).length + '）</span>';
+      }).join("");
+    $id("view-circuits").innerHTML =
+      '<div class="view-head">' +
+        '<div class="kicker" style="font-size:12px;letter-spacing:.14em;color:#0f766e;text-transform:uppercase;margin-bottom:4px">Circuits & Components</div>' +
+        '<h2>电路与元器件 · 电赛真题背后的知识库</h2>' +
+        '<p>' + CIRC.length + ' 个电路模块按六大类梳理（电源变换 / 信号与测量 / 控制与运动 / 射频与通信 / 显示与人机 / 传感器接口），每个模块列出电路要点、关键元器件、对应真题与公司应用；下方附 45 项元器件速查表。结合 TI 模拟工程师手册学习效果最佳。</p>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">电路模块知识库</div><div class="sec-sub">点击类别筛选；每个模块的「对应真题」可在总览清单中回溯</div>' +
+        '<div class="cat-chips">' + chips + '</div>' +
+        '<div id="circ-list" style="min-height:60px"></div>' +
+      '</div>' +
+      '<div class="card"><div class="sec-title">电路模块按类别分布</div><div class="sec-sub">六大类的模块数量</div><div class="chart-box" id="chart4"><div class="fallback" id="fb4">图表库加载失败：请联网后刷新。</div></div></div>' +
+      '<div class="card"><div class="sec-title">元器件速查表</div><div class="sec-sub">按功能类别列出常用元器件与典型型号（参考件）</div>' +
+        '<div class="comp-wrap"><table class="comp-table"><thead><tr><th style="width:140px">类别</th><th style="width:180px">元器件</th><th style="width:280px">典型型号</th><th>用途</th></tr></thead><tbody id="comp-body"></tbody></table></div>' +
+      '</div>';
+    renderCircList("all");
+    Array.prototype.forEach.call(document.querySelectorAll("#view-circuits .cat-chips .chip"), function(ch){
+      ch.addEventListener("click", function(){
+        Array.prototype.forEach.call(document.querySelectorAll("#view-circuits .cat-chips .chip"), function(x){ x.classList.remove("cat-on"); });
+        ch.classList.add("cat-on");
+        renderCircList(ch.getAttribute("data-cat"));
+      });
+    });
+    var compHtml = "";
+    var lastGroup = "";
+    COMP.forEach(function(c){
+      if(c.group !== lastGroup){
+        compHtml += '<tr class="comp-group"><td colspan="4">' + esc(c.group) + '</td></tr>';
+        lastGroup = c.group;
+      }
+      compHtml += '<tr><td></td><td>' + esc(c.name) + '</td><td>' + esc(c.models) + '</td><td>' + esc(c.use) + '</td></tr>';
+    });
+    $id("comp-body").innerHTML = compHtml;
+  }
+  function renderCircList(cat){
+    var list = CIRC.filter(function(c){ return cat === "all" || c.cat === cat; });
+    var html = list.map(function(c){
+      return '<div class="circ"><h4>' + esc(c.name) + '</h4>' +
+        '<div class="row"><b>电路要点：</b>' + esc(c.points) + '</div>' +
+        '<div class="row"><b>关键元器件：</b>' + esc(c.parts) + '</div>' +
+        '<div class="row"><span class="tt2">对应真题：</span>' + esc(c.topics) + '</div>' +
+        '<div class="row"><b>学习要点 / 公司应用：</b>' + esc(c.note) + '</div>' +
+      '</div>';
+    }).join("");
+    $id("circ-list").innerHTML = html || '<p style="color:#94a3b8;padding:10px 0">该类别暂无模块</p>';
+  }
+  function initCircuitsCharts(){
+    if(!window.echarts){ $id("fb4").style.display = "block"; return; }
+    var cats = [];
+    CIRC.forEach(function(c){ if(cats.indexOf(c.cat) < 0) cats.push(c.cat); });
+    var c4 = echarts.init($id("chart4"));
+    c4.setOption({
+      backgroundColor:"transparent",
+      tooltip:{trigger:"axis", triggerOn:"mousemove|click", renderMode:"richText", confine:true},
+      grid:{left:6, right:30, top:10, bottom:0, containLabel:true},
+      xAxis:{type:"value", minInterval:1, axisLabel:{fontSize:11, color:"#64748b"}, splitLine:{lineStyle:{color:"#eef2f7"}}},
+      yAxis:{type:"category", data:cats, axisLabel:{fontSize:12, color:"#334155"}, axisLine:{lineStyle:{color:"#cbd5e1"}}, axisTick:{show:false}},
+      series:[{type:"bar", barWidth:16, itemStyle:{color:"#0f766e", borderRadius:[0,4,4,0]},
+        label:{show:true, position:"right", fontSize:12, color:"#475569"},
+        data: cats.map(function(c){ return CIRC.filter(function(x){ return x.cat === c; }).length; })}]
+    });
+    window.addEventListener("resize", function(){ c4.resize(); });
+  }
+
+  route();
+})();
+</script>
+</body>
+</html>
