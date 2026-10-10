@@ -207,7 +207,7 @@ def build_tree():
                     node["index_md_path"] = e.path
                     node["index_rel"] = relpath
                 else:
-                    page = {"type": "page", "name": e.name[:-3], "url": "/knowledge/" + relpath[:-3],
+                    page = {"type": "page", "name": e.name[:-3], "url": "/knowledge/" + relpath[:-3] + ".html",
                             "md_path": e.path, "rel": relpath[:-3]}
                     node["children"].append(page)
 
@@ -322,8 +322,8 @@ def main():
         converted += 1
 
     # 首页（index.md -> index.html）特殊处理：由外部手写版覆盖，这里仅转换占位
-    # 导航树写出
-    nav = {"tree": root, "pages": tree_pages}
+    # 导航树写出（剔除本地路径等内部字段）
+    nav = {"tree": clean_node(root), "pages": tree_pages}
     with open(os.path.join(OUT, "kb-nav.json"), "w", encoding="utf-8", newline="\n") as f:
         json.dump(nav, f, ensure_ascii=False, separators=(",", ":"))
     with open(os.path.join(OUT, "search_index.json"), "w", encoding="utf-8", newline="\n") as f:
@@ -347,6 +347,12 @@ def build_crumb_html(rel_dir):
     if html:
         return " / ".join(html)
     return '<a href="/knowledge/">工程师知识库</a>'
+
+
+def clean_node(n):
+    """剔除导航树中的本地路径等内部字段，仅保留公开展示字段"""
+    return {"type": n["type"], "name": n["name"], "url": n["url"],
+            "children": [clean_node(c) for c in n.get("children", [])]}
 
 
 def title_of(url, order):
