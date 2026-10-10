@@ -3,22 +3,29 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="generator" content="工程师知识库静态转换">
+<meta name="generator" content="工程师知识库静态转换 v2">
 <title>多轴同步控制：协调运动与插补算法 · 工程师知识库</title>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="stylesheet" href="/knowledge/kb-style.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 </head>
 <body>
-<div class="kb-page">
-  <div class="kb-topbar">
-    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
-    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></span>
+<div class="kb-progress" id="kb-progress"></div>
+<header class="kb-header">
+  <a class="kb-logo" href="/knowledge/"><span class="dot"></span>工程师知识库</a>
+  <div class="kb-crumbs"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">执行器控制</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></div>
+  <div class="kb-search">
+    <input id="kb-search-input" type="text" placeholder="搜索知识库…（按 / 聚焦）" autocomplete="off">
+    <span class="hotkey">/</span>
   </div>
-  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+</header>
+<div class="kb-search-panel" id="kb-search-panel">
+  <div id="kb-search-results"><div class="kb-search-empty">输入关键词开始搜索</div></div>
+</div>
+<div class="kb-layout">
+  <aside class="kb-side" id="kb-side"></aside>
+  <main class="kb-main">
+    <details class="kb-toc-inline" open><summary>📑 本页目录</summary><div class="toc">
 <ul>
 <li><a href="#_2">概述</a></li>
 <li><a href="#_3">背景知识</a><ul>
@@ -77,7 +84,7 @@
 </ul>
 </div>
 </details>
-  <article class="kb-article">
+    <article class="kb-article">
 <h1 id="_1">多轴同步控制：协调运动与插补算法</h1>
 <h2 id="_2">概述</h2>
 <p>单轴运动控制只需控制一个电机，而多轴系统需要多个电机在时间上精确协调，使末端执行器（刀具、打印头、机械臂末端）沿预定轨迹运动。这是CNC（Computer Numerical Control，计算机数控）机床、3D打印机、工业机器人的核心技术。</p>
@@ -2388,16 +2395,82 @@ for radius in [5, 10, 20, 50, 100]:
 <li>CoreXY运动学分析 — <a href="http://corexy.com/">corexy.com</a></li>
 <li>《计算机数控系统》— 王永章，机械工业出版社</li>
 </ol>
-  </article>
-  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+    </article>
+    <div class="kb-prevnext">
+      <a class="prev" href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/02-motion-control-algorithms"><span class="lbl">← 上一篇</span>02-motion-control-algorithms</a>
+      <a class="next" href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/04-smart-gimbal-project"><span class="lbl">下一篇 →</span>04-smart-gimbal-project</a>
+    </div>
+    <div class="kb-footer">© 工程师知识库 · <a href="/">返回博客首页</a></div>
+  </main>
+  <aside class="kb-toc-rt"><div class="h">本页目录</div><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#cnc">CNC三种坐标系详解</a></li>
+<li><a href="#g">G代码结构与常用指令</a></li>
+<li><a href="#bresenham">Bresenham线性插补算法推导</a></li>
+</ul>
+</li>
+<li><a href="#_4">核心内容</a><ul>
+<li><a href="#_5">主从同步与电子齿轮</a></li>
+<li><a href="#bresenham_1">Bresenham线性插补实现</a></li>
+<li><a href="#3d">3D线性插补与速度混合</a></li>
+<li><a href="#_6">圆弧插补与弦误差控制</a></li>
+<li><a href="#_7">前瞻缓冲区与连续路径执行</a></li>
+<li><a href="#freertos">FreeRTOS多轴任务架构</a></li>
+</ul>
+</li>
+<li><a href="#_8">深入原理</a><ul>
+<li><a href="#grbl">GRBL架构深度分析</a></li>
+<li><a href="#_9">实时运动规划：数学基础</a></li>
+<li><a href="#_10">电子齿轮进阶：非线性凸轮仿形</a></li>
+</ul>
+</li>
+<li><a href="#2xy">完整项目实战：2轴XY绘图仪</a><ul>
+<li><a href="#_11">项目概述</a></li>
+<li><a href="#bom">物料清单（BOM）</a></li>
+<li><a href="#corexy">CoreXY运动学</a></li>
+<li><a href="#g_1">G代码解析器实现</a></li>
+<li><a href="#homing">回零（Homing）程序</a></li>
+<li><a href="#_12">主程序</a></li>
+<li><a href="#_13">测试程序：绘制测试图案</a></li>
+</ul>
+</li>
+<li><a href="#_14">性能调优</a><ul>
+<li><a href="#_15">插补精度优化</a></li>
+<li><a href="#_16">速度规划调优参数</a></li>
+</ul>
+</li>
+<li><a href="#_17">常见问题与调试</a><ul>
+<li><a href="#1">问题1：圆弧变椭圆</a></li>
+<li><a href="#2">问题2：圆弧弦误差过大</a></li>
+<li><a href="#3">问题3：速度不连续（转角处抖动）</a></li>
+<li><a href="#4axis-desync">问题4：轴失步（Axis Desync）</a></li>
+<li><a href="#5">问题5：圆弧起终点不闭合</a></li>
+<li><a href="#6g">问题6：G代码解析错误</a></li>
+<li><a href="#_18">调试工具推荐</a></li>
+</ul>
+</li>
+<li><a href="#_19">测试与验证</a><ul>
+<li><a href="#_20">插补精度测试</a></li>
+<li><a href="#_21">圆弧弦误差验证</a></li>
+</ul>
+</li>
+<li><a href="#_22">延伸阅读</a></li>
+<li><a href="#_23">参考资料</a></li>
+</ul>
 </div>
+</aside>
+</div>
+<button class="kb-backtop" id="kb-backtop">↑</button>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+<script src="/knowledge/kb-app.js"></script>
 <script>
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
 document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
 hljs.highlightAll();
-mermaid.initialize({{startOnLoad:true,theme:'dark'}});
-var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
-window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
-bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
 </script>
 </body>
 </html>
