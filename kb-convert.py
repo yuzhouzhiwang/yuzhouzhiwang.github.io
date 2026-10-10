@@ -14,7 +14,7 @@ from html.parser import HTMLParser
 
 SRC = r"C:\Users\Administrator\Desktop\knowledge-system\knowledge"
 OUT = r"D:\GitHub个人主页项目\yuzhouzhiwang.github.io\knowledge"
-EXCLUDE_DIRS = {"templates", ".obsidian", ".git", ".github"}
+EXCLUDE_DIRS = {"templates", ".obsidian", ".git", ".github", "javascripts", "stylesheets"}
 
 import markdown
 
