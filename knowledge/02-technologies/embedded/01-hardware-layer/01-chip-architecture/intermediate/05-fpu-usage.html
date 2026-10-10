@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>浮点运算单元FPU使用指南 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/">01-chip-architecture</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a><ul>
+<li><a href="#fpu_1">FPU的优势</a></li>
+<li><a href="#fpu_2">支持FPU的处理器</a></li>
+</ul>
+</li>
+<li><a href="#fpu_3">FPU配置与使能</a><ul>
+<li><a href="#fpu_4">检查FPU支持</a></li>
+<li><a href="#fpu_5">使能FPU</a></li>
+<li><a href="#_2">编译器配置</a></li>
+</ul>
+</li>
+<li><a href="#_3">浮点指令集</a><ul>
+<li><a href="#fpu_6">FPU寄存器</a></li>
+<li><a href="#_4">基本浮点运算</a></li>
+<li><a href="#_5">向量运算</a></li>
+</ul>
+</li>
+<li><a href="#_6">性能对比</a><ul>
+<li><a href="#vs">软浮点 vs 硬浮点</a></li>
+<li><a href="#_7">典型性能数据</a></li>
+</ul>
+</li>
+<li><a href="#_8">上下文保存</a><ul>
+<li><a href="#fpu_7">FPU上下文</a></li>
+<li><a href="#_9">延迟上下文保存</a></li>
+<li><a href="#rtosfpu">RTOS中的FPU支持</a></li>
+</ul>
+</li>
+<li><a href="#_10">应用场景</a><ul>
+<li><a href="#dsp">数字信号处理（DSP）</a></li>
+<li><a href="#_11">姿态解算</a></li>
+<li><a href="#_12">控制算法</a></li>
+<li><a href="#_13">图形处理</a></li>
+</ul>
+</li>
+<li><a href="#_14">最佳实践</a><ul>
+<li><a href="#_15">使用建议</a></li>
+<li><a href="#_16">性能优化技巧</a></li>
+<li><a href="#_17">调试技巧</a></li>
+</ul>
+</li>
+<li><a href="#_18">常见问题</a><ul>
+<li><a href="#q1-fpu">Q1: 如何判断程序是否使用了FPU？</a></li>
+<li><a href="#q2-fpu">Q2: FPU会增加多少功耗？</a></li>
+<li><a href="#q3">Q3: 软浮点和硬浮点可以混用吗？</a></li>
+<li><a href="#q4-fpu">Q4: 为什么使用FPU后程序变慢了？</a></li>
+<li><a href="#q5-fpu">Q5: 中断中可以使用FPU吗？</a></li>
+</ul>
+</li>
+<li><a href="#_19">总结</a><ul>
+<li><a href="#_20">关键要点</a></li>
+<li><a href="#_21">下一步学习</a></li>
+</ul>
+</li>
+<li><a href="#_22">参考资料</a><ul>
+<li><a href="#_23">官方文档</a></li>
+<li><a href="#_24">推荐阅读</a></li>
+<li><a href="#_25">在线资源</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="fpu">浮点运算单元FPU使用指南</h1>
+<h2 id="_1">概述</h2>
+<p>FPU（Floating Point Unit，浮点运算单元）是ARM Cortex-M4/M7/M33等高性能处理器中的硬件加速模块，专门用于执行浮点运算。相比软件浮点运算，硬件FPU可以显著提升浮点计算性能，降低功耗。</p>
+<h3 id="fpu_1">FPU的优势</h3>
+<p><strong>性能提升</strong>：
+- 硬件FPU比软浮点快10-100倍
+- 单周期执行简单浮点运算
+- 支持流水线操作</p>
+<p><strong>功耗降低</strong>：
+- 减少CPU指令执行数量
+- 降低整体系统功耗
+- 提高能效比</p>
+<p><strong>代码简化</strong>：
+- 直接使用标准C浮点类型
+- 无需特殊的定点运算库
+- 提高代码可读性</p>
+<h3 id="fpu_2">支持FPU的处理器</h3>
+<table>
+<thead>
+<tr>
+<th>处理器系列</th>
+<th>FPU类型</th>
+<th>精度</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cortex-M4</td>
+<td>FPv4-SP</td>
+<td>单精度</td>
+<td>可选FPU</td>
+</tr>
+<tr>
+<td>Cortex-M7</td>
+<td>FPv5-SP/DP</td>
+<td>单精度/双精度</td>
+<td>可选FPU</td>
+</tr>
+<tr>
+<td>Cortex-M33</td>
+<td>FPv5-SP</td>
+<td>单精度</td>
+<td>可选FPU</td>
+</tr>
+<tr>
+<td>Cortex-M0/M0+/M3</td>
+<td>无</td>
+<td>-</td>
+<td>不支持FPU</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fpu_3">FPU配置与使能</h2>
+<h3 id="fpu_4">检查FPU支持</h3>
+<p>首先需要检查处理器是否支持FPU：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+#include &lt;stdio.h&gt;
+
+/**
+ * @brief  检查FPU是否存在
+ * @retval 1: 支持FPU, 0: 不支持FPU
+ */
+int fpu_check_support(void) {
+    // 读取协处理器访问控制寄存器
+    uint32_t cpacr = SCB-&gt;CPACR;
+
+    // 检查CP10和CP11位（FPU协处理器）
+    // 如果这些位可以设置，说明支持FPU
+    return ((cpacr &amp; 0x00F00000) != 0);
+}
+
+/**
+ * @brief  获取FPU类型信息
+ */
+void fpu_get_info(void) {
+    printf(&quot;=== FPU信息 ===\n&quot;);
+
+    if (fpu_check_support()) {
+        printf(&quot;FPU: 支持\n&quot;);
+
+        // 读取FPU类型寄存器
+        uint32_t mvfr0 = FPU-&gt;MVFR0;
+        uint32_t mvfr1 = FPU-&gt;MVFR1;
+
+        printf(&quot;MVFR0: 0x%08X\n&quot;, (unsigned int)mvfr0);
+        printf(&quot;MVFR1: 0x%08X\n&quot;, (unsigned int)mvfr1);
+
+        // 检查单精度支持
+        if ((mvfr0 &amp; 0x000000F0) == 0x00000020) {
+            printf(&quot;单精度浮点: 支持\n&quot;);
+        }
+
+        // 检查双精度支持
+        if ((mvfr0 &amp; 0x00000F00) == 0x00000200) {
+            printf(&quot;双精度浮点: 支持\n&quot;);
+        }
+    } else {
+        printf(&quot;FPU: 不支持\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="fpu_5">使能FPU</h3>
+<p>FPU默认是禁用的，需要在系统初始化时使能：</p>
+<pre><code class="language-c">/**
+ * @brief  使能FPU
+ */
+void fpu_enable(void) {
+    // 设置CP10和CP11为完全访问权限
+    // CP10和CP11对应FPU协处理器
+    SCB-&gt;CPACR |= ((3UL &lt;&lt; 10*2) |  // CP10: 完全访问
+                   (3UL &lt;&lt; 11*2));   // CP11: 完全访问
+
+    // 数据同步屏障，确保配置生效
+    __DSB();
+    __ISB();
+
+    printf(&quot;FPU已使能\n&quot;);
+}
+
+/**
+ * @brief  禁用FPU
+ */
+void fpu_disable(void) {
+    // 清除CP10和CP11访问权限
+    SCB-&gt;CPACR &amp;= ~((3UL &lt;&lt; 10*2) |
+                    (3UL &lt;&lt; 11*2));
+
+    __DSB();
+    __ISB();
+
+    printf(&quot;FPU已禁用\n&quot;);
+}
+
+/**
+ * @brief  配置FPU模式
+ */
+void fpu_configure(void) {
+    // 使能FPU
+    fpu_enable();
+
+    // 配置FPU上下文控制寄存器
+    // FPCCR: Floating-Point Context Control Register
+
+    // 自动保存FPU上下文（推荐）
+    FPU-&gt;FPCCR |= FPU_FPCCR_ASPEN_Msk;  // 自动状态保存使能
+    FPU-&gt;FPCCR |= FPU_FPCCR_LSPEN_Msk;  // 延迟状态保存使能
+
+    // 配置默认NaN模式
+    // FPU-&gt;FPDSCR |= FPU_FPDSCR_DN_Msk;  // 默认NaN模式
+
+    printf(&quot;FPU配置完成\n&quot;);
+}
+</code></pre>
+<h3 id="_2">编译器配置</h3>
+<p>使用FPU还需要配置编译器选项：</p>
+<p><strong>GCC编译器</strong>：</p>
+<pre><code class="language-bash"># 单精度FPU（Cortex-M4）
+-mfloat-abi=hard -mfpu=fpv4-sp-d16
+
+# 双精度FPU（Cortex-M7）
+-mfloat-abi=hard -mfpu=fpv5-d16
+
+# 软浮点（不使用FPU）
+-mfloat-abi=soft
+</code></pre>
+<p><strong>Keil MDK</strong>：</p>
+<pre><code>Target Options -&gt; C/C++ -&gt; Floating Point Hardware: Use FPU
+</code></pre>
+<p><strong>IAR EWARM</strong>：</p>
+<pre><code>Project Options -&gt; General Options -&gt; FPU: VFPv4 single precision
+</code></pre>
+<h2 id="_3">浮点指令集</h2>
+<h3 id="fpu_6">FPU寄存器</h3>
+<p>FPU包含32个单精度寄存器（S0-S31）或16个双精度寄存器（D0-D15）：</p>
+<pre><code>FPU寄存器组织：
+
+单精度模式：
+┌────┬────┬────┬────┬─────┬─────┐
+│ S0 │ S1 │ S2 │ S3 │ ... │ S31 │
+└────┴────┴────┴────┴─────┴─────┘
+  32位  32位  32位  32位        32位
+
+双精度模式：
+┌─────────┬─────────┬─────┬─────────┐
+│   D0    │   D1    │ ... │   D15   │
+└─────────┴─────────┴─────┴─────────┘
+   64位      64位            64位
+
+关系：D0 = {S1, S0}, D1 = {S3, S2}, ...
+
+控制寄存器：
+- FPSCR: 浮点状态和控制寄存器
+- FPDSCR: 浮点默认状态控制寄存器
+</code></pre>
+<h3 id="_4">基本浮点运算</h3>
+<pre><code class="language-c">/**
+ * @brief  基本浮点运算示例
+ */
+void fpu_basic_operations(void) {
+    float a = 3.14159f;
+    float b = 2.71828f;
+    float result;
+
+    // 加法
+    result = a + b;
+    printf(&quot;加法: %.5f + %.5f = %.5f\n&quot;, a, b, result);
+
+    // 减法
+    result = a - b;
+    printf(&quot;减法: %.5f - %.5f = %.5f\n&quot;, a, b, result);
+
+    // 乘法
+    result = a * b;
+    printf(&quot;乘法: %.5f * %.5f = %.5f\n&quot;, a, b, result);
+
+    // 除法
+    result = a / b;
+    printf(&quot;除法: %.5f / %.5f = %.5f\n&quot;, a, b, result);
+
+    // 平方根
+    result = sqrtf(a);
+    printf(&quot;平方根: sqrt(%.5f) = %.5f\n&quot;, a, result);
+}
+
+/**
+ * @brief  数学函数库使用
+ */
+void fpu_math_functions(void) {
+    float angle = 3.14159f / 4.0f;  // 45度
+    float result;
+
+    // 三角函数
+    result = sinf(angle);
+    printf(&quot;sin(π/4) = %.5f\n&quot;, result);
+
+    result = cosf(angle);
+    printf(&quot;cos(π/4) = %.5f\n&quot;, result);
+
+    result = tanf(angle);
+    printf(&quot;tan(π/4) = %.5f\n&quot;, result);
+
+    // 指数和对数
+    result = expf(1.0f);
+    printf(&quot;e^1 = %.5f\n&quot;, result);
+
+    result = logf(2.71828f);
+    printf(&quot;ln(e) = %.5f\n&quot;, result);
+
+    // 幂运算
+    result = powf(2.0f, 8.0f);
+    printf(&quot;2^8 = %.1f\n&quot;, result);
+}
+</code></pre>
+<h3 id="_5">向量运算</h3>
+<p>FPU可以加速向量和矩阵运算：</p>
+<pre><code class="language-c">/**
+ * @brief  向量点积运算
+ */
+float vector_dot_product(const float *a, const float *b, int n) {
+    float sum = 0.0f;
+
+    for (int i = 0; i &lt; n; i++) {
+        sum += a[i] * b[i];  // FPU加速
+    }
+
+    return sum;
+}
+
+/**
+ * @brief  向量叉积运算（3D）
+ */
+void vector_cross_product(const float *a, const float *b, float *result) {
+    result[0] = a[1] * b[2] - a[2] * b[1];
+    result[1] = a[2] * b[0] - a[0] * b[2];
+    result[2] = a[0] * b[1] - a[1] * b[0];
+}
+
+/**
+ * @brief  矩阵乘法（3x3）
+ */
+void matrix_multiply_3x3(const float *a, const float *b, float *result) {
+    for (int i = 0; i &lt; 3; i++) {
+        for (int j = 0; j &lt; 3; j++) {
+            result[i*3 + j] = 0.0f;
+            for (int k = 0; k &lt; 3; k++) {
+                result[i*3 + j] += a[i*3 + k] * b[k*3 + j];
+            }
+        }
+    }
+}
+
+/**
+ * @brief  向量运算示例
+ */
+void fpu_vector_operations(void) {
+    float vec_a[3] = {1.0f, 2.0f, 3.0f};
+    float vec_b[3] = {4.0f, 5.0f, 6.0f};
+    float result[3];
+
+    // 点积
+    float dot = vector_dot_product(vec_a, vec_b, 3);
+    printf(&quot;点积: %.2f\n&quot;, dot);
+
+    // 叉积
+    vector_cross_product(vec_a, vec_b, result);
+    printf(&quot;叉积: [%.2f, %.2f, %.2f]\n&quot;, result[0], result[1], result[2]);
+
+    // 矩阵乘法
+    float mat_a[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
+    float mat_b[9] = {9, 8, 7, 6, 5, 4, 3, 2, 1};
+    float mat_result[9];
+
+    matrix_multiply_3x3(mat_a, mat_b, mat_result);
+    printf(&quot;矩阵乘法结果:\n&quot;);
+    for (int i = 0; i &lt; 3; i++) {
+        printf(&quot;[%.1f, %.1f, %.1f]\n&quot;, 
+               mat_result[i*3], mat_result[i*3+1], mat_result[i*3+2]);
+    }
+}
+</code></pre>
+<h2 id="_6">性能对比</h2>
+<h3 id="vs">软浮点 vs 硬浮点</h3>
+<p>对比软件浮点和硬件FPU的性能差异：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;math.h&gt;
+
+/**
+ * @brief  性能测试：浮点加法
+ */
+void benchmark_float_addition(void) {
+    volatile float a = 1.23456f;
+    volatile float b = 7.89012f;
+    volatile float result;
+    uint32_t start, end, cycles;
+
+    // 使能DWT计数器
+    CoreDebug-&gt;DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT-&gt;CYCCNT = 0;
+    DWT-&gt;CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+
+    // 测试1000次加法
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 1000; i++) {
+        result = a + b;
+    }
+    end = DWT-&gt;CYCCNT;
+
+    cycles = end - start;
+    printf(&quot;浮点加法 (1000次): %u 周期\n&quot;, (unsigned int)cycles);
+    printf(&quot;平均每次: %.2f 周期\n&quot;, cycles / 1000.0f);
+}
+
+/**
+ * @brief  性能测试：浮点乘法
+ */
+void benchmark_float_multiplication(void) {
+    volatile float a = 1.23456f;
+    volatile float b = 7.89012f;
+    volatile float result;
+    uint32_t start, end, cycles;
+
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 1000; i++) {
+        result = a * b;
+    }
+    end = DWT-&gt;CYCCNT;
+
+    cycles = end - start;
+    printf(&quot;浮点乘法 (1000次): %u 周期\n&quot;, (unsigned int)cycles);
+    printf(&quot;平均每次: %.2f 周期\n&quot;, cycles / 1000.0f);
+}
+
+/**
+ * @brief  性能测试：浮点除法
+ */
+void benchmark_float_division(void) {
+    volatile float a = 123.456f;
+    volatile float b = 7.89012f;
+    volatile float result;
+    uint32_t start, end, cycles;
+
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 1000; i++) {
+        result = a / b;
+    }
+    end = DWT-&gt;CYCCNT;
+
+    cycles = end - start;
+    printf(&quot;浮点除法 (1000次): %u 周期\n&quot;, (unsigned int)cycles);
+    printf(&quot;平均每次: %.2f 周期\n&quot;, cycles / 1000.0f);
+}
+
+/**
+ * @brief  性能测试：平方根
+ */
+void benchmark_sqrt(void) {
+    volatile float a = 123.456f;
+    volatile float result;
+    uint32_t start, end, cycles;
+
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 1000; i++) {
+        result = sqrtf(a);
+    }
+    end = DWT-&gt;CYCCNT;
+
+    cycles = end - start;
+    printf(&quot;平方根 (1000次): %u 周期\n&quot;, (unsigned int)cycles);
+    printf(&quot;平均每次: %.2f 周期\n&quot;, cycles / 1000.0f);
+}
+
+/**
+ * @brief  综合性能测试
+ */
+void fpu_performance_test(void) {
+    printf(&quot;\n=== FPU性能测试 ===\n&quot;);
+    printf(&quot;CPU频率: %u MHz\n&quot;, (unsigned int)(SystemCoreClock / 1000000));
+
+    benchmark_float_addition();
+    benchmark_float_multiplication();
+    benchmark_float_division();
+    benchmark_sqrt();
+}
+</code></pre>
+<h3 id="_7">典型性能数据</h3>
+<p>在STM32F407（168MHz）上的测试结果：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>硬件FPU</th>
+<th>软浮点</th>
+<th>加速比</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>加法</td>
+<td>1-2周期</td>
+<td>20-30周期</td>
+<td>15x</td>
+</tr>
+<tr>
+<td>减法</td>
+<td>1-2周期</td>
+<td>20-30周期</td>
+<td>15x</td>
+</tr>
+<tr>
+<td>乘法</td>
+<td>1-2周期</td>
+<td>30-40周期</td>
+<td>20x</td>
+</tr>
+<tr>
+<td>除法</td>
+<td>14周期</td>
+<td>100-150周期</td>
+<td>8x</td>
+</tr>
+<tr>
+<td>平方根</td>
+<td>14周期</td>
+<td>200-300周期</td>
+<td>15x</td>
+</tr>
+<tr>
+<td>sin/cos</td>
+<td>20-30周期</td>
+<td>500-1000周期</td>
+<td>25x</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">上下文保存</h2>
+<h3 id="fpu_7">FPU上下文</h3>
+<p>在中断和任务切换时，需要保存FPU上下文：</p>
+<pre><code class="language-c">/**
+ * @brief  FPU上下文结构
+ */
+typedef struct {
+    float s[32];        // S0-S31寄存器
+    uint32_t fpscr;     // 浮点状态和控制寄存器
+} FPU_Context_t;
+
+/**
+ * @brief  保存FPU上下文
+ */
+void fpu_context_save(FPU_Context_t *context) {
+    // 保存S0-S31寄存器
+    __asm volatile (
+        &quot;vstm %0, {s0-s31}  \n&quot;  // 保存所有单精度寄存器
+        : : &quot;r&quot; (context-&gt;s)
+    );
+
+    // 保存FPSCR
+    __asm volatile (
+        &quot;vmrs %0, fpscr     \n&quot;  // 读取FPSCR到通用寄存器
+        : &quot;=r&quot; (context-&gt;fpscr)
+    );
+}
+
+/**
+ * @brief  恢复FPU上下文
+ */
+void fpu_context_restore(const FPU_Context_t *context) {
+    // 恢复S0-S31寄存器
+    __asm volatile (
+        &quot;vldm %0, {s0-s31}  \n&quot;  // 加载所有单精度寄存器
+        : : &quot;r&quot; (context-&gt;s)
+    );
+
+    // 恢复FPSCR
+    __asm volatile (
+        &quot;vmsr fpscr, %0     \n&quot;  // 写入FPSCR
+        : : &quot;r&quot; (context-&gt;fpscr)
+    );
+}
+</code></pre>
+<h3 id="_9">延迟上下文保存</h3>
+<p>ARM Cortex-M4支持延迟上下文保存，可以提高中断响应速度：</p>
+<pre><code class="language-c">/**
+ * @brief  配置FPU延迟上下文保存
+ */
+void fpu_lazy_context_save_config(void) {
+    // 使能自动状态保存
+    FPU-&gt;FPCCR |= FPU_FPCCR_ASPEN_Msk;
+
+    // 使能延迟状态保存
+    FPU-&gt;FPCCR |= FPU_FPCCR_LSPEN_Msk;
+
+    printf(&quot;FPU延迟上下文保存已配置\n&quot;);
+    printf(&quot;  ASPEN: 自动状态保存使能\n&quot;);
+    printf(&quot;  LSPEN: 延迟状态保存使能\n&quot;);
+}
+
+/**
+ * @brief  检查FPU上下文保存状态
+ */
+void fpu_check_context_status(void) {
+    uint32_t fpccr = FPU-&gt;FPCCR;
+
+    printf(&quot;FPU上下文状态:\n&quot;);
+
+    if (fpccr &amp; FPU_FPCCR_LSPACT_Msk) {
+        printf(&quot;  延迟状态保存激活\n&quot;);
+    }
+
+    if (fpccr &amp; FPU_FPCCR_USER_Msk) {
+        printf(&quot;  用户模式使用FPU\n&quot;);
+    }
+
+    if (fpccr &amp; FPU_FPCCR_THREAD_Msk) {
+        printf(&quot;  线程模式使用FPU\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="rtosfpu">RTOS中的FPU支持</h3>
+<p>在RTOS环境中使用FPU需要特别注意：</p>
+<pre><code class="language-c">/**
+ * @brief  FreeRTOS中的FPU配置
+ * 
+ * 在FreeRTOSConfig.h中添加：
+ * #define configUSE_TASK_FPU_SUPPORT 1
+ */
+
+// 任务中使用FPU的示例
+void vTaskWithFPU(void *pvParameters) {
+    float result;
+
+    while (1) {
+        // 使用FPU进行计算
+        result = sinf(3.14159f / 4.0f);
+
+        printf(&quot;Task FPU result: %.5f\n&quot;, result);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+/**
+ * @brief  创建使用FPU的任务
+ */
+void create_fpu_task(void) {
+    // 创建任务时，FreeRTOS会自动处理FPU上下文
+    xTaskCreate(vTaskWithFPU,
+                &quot;FPU_Task&quot;,
+                128,
+                NULL,
+                tskIDLE_PRIORITY + 1,
+                NULL);
+}
+</code></pre>
+<h2 id="_10">应用场景</h2>
+<h3 id="dsp">数字信号处理（DSP）</h3>
+<p>FPU非常适合DSP应用：</p>
+<pre><code class="language-c">/**
+ * @brief  FIR滤波器实现
+ */
+float fir_filter(const float *input, const float *coeffs, int n) {
+    float output = 0.0f;
+
+    for (int i = 0; i &lt; n; i++) {
+        output += input[i] * coeffs[i];  // FPU加速
+    }
+
+    return output;
+}
+
+/**
+ * @brief  FFT蝶形运算
+ */
+void fft_butterfly(float *real, float *imag, float wr, float wi) {
+    float temp_r = *real * wr - *imag * wi;
+    float temp_i = *real * wi + *imag * wr;
+
+    *real = temp_r;
+    *imag = temp_i;
+}
+
+/**
+ * @brief  数字滤波示例
+ */
+void dsp_filtering_example(void) {
+    // 输入信号
+    float input[8] = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+
+    // FIR滤波器系数（低通滤波器）
+    float coeffs[8] = {0.1f, 0.15f, 0.2f, 0.1f, 0.1f, 0.2f, 0.15f, 0.1f};
+
+    // 应用滤波器
+    float output = fir_filter(input, coeffs, 8);
+
+    printf(&quot;滤波器输出: %.3f\n&quot;, output);
+}
+</code></pre>
+<h3 id="_11">姿态解算</h3>
+<p>IMU传感器数据处理：</p>
+<pre><code class="language-c">/**
+ * @brief  四元数结构
+ */
+typedef struct {
+    float w, x, y, z;
+} Quaternion_t;
+
+/**
+ * @brief  四元数乘法
+ */
+Quaternion_t quaternion_multiply(Quaternion_t q1, Quaternion_t q2) {
+    Quaternion_t result;
+
+    result.w = q1.w*q2.w - q1.x*q2.x - q1.y*q2.y - q1.z*q2.z;
+    result.x = q1.w*q2.x + q1.x*q2.w + q1.y*q2.z - q1.z*q2.y;
+    result.y = q1.w*q2.y - q1.x*q2.z + q1.y*q2.w + q1.z*q2.x;
+    result.z = q1.w*q2.z + q1.x*q2.y - q1.y*q2.x + q1.z*q2.w;
+
+    return result;
+}
+
+/**
+ * @brief  四元数转欧拉角
+ */
+void quaternion_to_euler(Quaternion_t q, float *roll, float *pitch, float *yaw) {
+    // Roll (x轴旋转)
+    float sinr_cosp = 2.0f * (q.w * q.x + q.y * q.z);
+    float cosr_cosp = 1.0f - 2.0f * (q.x * q.x + q.y * q.y);
+    *roll = atan2f(sinr_cosp, cosr_cosp);
+
+    // Pitch (y轴旋转)
+    float sinp = 2.0f * (q.w * q.y - q.z * q.x);
+    if (fabsf(sinp) &gt;= 1.0f) {
+        *pitch = copysignf(3.14159f / 2.0f, sinp);  // 使用90度
+    } else {
+        *pitch = asinf(sinp);
+    }
+
+    // Yaw (z轴旋转)
+    float siny_cosp = 2.0f * (q.w * q.z + q.x * q.y);
+    float cosy_cosp = 1.0f - 2.0f * (q.y * q.y + q.z * q.z);
+    *yaw = atan2f(siny_cosp, cosy_cosp);
+}
+
+/**
+ * @brief  姿态解算示例
+ */
+void attitude_estimation_example(void) {
+    Quaternion_t q = {1.0f, 0.0f, 0.0f, 0.0f};  // 初始姿态
+    float roll, pitch, yaw;
+
+    // 转换为欧拉角
+    quaternion_to_euler(q, &amp;roll, &amp;pitch, &amp;yaw);
+
+    printf(&quot;姿态角度:\n&quot;);
+    printf(&quot;  Roll:  %.2f°\n&quot;, roll * 180.0f / 3.14159f);
+    printf(&quot;  Pitch: %.2f°\n&quot;, pitch * 180.0f / 3.14159f);
+    printf(&quot;  Yaw:   %.2f°\n&quot;, yaw * 180.0f / 3.14159f);
+}
+</code></pre>
+<h3 id="_12">控制算法</h3>
+<p>PID控制器和卡尔曼滤波器：</p>
+<pre><code class="language-c">/**
+ * @brief  PID控制器结构
+ */
+typedef struct {
+    float kp;           // 比例系数
+    float ki;           // 积分系数
+    float kd;           // 微分系数
+    float integral;     // 积分累积
+    float prev_error;   // 上次误差
+    float output_min;   // 输出下限
+    float output_max;   // 输出上限
+} PID_Controller_t;
+
+/**
+ * @brief  PID控制器更新
+ */
+float pid_update(PID_Controller_t *pid, float setpoint, float measurement, float dt) {
+    // 计算误差
+    float error = setpoint - measurement;
+
+    // 比例项
+    float p_term = pid-&gt;kp * error;
+
+    // 积分项
+    pid-&gt;integral += error * dt;
+    float i_term = pid-&gt;ki * pid-&gt;integral;
+
+    // 微分项
+    float derivative = (error - pid-&gt;prev_error) / dt;
+    float d_term = pid-&gt;kd * derivative;
+
+    // 计算输出
+    float output = p_term + i_term + d_term;
+
+    // 限幅
+    if (output &gt; pid-&gt;output_max) {
+        output = pid-&gt;output_max;
+    } else if (output &lt; pid-&gt;output_min) {
+        output = pid-&gt;output_min;
+    }
+
+    // 保存当前误差
+    pid-&gt;prev_error = error;
+
+    return output;
+}
+
+/**
+ * @brief  一维卡尔曼滤波器
+ */
+typedef struct {
+    float x;        // 状态估计
+    float p;        // 估计协方差
+    float q;        // 过程噪声协方差
+    float r;        // 测量噪声协方差
+} Kalman_Filter_t;
+
+/**
+ * @brief  卡尔曼滤波器更新
+ */
+float kalman_update(Kalman_Filter_t *kf, float measurement) {
+    // 预测
+    float x_pred = kf-&gt;x;
+    float p_pred = kf-&gt;p + kf-&gt;q;
+
+    // 更新
+    float k = p_pred / (p_pred + kf-&gt;r);  // 卡尔曼增益
+    kf-&gt;x = x_pred + k * (measurement - x_pred);
+    kf-&gt;p = (1.0f - k) * p_pred;
+
+    return kf-&gt;x;
+}
+
+/**
+ * @brief  控制算法示例
+ */
+void control_algorithm_example(void) {
+    // PID控制器初始化
+    PID_Controller_t pid = {
+        .kp = 1.0f,
+        .ki = 0.1f,
+        .kd = 0.05f,
+        .integral = 0.0f,
+        .prev_error = 0.0f,
+        .output_min = -100.0f,
+        .output_max = 100.0f
+    };
+
+    // 卡尔曼滤波器初始化
+    Kalman_Filter_t kf = {
+        .x = 0.0f,
+        .p = 1.0f,
+        .q = 0.01f,
+        .r = 0.1f
+    };
+
+    // 模拟控制循环
+    float setpoint = 100.0f;
+    float measurement = 0.0f;
+    float dt = 0.01f;  // 10ms
+
+    for (int i = 0; i &lt; 10; i++) {
+        // 滤波测量值
+        float filtered = kalman_update(&amp;kf, measurement);
+
+        // PID控制
+        float output = pid_update(&amp;pid, setpoint, filtered, dt);
+
+        // 模拟系统响应
+        measurement += output * dt;
+
+        printf(&quot;Step %d: Setpoint=%.2f, Measurement=%.2f, Output=%.2f\n&quot;,
+               i, setpoint, measurement, output);
+    }
+}
+</code></pre>
+<h3 id="_13">图形处理</h3>
+<p>2D/3D图形变换：</p>
+<pre><code class="language-c">/**
+ * @brief  2D点结构
+ */
+typedef struct {
+    float x, y;
+} Point2D_t;
+
+/**
+ * @brief  2D旋转变换
+ */
+Point2D_t rotate_2d(Point2D_t point, float angle) {
+    Point2D_t result;
+    float cos_a = cosf(angle);
+    float sin_a = sinf(angle);
+
+    result.x = point.x * cos_a - point.y * sin_a;
+    result.y = point.x * sin_a + point.y * cos_a;
+
+    return result;
+}
+
+/**
+ * @brief  3D向量结构
+ */
+typedef struct {
+    float x, y, z;
+} Vector3D_t;
+
+/**
+ * @brief  3D向量归一化
+ */
+Vector3D_t vector_normalize(Vector3D_t v) {
+    float length = sqrtf(v.x*v.x + v.y*v.y + v.z*v.z);
+    Vector3D_t result;
+
+    if (length &gt; 0.0f) {
+        result.x = v.x / length;
+        result.y = v.y / length;
+        result.z = v.z / length;
+    } else {
+        result.x = result.y = result.z = 0.0f;
+    }
+
+    return result;
+}
+
+/**
+ * @brief  图形处理示例
+ */
+void graphics_processing_example(void) {
+    // 2D旋转
+    Point2D_t point = {1.0f, 0.0f};
+    float angle = 3.14159f / 4.0f;  // 45度
+
+    Point2D_t rotated = rotate_2d(point, angle);
+    printf(&quot;旋转后坐标: (%.3f, %.3f)\n&quot;, rotated.x, rotated.y);
+
+    // 3D向量归一化
+    Vector3D_t vec = {3.0f, 4.0f, 0.0f};
+    Vector3D_t normalized = vector_normalize(vec);
+    printf(&quot;归一化向量: (%.3f, %.3f, %.3f)\n&quot;, 
+           normalized.x, normalized.y, normalized.z);
+}
+</code></pre>
+<h2 id="_14">最佳实践</h2>
+<h3 id="_15">使用建议</h3>
+<ol>
+<li><strong>编译器优化</strong></li>
+</ol>
+<pre><code class="language-c">// 使用-O2或-O3优化级别
+// 使用-mfloat-abi=hard启用硬件FPU
+// 使用-ffast-math加速数学运算（注意精度损失）
+</code></pre>
+<ol start="2">
+<li><strong>数据类型选择</strong></li>
+</ol>
+<pre><code class="language-c">// 优先使用float而不是double（除非需要双精度）
+float value = 3.14159f;  // 推荐：单精度
+double value = 3.14159;  // 不推荐：双精度（Cortex-M4不支持）
+
+// 使用f后缀标识浮点常量
+float pi = 3.14159f;     // 正确
+float pi = 3.14159;      // 错误：会被当作double
+</code></pre>
+<ol start="3">
+<li><strong>避免频繁类型转换</strong></li>
+</ol>
+<pre><code class="language-c">// 不好的做法
+int i = 10;
+float f = (float)i;
+int j = (int)f;
+
+// 好的做法：尽量保持浮点运算
+float a = 10.0f;
+float b = a * 2.0f;
+</code></pre>
+<ol start="4">
+<li><strong>使用数学库函数</strong></li>
+</ol>
+<pre><code class="language-c">#include &lt;math.h&gt;
+
+// 使用单精度版本的数学函数
+float result = sinf(angle);    // 正确
+float result = sin(angle);     // 不推荐：双精度版本
+</code></pre>
+<h3 id="_16">性能优化技巧</h3>
+<pre><code class="language-c">/**
+ * @brief  循环展开优化
+ */
+void optimized_vector_add(float *a, float *b, float *result, int n) {
+    int i;
+
+    // 4路循环展开
+    for (i = 0; i &lt; n - 3; i += 4) {
+        result[i]   = a[i]   + b[i];
+        result[i+1] = a[i+1] + b[i+1];
+        result[i+2] = a[i+2] + b[i+2];
+        result[i+3] = a[i+3] + b[i+3];
+    }
+
+    // 处理剩余元素
+    for (; i &lt; n; i++) {
+        result[i] = a[i] + b[i];
+    }
+}
+
+/**
+ * @brief  使用查找表优化三角函数
+ */
+#define SIN_TABLE_SIZE 360
+float sin_table[SIN_TABLE_SIZE];
+
+void init_sin_table(void) {
+    for (int i = 0; i &lt; SIN_TABLE_SIZE; i++) {
+        sin_table[i] = sinf(i * 3.14159f / 180.0f);
+    }
+}
+
+float fast_sin(float angle_deg) {
+    int index = (int)angle_deg % 360;
+    if (index &lt; 0) index += 360;
+    return sin_table[index];
+}
+</code></pre>
+<h3 id="_17">调试技巧</h3>
+<pre><code class="language-c">/**
+ * @brief  检查FPU异常
+ */
+void check_fpu_exceptions(void) {
+    uint32_t fpscr;
+
+    // 读取FPSCR
+    __asm volatile (&quot;vmrs %0, fpscr&quot; : &quot;=r&quot; (fpscr));
+
+    printf(&quot;FPSCR: 0x%08X\n&quot;, (unsigned int)fpscr);
+
+    if (fpscr &amp; (1 &lt;&lt; 0)) printf(&quot;  无效操作异常\n&quot;);
+    if (fpscr &amp; (1 &lt;&lt; 1)) printf(&quot;  除零异常\n&quot;);
+    if (fpscr &amp; (1 &lt;&lt; 2)) printf(&quot;  溢出异常\n&quot;);
+    if (fpscr &amp; (1 &lt;&lt; 3)) printf(&quot;  下溢异常\n&quot;);
+    if (fpscr &amp; (1 &lt;&lt; 4)) printf(&quot;  不精确异常\n&quot;);
+    if (fpscr &amp; (1 &lt;&lt; 7)) printf(&quot;  输入非规格化异常\n&quot;);
+}
+
+/**
+ * @brief  清除FPU异常标志
+ */
+void clear_fpu_exceptions(void) {
+    uint32_t fpscr;
+
+    __asm volatile (&quot;vmrs %0, fpscr&quot; : &quot;=r&quot; (fpscr));
+    fpscr &amp;= ~0x9F;  // 清除异常标志
+    __asm volatile (&quot;vmsr fpscr, %0&quot; : : &quot;r&quot; (fpscr));
+}
+</code></pre>
+<h2 id="_18">常见问题</h2>
+<h3 id="q1-fpu">Q1: 如何判断程序是否使用了FPU？</h3>
+<p><strong>A</strong>: 可以通过以下方法检查：</p>
+<pre><code class="language-c">/**
+ * @brief  检查FPU是否被使用
+ */
+void check_fpu_usage(void) {
+    uint32_t fpccr = FPU-&gt;FPCCR;
+
+    if (fpccr &amp; FPU_FPCCR_LSPACT_Msk) {
+        printf(&quot;FPU正在使用中\n&quot;);
+    } else {
+        printf(&quot;FPU未使用\n&quot;);
+    }
+
+    // 也可以查看编译后的汇编代码
+    // 查找VMOV, VADD, VMUL等FPU指令
+}
+</code></pre>
+<h3 id="q2-fpu">Q2: FPU会增加多少功耗？</h3>
+<p><strong>A</strong>: FPU的功耗影响：
+- 空闲时：几乎无额外功耗
+- 使用时：增加约5-10%的功耗
+- 但由于执行速度快，总体能耗可能更低</p>
+<h3 id="q3">Q3: 软浮点和硬浮点可以混用吗？</h3>
+<p><strong>A</strong>: 不建议混用，会导致链接错误。必须统一使用：</p>
+<pre><code class="language-bash"># 全部使用硬件FPU
+-mfloat-abi=hard -mfpu=fpv4-sp-d16
+
+# 或全部使用软浮点
+-mfloat-abi=soft
+</code></pre>
+<h3 id="q4-fpu">Q4: 为什么使用FPU后程序变慢了？</h3>
+<p><strong>A</strong>: 可能的原因：
+1. 未正确配置编译器选项
+2. 频繁的类型转换
+3. 使用了双精度运算（Cortex-M4不支持硬件双精度）
+4. FPU上下文保存开销过大</p>
+<h3 id="q5-fpu">Q5: 中断中可以使用FPU吗？</h3>
+<p><strong>A</strong>: 可以，但需要注意：</p>
+<pre><code class="language-c">// 在中断中使用FPU会自动保存上下文
+void TIM2_IRQHandler(void) {
+    float result = sinf(3.14159f / 4.0f);  // 可以使用FPU
+
+    // 处理中断
+    // ...
+
+    HAL_TIM_IRQHandler(&amp;htim2);
+}
+
+// 如果中断频繁且不使用FPU，可以禁用自动保存以提高性能
+</code></pre>
+<h2 id="_19">总结</h2>
+<h3 id="_20">关键要点</h3>
+<ol>
+<li>
+<p><strong>FPU配置</strong>
+   - 使能CP10和CP11协处理器
+   - 配置编译器使用硬件浮点
+   - 设置延迟上下文保存</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 使用单精度浮点（float）
+   - 避免频繁类型转换
+   - 使用单精度数学函数（sinf, cosf等）
+   - 考虑循环展开和查找表</p>
+</li>
+<li>
+<p><strong>应用场景</strong>
+   - 数字信号处理
+   - 姿态解算
+   - 控制算法
+   - 图形处理</p>
+</li>
+<li>
+<p><strong>注意事项</strong>
+   - 正确处理FPU上下文
+   - 注意RTOS环境下的配置
+   - 避免在关键中断中使用复杂浮点运算
+   - 测试验证性能提升</p>
+</li>
+</ol>
+<h3 id="_21">下一步学习</h3>
+<ul>
+<li>学习ARM CMSIS-DSP库的使用</li>
+<li>深入了解定点运算与浮点运算的权衡</li>
+<li>研究高级优化技术（SIMD、向量化）</li>
+<li>实践复杂的DSP算法实现</li>
+</ul>
+<h2 id="_22">参考资料</h2>
+<h3 id="_23">官方文档</h3>
+<ul>
+<li><a href="https://developer.arm.com/documentation/100166/latest/">ARM Cortex-M4 Technical Reference Manual</a></li>
+<li><a href="https://developer.arm.com/documentation/dui0553/latest/">ARM Cortex-M4 Devices Generic User Guide</a></li>
+<li><a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4 Reference Manual</a></li>
+</ul>
+<h3 id="_24">推荐阅读</h3>
+<ul>
+<li>《ARM Cortex-M4 Cookbook》</li>
+<li>《Digital Signal Processing using ARM Cortex-M based Microcontrollers》</li>
+<li>CMSIS-DSP库文档</li>
+</ul>
+<h3 id="_25">在线资源</h3>
+<ul>
+<li>ARM Developer官网</li>
+<li>STM32社区论坛</li>
+<li>GitHub上的开源FPU示例项目</li>
+</ul>
+<hr />
+<p><strong>作者</strong>: 嵌入式知识平台内容团队<br />
+<strong>最后更新</strong>: 2026-03-07<br />
+<strong>版本</strong>: 1.0.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

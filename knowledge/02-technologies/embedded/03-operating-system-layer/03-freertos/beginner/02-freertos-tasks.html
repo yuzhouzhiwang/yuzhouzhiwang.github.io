@@ -1,0 +1,2086 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>FreeRTOS任务创建与管理：深入理解多任务编程 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/">03-freertos</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">环境配置</a></li>
+<li><a href="#_5">创建基础项目</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#api">任务创建API详解</a><ul>
+<li><a href="#-xtaskcreate">动态任务创建 - xTaskCreate()</a></li>
+<li><a href="#_7">参数详细说明</a></li>
+<li><a href="#-xtaskcreatestatic">静态任务创建 - xTaskCreateStatic()</a></li>
+</ul>
+</li>
+<li><a href="#_8">任务删除</a><ul>
+<li><a href="#_9">删除自己</a></li>
+<li><a href="#_10">删除其他任务</a></li>
+</ul>
+</li>
+<li><a href="#_11">任务挂起和恢复</a><ul>
+<li><a href="#-vtasksuspend">挂起任务 - vTaskSuspend()</a></li>
+<li><a href="#-vtaskresume">恢复任务 - vTaskResume()</a></li>
+</ul>
+</li>
+<li><a href="#_12">任务优先级管理</a><ul>
+<li><a href="#_13">获取任务优先级</a></li>
+<li><a href="#_14">设置任务优先级</a></li>
+<li><a href="#_15">动态优先级调整示例</a></li>
+</ul>
+</li>
+<li><a href="#_16">任务状态查询</a><ul>
+<li><a href="#_17">获取任务句柄</a></li>
+<li><a href="#_18">获取任务名称</a></li>
+<li><a href="#_19">获取任务状态</a></li>
+<li><a href="#_20">获取栈使用情况</a></li>
+<li><a href="#_21">任务监控示例</a></li>
+</ul>
+</li>
+<li><a href="#_22">任务延时</a><ul>
+<li><a href="#-vtaskdelay">相对延时 - vTaskDelay()</a></li>
+<li><a href="#-vtaskdelayuntil">绝对延时 - vTaskDelayUntil()</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_23">实践示例</a><ul>
+<li><a href="#1led">示例1：多LED控制系统</a></li>
+<li><a href="#2">示例2：任务动态管理</a></li>
+<li><a href="#3">示例3：优先级调度演示</a></li>
+<li><a href="#4">示例4：精确周期任务</a></li>
+</ul>
+</li>
+<li><a href="#_24">故障排除</a><ul>
+<li><a href="#1">问题1：任务创建失败</a></li>
+<li><a href="#2_1">问题2：栈溢出</a></li>
+<li><a href="#3_1">问题3：任务无法运行</a></li>
+<li><a href="#4_1">问题4：任务删除后系统异常</a></li>
+</ul>
+</li>
+<li><a href="#_25">最佳实践</a><ul>
+<li><a href="#_26">任务设计原则</a></li>
+<li><a href="#_27">栈大小配置建议</a></li>
+<li><a href="#_28">优先级分配建议</a></li>
+<li><a href="#_29">任务命名建议</a></li>
+</ul>
+</li>
+<li><a href="#_30">总结</a><ul>
+<li><a href="#_31">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_32">下一步学习</a><ul>
+<li><a href="#1_1">1. 任务间通信</a></li>
+<li><a href="#2_2">2. 同步机制</a></li>
+<li><a href="#3_2">3. 高级特性</a></li>
+<li><a href="#4_2">4. 系统设计</a></li>
+</ul>
+</li>
+<li><a href="#_33">参考资料</a><ul>
+<li><a href="#_34">官方文档</a></li>
+<li><a href="#_35">推荐书籍</a></li>
+<li><a href="#_36">在线资源</a></li>
+<li><a href="#api_1">API快速参考</a></li>
+</ul>
+</li>
+<li><a href="#_37">常见问题解答</a><ul>
+<li><a href="#q1">Q1: 任务栈大小应该设置多大？</a></li>
+<li><a href="#q2">Q2: 如何选择合适的任务优先级？</a></li>
+<li><a href="#q3">Q3: 任务函数可以返回吗？</a></li>
+<li><a href="#q4">Q4: 动态创建和静态创建有什么区别？</a></li>
+<li><a href="#q5">Q5: 如何调试任务栈溢出？</a></li>
+<li><a href="#q6">Q6: 任务之间如何通信？</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="freertos">FreeRTOS任务创建与管理：深入理解多任务编程</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 掌握FreeRTOS任务创建的两种方法（动态和静态）</li>
+<li>[ ] 理解任务创建API的所有参数及其作用</li>
+<li>[ ] 熟练配置任务优先级和堆栈大小</li>
+<li>[ ] 掌握任务删除、挂起和恢复操作</li>
+<li>[ ] 理解任务句柄的使用和管理</li>
+<li>[ ] 学会任务状态查询和监控</li>
+<li>[ ] 掌握任务参数传递的多种方法</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 完成FreeRTOS快速入门教程
+- 理解RTOS任务管理的基本概念
+- 熟悉C语言指针和结构体
+- 了解任务状态和调度原理</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32CubeIDE创建FreeRTOS项目
+- 会使用基本的调试工具
+- 了解如何编译和下载程序</p>
+<p><strong>硬件准备</strong>：
+- STM32开发板（如STM32F4 Discovery）
+- ST-Link调试器
+- USB数据线</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">环境配置</h3>
+<p>本教程基于以下环境：</p>
+<p><strong>软件环境</strong>：
+- STM32CubeIDE v1.10+
+- FreeRTOS V10.3.1+
+- HAL库 v1.27+</p>
+<p><strong>硬件环境</strong>：
+- STM32F407VGT6开发板
+- 板载LED（用于演示）
+- 串口调试工具</p>
+<h3 id="_5">创建基础项目</h3>
+<ol>
+<li>打开STM32CubeIDE，创建新的STM32项目</li>
+<li>在CubeMX中启用FreeRTOS（CMSIS_V1接口）</li>
+<li>配置系统时钟和串口（用于调试输出）</li>
+<li>生成代码并打开项目</li>
+</ol>
+<p>如果你已经完成了快速入门教程，可以直接使用之前的项目。</p>
+<h2 id="_6">核心内容</h2>
+<h3 id="api">任务创建API详解</h3>
+<p>FreeRTOS提供了两种任务创建方法：动态创建和静态创建。</p>
+<h4 id="-xtaskcreate">动态任务创建 - xTaskCreate()</h4>
+<p>动态创建是最常用的方法，内存从堆中自动分配。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">BaseType_t xTaskCreate(
+    TaskFunction_t pvTaskCode,      // 任务函数指针
+    const char * const pcName,      // 任务名称
+    uint16_t usStackDepth,          // 栈大小（字）
+    void *pvParameters,             // 任务参数
+    UBaseType_t uxPriority,         // 任务优先级
+    TaskHandle_t *pxCreatedTask     // 任务句柄（可选）
+);
+</code></pre>
+<p><strong>返回值</strong>：
+- <code>pdPASS</code>：任务创建成功
+- <code>errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY</code>：内存不足，创建失败</p>
+<p><strong>完整示例</strong>：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 任务句柄
+TaskHandle_t myTaskHandle = NULL;
+
+// 任务函数
+void MyTask(void *pvParameters)
+{
+    // 任务初始化代码
+    uint32_t counter = 0;
+
+    // 任务主循环（永不退出）
+    while(1)
+    {
+        // 执行任务工作
+        printf(&quot;Task running, counter = %lu\n&quot;, counter++);
+
+        // 延时，让出CPU
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建任务
+    BaseType_t result = xTaskCreate(
+        MyTask,              // 任务函数
+        &quot;MyTask&quot;,            // 任务名称
+        128,                 // 栈大小：128字（512字节）
+        NULL,                // 任务参数
+        2,                   // 优先级：2
+        &amp;myTaskHandle        // 保存任务句柄
+    );
+
+    // 检查创建结果
+    if(result == pdPASS)
+    {
+        printf(&quot;Task created successfully\n&quot;);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Task creation failed\n&quot;);
+    }
+
+    // 永远不会执行到这里
+    while(1);
+}
+</code></pre>
+<h4 id="_7">参数详细说明</h4>
+<h5 id="1-pvtaskcode">1. 任务函数 (pvTaskCode)</h5>
+<p>任务函数必须符合以下要求：</p>
+<pre><code class="language-c">// 任务函数签名
+void TaskFunction(void *pvParameters);
+
+// 任务函数必须是无限循环
+void MyTask(void *pvParameters)
+{
+    // 初始化代码（只执行一次）
+    InitializeHardware();
+
+    // 主循环（永远执行）
+    while(1)
+    {
+        // 任务代码
+        DoWork();
+
+        // 必须有延时或阻塞，否则会一直占用CPU
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    // 如果任务需要退出，应该删除自己
+    // vTaskDelete(NULL);
+}
+</code></pre>
+<p><strong>重要规则</strong>：
+- 任务函数永远不应该返回
+- 必须包含延时或阻塞调用
+- 如果需要退出，调用<code>vTaskDelete(NULL)</code></p>
+<h5 id="2-pcname">2. 任务名称 (pcName)</h5>
+<p>任务名称用于调试和监控：</p>
+<pre><code class="language-c">// 好的命名：描述性强
+xTaskCreate(SensorTask, &quot;Sensor&quot;, 128, NULL, 2, NULL);
+xTaskCreate(DisplayTask, &quot;Display&quot;, 128, NULL, 1, NULL);
+xTaskCreate(NetworkTask, &quot;Network&quot;, 256, NULL, 3, NULL);
+
+// 不好的命名：不够清晰
+xTaskCreate(Task1, &quot;T1&quot;, 128, NULL, 2, NULL);
+xTaskCreate(Task2, &quot;T2&quot;, 128, NULL, 1, NULL);
+</code></pre>
+<p><strong>命名规范</strong>：
+- 最大长度由<code>configMAX_TASK_NAME_LEN</code>定义（默认16字符）
+- 使用有意义的名称
+- 避免使用特殊字符
+- 名称可以重复（但不推荐）</p>
+<h5 id="3-usstackdepth">3. 栈大小 (usStackDepth)</h5>
+<p>栈大小以"字"为单位，不是字节：</p>
+<pre><code class="language-c">// Cortex-M系列：1字 = 4字节
+// 栈大小（字节） = usStackDepth × 4
+
+// 示例
+xTaskCreate(Task, &quot;Task&quot;, 128, NULL, 1, NULL);  // 128字 = 512字节
+xTaskCreate(Task, &quot;Task&quot;, 256, NULL, 1, NULL);  // 256字 = 1024字节
+xTaskCreate(Task, &quot;Task&quot;, 512, NULL, 1, NULL);  // 512字 = 2048字节
+</code></pre>
+<p><strong>栈大小建议</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>任务类型</th>
+<th>栈大小（字）</th>
+<th>栈大小（字节）</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最小任务</td>
+<td>64-128</td>
+<td>256-512</td>
+<td>简单循环，无函数调用</td>
+</tr>
+<tr>
+<td>小任务</td>
+<td>128-256</td>
+<td>512-1024</td>
+<td>LED控制，简单IO</td>
+</tr>
+<tr>
+<td>中等任务</td>
+<td>256-512</td>
+<td>1024-2048</td>
+<td>数据处理，串口通信</td>
+</tr>
+<tr>
+<td>大任务</td>
+<td>512-1024</td>
+<td>2048-4096</td>
+<td>网络通信，文件操作</td>
+</tr>
+<tr>
+<td>超大任务</td>
+<td>1024+</td>
+<td>4096+</td>
+<td>复杂算法，大缓冲区</td>
+</tr>
+</tbody>
+</table>
+<p><strong>影响栈大小的因素</strong>：</p>
+<pre><code class="language-c">void TaskWithLargeStack(void *pvParameters)
+{
+    // 1. 局部变量占用栈空间
+    char buffer[1024];  // 需要1KB栈空间
+    uint32_t array[100]; // 需要400字节
+
+    // 2. 函数调用深度
+    Function1();  // 每次调用需要额外栈空间
+
+    // 3. 中断嵌套
+    // 中断发生时会使用任务栈保存上下文
+
+    while(1)
+    {
+        vTaskDelay(100);
+    }
+}
+</code></pre>
+<h5 id="4-pvparameters">4. 任务参数 (pvParameters)</h5>
+<p>可以向任务传递任何类型的参数：</p>
+<p><strong>方法1：传递简单值</strong></p>
+<pre><code class="language-c">// 传递整数
+xTaskCreate(Task, &quot;Task&quot;, 128, (void *)100, 1, NULL);
+
+// 在任务中接收
+void Task(void *pvParameters)
+{
+    uint32_t value = (uint32_t)pvParameters;
+    printf(&quot;Received value: %lu\n&quot;, value);
+
+    while(1)
+    {
+        vTaskDelay(value);  // 使用传入的延时值
+    }
+}
+</code></pre>
+<p><strong>方法2：传递指针</strong></p>
+<pre><code class="language-c">// 定义参数结构体
+typedef struct
+{
+    uint32_t sensor_id;
+    uint32_t sample_rate;
+    GPIO_TypeDef *gpio_port;
+    uint16_t gpio_pin;
+} TaskParams_t;
+
+// 创建参数实例
+TaskParams_t params = {
+    .sensor_id = 1,
+    .sample_rate = 1000,
+    .gpio_port = GPIOA,
+    .gpio_pin = GPIO_PIN_5
+};
+
+// 传递参数指针
+xTaskCreate(SensorTask, &quot;Sensor&quot;, 256, &amp;params, 2, NULL);
+
+// 在任务中接收
+void SensorTask(void *pvParameters)
+{
+    // 转换参数类型
+    TaskParams_t *p = (TaskParams_t *)pvParameters;
+
+    printf(&quot;Sensor ID: %lu\n&quot;, p-&gt;sensor_id);
+    printf(&quot;Sample Rate: %lu Hz\n&quot;, p-&gt;sample_rate);
+
+    while(1)
+    {
+        // 使用参数
+        HAL_GPIO_TogglePin(p-&gt;gpio_port, p-&gt;gpio_pin);
+        vTaskDelay(pdMS_TO_TICKS(1000 / p-&gt;sample_rate));
+    }
+}
+</code></pre>
+<p><strong>方法3：传递多个任务共享的参数</strong></p>
+<pre><code class="language-c">// 为每个任务创建独立的参数
+typedef struct
+{
+    uint32_t task_id;
+    uint32_t delay_ms;
+} TaskConfig_t;
+
+// 创建多个参数实例（必须是静态或全局变量）
+static TaskConfig_t task1_config = {.task_id = 1, .delay_ms = 500};
+static TaskConfig_t task2_config = {.task_id = 2, .delay_ms = 1000};
+static TaskConfig_t task3_config = {.task_id = 3, .delay_ms = 2000};
+
+// 创建多个任务，使用相同的任务函数
+xTaskCreate(GenericTask, &quot;Task1&quot;, 128, &amp;task1_config, 1, NULL);
+xTaskCreate(GenericTask, &quot;Task2&quot;, 128, &amp;task2_config, 1, NULL);
+xTaskCreate(GenericTask, &quot;Task3&quot;, 128, &amp;task3_config, 1, NULL);
+
+// 通用任务函数
+void GenericTask(void *pvParameters)
+{
+    TaskConfig_t *config = (TaskConfig_t *)pvParameters;
+
+    while(1)
+    {
+        printf(&quot;Task %lu running\n&quot;, config-&gt;task_id);
+        vTaskDelay(pdMS_TO_TICKS(config-&gt;delay_ms));
+    }
+}
+</code></pre>
+<p><strong>⚠️ 重要注意事项</strong>：</p>
+<pre><code class="language-c">// ❌ 错误：传递局部变量的地址
+void CreateTask(void)
+{
+    TaskParams_t params;  // 局部变量
+    params.value = 100;
+
+    // 错误！params在函数返回后会被销毁
+    xTaskCreate(Task, &quot;Task&quot;, 128, &amp;params, 1, NULL);
+}
+
+// ✅ 正确：使用静态或全局变量
+static TaskParams_t params;  // 静态变量
+
+void CreateTask(void)
+{
+    params.value = 100;
+    xTaskCreate(Task, &quot;Task&quot;, 128, &amp;params, 1, NULL);  // 正确
+}
+
+// ✅ 正确：使用动态分配的内存
+void CreateTask(void)
+{
+    TaskParams_t *params = pvPortMalloc(sizeof(TaskParams_t));
+    params-&gt;value = 100;
+    xTaskCreate(Task, &quot;Task&quot;, 128, params, 1, NULL);  // 正确
+}
+</code></pre>
+<h5 id="5-uxpriority">5. 任务优先级 (uxPriority)</h5>
+<p>优先级决定任务的调度顺序：</p>
+<pre><code class="language-c">// 优先级范围：0 到 (configMAX_PRIORITIES - 1)
+// 数字越大，优先级越高
+
+// 典型优先级定义
+#define PRIORITY_IDLE       0  // 空闲任务（系统保留）
+#define PRIORITY_LOW        1  // 低优先级
+#define PRIORITY_BELOW_NORMAL 2
+#define PRIORITY_NORMAL     3  // 普通优先级
+#define PRIORITY_ABOVE_NORMAL 4
+#define PRIORITY_HIGH       5  // 高优先级
+#define PRIORITY_REALTIME   6  // 实时任务
+
+// 创建不同优先级的任务
+xTaskCreate(BackgroundTask, &quot;Background&quot;, 128, NULL, PRIORITY_LOW, NULL);
+xTaskCreate(NormalTask, &quot;Normal&quot;, 256, NULL, PRIORITY_NORMAL, NULL);
+xTaskCreate(CriticalTask, &quot;Critical&quot;, 512, NULL, PRIORITY_HIGH, NULL);
+</code></pre>
+<p><strong>优先级分配原则</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>任务类型</th>
+<th>优先级</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>实时响应任务</td>
+<td>最高</td>
+<td>中断后处理、紧急控制</td>
+</tr>
+<tr>
+<td>周期性任务</td>
+<td>高</td>
+<td>传感器采集、数据处理</td>
+</tr>
+<tr>
+<td>用户交互任务</td>
+<td>中</td>
+<td>按键检测、显示更新</td>
+</tr>
+<tr>
+<td>后台任务</td>
+<td>低</td>
+<td>日志记录、统计分析</td>
+</tr>
+<tr>
+<td>空闲任务</td>
+<td>最低</td>
+<td>系统空闲时执行</td>
+</tr>
+</tbody>
+</table>
+<p><strong>优先级调度示例</strong>：</p>
+<pre><code class="language-c">// 高优先级任务
+void HighPriorityTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;High priority task running\n&quot;);
+        // 高优先级任务运行时，低优先级任务无法运行
+        vTaskDelay(pdMS_TO_TICKS(1000));
+        // 延时期间，低优先级任务可以运行
+    }
+}
+
+// 低优先级任务
+void LowPriorityTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;Low priority task running\n&quot;);
+        // 只有在高优先级任务阻塞时才能运行
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    // 创建任务
+    xTaskCreate(HighPriorityTask, &quot;High&quot;, 128, NULL, 3, NULL);
+    xTaskCreate(LowPriorityTask, &quot;Low&quot;, 128, NULL, 1, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h5 id="6-pxcreatedtask">6. 任务句柄 (pxCreatedTask)</h5>
+<p>任务句柄是任务的唯一标识符：</p>
+<pre><code class="language-c">// 定义任务句柄
+TaskHandle_t task1Handle = NULL;
+TaskHandle_t task2Handle = NULL;
+
+// 创建任务并保存句柄
+xTaskCreate(Task1, &quot;Task1&quot;, 128, NULL, 1, &amp;task1Handle);
+xTaskCreate(Task2, &quot;Task2&quot;, 128, NULL, 1, &amp;task2Handle);
+
+// 使用句柄操作任务
+vTaskSuspend(task1Handle);   // 挂起任务1
+vTaskResume(task1Handle);    // 恢复任务1
+vTaskDelete(task2Handle);    // 删除任务2
+
+// 如果不需要句柄，可以传NULL
+xTaskCreate(Task3, &quot;Task3&quot;, 128, NULL, 1, NULL);
+</code></pre>
+<p><strong>句柄的用途</strong>：
+- 挂起和恢复任务
+- 删除任务
+- 修改任务优先级
+- 查询任务状态
+- 向任务发送通知</p>
+<h4 id="-xtaskcreatestatic">静态任务创建 - xTaskCreateStatic()</h4>
+<p>静态创建使用预分配的内存，适合安全关键应用：</p>
+<pre><code class="language-c">// 需要在FreeRTOSConfig.h中启用
+#define configSUPPORT_STATIC_ALLOCATION  1
+
+// 定义任务栈（静态分配）
+#define TASK_STACK_SIZE  128
+static StackType_t taskStack[TASK_STACK_SIZE];
+
+// 定义任务控制块（静态分配）
+static StaticTask_t taskTCB;
+
+// 任务函数
+void MyTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;Static task running\n&quot;);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    // 静态创建任务
+    TaskHandle_t taskHandle = xTaskCreateStatic(
+        MyTask,              // 任务函数
+        &quot;MyTask&quot;,            // 任务名称
+        TASK_STACK_SIZE,     // 栈大小
+        NULL,                // 参数
+        2,                   // 优先级
+        taskStack,           // 栈数组
+        &amp;taskTCB             // TCB
+    );
+
+    if(taskHandle != NULL)
+    {
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>动态 vs 静态创建对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>动态创建</th>
+<th>静态创建</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内存分配</td>
+<td>从堆中分配</td>
+<td>使用预定义的静态内存</td>
+</tr>
+<tr>
+<td>灵活性</td>
+<td>高（运行时创建）</td>
+<td>低（编译时确定）</td>
+</tr>
+<tr>
+<td>内存碎片</td>
+<td>可能产生碎片</td>
+<td>无碎片问题</td>
+</tr>
+<tr>
+<td>内存使用</td>
+<td>需要堆空间</td>
+<td>不需要堆</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>一般应用</td>
+<td>安全关键应用</td>
+</tr>
+<tr>
+<td>代码复杂度</td>
+<td>简单</td>
+<td>稍复杂</td>
+</tr>
+<tr>
+<td>配置要求</td>
+<td>默认启用</td>
+<td>需要启用配置</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">任务删除</h3>
+<h4 id="_9">删除自己</h4>
+<p>任务可以删除自己，通常用于一次性任务：</p>
+<pre><code class="language-c">void TemporaryTask(void *pvParameters)
+{
+    // 执行一次性初始化
+    printf(&quot;Initializing system...\n&quot;);
+    InitializeSystem();
+    printf(&quot;Initialization complete\n&quot;);
+
+    // 任务完成后删除自己
+    vTaskDelete(NULL);  // NULL表示删除当前任务
+
+    // 永远不会执行到这里
+    printf(&quot;This will never print\n&quot;);
+}
+
+int main(void)
+{
+    SystemInit();
+
+    // 创建临时任务
+    xTaskCreate(TemporaryTask, &quot;Init&quot;, 256, NULL, 1, NULL);
+
+    // 创建其他任务
+    xTaskCreate(MainTask, &quot;Main&quot;, 256, NULL, 2, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h4 id="_10">删除其他任务</h4>
+<p>可以通过任务句柄删除其他任务：</p>
+<pre><code class="language-c">TaskHandle_t workerTaskHandle = NULL;
+
+void WorkerTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    while(1)
+    {
+        printf(&quot;Worker task: %lu\n&quot;, counter++);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+void ManagerTask(void *pvParameters)
+{
+    while(1)
+    {
+        // 检查是否需要停止工作任务
+        if(WorkCompleted())
+        {
+            if(workerTaskHandle != NULL)
+            {
+                // 删除工作任务
+                vTaskDelete(workerTaskHandle);
+                workerTaskHandle = NULL;
+                printf(&quot;Worker task deleted\n&quot;);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    // 创建任务
+    xTaskCreate(WorkerTask, &quot;Worker&quot;, 256, NULL, 1, &amp;workerTaskHandle);
+    xTaskCreate(ManagerTask, &quot;Manager&quot;, 256, NULL, 2, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<p><strong>⚠️ 删除任务的注意事项</strong>：</p>
+<pre><code class="language-c">// ❌ 错误：删除后继续使用句柄
+vTaskDelete(taskHandle);
+vTaskResume(taskHandle);  // 错误！任务已被删除
+
+// ✅ 正确：删除后清空句柄
+vTaskDelete(taskHandle);
+taskHandle = NULL;
+
+// ✅ 正确：删除前检查句柄
+if(taskHandle != NULL)
+{
+    vTaskDelete(taskHandle);
+    taskHandle = NULL;
+}
+
+// ✅ 正确：删除前释放资源
+void TaskWithResources(void *pvParameters)
+{
+    // 分配资源
+    uint8_t *buffer = pvPortMalloc(1024);
+
+    while(1)
+    {
+        if(ShouldExit())
+        {
+            // 释放资源
+            vPortFree(buffer);
+
+            // 删除自己
+            vTaskDelete(NULL);
+        }
+
+        vTaskDelay(100);
+    }
+}
+</code></pre>
+<h3 id="_11">任务挂起和恢复</h3>
+<h4 id="-vtasksuspend">挂起任务 - vTaskSuspend()</h4>
+<p>挂起任务会使任务进入挂起态，不参与调度：</p>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 挂起指定任务
+vTaskSuspend(taskHandle);
+
+// 挂起自己
+vTaskSuspend(NULL);
+</code></pre>
+<p><strong>完整示例</strong>：</p>
+<pre><code class="language-c">TaskHandle_t dataTaskHandle = NULL;
+
+void DataTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;Processing data...\n&quot;);
+        ProcessData();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void ControlTask(void *pvParameters)
+{
+    bool taskActive = true;
+
+    while(1)
+    {
+        if(Button_Pressed())
+        {
+            taskActive = !taskActive;
+
+            if(taskActive)
+            {
+                // 恢复任务
+                vTaskResume(dataTaskHandle);
+                printf(&quot;Data task resumed\n&quot;);
+            }
+            else
+            {
+                // 挂起任务
+                vTaskSuspend(dataTaskHandle);
+                printf(&quot;Data task suspended\n&quot;);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    xTaskCreate(DataTask, &quot;Data&quot;, 256, NULL, 2, &amp;dataTaskHandle);
+    xTaskCreate(ControlTask, &quot;Control&quot;, 256, NULL, 3, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h4 id="-vtaskresume">恢复任务 - vTaskResume()</h4>
+<p>恢复被挂起的任务：</p>
+<pre><code class="language-c">// 从任务中恢复
+vTaskResume(taskHandle);
+
+// 从中断中恢复（ISR安全版本）
+BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+xTaskResumeFromISR(taskHandle);
+portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+</code></pre>
+<p><strong>中断中恢复任务示例</strong>：</p>
+<pre><code class="language-c">TaskHandle_t urgentTaskHandle = NULL;
+
+void UrgentTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;Handling urgent event\n&quot;);
+        HandleUrgentEvent();
+
+        // 处理完后挂起自己，等待下次中断唤醒
+        vTaskSuspend(NULL);
+    }
+}
+
+// 外部中断服务函数
+void EXTI0_IRQHandler(void)
+{
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET)
+    {
+        // 清除中断标志
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        // 从中断中恢复任务
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xTaskResumeFromISR(urgentTaskHandle);
+
+        // 如果恢复的任务优先级更高，立即切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<p><strong>挂起和恢复的应用场景</strong>：</p>
+<ol>
+<li><strong>省电模式</strong>：挂起不需要的任务以降低功耗</li>
+<li><strong>条件执行</strong>：根据系统状态动态启停任务</li>
+<li><strong>中断驱动</strong>：任务在中断中被唤醒执行</li>
+<li><strong>资源管理</strong>：暂停某些任务以释放资源</li>
+</ol>
+<h3 id="_12">任务优先级管理</h3>
+<h4 id="_13">获取任务优先级</h4>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 获取指定任务的优先级
+UBaseType_t priority = uxTaskPriorityGet(taskHandle);
+printf(&quot;Task priority: %u\n&quot;, priority);
+
+// 获取当前任务的优先级
+UBaseType_t myPriority = uxTaskPriorityGet(NULL);
+printf(&quot;My priority: %u\n&quot;, myPriority);
+</code></pre>
+<h4 id="_14">设置任务优先级</h4>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 设置指定任务的优先级
+vTaskPrioritySet(taskHandle, 5);
+
+// 设置当前任务的优先级
+vTaskPrioritySet(NULL, 3);
+
+// 提升自己的优先级
+UBaseType_t currentPriority = uxTaskPriorityGet(NULL);
+vTaskPrioritySet(NULL, currentPriority + 1);
+
+// 降低自己的优先级
+vTaskPrioritySet(NULL, currentPriority - 1);
+</code></pre>
+<h4 id="_15">动态优先级调整示例</h4>
+<pre><code class="language-c">TaskHandle_t workerTaskHandle = NULL;
+
+void WorkerTask(void *pvParameters)
+{
+    while(1)
+    {
+        // 执行工作
+        DoWork();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void ManagerTask(void *pvParameters)
+{
+    while(1)
+    {
+        if(EmergencyDetected())
+        {
+            // 紧急情况：提升工作任务优先级
+            vTaskPrioritySet(workerTaskHandle, 5);
+            printf(&quot;Priority elevated to 5\n&quot;);
+        }
+        else if(NormalOperation())
+        {
+            // 正常情况：恢复普通优先级
+            vTaskPrioritySet(workerTaskHandle, 2);
+            printf(&quot;Priority restored to 2\n&quot;);
+        }
+        else if(LowPowerMode())
+        {
+            // 低功耗模式：降低优先级
+            vTaskPrioritySet(workerTaskHandle, 1);
+            printf(&quot;Priority lowered to 1\n&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    xTaskCreate(WorkerTask, &quot;Worker&quot;, 256, NULL, 2, &amp;workerTaskHandle);
+    xTaskCreate(ManagerTask, &quot;Manager&quot;, 256, NULL, 3, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h3 id="_16">任务状态查询</h3>
+<h4 id="_17">获取任务句柄</h4>
+<pre><code class="language-c">// 通过任务名称获取句柄
+TaskHandle_t handle = xTaskGetHandle(&quot;TaskName&quot;);
+
+if(handle != NULL)
+{
+    printf(&quot;Task found\n&quot;);
+}
+else
+{
+    printf(&quot;Task not found\n&quot;);
+}
+
+// 获取当前任务句柄
+TaskHandle_t currentHandle = xTaskGetCurrentTaskHandle();
+</code></pre>
+<h4 id="_18">获取任务名称</h4>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 获取任务名称
+char *taskName = pcTaskGetName(taskHandle);
+printf(&quot;Task name: %s\n&quot;, taskName);
+
+// 获取当前任务名称
+char *myName = pcTaskGetName(NULL);
+printf(&quot;My name: %s\n&quot;, myName);
+</code></pre>
+<h4 id="_19">获取任务状态</h4>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 获取任务状态
+eTaskState state = eTaskGetState(taskHandle);
+
+switch(state)
+{
+    case eRunning:
+        printf(&quot;Task is running\n&quot;);
+        break;
+    case eReady:
+        printf(&quot;Task is ready\n&quot;);
+        break;
+    case eBlocked:
+        printf(&quot;Task is blocked\n&quot;);
+        break;
+    case eSuspended:
+        printf(&quot;Task is suspended\n&quot;);
+        break;
+    case eDeleted:
+        printf(&quot;Task is deleted\n&quot;);
+        break;
+    default:
+        printf(&quot;Unknown state\n&quot;);
+        break;
+}
+</code></pre>
+<h4 id="_20">获取栈使用情况</h4>
+<pre><code class="language-c">TaskHandle_t taskHandle;
+
+// 获取栈水位（最小剩余栈空间）
+UBaseType_t stackHighWaterMark = uxTaskGetStackHighWaterMark(taskHandle);
+printf(&quot;Minimum free stack: %u words (%u bytes)\n&quot;, 
+       stackHighWaterMark, 
+       stackHighWaterMark * 4);
+
+// 获取当前任务的栈水位
+UBaseType_t myStackMark = uxTaskGetStackHighWaterMark(NULL);
+printf(&quot;My stack free: %u words\n&quot;, myStackMark);
+
+// 检查栈是否充足
+if(stackHighWaterMark &lt; 32)  // 少于128字节
+{
+    printf(&quot;Warning: Stack space is low!\n&quot;);
+}
+</code></pre>
+<h4 id="_21">任务监控示例</h4>
+<pre><code class="language-c">void MonitorTask(void *pvParameters)
+{
+    TaskHandle_t task1 = xTaskGetHandle(&quot;Task1&quot;);
+    TaskHandle_t task2 = xTaskGetHandle(&quot;Task2&quot;);
+    TaskHandle_t task3 = xTaskGetHandle(&quot;Task3&quot;);
+
+    while(1)
+    {
+        printf(&quot;\n=== Task Monitor ===\n&quot;);
+
+        // 监控Task1
+        if(task1 != NULL)
+        {
+            printf(&quot;Task1:\n&quot;);
+            printf(&quot;  State: %d\n&quot;, eTaskGetState(task1));
+            printf(&quot;  Priority: %u\n&quot;, uxTaskPriorityGet(task1));
+            printf(&quot;  Stack free: %u words\n&quot;, 
+                   uxTaskGetStackHighWaterMark(task1));
+        }
+
+        // 监控Task2
+        if(task2 != NULL)
+        {
+            printf(&quot;Task2:\n&quot;);
+            printf(&quot;  State: %d\n&quot;, eTaskGetState(task2));
+            printf(&quot;  Priority: %u\n&quot;, uxTaskPriorityGet(task2));
+            printf(&quot;  Stack free: %u words\n&quot;, 
+                   uxTaskGetStackHighWaterMark(task2));
+        }
+
+        // 监控Task3
+        if(task3 != NULL)
+        {
+            printf(&quot;Task3:\n&quot;);
+            printf(&quot;  State: %d\n&quot;, eTaskGetState(task3));
+            printf(&quot;  Priority: %u\n&quot;, uxTaskPriorityGet(task3));
+            printf(&quot;  Stack free: %u words\n&quot;, 
+                   uxTaskGetStackHighWaterMark(task3));
+        }
+
+        // 系统信息
+        printf(&quot;\nSystem:\n&quot;);
+        printf(&quot;  Free heap: %u bytes\n&quot;, xPortGetFreeHeapSize());
+        printf(&quot;  Task count: %u\n&quot;, uxTaskGetNumberOfTasks());
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
+</code></pre>
+<h3 id="_22">任务延时</h3>
+<h4 id="-vtaskdelay">相对延时 - vTaskDelay()</h4>
+<p>从调用时刻开始计时：</p>
+<pre><code class="language-c">void Task(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;Task running\n&quot;);
+
+        // 延时1000个时钟节拍（1秒）
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // 或直接使用节拍数
+        // vTaskDelay(1000);
+    }
+}
+</code></pre>
+<p><strong>相对延时的问题</strong>：</p>
+<pre><code class="language-c">void Task(void *pvParameters)
+{
+    while(1)
+    {
+        // 执行工作（假设需要50ms）
+        DoWork();  // 50ms
+
+        // 延时1000ms
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // 实际周期 = 50ms + 1000ms = 1050ms
+        // 不是精确的1000ms周期
+    }
+}
+</code></pre>
+<h4 id="-vtaskdelayuntil">绝对延时 - vTaskDelayUntil()</h4>
+<p>实现精确的周期性延时：</p>
+<pre><code class="language-c">void Task(void *pvParameters)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(1000);  // 1秒周期
+
+    // 初始化上次唤醒时间
+    xLastWakeTime = xTaskGetTickCount();
+
+    while(1)
+    {
+        // 执行工作（无论需要多长时间）
+        DoWork();
+
+        // 精确的周期性延时
+        vTaskDelayUntil(&amp;xLastWakeTime, xFrequency);
+
+        // 保证精确的1000ms周期
+    }
+}
+</code></pre>
+<p><strong>vTaskDelay vs vTaskDelayUntil 对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>vTaskDelay</th>
+<th>vTaskDelayUntil</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>延时类型</td>
+<td>相对延时</td>
+<td>绝对延时</td>
+</tr>
+<tr>
+<td>周期精度</td>
+<td>不精确</td>
+<td>精确</td>
+</tr>
+<tr>
+<td>使用场景</td>
+<td>一般延时</td>
+<td>周期性任务</td>
+</tr>
+<tr>
+<td>代码复杂度</td>
+<td>简单</td>
+<td>稍复杂</td>
+</tr>
+<tr>
+<td>CPU占用</td>
+<td>相同</td>
+<td>相同</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_23">实践示例</h2>
+<h3 id="1led">示例1：多LED控制系统</h3>
+<p>创建多个任务，以不同频率控制LED：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;stm32f4xx_hal.h&quot;
+
+// LED配置结构体
+typedef struct
+{
+    GPIO_TypeDef *port;
+    uint16_t pin;
+    uint32_t delay_ms;
+    const char *name;
+} LED_Config_t;
+
+// LED任务函数
+void LED_Task(void *pvParameters)
+{
+    LED_Config_t *config = (LED_Config_t *)pvParameters;
+
+    printf(&quot;%s task started\n&quot;, config-&gt;name);
+
+    while(1)
+    {
+        // 切换LED状态
+        HAL_GPIO_TogglePin(config-&gt;port, config-&gt;pin);
+        printf(&quot;%s toggled\n&quot;, config-&gt;name);
+
+        // 延时
+        vTaskDelay(pdMS_TO_TICKS(config-&gt;delay_ms));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化GPIO
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+
+    // 配置LED引脚
+    GPIO_InitStruct.Pin = GPIO_PIN_12 | GPIO_PIN_13 | GPIO_PIN_14 | GPIO_PIN_15;
+    HAL_GPIO_Init(GPIOD, &amp;GPIO_InitStruct);
+
+    // LED配置（静态变量，生命周期持续整个程序）
+    static LED_Config_t led_green = {
+        .port = GPIOD,
+        .pin = GPIO_PIN_12,
+        .delay_ms = 500,
+        .name = &quot;LED_Green&quot;
+    };
+
+    static LED_Config_t led_orange = {
+        .port = GPIOD,
+        .pin = GPIO_PIN_13,
+        .delay_ms = 1000,
+        .name = &quot;LED_Orange&quot;
+    };
+
+    static LED_Config_t led_red = {
+        .port = GPIOD,
+        .pin = GPIO_PIN_14,
+        .delay_ms = 2000,
+        .name = &quot;LED_Red&quot;
+    };
+
+    static LED_Config_t led_blue = {
+        .port = GPIOD,
+        .pin = GPIO_PIN_15,
+        .delay_ms = 3000,
+        .name = &quot;LED_Blue&quot;
+    };
+
+    // 创建LED任务
+    xTaskCreate(LED_Task, &quot;LED_Green&quot;, 128, &amp;led_green, 1, NULL);
+    xTaskCreate(LED_Task, &quot;LED_Orange&quot;, 128, &amp;led_orange, 1, NULL);
+    xTaskCreate(LED_Task, &quot;LED_Red&quot;, 128, &amp;led_red, 1, NULL);
+    xTaskCreate(LED_Task, &quot;LED_Blue&quot;, 128, &amp;led_blue, 1, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行效果</strong>：
+- 绿色LED每500ms闪烁
+- 橙色LED每1秒闪烁
+- 红色LED每2秒闪烁
+- 蓝色LED每3秒闪烁</p>
+<h3 id="2">示例2：任务动态管理</h3>
+<p>演示任务的创建、挂起、恢复和删除：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 任务句柄
+TaskHandle_t workerTaskHandle = NULL;
+TaskHandle_t monitorTaskHandle = NULL;
+
+// 工作任务
+void WorkerTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    printf(&quot;Worker task started\n&quot;);
+
+    while(1)
+    {
+        printf(&quot;Worker: %lu\n&quot;, counter++);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// 监控任务
+void MonitorTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    printf(&quot;Monitor task started\n&quot;);
+
+    while(1)
+    {
+        printf(&quot;Monitor: %lu\n&quot;, counter++);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 控制任务
+void ControlTask(void *pvParameters)
+{
+    uint32_t state = 0;
+
+    printf(&quot;Control task started\n&quot;);
+
+    while(1)
+    {
+        switch(state)
+        {
+            case 0:
+                // 创建工作任务
+                printf(&quot;\n[Control] Creating worker task...\n&quot;);
+                xTaskCreate(WorkerTask, &quot;Worker&quot;, 256, NULL, 2, &amp;workerTaskHandle);
+                state = 1;
+                break;
+
+            case 1:
+                // 运行5秒
+                printf(&quot;[Control] Worker task running...\n&quot;);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                state = 2;
+                break;
+
+            case 2:
+                // 挂起工作任务
+                printf(&quot;\n[Control] Suspending worker task...\n&quot;);
+                vTaskSuspend(workerTaskHandle);
+                state = 3;
+                break;
+
+            case 3:
+                // 挂起3秒
+                printf(&quot;[Control] Worker task suspended...\n&quot;);
+                vTaskDelay(pdMS_TO_TICKS(3000));
+                state = 4;
+                break;
+
+            case 4:
+                // 恢复工作任务
+                printf(&quot;\n[Control] Resuming worker task...\n&quot;);
+                vTaskResume(workerTaskHandle);
+                state = 5;
+                break;
+
+            case 5:
+                // 运行3秒
+                printf(&quot;[Control] Worker task resumed...\n&quot;);
+                vTaskDelay(pdMS_TO_TICKS(3000));
+                state = 6;
+                break;
+
+            case 6:
+                // 删除工作任务
+                printf(&quot;\n[Control] Deleting worker task...\n&quot;);
+                vTaskDelete(workerTaskHandle);
+                workerTaskHandle = NULL;
+                state = 7;
+                break;
+
+            case 7:
+                // 等待5秒后重新开始
+                printf(&quot;[Control] Worker task deleted, restarting in 5s...\n&quot;);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+                state = 0;
+                break;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    // 创建监控任务（一直运行）
+    xTaskCreate(MonitorTask, &quot;Monitor&quot;, 256, NULL, 1, &amp;monitorTaskHandle);
+
+    // 创建控制任务
+    xTaskCreate(ControlTask, &quot;Control&quot;, 256, NULL, 3, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h3 id="3">示例3：优先级调度演示</h3>
+<p>演示不同优先级任务的调度行为：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 高优先级任务
+void HighPriorityTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    while(1)
+    {
+        printf(&quot;[HIGH] Running: %lu\n&quot;, counter++);
+
+        // 执行一些工作
+        for(volatile uint32_t i = 0; i &lt; 1000000; i++);
+
+        // 延时，让出CPU
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 中优先级任务
+void MediumPriorityTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    while(1)
+    {
+        printf(&quot;[MEDIUM] Running: %lu\n&quot;, counter++);
+
+        // 执行一些工作
+        for(volatile uint32_t i = 0; i &lt; 500000; i++);
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// 低优先级任务
+void LowPriorityTask(void *pvParameters)
+{
+    uint32_t counter = 0;
+
+    while(1)
+    {
+        printf(&quot;[LOW] Running: %lu\n&quot;, counter++);
+
+        // 执行一些工作
+        for(volatile uint32_t i = 0; i &lt; 100000; i++);
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    printf(&quot;Creating tasks with different priorities...\n&quot;);
+
+    // 创建不同优先级的任务
+    xTaskCreate(HighPriorityTask, &quot;High&quot;, 256, NULL, 3, NULL);
+    xTaskCreate(MediumPriorityTask, &quot;Medium&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(LowPriorityTask, &quot;Low&quot;, 256, NULL, 1, NULL);
+
+    printf(&quot;Starting scheduler...\n&quot;);
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>观察要点</strong>：
+- 高优先级任务优先执行
+- 中优先级任务在高优先级任务阻塞时执行
+- 低优先级任务在其他任务都阻塞时才执行
+- 高优先级任务就绪时会抢占低优先级任务</p>
+<h3 id="4">示例4：精确周期任务</h3>
+<p>使用<code>vTaskDelayUntil()</code>实现精确的周期性任务：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 传感器采集任务（精确10Hz）
+void SensorTask(void *pvParameters)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(100);  // 100ms = 10Hz
+
+    // 初始化上次唤醒时间
+    xLastWakeTime = xTaskGetTickCount();
+
+    uint32_t counter = 0;
+
+    while(1)
+    {
+        // 记录开始时间
+        TickType_t startTime = xTaskGetTickCount();
+
+        // 读取传感器（模拟，可能需要不同时间）
+        float value = ReadSensor();
+
+        // 处理数据
+        ProcessData(value);
+
+        // 记录结束时间
+        TickType_t endTime = xTaskGetTickCount();
+        TickType_t elapsed = endTime - startTime;
+
+        printf(&quot;Sample %lu: value=%.2f, time=%lu ms\n&quot;, 
+               counter++, value, elapsed);
+
+        // 精确的周期性延时
+        vTaskDelayUntil(&amp;xLastWakeTime, xFrequency);
+
+        // 无论处理需要多长时间，都保证100ms的周期
+    }
+}
+
+// 显示任务（精确1Hz）
+void DisplayTask(void *pvParameters)
+{
+    TickType_t xLastWakeTime;
+    const TickType_t xFrequency = pdMS_TO_TICKS(1000);  // 1000ms = 1Hz
+
+    xLastWakeTime = xTaskGetTickCount();
+
+    while(1)
+    {
+        // 更新显示
+        UpdateDisplay();
+
+        printf(&quot;Display updated at %lu ms\n&quot;, xTaskGetTickCount());
+
+        // 精确的1秒周期
+        vTaskDelayUntil(&amp;xLastWakeTime, xFrequency);
+    }
+}
+
+int main(void)
+{
+    SystemInit();
+
+    xTaskCreate(SensorTask, &quot;Sensor&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(DisplayTask, &quot;Display&quot;, 256, NULL, 1, NULL);
+
+    vTaskStartScheduler();
+    while(1);
+}
+</code></pre>
+<h2 id="_24">故障排除</h2>
+<h3 id="1">问题1：任务创建失败</h3>
+<p><strong>现象</strong>：
+- <code>xTaskCreate()</code>返回<code>errCOULD_NOT_ALLOCATE_REQUIRED_MEMORY</code>
+- 任务无法创建</p>
+<p><strong>可能原因</strong>：
+1. 堆内存不足
+2. 栈大小设置过大
+3. 创建了太多任务</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 增加堆大小
+// 在FreeRTOSConfig.h中
+#define configTOTAL_HEAP_SIZE  (20 * 1024)  // 增加到20KB
+
+// 2. 减小任务栈大小
+xTaskCreate(Task, &quot;Task&quot;, 128, NULL, 1, NULL);  // 从256减到128
+
+// 3. 检查堆使用情况
+size_t freeHeap = xPortGetFreeHeapSize();
+printf(&quot;Free heap: %u bytes\n&quot;, freeHeap);
+
+// 4. 使用静态创建（不需要堆）
+static StackType_t taskStack[128];
+static StaticTask_t taskTCB;
+xTaskCreateStatic(Task, &quot;Task&quot;, 128, NULL, 1, taskStack, &amp;taskTCB);
+</code></pre>
+<h3 id="2_1">问题2：栈溢出</h3>
+<p><strong>现象</strong>：
+- 系统崩溃或死机
+- 任务行为异常
+- 数据损坏</p>
+<p><strong>可能原因</strong>：
+1. 栈大小不足
+2. 局部变量过大
+3. 函数调用层次过深
+4. 递归调用</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 启用栈溢出检测
+// 在FreeRTOSConfig.h中
+#define configCHECK_FOR_STACK_OVERFLOW  2
+
+// 2. 实现栈溢出钩子函数
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    printf(&quot;Stack overflow in task: %s\n&quot;, pcTaskName);
+    while(1);  // 停止系统
+}
+
+// 3. 检查栈使用情况
+UBaseType_t stackMark = uxTaskGetStackHighWaterMark(taskHandle);
+printf(&quot;Stack free: %u words (%u bytes)\n&quot;, stackMark, stackMark * 4);
+
+// 4. 增加栈大小
+xTaskCreate(Task, &quot;Task&quot;, 256, NULL, 1, NULL);  // 从128增加到256
+
+// 5. 减少局部变量
+// ❌ 不好：大数组在栈上
+void Task(void *pvParameters)
+{
+    char buffer[2048];  // 占用2KB栈空间
+}
+
+// ✅ 更好：使用动态分配
+void Task(void *pvParameters)
+{
+    char *buffer = pvPortMalloc(2048);
+    // 使用buffer
+    vPortFree(buffer);
+}
+</code></pre>
+<h3 id="3_1">问题3：任务无法运行</h3>
+<p><strong>现象</strong>：
+- 某个任务从不执行
+- 任务创建成功但不运行</p>
+<p><strong>可能原因</strong>：
+1. 优先级设置不当
+2. 任务被挂起
+3. 任务在等待事件
+4. 高优先级任务占用CPU</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 检查任务状态
+eTaskState state = eTaskGetState(taskHandle);
+if(state == eSuspended)
+{
+    printf(&quot;Task is suspended\n&quot;);
+    vTaskResume(taskHandle);
+}
+
+// 2. 检查优先级
+UBaseType_t priority = uxTaskPriorityGet(taskHandle);
+printf(&quot;Task priority: %u\n&quot;, priority);
+
+// 3. 确保高优先级任务有延时
+void HighPriorityTask(void *pvParameters)
+{
+    while(1)
+    {
+        DoWork();
+        // 必须有延时，否则低优先级任务无法运行
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+
+// 4. 使用任务通知或信号量唤醒任务
+// 而不是让任务一直轮询
+</code></pre>
+<h3 id="4_1">问题4：任务删除后系统异常</h3>
+<p><strong>现象</strong>：
+- 删除任务后系统崩溃
+- 出现硬件错误</p>
+<p><strong>可能原因</strong>：
+1. 删除后继续使用句柄
+2. 未释放任务占用的资源
+3. 其他任务仍在访问被删除任务的数据</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 删除后清空句柄
+vTaskDelete(taskHandle);
+taskHandle = NULL;
+
+// 2. 删除前释放资源
+void TaskWithResources(void *pvParameters)
+{
+    uint8_t *buffer = pvPortMalloc(1024);
+    SemaphoreHandle_t sem = xSemaphoreCreateBinary();
+
+    while(1)
+    {
+        if(ShouldExit())
+        {
+            // 释放所有资源
+            vPortFree(buffer);
+            vSemaphoreDelete(sem);
+
+            // 删除自己
+            vTaskDelete(NULL);
+        }
+
+        vTaskDelay(100);
+    }
+}
+
+// 3. 使用标志位通知其他任务
+volatile bool taskRunning = true;
+
+void Task1(void *pvParameters)
+{
+    while(1)
+    {
+        if(ShouldExit())
+        {
+            taskRunning = false;  // 通知其他任务
+            vTaskDelay(100);      // 等待其他任务响应
+            vTaskDelete(NULL);
+        }
+        vTaskDelay(100);
+    }
+}
+
+void Task2(void *pvParameters)
+{
+    while(1)
+    {
+        if(taskRunning)
+        {
+            // 访问Task1的数据
+        }
+        vTaskDelay(100);
+    }
+}
+</code></pre>
+<h2 id="_25">最佳实践</h2>
+<h3 id="_26">任务设计原则</h3>
+<ol>
+<li><strong>单一职责</strong>：每个任务只负责一个功能模块</li>
+<li><strong>合理优先级</strong>：根据实时性要求分配优先级</li>
+<li><strong>适当延时</strong>：任务必须有延时或阻塞，避免占用CPU</li>
+<li><strong>资源管理</strong>：及时释放不再使用的资源</li>
+<li><strong>错误处理</strong>：检查API返回值，处理错误情况</li>
+</ol>
+<h3 id="_27">栈大小配置建议</h3>
+<pre><code class="language-c">// 开发阶段：使用较大的栈，启用栈溢出检测
+#define configCHECK_FOR_STACK_OVERFLOW  2
+xTaskCreate(Task, &quot;Task&quot;, 512, NULL, 1, NULL);  // 较大的栈
+
+// 测试阶段：监控栈使用情况
+UBaseType_t stackMark = uxTaskGetStackHighWaterMark(taskHandle);
+printf(&quot;Stack usage: %u words\n&quot;, 512 - stackMark);
+
+// 发布阶段：根据实际使用情况优化栈大小
+// 栈大小 = 实际使用 + 20%余量
+xTaskCreate(Task, &quot;Task&quot;, 256, NULL, 1, NULL);  // 优化后的栈
+</code></pre>
+<h3 id="_28">优先级分配建议</h3>
+<pre><code class="language-c">// 优先级分配示例
+#define PRIORITY_IDLE       0  // 空闲任务（系统保留）
+#define PRIORITY_BACKGROUND 1  // 后台任务（日志、统计）
+#define PRIORITY_LOW        2  // 低优先级（显示更新）
+#define PRIORITY_NORMAL     3  // 普通优先级（数据处理）
+#define PRIORITY_HIGH       4  // 高优先级（传感器采集）
+#define PRIORITY_REALTIME   5  // 实时任务（中断后处理）
+
+// 创建任务
+xTaskCreate(LogTask, &quot;Log&quot;, 256, NULL, PRIORITY_BACKGROUND, NULL);
+xTaskCreate(DisplayTask, &quot;Display&quot;, 256, NULL, PRIORITY_LOW, NULL);
+xTaskCreate(ProcessTask, &quot;Process&quot;, 512, NULL, PRIORITY_NORMAL, NULL);
+xTaskCreate(SensorTask, &quot;Sensor&quot;, 256, NULL, PRIORITY_HIGH, NULL);
+xTaskCreate(UrgentTask, &quot;Urgent&quot;, 256, NULL, PRIORITY_REALTIME, NULL);
+</code></pre>
+<h3 id="_29">任务命名建议</h3>
+<pre><code class="language-c">// 好的命名：描述性强，易于理解
+xTaskCreate(SensorReadTask, &quot;SensorRead&quot;, 256, NULL, 2, NULL);
+xTaskCreate(DataProcessTask, &quot;DataProcess&quot;, 512, NULL, 3, NULL);
+xTaskCreate(DisplayUpdateTask, &quot;DisplayUpdate&quot;, 256, NULL, 1, NULL);
+xTaskCreate(NetworkCommTask, &quot;NetworkComm&quot;, 512, NULL, 4, NULL);
+
+// 不好的命名：不够清晰
+xTaskCreate(Task1, &quot;T1&quot;, 256, NULL, 2, NULL);
+xTaskCreate(Task2, &quot;T2&quot;, 512, NULL, 3, NULL);
+xTaskCreate(Task3, &quot;T3&quot;, 256, NULL, 1, NULL);
+</code></pre>
+<h2 id="_30">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ FreeRTOS任务创建的两种方法（动态和静态）</li>
+<li>✅ 任务创建API的所有参数及其详细用法</li>
+<li>✅ 任务优先级的配置和动态调整</li>
+<li>✅ 任务堆栈的管理和监控</li>
+<li>✅ 任务的删除、挂起和恢复操作</li>
+<li>✅ 任务状态查询和监控方法</li>
+<li>✅ 任务参数传递的多种技巧</li>
+<li>✅ 相对延时和绝对延时的区别</li>
+<li>✅ 常见问题的排查和解决方法</li>
+</ul>
+<h3 id="_31">关键要点</h3>
+<ol>
+<li>
+<p><strong>任务创建</strong>
+   - 动态创建简单方便，适合一般应用
+   - 静态创建无内存碎片，适合安全关键应用
+   - 栈大小以"字"为单位，需要根据实际使用情况配置</p>
+</li>
+<li>
+<p><strong>任务管理</strong>
+   - 任务可以删除自己或其他任务
+   - 挂起的任务必须手动恢复
+   - 优先级可以动态调整</p>
+</li>
+<li>
+<p><strong>任务调度</strong>
+   - 高优先级任务优先执行
+   - 相同优先级任务时间片轮转
+   - 任务必须有延时或阻塞</p>
+</li>
+<li>
+<p><strong>调试技巧</strong>
+   - 启用栈溢出检测
+   - 监控栈使用情况
+   - 使用任务状态查询API
+   - 合理命名任务便于调试</p>
+</li>
+</ol>
+<h2 id="_32">下一步学习</h2>
+<p>建议按以下顺序继续学习：</p>
+<h3 id="1_1">1. 任务间通信</h3>
+<ul>
+<li><a href="03-freertos-queue.html">FreeRTOS队列通信实战</a></li>
+<li>学习使用队列在任务间传递数据</li>
+<li>理解阻塞和非阻塞通信</li>
+</ul>
+<h3 id="2_2">2. 同步机制</h3>
+<ul>
+<li><a href="04-freertos-semaphore.html">FreeRTOS信号量应用</a></li>
+<li>学习二值信号量和计数信号量</li>
+<li>理解互斥量和临界区保护</li>
+</ul>
+<h3 id="3_2">3. 高级特性</h3>
+<ul>
+<li><a href="../intermediate/01-freertos-timer.html">FreeRTOS软件定时器</a></li>
+<li><a href="../intermediate/02-freertos-event-group.html">FreeRTOS事件标志组</a></li>
+<li><a href="../intermediate/03-freertos-notification.html">FreeRTOS任务通知</a></li>
+</ul>
+<h3 id="4_2">4. 系统设计</h3>
+<ul>
+<li><a href="../advanced/01-freertos-system-design.html">基于FreeRTOS的多任务系统设计</a></li>
+<li>学习完整的系统架构设计</li>
+<li>掌握任务划分和资源管理</li>
+</ul>
+<h2 id="_33">参考资料</h2>
+<h3 id="_34">官方文档</h3>
+<ol>
+<li>
+<p><strong>FreeRTOS官方网站</strong>
+   - https://www.freertos.org/
+   - 完整的API文档和参考手册</p>
+</li>
+<li>
+<p><strong>FreeRTOS任务管理API</strong>
+   - https://www.freertos.org/a00019.html
+   - 所有任务管理函数的详细说明</p>
+</li>
+<li>
+<p><strong>FreeRTOS参考手册</strong>
+   - https://www.freertos.org/Documentation/RTOS_book.html
+   - 《Mastering the FreeRTOS Real Time Kernel》免费下载</p>
+</li>
+</ol>
+<h3 id="_35">推荐书籍</h3>
+<ol>
+<li>
+<p><strong>《Mastering the FreeRTOS Real Time Kernel》</strong>
+   - FreeRTOS作者Richard Barry编写
+   - 详细讲解任务管理和调度原理
+   - 免费下载：https://www.freertos.org/Documentation/RTOS_book.html</p>
+</li>
+<li>
+<p><strong>《嵌入式实时操作系统FreeRTOS原理与实践》</strong>
+   - 中文书籍，适合入门
+   - 包含大量实例和项目</p>
+</li>
+</ol>
+<h3 id="_36">在线资源</h3>
+<ol>
+<li>
+<p><strong>FreeRTOS论坛</strong>
+   - https://forums.freertos.org/
+   - 活跃的社区支持
+   - 可以提问和交流</p>
+</li>
+<li>
+<p><strong>STM32社区</strong>
+   - https://community.st.com/
+   - ST官方技术支持
+   - FreeRTOS相关讨论</p>
+</li>
+<li>
+<p><strong>GitHub示例代码</strong>
+   - https://github.com/FreeRTOS/FreeRTOS
+   - 官方示例和Demo
+   - 各种平台的移植代码</p>
+</li>
+</ol>
+<h3 id="api_1">API快速参考</h3>
+<p><strong>任务创建和删除</strong>：</p>
+<pre><code class="language-c">BaseType_t xTaskCreate(TaskFunction_t, const char*, uint16_t, void*, UBaseType_t, TaskHandle_t*);
+TaskHandle_t xTaskCreateStatic(TaskFunction_t, const char*, uint32_t, void*, UBaseType_t, StackType_t*, StaticTask_t*);
+void vTaskDelete(TaskHandle_t);
+</code></pre>
+<p><strong>任务挂起和恢复</strong>：</p>
+<pre><code class="language-c">void vTaskSuspend(TaskHandle_t);
+void vTaskResume(TaskHandle_t);
+BaseType_t xTaskResumeFromISR(TaskHandle_t);
+</code></pre>
+<p><strong>任务优先级</strong>：</p>
+<pre><code class="language-c">UBaseType_t uxTaskPriorityGet(TaskHandle_t);
+void vTaskPrioritySet(TaskHandle_t, UBaseType_t);
+</code></pre>
+<p><strong>任务延时</strong>：</p>
+<pre><code class="language-c">void vTaskDelay(TickType_t);
+void vTaskDelayUntil(TickType_t*, TickType_t);
+</code></pre>
+<p><strong>任务信息查询</strong>：</p>
+<pre><code class="language-c">TaskHandle_t xTaskGetHandle(const char*);
+TaskHandle_t xTaskGetCurrentTaskHandle(void);
+char* pcTaskGetName(TaskHandle_t);
+eTaskState eTaskGetState(TaskHandle_t);
+UBaseType_t uxTaskGetStackHighWaterMark(TaskHandle_t);
+</code></pre>
+<h2 id="_37">常见问题解答</h2>
+<h3 id="q1">Q1: 任务栈大小应该设置多大？</h3>
+<p><strong>A</strong>: 栈大小取决于任务的复杂度：
+- 简单任务（LED闪烁）：128-256字（512-1024字节）
+- 中等任务（数据处理）：256-512字（1024-2048字节）
+- 复杂任务（网络通信）：512-1024字（2048-4096字节）</p>
+<p>建议：
+1. 开发阶段使用较大的栈
+2. 启用栈溢出检测
+3. 使用<code>uxTaskGetStackHighWaterMark()</code>监控栈使用
+4. 根据实际使用情况优化</p>
+<h3 id="q2">Q2: 如何选择合适的任务优先级？</h3>
+<p><strong>A</strong>: 优先级分配原则：
+1. 实时性要求高的任务：高优先级
+2. 周期性任务：中等优先级
+3. 后台任务：低优先级
+4. 避免过多任务使用相同优先级</p>
+<p>示例：
+- 中断后处理：优先级5
+- 传感器采集：优先级4
+- 数据处理：优先级3
+- 显示更新：优先级2
+- 日志记录：优先级1</p>
+<h3 id="q3">Q3: 任务函数可以返回吗？</h3>
+<p><strong>A</strong>: 不可以。任务函数必须是无限循环，永远不应该返回。</p>
+<pre><code class="language-c">// ❌ 错误：任务函数返回
+void Task(void *pvParameters)
+{
+    DoWork();
+    return;  // 错误！
+}
+
+// ✅ 正确：无限循环
+void Task(void *pvParameters)
+{
+    while(1)
+    {
+        DoWork();
+        vTaskDelay(100);
+    }
+}
+
+// ✅ 正确：需要退出时删除自己
+void Task(void *pvParameters)
+{
+    DoWork();
+    vTaskDelete(NULL);  // 删除自己
+}
+</code></pre>
+<h3 id="q4">Q4: 动态创建和静态创建有什么区别？</h3>
+<p><strong>A</strong>: 主要区别：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>动态创建</th>
+<th>静态创建</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内存分配</td>
+<td>从堆中分配</td>
+<td>使用预定义内存</td>
+</tr>
+<tr>
+<td>内存碎片</td>
+<td>可能产生</td>
+<td>不会产生</td>
+</tr>
+<tr>
+<td>灵活性</td>
+<td>高</td>
+<td>低</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>一般应用</td>
+<td>安全关键应用</td>
+</tr>
+</tbody>
+</table>
+<p>建议：
+- 一般应用使用动态创建
+- 安全关键应用使用静态创建
+- 资源受限系统使用静态创建</p>
+<h3 id="q5">Q5: 如何调试任务栈溢出？</h3>
+<p><strong>A</strong>: 步骤：</p>
+<ol>
+<li>启用栈溢出检测：</li>
+</ol>
+<pre><code class="language-c">#define configCHECK_FOR_STACK_OVERFLOW  2
+</code></pre>
+<ol start="2">
+<li>实现钩子函数：</li>
+</ol>
+<pre><code class="language-c">void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    printf(&quot;Stack overflow: %s\n&quot;, pcTaskName);
+    while(1);
+}
+</code></pre>
+<ol start="3">
+<li>监控栈使用：</li>
+</ol>
+<pre><code class="language-c">UBaseType_t mark = uxTaskGetStackHighWaterMark(taskHandle);
+printf(&quot;Stack free: %u words\n&quot;, mark);
+</code></pre>
+<ol start="4">
+<li>增加栈大小或优化代码</li>
+</ol>
+<h3 id="q6">Q6: 任务之间如何通信？</h3>
+<p><strong>A</strong>: FreeRTOS提供多种通信机制：
+- <strong>队列</strong>：传递数据
+- <strong>信号量</strong>：同步和互斥
+- <strong>事件标志组</strong>：多事件同步
+- <strong>任务通知</strong>：轻量级通信
+- <strong>互斥量</strong>：保护共享资源</p>
+<p>详见后续教程：
+- <a href="03-freertos-queue.html">FreeRTOS队列通信</a>
+- <a href="04-freertos-semaphore.html">FreeRTOS信号量应用</a></p>
+<hr />
+<p><strong>反馈与支持</strong>：</p>
+<p>如果你在学习过程中遇到问题：
+- 💬 在评论区留言讨论
+- 📧 发送邮件到：support@embedded-platform.com
+- 🐛 报告问题：<a href="https://github.com/your-repo/issues">GitHub Issues</a></p>
+<p><strong>贡献代码</strong>：
+欢迎提交改进建议和示例代码！</p>
+<hr />
+<p><strong>版权声明</strong>：本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+<p><strong>最后更新</strong>：2024-01-15<br />
+<strong>文档版本</strong>：1.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,2835 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>基于FreeRTOS的多任务系统设计：智能环境监控系统 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/">03-freertos</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">项目概述</a><ul>
+<li><a href="#_2">项目简介</a></li>
+<li><a href="#_3">项目演示</a></li>
+<li><a href="#_4">学习目标</a></li>
+</ul>
+</li>
+<li><a href="#_5">项目特点</a></li>
+<li><a href="#_6">技术栈</a><ul>
+<li><a href="#_7">硬件平台</a></li>
+<li><a href="#_8">核心技术</a></li>
+<li><a href="#_9">开发工具</a></li>
+<li><a href="#_10">第三方库</a></li>
+</ul>
+</li>
+<li><a href="#_11">硬件清单</a><ul>
+<li><a href="#_12">必需硬件</a></li>
+<li><a href="#_13">可选硬件</a></li>
+<li><a href="#_14">工具要求</a></li>
+</ul>
+</li>
+<li><a href="#_15">软件要求</a><ul>
+<li><a href="#_16">开发环境</a></li>
+<li><a href="#_17">驱动和工具</a></li>
+<li><a href="#_18">辅助工具</a></li>
+</ul>
+</li>
+<li><a href="#_19">系统架构</a><ul>
+<li><a href="#_20">整体架构</a></li>
+<li><a href="#_21">任务架构</a></li>
+<li><a href="#_22">通信机制</a></li>
+<li><a href="#_23">数据流图</a></li>
+<li><a href="#_24">模块说明</a><ul>
+<li><a href="#1-sensor-module">1. 传感器采集模块 (Sensor Module)</a></li>
+<li><a href="#2-data-processing-module">2. 数据处理模块 (Data Processing Module)</a></li>
+<li><a href="#3-display-module">3. 显示模块 (Display Module)</a></li>
+<li><a href="#4-communication-module">4. 通信模块 (Communication Module)</a></li>
+<li><a href="#5-button-module">5. 按键模块 (Button Module)</a></li>
+<li><a href="#6-led-led-module">6. LED指示模块 (LED Module)</a></li>
+<li><a href="#7-monitor-module">7. 系统监控模块 (Monitor Module)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_25">电路设计</a><ul>
+<li><a href="#_26">系统接线图</a></li>
+<li><a href="#_27">引脚分配表</a></li>
+<li><a href="#_28">注意事项</a></li>
+</ul>
+</li>
+<li><a href="#_29">实现步骤</a><ul>
+<li><a href="#1-30">阶段1：项目创建与基础配置 (预计30分钟)</a><ul>
+<li><a href="#11-stm32cubemx">1.1 使用STM32CubeMX创建项目</a></li>
+<li><a href="#12">1.2 项目结构组织</a></li>
+<li><a href="#13-freertosconfigh">1.3 配置FreeRTOSConfig.h</a></li>
+<li><a href="#14">1.4 创建应用配置文件</a></li>
+</ul>
+</li>
+<li><a href="#2-60">阶段2：驱动层实现 (预计60分钟)</a><ul>
+<li><a href="#21-dht22">2.1 DHT22温湿度传感器驱动</a></li>
+<li><a href="#22-bh1750">2.2 BH1750光照传感器驱动</a></li>
+<li><a href="#23-mq135">2.3 MQ135空气质量传感器驱动</a></li>
+<li><a href="#24-oled">2.4 OLED显示驱动（简化版）</a></li>
+</ul>
+</li>
+<li><a href="#3-90">阶段3：任务实现 (预计90分钟)</a><ul>
+<li><a href="#31">3.1 创建全局对象</a></li>
+<li><a href="#32">3.2 传感器任务实现</a></li>
+<li><a href="#33">3.3 数据处理任务实现</a></li>
+<li><a href="#34">3.4 显示任务实现</a></li>
+<li><a href="#35">3.5 通信任务实现</a></li>
+<li><a href="#36">3.6 按键任务实现</a></li>
+<li><a href="#37-led">3.7 LED任务实现</a></li>
+<li><a href="#38">3.8 系统监控任务实现</a></li>
+</ul>
+</li>
+<li><a href="#4-40">阶段4：系统集成与测试 (预计40分钟)</a><ul>
+<li><a href="#41">4.1 主函数集成</a></li>
+<li><a href="#42">4.2 错误处理钩子</a></li>
+<li><a href="#43">4.3 功能测试</a></li>
+<li><a href="#44">4.4 性能测试</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_30">故障排除</a><ul>
+<li><a href="#_31">常见问题</a><ul>
+<li><a href="#1">问题1：系统无法启动或频繁重启</a></li>
+<li><a href="#2">问题2：传感器读取失败</a></li>
+<li><a href="#3oled">问题3：OLED显示异常</a></li>
+<li><a href="#4">问题4：任务间通信失败</a></li>
+<li><a href="#5">问题5：系统性能下降</a></li>
+</ul>
+</li>
+<li><a href="#_32">调试技巧</a><ul>
+<li><a href="#1_1">1. 使用串口调试</a></li>
+<li><a href="#2_1">2. 使用断言</a></li>
+<li><a href="#3">3. 任务状态监控</a></li>
+<li><a href="#4_1">4. 使用逻辑分析仪</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_33">扩展思路</a><ul>
+<li><a href="#_34">功能扩展</a><ul>
+<li><a href="#1_2">1. 添加数据存储功能</a></li>
+<li><a href="#2-wifi">2. 添加WiFi云端上传</a></li>
+<li><a href="#3_1">3. 添加远程控制功能</a></li>
+<li><a href="#4_2">4. 添加数据分析功能</a></li>
+</ul>
+</li>
+<li><a href="#_35">性能优化</a><ul>
+<li><a href="#1-dma">1. 使用DMA传输</a></li>
+<li><a href="#2_2">2. 降低功耗</a></li>
+<li><a href="#3_2">3. 优化内存使用</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_36">项目总结</a><ul>
+<li><a href="#_37">技术要点</a></li>
+<li><a href="#_38">学习收获</a></li>
+<li><a href="#_39">改进建议</a></li>
+</ul>
+</li>
+<li><a href="#_40">相关资源</a><ul>
+<li><a href="#_41">官方文档</a></li>
+<li><a href="#_42">推荐书籍</a></li>
+<li><a href="#_43">开源项目</a></li>
+<li><a href="#_44">视频教程</a></li>
+</ul>
+</li>
+<li><a href="#_45">下一步</a></li>
+<li><a href="#_46">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="freertos">基于FreeRTOS的多任务系统设计：智能环境监控系统</h1>
+<h2 id="_1">项目概述</h2>
+<h3 id="_2">项目简介</h3>
+<p>本项目将设计并实现一个完整的智能环境监控系统，该系统能够实时监测环境参数（温度、湿度、光照、空气质量），通过OLED显示屏显示数据，支持按键交互，并通过串口或WiFi将数据上传到上位机或云平台。</p>
+<p>系统采用FreeRTOS作为操作系统，充分展示多任务调度、任务间通信、资源管理、中断处理等核心技术。这是一个真实的工业级项目架构，涵盖了从需求分析、系统设计到代码实现的完整流程。</p>
+<h3 id="_3">项目演示</h3>
+<pre><code>┌─────────────────────────────────────┐
+│   智能环境监控系统                   │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │  OLED显示屏                 │   │
+│  │  ┌─────────────────────┐    │   │
+│  │  │ Temp: 25.3°C        │    │   │
+│  │  │ Humi: 65.2%         │    │   │
+│  │  │ Light: 450 Lux      │    │   │
+│  │  │ AQI: Good           │    │   │
+│  │  │ WiFi: Connected     │    │   │
+│  │  │ Time: 14:32:15      │    │   │
+│  │  └─────────────────────┘    │   │
+│  └─────────────────────────────┘   │
+│                                     │
+│  [按键1] [按键2] [按键3] [LED]     │
+│                                     │
+│  传感器模块：                       │
+│  • DHT22 (温湿度)                  │
+│  • BH1750 (光照)                   │
+│  • MQ135 (空气质量)                │
+│                                     │
+│  通信模块：                         │
+│  • UART (调试/数据上传)            │
+│  • ESP8266 (WiFi可选)              │
+└─────────────────────────────────────┘
+</code></pre>
+<h3 id="_4">学习目标</h3>
+<p>完成本项目后，你将掌握：</p>
+<ul>
+<li>[ ] <strong>系统架构设计</strong>：学会如何设计一个多任务嵌入式系统的整体架构</li>
+<li>[ ] <strong>任务划分与调度</strong>：掌握如何合理划分任务、设置优先级和调度策略</li>
+<li>[ ] <strong>任务间通信</strong>：熟练使用队列、信号量、事件组等通信机制</li>
+<li>[ ] <strong>资源管理</strong>：学会管理共享资源，避免竞态条件和死锁</li>
+<li>[ ] <strong>中断与RTOS集成</strong>：理解中断服务函数与RTOS任务的协作</li>
+<li>[ ] <strong>内存管理</strong>：掌握FreeRTOS的内存分配策略和优化方法</li>
+<li>[ ] <strong>错误处理</strong>：实现健壮的错误检测和恢复机制</li>
+<li>[ ] <strong>性能优化</strong>：学会分析和优化系统性能</li>
+<li>[ ] <strong>调试技巧</strong>：掌握多任务系统的调试方法和工具</li>
+<li>[ ] <strong>工程实践</strong>：了解真实项目的开发流程和最佳实践</li>
+</ul>
+<h2 id="_5">项目特点</h2>
+<ul>
+<li>✨ <strong>完整的系统架构</strong>：从底层驱动到应用层的完整设计</li>
+<li>✨ <strong>多任务协作</strong>：7个任务协同工作，展示任务调度和通信</li>
+<li>✨ <strong>丰富的通信机制</strong>：使用队列、信号量、互斥量、事件组等</li>
+<li>✨ <strong>模块化设计</strong>：清晰的模块划分，易于扩展和维护</li>
+<li>✨ <strong>工业级代码</strong>：遵循编码规范，包含完整的错误处理</li>
+<li>✨ <strong>性能监控</strong>：实时监控CPU使用率、内存使用、任务状态</li>
+<li>✨ <strong>可扩展性强</strong>：易于添加新的传感器和功能模块</li>
+<li>✨ <strong>实用性强</strong>：可直接应用于实际项目</li>
+</ul>
+<h2 id="_6">技术栈</h2>
+<h3 id="_7">硬件平台</h3>
+<ul>
+<li><strong>主控芯片</strong>：STM32F407VGT6 (Cortex-M4, 168MHz, 192KB RAM, 1MB Flash)</li>
+<li><strong>开发板</strong>：STM32F4 Discovery 或兼容板</li>
+<li><strong>调试器</strong>：ST-Link V2 (板载)</li>
+</ul>
+<h3 id="_8">核心技术</h3>
+<ul>
+<li><strong>操作系统</strong>：FreeRTOS V10.3.1+</li>
+<li><strong>开发语言</strong>：C语言 (C99标准)</li>
+<li><strong>HAL库</strong>：STM32 HAL库</li>
+<li><strong>通信协议</strong>：I2C, UART, SPI</li>
+</ul>
+<h3 id="_9">开发工具</h3>
+<ul>
+<li><strong>IDE</strong>：STM32CubeIDE v1.10+ 或 Keil MDK v5.30+</li>
+<li><strong>配置工具</strong>：STM32CubeMX</li>
+<li><strong>调试工具</strong>：串口调试助手、逻辑分析仪</li>
+<li><strong>版本控制</strong>：Git</li>
+</ul>
+<h3 id="_10">第三方库</h3>
+<ul>
+<li>FreeRTOS内核</li>
+<li>STM32 HAL库</li>
+<li>DHT22驱动库</li>
+<li>BH1750驱动库</li>
+<li>OLED驱动库 (SSD1306)</li>
+</ul>
+<h2 id="_11">硬件清单</h2>
+<h3 id="_12">必需硬件</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>型号/规格</th>
+<th>数量</th>
+<th>用途</th>
+<th>参考价格</th>
+<th>购买链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>STM32F4 Discovery</td>
+<td>1</td>
+<td>主控制器</td>
+<td>¥100</td>
+<td>[淘宝/立创商城]</td>
+</tr>
+<tr>
+<td>温湿度传感器</td>
+<td>DHT22 (AM2302)</td>
+<td>1</td>
+<td>温湿度检测</td>
+<td>¥15</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>光照传感器</td>
+<td>BH1750FVI</td>
+<td>1</td>
+<td>光照强度检测</td>
+<td>¥5</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>空气质量传感器</td>
+<td>MQ135</td>
+<td>1</td>
+<td>空气质量检测</td>
+<td>¥8</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>OLED显示屏</td>
+<td>0.96" I2C (SSD1306)</td>
+<td>1</td>
+<td>数据显示</td>
+<td>¥15</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>按键</td>
+<td>轻触开关</td>
+<td>3</td>
+<td>用户交互</td>
+<td>¥1</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>LED</td>
+<td>5mm LED (红/绿/蓝)</td>
+<td>3</td>
+<td>状态指示</td>
+<td>¥1</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>面包板</td>
+<td>标准面包板</td>
+<td>1</td>
+<td>电路搭建</td>
+<td>¥5</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>公对公/公对母</td>
+<td>若干</td>
+<td>连接线</td>
+<td>¥5</td>
+<td>[淘宝]</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>Micro USB</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>¥5</td>
+<td>[淘宝]</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_13">可选硬件</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>型号/规格</th>
+<th>数量</th>
+<th>用途</th>
+<th>参考价格</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WiFi模块</td>
+<td>ESP8266 (ESP-01)</td>
+<td>1</td>
+<td>无线通信</td>
+<td>¥10</td>
+</tr>
+<tr>
+<td>SD卡模块</td>
+<td>MicroSD卡槽</td>
+<td>1</td>
+<td>数据存储</td>
+<td>¥3</td>
+</tr>
+<tr>
+<td>RTC模块</td>
+<td>DS3231</td>
+<td>1</td>
+<td>实时时钟</td>
+<td>¥5</td>
+</tr>
+<tr>
+<td>蜂鸣器</td>
+<td>有源蜂鸣器</td>
+<td>1</td>
+<td>报警提示</td>
+<td>¥2</td>
+</tr>
+<tr>
+<td>电源模块</td>
+<td>LM2596 DC-DC</td>
+<td>1</td>
+<td>独立供电</td>
+<td>¥3</td>
+</tr>
+<tr>
+<td>外壳</td>
+<td>亚克力外壳</td>
+<td>1</td>
+<td>保护电路</td>
+<td>¥20</td>
+</tr>
+</tbody>
+</table>
+<p><strong>总成本</strong>：基础版约 ¥160，完整版约 ¥200</p>
+<h3 id="_14">工具要求</h3>
+<ul>
+<li>电烙铁（如需焊接）</li>
+<li>万用表（电路调试）</li>
+<li>逻辑分析仪（可选，用于调试通信协议）</li>
+</ul>
+<h2 id="_15">软件要求</h2>
+<h3 id="_16">开发环境</h3>
+<p><strong>必需软件</strong>：
+- STM32CubeIDE v1.10.0 或更高版本
+- STM32CubeMX v6.5.0 或更高版本
+- Git v2.30+ (版本控制)</p>
+<p><strong>可选软件</strong>：
+- Keil MDK v5.30+ (替代IDE)
+- IAR Embedded Workbench (替代IDE)
+- Visual Studio Code (代码编辑)</p>
+<h3 id="_17">驱动和工具</h3>
+<ul>
+<li>ST-Link驱动程序</li>
+<li>串口调试助手 (推荐：SSCOM、PuTTY、Tera Term)</li>
+<li>MQTT客户端 (可选，用于测试云端通信)</li>
+<li>Wireshark (可选，用于网络调试)</li>
+</ul>
+<h3 id="_18">辅助工具</h3>
+<ul>
+<li>Python 3.8+ (用于数据分析脚本)</li>
+<li>Node.js (可选，用于Web界面)</li>
+<li>MQTT Broker (可选，如Mosquitto)</li>
+</ul>
+<h2 id="_19">系统架构</h2>
+<h3 id="_20">整体架构</h3>
+<p>系统采用分层架构设计，从底层到应用层清晰分离：</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    应用层 (Application Layer)            │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  UI管理      │  │  数据处理    │  │  业务逻辑    │  │
+│  │  Display     │  │  Processing  │  │  Logic       │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│                  中间件层 (Middleware Layer)             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  FreeRTOS    │  │  通信协议    │  │  数据管理    │  │
+│  │  Kernel      │  │  Protocol    │  │  Data Mgmt   │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│                   驱动层 (Driver Layer)                  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  传感器驱动  │  │  显示驱动    │  │  通信驱动    │  │
+│  │  Sensors     │  │  Display     │  │  Comm        │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+├─────────────────────────────────────────────────────────┤
+│                   硬件层 (Hardware Layer)                │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  STM32 HAL   │  │  外设配置    │  │  时钟管理    │  │
+│  │  Library     │  │  Peripheral  │  │  Clock       │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="_21">任务架构</h3>
+<p>系统包含7个主要任务，每个任务负责特定功能：</p>
+<pre><code>任务优先级分配 (数字越大优先级越高)：
+
+┌─────────────────────────────────────────────────────┐
+│ Priority 5: Sensor_Task (传感器采集任务)            │
+│             周期: 1000ms                            │
+│             功能: 读取所有传感器数据                │
+└─────────────────────────────────────────────────────┘
+                        ↓ (Queue)
+┌─────────────────────────────────────────────────────┐
+│ Priority 4: DataProcess_Task (数据处理任务)         │
+│             周期: 触发式                            │
+│             功能: 数据滤波、计算、异常检测          │
+└─────────────────────────────────────────────────────┘
+                        ↓ (Queue)
+┌─────────────────────────────────────────────────────┐
+│ Priority 3: Display_Task (显示任务)                 │
+│             周期: 200ms                             │
+│             功能: 更新OLED显示内容                  │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ Priority 3: Communication_Task (通信任务)           │
+│             周期: 5000ms                            │
+│             功能: 上传数据到上位机/云平台           │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ Priority 2: Button_Task (按键任务)                  │
+│             周期: 50ms                              │
+│             功能: 按键扫描、消抖、事件处理          │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ Priority 2: LED_Task (LED任务)                      │
+│             周期: 500ms                             │
+│             功能: LED状态指示、闪烁控制             │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│ Priority 1: Monitor_Task (系统监控任务)             │
+│             周期: 10000ms                           │
+│             功能: CPU使用率、内存监控、任务状态     │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="_22">通信机制</h3>
+<p>系统使用多种FreeRTOS通信机制实现任务间协作：</p>
+<pre><code>通信对象使用图：
+
+Sensor_Task ──[Queue: sensor_queue]──&gt; DataProcess_Task
+                                              │
+DataProcess_Task ──[Queue: display_queue]──&gt; Display_Task
+                                              │
+DataProcess_Task ──[Queue: comm_queue]────&gt; Communication_Task
+
+Button_Task ──[EventGroup: button_events]──&gt; Display_Task
+                                              │
+                                              └──&gt; LED_Task
+
+All Tasks ──[Mutex: i2c_mutex]──&gt; I2C Bus (共享资源)
+All Tasks ──[Mutex: uart_mutex]──&gt; UART (共享资源)
+
+Timer_Callback ──[Semaphore: sensor_sem]──&gt; Sensor_Task
+</code></pre>
+<h3 id="_23">数据流图</h3>
+<pre><code class="language-mermaid">graph TB
+    A[传感器硬件] --&gt;|I2C/GPIO| B[传感器驱动]
+    B --&gt;|原始数据| C[Sensor_Task]
+    C --&gt;|sensor_queue| D[DataProcess_Task]
+    D --&gt;|滤波/计算| E[处理后数据]
+    E --&gt;|display_queue| F[Display_Task]
+    E --&gt;|comm_queue| G[Communication_Task]
+    F --&gt;|I2C| H[OLED显示]
+    G --&gt;|UART/WiFi| I[上位机/云平台]
+    J[按键硬件] --&gt;|GPIO中断| K[Button_Task]
+    K --&gt;|button_events| F
+    K --&gt;|button_events| L[LED_Task]
+    L --&gt;|GPIO| M[LED硬件]
+    N[Monitor_Task] -.监控.-&gt; C
+    N -.监控.-&gt; D
+    N -.监控.-&gt; F
+    N -.监控.-&gt; G
+</code></pre>
+<h3 id="_24">模块说明</h3>
+<h4 id="1-sensor-module">1. 传感器采集模块 (Sensor Module)</h4>
+<p><strong>功能</strong>：
+- 周期性读取DHT22温湿度数据
+- 周期性读取BH1750光照数据
+- 周期性读取MQ135空气质量数据
+- 数据打包发送到数据处理任务</p>
+<p><strong>接口</strong>：
+- I2C接口：BH1750
+- GPIO接口：DHT22 (单总线协议)
+- ADC接口：MQ135</p>
+<p><strong>更新频率</strong>：1Hz (每秒采集一次)</p>
+<p><strong>数据结构</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    float temperature;      // 温度 (°C)
+    float humidity;         // 湿度 (%)
+    uint16_t light;         // 光照 (Lux)
+    uint16_t air_quality;   // 空气质量 (ADC值)
+    uint32_t timestamp;     // 时间戳
+} SensorData_t;
+</code></pre>
+<h4 id="2-data-processing-module">2. 数据处理模块 (Data Processing Module)</h4>
+<p><strong>功能</strong>：
+- 对传感器数据进行滤波处理（移动平均滤波）
+- 数据有效性检查和异常值剔除
+- 计算衍生数据（如舒适度指数）
+- 异常情况检测和报警</p>
+<p><strong>算法</strong>：
+- 移动平均滤波（窗口大小：5）
+- 异常值检测（3σ原则）
+- 舒适度计算（基于温湿度）</p>
+<p><strong>处理周期</strong>：触发式（收到数据立即处理）</p>
+<p><strong>数据结构</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    float temperature;      // 滤波后温度
+    float humidity;         // 滤波后湿度
+    uint16_t light;         // 滤波后光照
+    uint16_t air_quality;   // 滤波后空气质量
+    uint8_t comfort_index;  // 舒适度指数 (0-100)
+    uint8_t alarm_flags;    // 报警标志位
+    uint32_t timestamp;     // 时间戳
+} ProcessedData_t;
+</code></pre>
+<h4 id="3-display-module">3. 显示模块 (Display Module)</h4>
+<p><strong>功能</strong>：
+- 在OLED屏幕上显示环境数据
+- 支持多页面切换（通过按键）
+- 显示系统状态信息
+- 显示报警信息</p>
+<p><strong>接口</strong>：I2C (OLED SSD1306)</p>
+<p><strong>刷新率</strong>：5Hz (每200ms刷新一次)</p>
+<p><strong>显示页面</strong>：
+- 页面1：主界面（温湿度、光照、空气质量）
+- 页面2：系统信息（CPU使用率、内存、运行时间）
+- 页面3：网络状态（WiFi连接、数据上传状态）</p>
+<h4 id="4-communication-module">4. 通信模块 (Communication Module)</h4>
+<p><strong>功能</strong>：
+- 通过UART发送数据到上位机
+- 可选：通过ESP8266发送数据到云平台
+- 接收上位机命令
+- 数据格式化（JSON格式）</p>
+<p><strong>协议</strong>：
+- UART：115200 bps, 8N1
+- WiFi：MQTT协议（可选）</p>
+<p><strong>上传周期</strong>：5秒一次</p>
+<p><strong>数据格式</strong>：</p>
+<pre><code class="language-json">{
+    &quot;device_id&quot;: &quot;ENV_MONITOR_001&quot;,
+    &quot;timestamp&quot;: 1234567890,
+    &quot;data&quot;: {
+        &quot;temperature&quot;: 25.3,
+        &quot;humidity&quot;: 65.2,
+        &quot;light&quot;: 450,
+        &quot;air_quality&quot;: 85,
+        &quot;comfort&quot;: 78
+    }
+}
+</code></pre>
+<h4 id="5-button-module">5. 按键模块 (Button Module)</h4>
+<p><strong>功能</strong>：
+- 按键扫描和消抖
+- 检测按键事件（短按、长按、双击）
+- 发送按键事件到其他任务</p>
+<p><strong>按键定义</strong>：
+- 按键1：切换显示页面
+- 按键2：手动触发数据上传
+- 按键3：系统复位/进入配置模式</p>
+<p><strong>扫描周期</strong>：20Hz (每50ms扫描一次)</p>
+<p><strong>消抖时间</strong>：20ms</p>
+<h4 id="6-led-led-module">6. LED指示模块 (LED Module)</h4>
+<p><strong>功能</strong>：
+- LED状态指示
+- 不同闪烁模式表示不同状态
+- 报警时LED快速闪烁</p>
+<p><strong>LED定义</strong>：
+- LED1 (绿色)：系统运行指示（慢闪）
+- LED2 (蓝色)：数据上传指示（快闪）
+- LED3 (红色)：报警指示（常亮或快闪）</p>
+<p><strong>更新周期</strong>：2Hz (每500ms更新一次)</p>
+<h4 id="7-monitor-module">7. 系统监控模块 (Monitor Module)</h4>
+<p><strong>功能</strong>：
+- 监控CPU使用率
+- 监控内存使用情况
+- 监控任务运行状态
+- 检测任务堆栈溢出
+- 记录系统运行时间</p>
+<p><strong>监控周期</strong>：0.1Hz (每10秒监控一次)</p>
+<p><strong>监控数据</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    uint8_t cpu_usage;          // CPU使用率 (%)
+    uint32_t free_heap;         // 空闲堆内存 (bytes)
+    uint32_t min_free_heap;     // 历史最小空闲堆
+    uint32_t runtime_seconds;   // 运行时间 (秒)
+    TaskStatus_t task_status[7]; // 各任务状态
+} SystemMonitor_t;
+</code></pre>
+<h2 id="_25">电路设计</h2>
+<h3 id="_26">系统接线图</h3>
+<pre><code>STM32F407 Discovery 开发板接线：
+
+传感器连接：
+┌─────────────────────────────────────┐
+│ DHT22 温湿度传感器                  │
+│   VCC  ──&gt; 3.3V                     │
+│   DATA ──&gt; PA0 (GPIO)               │
+│   GND  ──&gt; GND                      │
+└─────────────────────────────────────┘
+
+┌─────────────────────────────────────┐
+│ BH1750 光照传感器                   │
+│   VCC  ──&gt; 3.3V                     │
+│   SDA  ──&gt; PB7 (I2C1_SDA)           │
+│   SCL  ──&gt; PB6 (I2C1_SCL)           │
+│   GND  ──&gt; GND                      │
+└─────────────────────────────────────┘
+
+┌─────────────────────────────────────┐
+│ MQ135 空气质量传感器                │
+│   VCC  ──&gt; 5V                       │
+│   AOUT ──&gt; PA1 (ADC1_IN1)           │
+│   GND  ──&gt; GND                      │
+└─────────────────────────────────────┘
+
+显示器连接：
+┌─────────────────────────────────────┐
+│ OLED 0.96&quot; (SSD1306)                │
+│   VCC  ──&gt; 3.3V                     │
+│   SDA  ──&gt; PB7 (I2C1_SDA) [共享]    │
+│   SCL  ──&gt; PB6 (I2C1_SCL) [共享]    │
+│   GND  ──&gt; GND                      │
+└─────────────────────────────────────┘
+
+按键连接：
+┌─────────────────────────────────────┐
+│ 按键1 ──&gt; PC0 (GPIO_INPUT)          │
+│ 按键2 ──&gt; PC1 (GPIO_INPUT)          │
+│ 按键3 ──&gt; PC2 (GPIO_INPUT)          │
+│ (所有按键另一端接GND，使用内部上拉) │
+└─────────────────────────────────────┘
+
+LED连接：
+┌─────────────────────────────────────┐
+│ LED1 (绿) ──&gt; PD12 (GPIO_OUTPUT)    │
+│ LED2 (蓝) ──&gt; PD13 (GPIO_OUTPUT)    │
+│ LED3 (红) ──&gt; PD14 (GPIO_OUTPUT)    │
+│ (所有LED串联330Ω电阻后接GND)       │
+└─────────────────────────────────────┘
+
+通信接口：
+┌─────────────────────────────────────┐
+│ UART1 (调试/数据上传)               │
+│   TX   ──&gt; PA9  (USART1_TX)         │
+│   RX   ──&gt; PA10 (USART1_RX)         │
+└─────────────────────────────────────┘
+
+可选WiFi模块：
+┌─────────────────────────────────────┐
+│ ESP8266 (ESP-01)                    │
+│   VCC  ──&gt; 3.3V                     │
+│   TX   ──&gt; PA3 (USART2_RX)          │
+│   RX   ──&gt; PA2 (USART2_TX)          │
+│   GND  ──&gt; GND                      │
+│   CH_PD ──&gt; 3.3V (使能)             │
+└─────────────────────────────────────┘
+</code></pre>
+<h3 id="_27">引脚分配表</h3>
+<table>
+<thead>
+<tr>
+<th>功能</th>
+<th>引脚</th>
+<th>模式</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DHT22_DATA</td>
+<td>PA0</td>
+<td>GPIO_Input/Output</td>
+<td>单总线协议</td>
+</tr>
+<tr>
+<td>MQ135_AOUT</td>
+<td>PA1</td>
+<td>ADC1_IN1</td>
+<td>模拟输入</td>
+</tr>
+<tr>
+<td>USART2_TX</td>
+<td>PA2</td>
+<td>USART2_TX</td>
+<td>ESP8266通信</td>
+</tr>
+<tr>
+<td>USART2_RX</td>
+<td>PA3</td>
+<td>USART2_RX</td>
+<td>ESP8266通信</td>
+</tr>
+<tr>
+<td>USART1_TX</td>
+<td>PA9</td>
+<td>USART1_TX</td>
+<td>调试串口</td>
+</tr>
+<tr>
+<td>USART1_RX</td>
+<td>PA10</td>
+<td>USART1_RX</td>
+<td>调试串口</td>
+</tr>
+<tr>
+<td>I2C1_SCL</td>
+<td>PB6</td>
+<td>I2C1_SCL</td>
+<td>I2C时钟</td>
+</tr>
+<tr>
+<td>I2C1_SDA</td>
+<td>PB7</td>
+<td>I2C1_SDA</td>
+<td>I2C数据</td>
+</tr>
+<tr>
+<td>BUTTON1</td>
+<td>PC0</td>
+<td>GPIO_Input</td>
+<td>按键1</td>
+</tr>
+<tr>
+<td>BUTTON2</td>
+<td>PC1</td>
+<td>GPIO_Input</td>
+<td>按键2</td>
+</tr>
+<tr>
+<td>BUTTON3</td>
+<td>PC2</td>
+<td>GPIO_Input</td>
+<td>按键3</td>
+</tr>
+<tr>
+<td>LED1_GREEN</td>
+<td>PD12</td>
+<td>GPIO_Output</td>
+<td>绿色LED</td>
+</tr>
+<tr>
+<td>LED2_BLUE</td>
+<td>PD13</td>
+<td>GPIO_Output</td>
+<td>蓝色LED</td>
+</tr>
+<tr>
+<td>LED3_RED</td>
+<td>PD14</td>
+<td>GPIO_Output</td>
+<td>红色LED</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_28">注意事项</h3>
+<ol>
+<li><strong>I2C总线</strong>：BH1750和OLED共享I2C总线，需要使用互斥量保护</li>
+<li><strong>电源</strong>：MQ135需要5V供电，其他传感器使用3.3V</li>
+<li><strong>上拉电阻</strong>：I2C总线需要4.7kΩ上拉电阻（通常模块自带）</li>
+<li><strong>按键消抖</strong>：使用软件消抖，无需外部电容</li>
+<li><strong>LED限流</strong>：每个LED串联330Ω电阻</li>
+</ol>
+<h2 id="_29">实现步骤</h2>
+<h3 id="1-30">阶段1：项目创建与基础配置 (预计30分钟)</h3>
+<h4 id="11-stm32cubemx">1.1 使用STM32CubeMX创建项目</h4>
+<p><strong>步骤</strong>：</p>
+<ol>
+<li>
+<p><strong>启动STM32CubeMX</strong>，选择芯片型号：STM32F407VGTx</p>
+</li>
+<li>
+<p><strong>配置时钟</strong>：
+   - 选择外部高速时钟 (HSE): 8MHz
+   - 配置PLL使系统时钟达到168MHz
+   - APB1时钟: 42MHz
+   - APB2时钟: 84MHz</p>
+</li>
+<li>
+<p><strong>配置外设</strong>：</p>
+</li>
+</ol>
+<p><strong>GPIO配置</strong>：
+   <code>PA0  - GPIO_Input (DHT22_DATA)
+   PC0  - GPIO_Input (BUTTON1, Pull-up)
+   PC1  - GPIO_Input (BUTTON2, Pull-up)
+   PC2  - GPIO_Input (BUTTON3, Pull-up)
+   PD12 - GPIO_Output (LED1_GREEN)
+   PD13 - GPIO_Output (LED2_BLUE)
+   PD14 - GPIO_Output (LED3_RED)</code></p>
+<p><strong>I2C1配置</strong>：
+   <code>Mode: I2C
+   I2C Speed: 100 kHz (Standard Mode)
+   PB6 - I2C1_SCL
+   PB7 - I2C1_SDA</code></p>
+<p><strong>USART1配置</strong>：
+   <code>Mode: Asynchronous
+   Baud Rate: 115200
+   Word Length: 8 Bits
+   Stop Bits: 1
+   Parity: None
+   PA9  - USART1_TX
+   PA10 - USART1_RX</code></p>
+<p><strong>ADC1配置</strong>：
+   <code>PA1 - ADC1_IN1
+   Resolution: 12 bits
+   Conversion Mode: Continuous</code></p>
+<ol start="4">
+<li>
+<p><strong>配置FreeRTOS</strong>：
+   - Middleware → FREERTOS → Enable
+   - Interface: CMSIS_V1 或 CMSIS_V2
+   - Kernel Settings:
+     <code>USE_PREEMPTION: Enabled
+     CPU_CLOCK_HZ: 168000000
+     TICK_RATE_HZ: 1000
+     MAX_PRIORITIES: 8
+     MINIMAL_STACK_SIZE: 128
+     TOTAL_HEAP_SIZE: 20480 (20KB)</code></p>
+</li>
+<li>
+<p><strong>生成代码</strong>：
+   - Project Name: EnvMonitor
+   - Toolchain: STM32CubeIDE
+   - 生成代码</p>
+</li>
+</ol>
+<h4 id="12">1.2 项目结构组织</h4>
+<p>在生成的项目中创建以下目录结构：</p>
+<pre><code>EnvMonitor/
+├── Core/
+│   ├── Inc/
+│   │   ├── main.h
+│   │   ├── FreeRTOSConfig.h
+│   │   └── ...
+│   └── Src/
+│       ├── main.c
+│       ├── freertos.c
+│       └── ...
+├── Drivers/
+│   ├── STM32F4xx_HAL_Driver/
+│   └── CMSIS/
+├── Middlewares/
+│   └── Third_Party/
+│       └── FreeRTOS/
+├── App/                    # 新建应用层目录
+│   ├── Inc/
+│   │   ├── app_config.h
+│   │   ├── sensor_task.h
+│   │   ├── data_process_task.h
+│   │   ├── display_task.h
+│   │   ├── communication_task.h
+│   │   ├── button_task.h
+│   │   ├── led_task.h
+│   │   └── monitor_task.h
+│   └── Src/
+│       ├── sensor_task.c
+│       ├── data_process_task.c
+│       ├── display_task.c
+│       ├── communication_task.c
+│       ├── button_task.c
+│       ├── led_task.c
+│       └── monitor_task.c
+├── BSP/                    # 新建板级支持包目录
+│   ├── Inc/
+│   │   ├── bsp_dht22.h
+│   │   ├── bsp_bh1750.h
+│   │   ├── bsp_mq135.h
+│   │   └── bsp_oled.h
+│   └── Src/
+│       ├── bsp_dht22.c
+│       ├── bsp_bh1750.c
+│       ├── bsp_mq135.c
+│       └── bsp_oled.c
+└── README.md
+</code></pre>
+<h4 id="13-freertosconfigh">1.3 配置FreeRTOSConfig.h</h4>
+<p>编辑<code>Core/Inc/FreeRTOSConfig.h</code>，添加以下配置：</p>
+<pre><code class="language-c">/* FreeRTOS配置 */
+#define configUSE_PREEMPTION                     1
+#define configUSE_IDLE_HOOK                      0
+#define configUSE_TICK_HOOK                      0
+#define configCPU_CLOCK_HZ                       ((unsigned long)168000000)
+#define configTICK_RATE_HZ                       ((TickType_t)1000)
+#define configMAX_PRIORITIES                     (8)
+#define configMINIMAL_STACK_SIZE                 ((uint16_t)128)
+#define configTOTAL_HEAP_SIZE                    ((size_t)20480)
+#define configMAX_TASK_NAME_LEN                  (16)
+#define configUSE_16_BIT_TICKS                   0
+#define configIDLE_SHOULD_YIELD                  1
+#define configUSE_MUTEXES                        1
+#define configUSE_RECURSIVE_MUTEXES              1
+#define configUSE_COUNTING_SEMAPHORES            1
+#define configQUEUE_REGISTRY_SIZE                8
+#define configUSE_QUEUE_SETS                     0
+#define configUSE_TIME_SLICING                   1
+#define configUSE_NEWLIB_REENTRANT               0
+#define configENABLE_BACKWARD_COMPATIBILITY      0
+#define configNUM_THREAD_LOCAL_STORAGE_POINTERS  5
+
+/* 内存分配方案 */
+#define configSUPPORT_STATIC_ALLOCATION          0
+#define configSUPPORT_DYNAMIC_ALLOCATION         1
+
+/* 钩子函数 */
+#define configUSE_MALLOC_FAILED_HOOK             1
+#define configCHECK_FOR_STACK_OVERFLOW           2
+
+/* 运行时统计 */
+#define configGENERATE_RUN_TIME_STATS            1
+#define configUSE_TRACE_FACILITY                 1
+#define configUSE_STATS_FORMATTING_FUNCTIONS     1
+
+/* 定时器 */
+#define configUSE_TIMERS                         1
+#define configTIMER_TASK_PRIORITY                (6)
+#define configTIMER_QUEUE_LENGTH                 10
+#define configTIMER_TASK_STACK_DEPTH             256
+
+/* 中断优先级 */
+#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY  15
+#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5
+#define configKERNEL_INTERRUPT_PRIORITY          (configLIBRARY_LOWEST_INTERRUPT_PRIORITY &lt;&lt; 4)
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY &lt;&lt; 4)
+
+/* 运行时统计时钟配置 */
+extern void ConfigureTimerForRunTimeStats(void);
+extern uint32_t GetRunTimeCounterValue(void);
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() ConfigureTimerForRunTimeStats()
+#define portGET_RUN_TIME_COUNTER_VALUE()         GetRunTimeCounterValue()
+</code></pre>
+<h4 id="14">1.4 创建应用配置文件</h4>
+<p>创建<code>App/Inc/app_config.h</code>：</p>
+<pre><code class="language-c">#ifndef APP_CONFIG_H
+#define APP_CONFIG_H
+
+#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+#include &quot;semphr.h&quot;
+#include &quot;event_groups.h&quot;
+
+/* 任务优先级定义 */
+#define PRIORITY_SENSOR         5
+#define PRIORITY_DATA_PROCESS   4
+#define PRIORITY_DISPLAY        3
+#define PRIORITY_COMMUNICATION  3
+#define PRIORITY_BUTTON         2
+#define PRIORITY_LED            2
+#define PRIORITY_MONITOR        1
+
+/* 任务堆栈大小 */
+#define STACK_SIZE_SENSOR       256
+#define STACK_SIZE_DATA_PROCESS 512
+#define STACK_SIZE_DISPLAY      256
+#define STACK_SIZE_COMM         512
+#define STACK_SIZE_BUTTON       128
+#define STACK_SIZE_LED          128
+#define STACK_SIZE_MONITOR      256
+
+/* 队列长度 */
+#define QUEUE_LENGTH_SENSOR     5
+#define QUEUE_LENGTH_DISPLAY    3
+#define QUEUE_LENGTH_COMM       10
+
+/* 事件标志位定义 */
+#define EVENT_BUTTON1_PRESSED   (1 &lt;&lt; 0)
+#define EVENT_BUTTON2_PRESSED   (1 &lt;&lt; 1)
+#define EVENT_BUTTON3_PRESSED   (1 &lt;&lt; 2)
+#define EVENT_ALARM_TEMP_HIGH   (1 &lt;&lt; 3)
+#define EVENT_ALARM_HUMI_HIGH   (1 &lt;&lt; 4)
+#define EVENT_ALARM_AQI_BAD     (1 &lt;&lt; 5)
+
+/* 数据结构定义 */
+typedef struct {
+    float temperature;
+    float humidity;
+    uint16_t light;
+    uint16_t air_quality;
+    uint32_t timestamp;
+} SensorData_t;
+
+typedef struct {
+    float temperature;
+    float humidity;
+    uint16_t light;
+    uint16_t air_quality;
+    uint8_t comfort_index;
+    uint8_t alarm_flags;
+    uint32_t timestamp;
+} ProcessedData_t;
+
+typedef struct {
+    uint8_t cpu_usage;
+    uint32_t free_heap;
+    uint32_t min_free_heap;
+    uint32_t runtime_seconds;
+} SystemMonitor_t;
+
+/* 全局对象声明 */
+extern QueueHandle_t sensor_queue;
+extern QueueHandle_t display_queue;
+extern QueueHandle_t comm_queue;
+extern SemaphoreHandle_t i2c_mutex;
+extern SemaphoreHandle_t uart_mutex;
+extern EventGroupHandle_t system_events;
+
+#endif /* APP_CONFIG_H */
+</code></pre>
+<p><strong>检查清单</strong>：
+- [ ] 项目成功创建并可以编译
+- [ ] 时钟配置正确（168MHz）
+- [ ] 所有外设引脚配置正确
+- [ ] FreeRTOS配置完成
+- [ ] 目录结构创建完成</p>
+<h3 id="2-60">阶段2：驱动层实现 (预计60分钟)</h3>
+<h4 id="21-dht22">2.1 DHT22温湿度传感器驱动</h4>
+<p>创建<code>BSP/Inc/bsp_dht22.h</code>：</p>
+<pre><code class="language-c">#ifndef BSP_DHT22_H
+#define BSP_DHT22_H
+
+#include &quot;main.h&quot;
+#include &lt;stdbool.h&gt;
+
+/* DHT22引脚定义 */
+#define DHT22_GPIO_PORT     GPIOA
+#define DHT22_GPIO_PIN      GPIO_PIN_0
+
+/* 函数声明 */
+HAL_StatusTypeDef BSP_DHT22_Init(void);
+HAL_StatusTypeDef BSP_DHT22_Read(float *temperature, float *humidity);
+
+#endif /* BSP_DHT22_H */
+</code></pre>
+<p>创建<code>BSP/Src/bsp_dht22.c</code>：</p>
+<pre><code class="language-c">#include &quot;bsp_dht22.h&quot;
+#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+/* 私有函数声明 */
+static void DHT22_SetPinOutput(void);
+static void DHT22_SetPinInput(void);
+static void DHT22_WriteBit(uint8_t bit);
+static uint8_t DHT22_ReadBit(void);
+static void DHT22_DelayUs(uint32_t us);
+
+/**
+ * @brief  初始化DHT22
+ */
+HAL_StatusTypeDef BSP_DHT22_Init(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* 配置为输入模式 */
+    GPIO_InitStruct.Pin = DHT22_GPIO_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(DHT22_GPIO_PORT, &amp;GPIO_InitStruct);
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  读取DHT22数据
+ * @param  temperature: 温度指针
+ * @param  humidity: 湿度指针
+ * @retval HAL状态
+ */
+HAL_StatusTypeDef BSP_DHT22_Read(float *temperature, float *humidity) {
+    uint8_t data[5] = {0};
+    uint8_t i, j;
+    uint16_t temp_value, humi_value;
+
+    /* 发送起始信号 */
+    DHT22_SetPinOutput();
+    HAL_GPIO_WritePin(DHT22_GPIO_PORT, DHT22_GPIO_PIN, GPIO_PIN_RESET);
+    vTaskDelay(pdMS_TO_TICKS(2));  // 拉低至少1ms
+    HAL_GPIO_WritePin(DHT22_GPIO_PORT, DHT22_GPIO_PIN, GPIO_PIN_SET);
+    DHT22_DelayUs(30);
+
+    /* 切换到输入模式 */
+    DHT22_SetPinInput();
+
+    /* 等待DHT22响应 */
+    uint32_t timeout = 1000;
+    while(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_SET) {
+        if(--timeout == 0) return HAL_TIMEOUT;
+        DHT22_DelayUs(1);
+    }
+
+    timeout = 1000;
+    while(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_RESET) {
+        if(--timeout == 0) return HAL_TIMEOUT;
+        DHT22_DelayUs(1);
+    }
+
+    timeout = 1000;
+    while(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_SET) {
+        if(--timeout == 0) return HAL_TIMEOUT;
+        DHT22_DelayUs(1);
+    }
+
+    /* 读取40位数据 */
+    for(i = 0; i &lt; 5; i++) {
+        for(j = 0; j &lt; 8; j++) {
+            /* 等待数据位开始 */
+            timeout = 1000;
+            while(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_RESET) {
+                if(--timeout == 0) return HAL_TIMEOUT;
+                DHT22_DelayUs(1);
+            }
+
+            /* 延时判断是0还是1 */
+            DHT22_DelayUs(40);
+
+            if(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_SET) {
+                data[i] |= (1 &lt;&lt; (7 - j));
+            }
+
+            /* 等待数据位结束 */
+            timeout = 1000;
+            while(HAL_GPIO_ReadPin(DHT22_GPIO_PORT, DHT22_GPIO_PIN) == GPIO_PIN_SET) {
+                if(--timeout == 0) return HAL_TIMEOUT;
+                DHT22_DelayUs(1);
+            }
+        }
+    }
+
+    /* 校验和验证 */
+    if(data[4] != ((data[0] + data[1] + data[2] + data[3]) &amp; 0xFF)) {
+        return HAL_ERROR;
+    }
+
+    /* 计算温湿度 */
+    humi_value = (data[0] &lt;&lt; 8) | data[1];
+    temp_value = (data[2] &lt;&lt; 8) | data[3];
+
+    *humidity = humi_value / 10.0f;
+    *temperature = temp_value / 10.0f;
+
+    /* 处理负温度 */
+    if(data[2] &amp; 0x80) {
+        *temperature = -(*temperature);
+    }
+
+    return HAL_OK;
+}
+
+/* 私有函数实现 */
+static void DHT22_SetPinOutput(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = DHT22_GPIO_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(DHT22_GPIO_PORT, &amp;GPIO_InitStruct);
+}
+
+static void DHT22_SetPinInput(void) {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = DHT22_GPIO_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(DHT22_GPIO_PORT, &amp;GPIO_InitStruct);
+}
+
+static void DHT22_DelayUs(uint32_t us) {
+    uint32_t ticks = us * (SystemCoreClock / 1000000) / 9;
+    while(ticks--);
+}
+</code></pre>
+<h4 id="22-bh1750">2.2 BH1750光照传感器驱动</h4>
+<p>创建<code>BSP/Inc/bsp_bh1750.h</code>：</p>
+<pre><code class="language-c">#ifndef BSP_BH1750_H
+#define BSP_BH1750_H
+
+#include &quot;main.h&quot;
+
+/* BH1750 I2C地址 */
+#define BH1750_ADDR         0x23 &lt;&lt; 1  // 7位地址左移1位
+
+/* BH1750命令 */
+#define BH1750_POWER_ON     0x01
+#define BH1750_POWER_OFF    0x00
+#define BH1750_RESET        0x07
+#define BH1750_CONT_H_MODE  0x10  // 连续高分辨率模式
+#define BH1750_CONT_H_MODE2 0x11  // 连续高分辨率模式2
+#define BH1750_CONT_L_MODE  0x13  // 连续低分辨率模式
+#define BH1750_ONE_H_MODE   0x20  // 单次高分辨率模式
+#define BH1750_ONE_H_MODE2  0x21  // 单次高分辨率模式2
+#define BH1750_ONE_L_MODE   0x23  // 单次低分辨率模式
+
+/* 函数声明 */
+HAL_StatusTypeDef BSP_BH1750_Init(I2C_HandleTypeDef *hi2c);
+HAL_StatusTypeDef BSP_BH1750_Read(I2C_HandleTypeDef *hi2c, uint16_t *light);
+
+#endif /* BSP_BH1750_H */
+</code></pre>
+<p>创建<code>BSP/Src/bsp_bh1750.c</code>：</p>
+<pre><code class="language-c">#include &quot;bsp_bh1750.h&quot;
+#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+/**
+ * @brief  初始化BH1750
+ */
+HAL_StatusTypeDef BSP_BH1750_Init(I2C_HandleTypeDef *hi2c) {
+    uint8_t cmd;
+
+    /* 上电 */
+    cmd = BH1750_POWER_ON;
+    if(HAL_I2C_Master_Transmit(hi2c, BH1750_ADDR, &amp;cmd, 1, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(10));
+
+    /* 设置为连续高分辨率模式 */
+    cmd = BH1750_CONT_H_MODE;
+    if(HAL_I2C_Master_Transmit(hi2c, BH1750_ADDR, &amp;cmd, 1, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(180));  // 等待测量完成
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  读取BH1750光照值
+ * @param  hi2c: I2C句柄
+ * @param  light: 光照值指针 (单位: Lux)
+ * @retval HAL状态
+ */
+HAL_StatusTypeDef BSP_BH1750_Read(I2C_HandleTypeDef *hi2c, uint16_t *light) {
+    uint8_t data[2];
+
+    /* 读取2字节数据 */
+    if(HAL_I2C_Master_Receive(hi2c, BH1750_ADDR, data, 2, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    /* 计算光照值 */
+    *light = (data[0] &lt;&lt; 8) | data[1];
+    *light = *light / 1.2;  // 转换为Lux
+
+    return HAL_OK;
+}
+</code></pre>
+<h4 id="23-mq135">2.3 MQ135空气质量传感器驱动</h4>
+<p>创建<code>BSP/Inc/bsp_mq135.h</code>：</p>
+<pre><code class="language-c">#ifndef BSP_MQ135_H
+#define BSP_MQ135_H
+
+#include &quot;main.h&quot;
+
+/* 函数声明 */
+HAL_StatusTypeDef BSP_MQ135_Init(ADC_HandleTypeDef *hadc);
+HAL_StatusTypeDef BSP_MQ135_Read(ADC_HandleTypeDef *hadc, uint16_t *adc_value);
+uint8_t BSP_MQ135_GetAQI(uint16_t adc_value);
+
+#endif /* BSP_MQ135_H */
+</code></pre>
+<p>创建<code>BSP/Src/bsp_mq135.c</code>：</p>
+<pre><code class="language-c">#include &quot;bsp_mq135.h&quot;
+
+/**
+ * @brief  初始化MQ135
+ */
+HAL_StatusTypeDef BSP_MQ135_Init(ADC_HandleTypeDef *hadc) {
+    /* 启动ADC */
+    if(HAL_ADC_Start(hadc) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  读取MQ135 ADC值
+ * @param  hadc: ADC句柄
+ * @param  adc_value: ADC值指针
+ * @retval HAL状态
+ */
+HAL_StatusTypeDef BSP_MQ135_Read(ADC_HandleTypeDef *hadc, uint16_t *adc_value) {
+    /* 等待转换完成 */
+    if(HAL_ADC_PollForConversion(hadc, 100) != HAL_OK) {
+        return HAL_ERROR;
+    }
+
+    /* 读取ADC值 */
+    *adc_value = HAL_ADC_GetValue(hadc);
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  根据ADC值计算空气质量指数
+ * @param  adc_value: ADC值 (0-4095)
+ * @retval 空气质量等级 (0-5)
+ *         0: 优秀 (0-500)
+ *         1: 良好 (500-1000)
+ *         2: 轻度污染 (1000-1500)
+ *         3: 中度污染 (1500-2000)
+ *         4: 重度污染 (2000-3000)
+ *         5: 严重污染 (3000+)
+ */
+uint8_t BSP_MQ135_GetAQI(uint16_t adc_value) {
+    if(adc_value &lt; 500) return 0;
+    else if(adc_value &lt; 1000) return 1;
+    else if(adc_value &lt; 1500) return 2;
+    else if(adc_value &lt; 2000) return 3;
+    else if(adc_value &lt; 3000) return 4;
+    else return 5;
+}
+</code></pre>
+<h4 id="24-oled">2.4 OLED显示驱动（简化版）</h4>
+<p>创建<code>BSP/Inc/bsp_oled.h</code>：</p>
+<pre><code class="language-c">#ifndef BSP_OLED_H
+#define BSP_OLED_H
+
+#include &quot;main.h&quot;
+
+/* OLED I2C地址 */
+#define OLED_ADDR       0x78  // 0x3C &lt;&lt; 1
+
+/* 函数声明 */
+HAL_StatusTypeDef BSP_OLED_Init(I2C_HandleTypeDef *hi2c);
+HAL_StatusTypeDef BSP_OLED_Clear(I2C_HandleTypeDef *hi2c);
+HAL_StatusTypeDef BSP_OLED_ShowString(I2C_HandleTypeDef *hi2c, uint8_t x, uint8_t y, const char *str);
+HAL_StatusTypeDef BSP_OLED_ShowFloat(I2C_HandleTypeDef *hi2c, uint8_t x, uint8_t y, float value, uint8_t precision);
+
+#endif /* BSP_OLED_H */
+</code></pre>
+<p>创建<code>BSP/Src/bsp_oled.c</code>（简化实现，实际项目需要完整的字库）：</p>
+<pre><code class="language-c">#include &quot;bsp_oled.h&quot;
+#include &quot;stdio.h&quot;
+#include &quot;string.h&quot;
+
+/* 私有函数 */
+static HAL_StatusTypeDef OLED_WriteCmd(I2C_HandleTypeDef *hi2c, uint8_t cmd);
+static HAL_StatusTypeDef OLED_WriteData(I2C_HandleTypeDef *hi2c, uint8_t data);
+
+/**
+ * @brief  初始化OLED
+ */
+HAL_StatusTypeDef BSP_OLED_Init(I2C_HandleTypeDef *hi2c) {
+    HAL_Delay(100);  // 等待OLED上电稳定
+
+    /* 初始化命令序列 */
+    OLED_WriteCmd(hi2c, 0xAE);  // 关闭显示
+    OLED_WriteCmd(hi2c, 0x00);  // 设置列地址低位
+    OLED_WriteCmd(hi2c, 0x10);  // 设置列地址高位
+    OLED_WriteCmd(hi2c, 0x40);  // 设置起始行
+    OLED_WriteCmd(hi2c, 0xB0);  // 设置页地址
+    OLED_WriteCmd(hi2c, 0x81);  // 对比度设置
+    OLED_WriteCmd(hi2c, 0xFF);  // 对比度值
+    OLED_WriteCmd(hi2c, 0xA1);  // 段重映射
+    OLED_WriteCmd(hi2c, 0xA6);  // 正常显示
+    OLED_WriteCmd(hi2c, 0xA8);  // 复用率
+    OLED_WriteCmd(hi2c, 0x3F);  // 1/64 duty
+    OLED_WriteCmd(hi2c, 0xC8);  // COM扫描方向
+    OLED_WriteCmd(hi2c, 0xD3);  // 显示偏移
+    OLED_WriteCmd(hi2c, 0x00);  // 无偏移
+    OLED_WriteCmd(hi2c, 0xD5);  // 时钟分频
+    OLED_WriteCmd(hi2c, 0x80);  // 分频值
+    OLED_WriteCmd(hi2c, 0xD9);  // 预充电周期
+    OLED_WriteCmd(hi2c, 0xF1);  // 预充电值
+    OLED_WriteCmd(hi2c, 0xDA);  // COM配置
+    OLED_WriteCmd(hi2c, 0x12);  // 配置值
+    OLED_WriteCmd(hi2c, 0xDB);  // VCOMH电压
+    OLED_WriteCmd(hi2c, 0x40);  // 电压值
+    OLED_WriteCmd(hi2c, 0x8D);  // 电荷泵
+    OLED_WriteCmd(hi2c, 0x14);  // 使能电荷泵
+    OLED_WriteCmd(hi2c, 0xAF);  // 开启显示
+
+    BSP_OLED_Clear(hi2c);
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  清屏
+ */
+HAL_StatusTypeDef BSP_OLED_Clear(I2C_HandleTypeDef *hi2c) {
+    uint8_t i, j;
+
+    for(i = 0; i &lt; 8; i++) {
+        OLED_WriteCmd(hi2c, 0xB0 + i);  // 设置页地址
+        OLED_WriteCmd(hi2c, 0x00);      // 设置列地址低位
+        OLED_WriteCmd(hi2c, 0x10);      // 设置列地址高位
+
+        for(j = 0; j &lt; 128; j++) {
+            OLED_WriteData(hi2c, 0x00);
+        }
+    }
+
+    return HAL_OK;
+}
+
+/**
+ * @brief  显示字符串（简化版，实际需要字库）
+ */
+HAL_StatusTypeDef BSP_OLED_ShowString(I2C_HandleTypeDef *hi2c, uint8_t x, uint8_t y, const char *str) {
+    /* 这里是简化实现，实际项目需要完整的字库支持 */
+    /* 可以使用u8g2库或自己实现字库 */
+    return HAL_OK;
+}
+
+/**
+ * @brief  显示浮点数
+ */
+HAL_StatusTypeDef BSP_OLED_ShowFloat(I2C_HandleTypeDef *hi2c, uint8_t x, uint8_t y, float value, uint8_t precision) {
+    char buffer[16];
+    snprintf(buffer, sizeof(buffer), &quot;%.*f&quot;, precision, value);
+    return BSP_OLED_ShowString(hi2c, x, y, buffer);
+}
+
+/* 私有函数实现 */
+static HAL_StatusTypeDef OLED_WriteCmd(I2C_HandleTypeDef *hi2c, uint8_t cmd) {
+    uint8_t data[2] = {0x00, cmd};  // 0x00表示命令
+    return HAL_I2C_Master_Transmit(hi2c, OLED_ADDR, data, 2, 100);
+}
+
+static HAL_StatusTypeDef OLED_WriteData(I2C_HandleTypeDef *hi2c, uint8_t data) {
+    uint8_t buf[2] = {0x40, data};  // 0x40表示数据
+    return HAL_I2C_Master_Transmit(hi2c, OLED_ADDR, buf, 2, 100);
+}
+</code></pre>
+<p><strong>检查清单</strong>：
+- [ ] DHT22驱动编译通过
+- [ ] BH1750驱动编译通过
+- [ ] MQ135驱动编译通过
+- [ ] OLED驱动编译通过
+- [ ] 所有驱动函数接口清晰</p>
+<p><strong>注意</strong>：OLED驱动这里提供的是简化版本，实际项目中建议使用成熟的库如u8g2。</p>
+<h3 id="3-90">阶段3：任务实现 (预计90分钟)</h3>
+<h4 id="31">3.1 创建全局对象</h4>
+<p>在<code>Core/Src/freertos.c</code>中创建全局对象：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+#include &quot;semphr.h&quot;
+#include &quot;event_groups.h&quot;
+#include &quot;app_config.h&quot;
+
+/* 队列句柄 */
+QueueHandle_t sensor_queue = NULL;
+QueueHandle_t display_queue = NULL;
+QueueHandle_t comm_queue = NULL;
+
+/* 互斥量句柄 */
+SemaphoreHandle_t i2c_mutex = NULL;
+SemaphoreHandle_t uart_mutex = NULL;
+
+/* 事件组句柄 */
+EventGroupHandle_t system_events = NULL;
+
+/* 任务句柄 */
+TaskHandle_t sensor_task_handle = NULL;
+TaskHandle_t data_process_task_handle = NULL;
+TaskHandle_t display_task_handle = NULL;
+TaskHandle_t comm_task_handle = NULL;
+TaskHandle_t button_task_handle = NULL;
+TaskHandle_t led_task_handle = NULL;
+TaskHandle_t monitor_task_handle = NULL;
+
+/**
+ * @brief  创建所有RTOS对象
+ */
+void MX_FREERTOS_Init(void) {
+    /* 创建队列 */
+    sensor_queue = xQueueCreate(QUEUE_LENGTH_SENSOR, sizeof(SensorData_t));
+    display_queue = xQueueCreate(QUEUE_LENGTH_DISPLAY, sizeof(ProcessedData_t));
+    comm_queue = xQueueCreate(QUEUE_LENGTH_COMM, sizeof(ProcessedData_t));
+
+    /* 创建互斥量 */
+    i2c_mutex = xSemaphoreCreateMutex();
+    uart_mutex = xSemaphoreCreateMutex();
+
+    /* 创建事件组 */
+    system_events = xEventGroupCreate();
+
+    /* 创建任务 */
+    xTaskCreate(Sensor_Task, &quot;Sensor&quot;, STACK_SIZE_SENSOR, 
+                NULL, PRIORITY_SENSOR, &amp;sensor_task_handle);
+
+    xTaskCreate(DataProcess_Task, &quot;DataProc&quot;, STACK_SIZE_DATA_PROCESS, 
+                NULL, PRIORITY_DATA_PROCESS, &amp;data_process_task_handle);
+
+    xTaskCreate(Display_Task, &quot;Display&quot;, STACK_SIZE_DISPLAY, 
+                NULL, PRIORITY_DISPLAY, &amp;display_task_handle);
+
+    xTaskCreate(Communication_Task, &quot;Comm&quot;, STACK_SIZE_COMM, 
+                NULL, PRIORITY_COMMUNICATION, &amp;comm_task_handle);
+
+    xTaskCreate(Button_Task, &quot;Button&quot;, STACK_SIZE_BUTTON, 
+                NULL, PRIORITY_BUTTON, &amp;button_task_handle);
+
+    xTaskCreate(LED_Task, &quot;LED&quot;, STACK_SIZE_LED, 
+                NULL, PRIORITY_LED, &amp;led_task_handle);
+
+    xTaskCreate(Monitor_Task, &quot;Monitor&quot;, STACK_SIZE_MONITOR, 
+                NULL, PRIORITY_MONITOR, &amp;monitor_task_handle);
+}
+</code></pre>
+<h4 id="32">3.2 传感器任务实现</h4>
+<p>创建<code>App/Src/sensor_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;sensor_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;bsp_dht22.h&quot;
+#include &quot;bsp_bh1750.h&quot;
+#include &quot;bsp_mq135.h&quot;
+#include &quot;main.h&quot;
+
+extern I2C_HandleTypeDef hi2c1;
+extern ADC_HandleTypeDef hadc1;
+
+/**
+ * @brief  传感器任务
+ * @param  argument: 任务参数
+ */
+void Sensor_Task(void *argument) {
+    SensorData_t sensor_data;
+    HAL_StatusTypeDef status;
+    uint32_t last_wake_time;
+
+    /* 初始化传感器 */
+    BSP_DHT22_Init();
+
+    /* 获取I2C互斥量并初始化I2C传感器 */
+    if(xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE) {
+        BSP_BH1750_Init(&amp;hi2c1);
+        xSemaphoreGive(i2c_mutex);
+    }
+
+    BSP_MQ135_Init(&amp;hadc1);
+
+    /* 初始化周期任务 */
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 读取DHT22温湿度 */
+        status = BSP_DHT22_Read(&amp;sensor_data.temperature, &amp;sensor_data.humidity);
+        if(status != HAL_OK) {
+            sensor_data.temperature = 0.0f;
+            sensor_data.humidity = 0.0f;
+        }
+
+        /* 读取BH1750光照（需要互斥量保护I2C总线） */
+        if(xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            status = BSP_BH1750_Read(&amp;hi2c1, &amp;sensor_data.light);
+            if(status != HAL_OK) {
+                sensor_data.light = 0;
+            }
+            xSemaphoreGive(i2c_mutex);
+        }
+
+        /* 读取MQ135空气质量 */
+        status = BSP_MQ135_Read(&amp;hadc1, &amp;sensor_data.air_quality);
+        if(status != HAL_OK) {
+            sensor_data.air_quality = 0;
+        }
+
+        /* 添加时间戳 */
+        sensor_data.timestamp = xTaskGetTickCount();
+
+        /* 发送数据到数据处理任务 */
+        if(xQueueSend(sensor_queue, &amp;sensor_data, 0) != pdTRUE) {
+            /* 队列满，丢弃旧数据 */
+        }
+
+        /* 周期性延时（1秒） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<h4 id="33">3.3 数据处理任务实现</h4>
+<p>创建<code>App/Src/data_process_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;data_process_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;bsp_mq135.h&quot;
+#include &lt;string.h&gt;
+
+/* 滤波窗口大小 */
+#define FILTER_WINDOW_SIZE  5
+
+/* 滤波缓冲区 */
+static float temp_buffer[FILTER_WINDOW_SIZE] = {0};
+static float humi_buffer[FILTER_WINDOW_SIZE] = {0};
+static uint16_t light_buffer[FILTER_WINDOW_SIZE] = {0};
+static uint16_t aqi_buffer[FILTER_WINDOW_SIZE] = {0};
+static uint8_t buffer_index = 0;
+
+/* 私有函数 */
+static float MovingAverageFilter_Float(float *buffer, float new_value);
+static uint16_t MovingAverageFilter_U16(uint16_t *buffer, uint16_t new_value);
+static uint8_t CalculateComfortIndex(float temp, float humi);
+static uint8_t CheckAlarms(ProcessedData_t *data);
+
+/**
+ * @brief  数据处理任务
+ */
+void DataProcess_Task(void *argument) {
+    SensorData_t sensor_data;
+    ProcessedData_t processed_data;
+
+    while(1) {
+        /* 等待传感器数据 */
+        if(xQueueReceive(sensor_queue, &amp;sensor_data, portMAX_DELAY) == pdTRUE) {
+            /* 移动平均滤波 */
+            processed_data.temperature = MovingAverageFilter_Float(
+                temp_buffer, sensor_data.temperature);
+            processed_data.humidity = MovingAverageFilter_Float(
+                humi_buffer, sensor_data.humidity);
+            processed_data.light = MovingAverageFilter_U16(
+                light_buffer, sensor_data.light);
+            processed_data.air_quality = MovingAverageFilter_U16(
+                aqi_buffer, sensor_data.air_quality);
+
+            /* 计算舒适度指数 */
+            processed_data.comfort_index = CalculateComfortIndex(
+                processed_data.temperature, processed_data.humidity);
+
+            /* 检查报警条件 */
+            processed_data.alarm_flags = CheckAlarms(&amp;processed_data);
+
+            /* 添加时间戳 */
+            processed_data.timestamp = sensor_data.timestamp;
+
+            /* 发送到显示任务 */
+            xQueueSend(display_queue, &amp;processed_data, 0);
+
+            /* 发送到通信任务 */
+            xQueueSend(comm_queue, &amp;processed_data, 0);
+
+            /* 如果有报警，设置事件标志 */
+            if(processed_data.alarm_flags != 0) {
+                xEventGroupSetBits(system_events, 
+                    processed_data.alarm_flags &lt;&lt; 3);  // 偏移到报警位
+            }
+        }
+    }
+}
+
+/**
+ * @brief  浮点数移动平均滤波
+ */
+static float MovingAverageFilter_Float(float *buffer, float new_value) {
+    float sum = 0;
+    uint8_t i;
+
+    /* 更新缓冲区 */
+    buffer[buffer_index] = new_value;
+
+    /* 计算平均值 */
+    for(i = 0; i &lt; FILTER_WINDOW_SIZE; i++) {
+        sum += buffer[i];
+    }
+
+    return sum / FILTER_WINDOW_SIZE;
+}
+
+/**
+ * @brief  16位整数移动平均滤波
+ */
+static uint16_t MovingAverageFilter_U16(uint16_t *buffer, uint16_t new_value) {
+    uint32_t sum = 0;
+    uint8_t i;
+
+    /* 更新缓冲区 */
+    buffer[buffer_index] = new_value;
+
+    /* 更新索引 */
+    buffer_index = (buffer_index + 1) % FILTER_WINDOW_SIZE;
+
+    /* 计算平均值 */
+    for(i = 0; i &lt; FILTER_WINDOW_SIZE; i++) {
+        sum += buffer[i];
+    }
+
+    return (uint16_t)(sum / FILTER_WINDOW_SIZE);
+}
+
+/**
+ * @brief  计算舒适度指数
+ * @param  temp: 温度 (°C)
+ * @param  humi: 湿度 (%)
+ * @retval 舒适度指数 (0-100)
+ */
+static uint8_t CalculateComfortIndex(float temp, float humi) {
+    uint8_t comfort = 50;  // 默认中等舒适度
+
+    /* 温度舒适度 (最佳: 20-26°C) */
+    if(temp &gt;= 20.0f &amp;&amp; temp &lt;= 26.0f) {
+        comfort += 25;
+    } else if(temp &gt;= 18.0f &amp;&amp; temp &lt;= 28.0f) {
+        comfort += 15;
+    } else if(temp &gt;= 15.0f &amp;&amp; temp &lt;= 30.0f) {
+        comfort += 5;
+    } else {
+        comfort -= 10;
+    }
+
+    /* 湿度舒适度 (最佳: 40-60%) */
+    if(humi &gt;= 40.0f &amp;&amp; humi &lt;= 60.0f) {
+        comfort += 25;
+    } else if(humi &gt;= 30.0f &amp;&amp; humi &lt;= 70.0f) {
+        comfort += 15;
+    } else if(humi &gt;= 20.0f &amp;&amp; humi &lt;= 80.0f) {
+        comfort += 5;
+    } else {
+        comfort -= 10;
+    }
+
+    /* 限制范围 */
+    if(comfort &gt; 100) comfort = 100;
+    if(comfort &lt; 0) comfort = 0;
+
+    return comfort;
+}
+
+/**
+ * @brief  检查报警条件
+ * @param  data: 处理后的数据
+ * @retval 报警标志位
+ */
+static uint8_t CheckAlarms(ProcessedData_t *data) {
+    uint8_t alarms = 0;
+
+    /* 温度报警 (&gt;30°C 或 &lt;10°C) */
+    if(data-&gt;temperature &gt; 30.0f || data-&gt;temperature &lt; 10.0f) {
+        alarms |= (1 &lt;&lt; 0);
+    }
+
+    /* 湿度报警 (&gt;80% 或 &lt;20%) */
+    if(data-&gt;humidity &gt; 80.0f || data-&gt;humidity &lt; 20.0f) {
+        alarms |= (1 &lt;&lt; 1);
+    }
+
+    /* 空气质量报警 (AQI &gt;= 3) */
+    uint8_t aqi = BSP_MQ135_GetAQI(data-&gt;air_quality);
+    if(aqi &gt;= 3) {
+        alarms |= (1 &lt;&lt; 2);
+    }
+
+    return alarms;
+}
+</code></pre>
+<h4 id="34">3.4 显示任务实现</h4>
+<p>创建<code>App/Src/display_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;display_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;bsp_oled.h&quot;
+#include &quot;main.h&quot;
+#include &quot;stdio.h&quot;
+
+extern I2C_HandleTypeDef hi2c1;
+
+/* 显示页面枚举 */
+typedef enum {
+    PAGE_MAIN = 0,
+    PAGE_SYSTEM,
+    PAGE_NETWORK,
+    PAGE_MAX
+} DisplayPage_t;
+
+static DisplayPage_t current_page = PAGE_MAIN;
+static ProcessedData_t latest_data = {0};
+
+/* 私有函数 */
+static void DisplayMainPage(void);
+static void DisplaySystemPage(void);
+static void DisplayNetworkPage(void);
+
+/**
+ * @brief  显示任务
+ */
+void Display_Task(void *argument) {
+    EventBits_t events;
+    uint32_t last_wake_time;
+
+    /* 初始化OLED（需要互斥量保护I2C总线） */
+    if(xSemaphoreTake(i2c_mutex, portMAX_DELAY) == pdTRUE) {
+        BSP_OLED_Init(&amp;hi2c1);
+        xSemaphoreGive(i2c_mutex);
+    }
+
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 检查按键事件（非阻塞） */
+        events = xEventGroupGetBits(system_events);
+        if(events &amp; EVENT_BUTTON1_PRESSED) {
+            /* 切换页面 */
+            current_page = (current_page + 1) % PAGE_MAX;
+            xEventGroupClearBits(system_events, EVENT_BUTTON1_PRESSED);
+        }
+
+        /* 接收最新数据（非阻塞） */
+        xQueueReceive(display_queue, &amp;latest_data, 0);
+
+        /* 获取I2C互斥量并更新显示 */
+        if(xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+            switch(current_page) {
+                case PAGE_MAIN:
+                    DisplayMainPage();
+                    break;
+                case PAGE_SYSTEM:
+                    DisplaySystemPage();
+                    break;
+                case PAGE_NETWORK:
+                    DisplayNetworkPage();
+                    break;
+                default:
+                    break;
+            }
+            xSemaphoreGive(i2c_mutex);
+        }
+
+        /* 周期性延时（200ms） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(200));
+    }
+}
+
+/**
+ * @brief  显示主页面
+ */
+static void DisplayMainPage(void) {
+    char buffer[32];
+
+    BSP_OLED_Clear(&amp;hi2c1);
+
+    /* 显示温度 */
+    snprintf(buffer, sizeof(buffer), &quot;Temp: %.1fC&quot;, latest_data.temperature);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 0, buffer);
+
+    /* 显示湿度 */
+    snprintf(buffer, sizeof(buffer), &quot;Humi: %.1f%%&quot;, latest_data.humidity);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 16, buffer);
+
+    /* 显示光照 */
+    snprintf(buffer, sizeof(buffer), &quot;Light: %d Lux&quot;, latest_data.light);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 32, buffer);
+
+    /* 显示空气质量 */
+    uint8_t aqi = BSP_MQ135_GetAQI(latest_data.air_quality);
+    const char *aqi_str[] = {&quot;Excellent&quot;, &quot;Good&quot;, &quot;Light&quot;, &quot;Moderate&quot;, &quot;Heavy&quot;, &quot;Severe&quot;};
+    snprintf(buffer, sizeof(buffer), &quot;AQI: %s&quot;, aqi_str[aqi]);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 48, buffer);
+}
+
+/**
+ * @brief  显示系统页面
+ */
+static void DisplaySystemPage(void) {
+    char buffer[32];
+
+    BSP_OLED_Clear(&amp;hi2c1);
+
+    /* 显示CPU使用率 */
+    snprintf(buffer, sizeof(buffer), &quot;CPU: --%%&quot;);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 0, buffer);
+
+    /* 显示内存使用 */
+    uint32_t free_heap = xPortGetFreeHeapSize();
+    snprintf(buffer, sizeof(buffer), &quot;Mem: %lu KB&quot;, free_heap / 1024);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 16, buffer);
+
+    /* 显示运行时间 */
+    uint32_t runtime = xTaskGetTickCount() / 1000;
+    snprintf(buffer, sizeof(buffer), &quot;Time: %lu s&quot;, runtime);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 32, buffer);
+}
+
+/**
+ * @brief  显示网络页面
+ */
+static void DisplayNetworkPage(void) {
+    char buffer[32];
+
+    BSP_OLED_Clear(&amp;hi2c1);
+
+    /* 显示WiFi状态 */
+    snprintf(buffer, sizeof(buffer), &quot;WiFi: Disconnected&quot;);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 0, buffer);
+
+    /* 显示上传状态 */
+    snprintf(buffer, sizeof(buffer), &quot;Upload: OK&quot;);
+    BSP_OLED_ShowString(&amp;hi2c1, 0, 16, buffer);
+}
+</code></pre>
+<h4 id="35">3.5 通信任务实现</h4>
+<p>创建<code>App/Src/communication_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;communication_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;main.h&quot;
+#include &quot;stdio.h&quot;
+#include &quot;string.h&quot;
+
+extern UART_HandleTypeDef huart1;
+
+/**
+ * @brief  通信任务
+ */
+void Communication_Task(void *argument) {
+    ProcessedData_t data;
+    char json_buffer[256];
+    uint32_t last_wake_time;
+
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 等待数据（带超时） */
+        if(xQueueReceive(comm_queue, &amp;data, pdMS_TO_TICKS(5000)) == pdTRUE) {
+            /* 格式化JSON数据 */
+            snprintf(json_buffer, sizeof(json_buffer),
+                &quot;{\&quot;device\&quot;:\&quot;ENV_001\&quot;,\&quot;time\&quot;:%lu,&quot;
+                &quot;\&quot;temp\&quot;:%.1f,\&quot;humi\&quot;:%.1f,\&quot;light\&quot;:%d,&quot;
+                &quot;\&quot;aqi\&quot;:%d,\&quot;comfort\&quot;:%d,\&quot;alarm\&quot;:%d}\r\n&quot;,
+                data.timestamp,
+                data.temperature,
+                data.humidity,
+                data.light,
+                data.air_quality,
+                data.comfort_index,
+                data.alarm_flags);
+
+            /* 获取UART互斥量并发送数据 */
+            if(xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                HAL_UART_Transmit(&amp;huart1, (uint8_t*)json_buffer, 
+                                 strlen(json_buffer), 1000);
+                xSemaphoreGive(uart_mutex);
+            }
+        }
+
+        /* 周期性延时（5秒） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(5000));
+    }
+}
+</code></pre>
+<h4 id="36">3.6 按键任务实现</h4>
+<p>创建<code>App/Src/button_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;button_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;main.h&quot;
+
+/* 按键状态 */
+typedef struct {
+    GPIO_TypeDef *port;
+    uint16_t pin;
+    uint8_t state;
+    uint8_t last_state;
+    uint16_t press_time;
+    EventBits_t event_bit;
+} Button_t;
+
+static Button_t buttons[3] = {
+    {GPIOC, GPIO_PIN_0, 0, 0, 0, EVENT_BUTTON1_PRESSED},
+    {GPIOC, GPIO_PIN_1, 0, 0, 0, EVENT_BUTTON2_PRESSED},
+    {GPIOC, GPIO_PIN_2, 0, 0, 0, EVENT_BUTTON3_PRESSED}
+};
+
+/* 按键消抖时间（ms） */
+#define DEBOUNCE_TIME  20
+
+/**
+ * @brief  按键任务
+ */
+void Button_Task(void *argument) {
+    uint8_t i;
+    uint32_t last_wake_time;
+
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 扫描所有按键 */
+        for(i = 0; i &lt; 3; i++) {
+            /* 读取按键状态（低电平有效） */
+            buttons[i].state = (HAL_GPIO_ReadPin(buttons[i].port, buttons[i].pin) == GPIO_PIN_RESET) ? 1 : 0;
+
+            /* 检测按键按下（带消抖） */
+            if(buttons[i].state &amp;&amp; !buttons[i].last_state) {
+                buttons[i].press_time = 0;
+            } else if(buttons[i].state &amp;&amp; buttons[i].last_state) {
+                buttons[i].press_time++;
+
+                /* 消抖时间到，确认按键按下 */
+                if(buttons[i].press_time == DEBOUNCE_TIME / 50) {
+                    /* 设置事件标志 */
+                    xEventGroupSetBits(system_events, buttons[i].event_bit);
+                }
+            } else if(!buttons[i].state &amp;&amp; buttons[i].last_state) {
+                /* 按键释放 */
+                buttons[i].press_time = 0;
+            }
+
+            buttons[i].last_state = buttons[i].state;
+        }
+
+        /* 周期性延时（50ms） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(50));
+    }
+}
+</code></pre>
+<h4 id="37-led">3.7 LED任务实现</h4>
+<p>创建<code>App/Src/led_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;led_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;main.h&quot;
+
+/* LED状态 */
+typedef enum {
+    LED_OFF = 0,
+    LED_ON,
+    LED_BLINK_SLOW,
+    LED_BLINK_FAST
+} LED_State_t;
+
+static LED_State_t led1_state = LED_BLINK_SLOW;  // 系统运行指示
+static LED_State_t led2_state = LED_OFF;          // 数据上传指示
+static LED_State_t led3_state = LED_OFF;          // 报警指示
+
+static uint16_t blink_counter = 0;
+
+/**
+ * @brief  LED任务
+ */
+void LED_Task(void *argument) {
+    EventBits_t events;
+    uint32_t last_wake_time;
+
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 检查事件 */
+        events = xEventGroupGetBits(system_events);
+
+        /* 检查报警事件 */
+        if(events &amp; (EVENT_ALARM_TEMP_HIGH | EVENT_ALARM_HUMI_HIGH | EVENT_ALARM_AQI_BAD)) {
+            led3_state = LED_BLINK_FAST;
+        } else {
+            led3_state = LED_OFF;
+        }
+
+        /* 更新计数器 */
+        blink_counter++;
+
+        /* LED1: 系统运行指示（慢闪，1Hz） */
+        if(led1_state == LED_BLINK_SLOW) {
+            if(blink_counter % 2 == 0) {
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
+            } else {
+                HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
+            }
+        }
+
+        /* LED2: 数据上传指示 */
+        if(led2_state == LED_ON) {
+            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_SET);
+        } else {
+            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_13, GPIO_PIN_RESET);
+        }
+
+        /* LED3: 报警指示（快闪，4Hz） */
+        if(led3_state == LED_BLINK_FAST) {
+            if(blink_counter % 1 == 0) {
+                HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_14);
+            }
+        } else {
+            HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET);
+        }
+
+        /* 周期性延时（500ms） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(500));
+    }
+}
+</code></pre>
+<h4 id="38">3.8 系统监控任务实现</h4>
+<p>创建<code>App/Src/monitor_task.c</code>：</p>
+<pre><code class="language-c">#include &quot;monitor_task.h&quot;
+#include &quot;app_config.h&quot;
+#include &quot;main.h&quot;
+#include &quot;stdio.h&quot;
+
+extern UART_HandleTypeDef huart1;
+
+/* 运行时统计时钟 */
+static uint32_t runtime_counter = 0;
+
+/**
+ * @brief  配置运行时统计定时器
+ */
+void ConfigureTimerForRunTimeStats(void) {
+    runtime_counter = 0;
+}
+
+/**
+ * @brief  获取运行时统计计数值
+ */
+uint32_t GetRunTimeCounterValue(void) {
+    return runtime_counter;
+}
+
+/**
+ * @brief  系统监控任务
+ */
+void Monitor_Task(void *argument) {
+    SystemMonitor_t monitor;
+    char buffer[256];
+    uint32_t last_wake_time;
+
+    last_wake_time = xTaskGetTickCount();
+
+    while(1) {
+        /* 更新运行时统计计数器 */
+        runtime_counter++;
+
+        /* 获取系统信息 */
+        monitor.free_heap = xPortGetFreeHeapSize();
+        monitor.min_free_heap = xPortGetMinimumEverFreeHeapSize();
+        monitor.runtime_seconds = xTaskGetTickCount() / 1000;
+
+        /* 计算CPU使用率（简化版） */
+        monitor.cpu_usage = 0;  // 需要更复杂的统计
+
+        /* 打印监控信息 */
+        if(xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+            snprintf(buffer, sizeof(buffer),
+                &quot;\r\n=== System Monitor ===\r\n&quot;
+                &quot;Runtime: %lu s\r\n&quot;
+                &quot;Free Heap: %lu bytes\r\n&quot;
+                &quot;Min Free Heap: %lu bytes\r\n&quot;
+                &quot;Heap Usage: %lu%%\r\n&quot;,
+                monitor.runtime_seconds,
+                monitor.free_heap,
+                monitor.min_free_heap,
+                (configTOTAL_HEAP_SIZE - monitor.free_heap) * 100 / configTOTAL_HEAP_SIZE);
+
+            HAL_UART_Transmit(&amp;huart1, (uint8_t*)buffer, strlen(buffer), 1000);
+            xSemaphoreGive(uart_mutex);
+        }
+
+        /* 检查堆栈溢出（通过任务状态） */
+        TaskStatus_t task_status[7];
+        UBaseType_t task_count = uxTaskGetSystemState(task_status, 7, NULL);
+
+        for(UBaseType_t i = 0; i &lt; task_count; i++) {
+            if(task_status[i].usStackHighWaterMark &lt; 50) {
+                /* 堆栈即将溢出警告 */
+                if(xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+                    snprintf(buffer, sizeof(buffer),
+                        &quot;WARNING: Task '%s' stack low: %u words\r\n&quot;,
+                        task_status[i].pcTaskName,
+                        task_status[i].usStackHighWaterMark);
+                    HAL_UART_Transmit(&amp;huart1, (uint8_t*)buffer, strlen(buffer), 1000);
+                    xSemaphoreGive(uart_mutex);
+                }
+            }
+        }
+
+        /* 周期性延时（10秒） */
+        vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(10000));
+    }
+}
+</code></pre>
+<p><strong>检查清单</strong>：
+- [ ] 所有任务编译通过
+- [ ] 任务优先级设置合理
+- [ ] 队列和互斥量正确使用
+- [ ] 事件组正确使用
+- [ ] 任务间通信逻辑正确</p>
+<h3 id="4-40">阶段4：系统集成与测试 (预计40分钟)</h3>
+<h4 id="41">4.1 主函数集成</h4>
+<p>编辑<code>Core/Src/main.c</code>，在main函数中添加：</p>
+<pre><code class="language-c">int main(void) {
+    /* 硬件初始化 */
+    HAL_Init();
+    SystemClock_Config();
+
+    /* 外设初始化 */
+    MX_GPIO_Init();
+    MX_I2C1_Init();
+    MX_USART1_UART_Init();
+    MX_ADC1_Init();
+
+    /* 打印启动信息 */
+    char *welcome = &quot;\r\n=== Environment Monitor System ===\r\n&quot;
+                    &quot;Version: 1.0\r\n&quot;
+                    &quot;Build: &quot; __DATE__ &quot; &quot; __TIME__ &quot;\r\n&quot;
+                    &quot;Starting FreeRTOS...\r\n\r\n&quot;;
+    HAL_UART_Transmit(&amp;huart1, (uint8_t*)welcome, strlen(welcome), 1000);
+
+    /* 创建RTOS对象和任务 */
+    MX_FREERTOS_Init();
+
+    /* 启动调度器 */
+    vTaskStartScheduler();
+
+    /* 不应该到达这里 */
+    while(1) {
+        Error_Handler();
+    }
+}
+</code></pre>
+<h4 id="42">4.2 错误处理钩子</h4>
+<p>在<code>Core/Src/freertos.c</code>中添加钩子函数：</p>
+<pre><code class="language-c">/**
+ * @brief  内存分配失败钩子
+ */
+void vApplicationMallocFailedHook(void) {
+    /* 内存分配失败，系统无法继续运行 */
+    taskDISABLE_INTERRUPTS();
+    printf(&quot;FATAL: Memory allocation failed!\r\n&quot;);
+    while(1);
+}
+
+/**
+ * @brief  堆栈溢出钩子
+ */
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+    /* 任务堆栈溢出 */
+    taskDISABLE_INTERRUPTS();
+    printf(&quot;FATAL: Stack overflow in task: %s\r\n&quot;, pcTaskName);
+    while(1);
+}
+</code></pre>
+<h4 id="43">4.3 功能测试</h4>
+<p><strong>测试清单</strong>：</p>
+<ol>
+<li>
+<p><strong>传感器测试</strong>
+   - [ ] DHT22能正常读取温湿度
+   - [ ] BH1750能正常读取光照
+   - [ ] MQ135能正常读取空气质量
+   - [ ] 数据更新频率正确（1Hz）</p>
+</li>
+<li>
+<p><strong>显示测试</strong>
+   - [ ] OLED能正常显示数据
+   - [ ] 显示刷新率正确（5Hz）
+   - [ ] 页面切换功能正常</p>
+</li>
+<li>
+<p><strong>通信测试</strong>
+   - [ ] 串口能正常输出JSON数据
+   - [ ] 数据格式正确
+   - [ ] 上传周期正确（5秒）</p>
+</li>
+<li>
+<p><strong>按键测试</strong>
+   - [ ] 按键1能切换显示页面
+   - [ ] 按键消抖正常
+   - [ ] 按键响应及时</p>
+</li>
+<li>
+<p><strong>LED测试</strong>
+   - [ ] LED1慢闪表示系统运行
+   - [ ] LED3在报警时快闪
+   - [ ] LED状态正确</p>
+</li>
+<li>
+<p><strong>系统监控测试</strong>
+   - [ ] 能正常输出系统信息
+   - [ ] 内存监控正确
+   - [ ] 堆栈监控正常</p>
+</li>
+</ol>
+<h4 id="44">4.4 性能测试</h4>
+<p>使用串口输出监控系统性能：</p>
+<pre><code class="language-c">/* 在Monitor_Task中添加性能统计 */
+TaskStatus_t task_status[7];
+uint32_t total_runtime;
+UBaseType_t task_count = uxTaskGetSystemState(task_status, 7, &amp;total_runtime);
+
+for(UBaseType_t i = 0; i &lt; task_count; i++) {
+    uint32_t cpu_percent = (task_status[i].ulRunTimeCounter * 100) / total_runtime;
+    printf(&quot;Task: %-12s CPU: %2lu%% Stack: %u\r\n&quot;,
+           task_status[i].pcTaskName,
+           cpu_percent,
+           task_status[i].usStackHighWaterMark);
+}
+</code></pre>
+<p><strong>性能指标</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>目标值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU使用率</td>
+<td>&lt;50%</td>
+<td>系统负载</td>
+</tr>
+<tr>
+<td>内存使用</td>
+<td>&lt;80%</td>
+<td>堆内存使用</td>
+</tr>
+<tr>
+<td>任务响应时间</td>
+<td>&lt;100ms</td>
+<td>按键到显示更新</td>
+</tr>
+<tr>
+<td>数据采集周期</td>
+<td>1000ms±10ms</td>
+<td>传感器采集周期</td>
+</tr>
+<tr>
+<td>显示刷新率</td>
+<td>5Hz</td>
+<td>OLED刷新频率</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_30">故障排除</h2>
+<h3 id="_31">常见问题</h3>
+<h4 id="1">问题1：系统无法启动或频繁重启</h4>
+<p><strong>症状</strong>：
+- 系统上电后无响应
+- 系统运行一段时间后自动重启
+- LED不闪烁</p>
+<p><strong>可能原因</strong>：
+1. 堆栈溢出
+2. 内存分配失败
+3. 硬件故障（电源不稳定）
+4. 时钟配置错误</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">/* 1. 增加任务堆栈大小 */
+#define STACK_SIZE_SENSOR  512  // 从256增加到512
+
+/* 2. 增加堆大小 */
+#define configTOTAL_HEAP_SIZE  ((size_t)(30 * 1024))  // 从20KB增加到30KB
+
+/* 3. 启用堆栈溢出检查 */
+#define configCHECK_FOR_STACK_OVERFLOW  2
+
+/* 4. 添加调试输出 */
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+    printf(&quot;Stack overflow in: %s\r\n&quot;, pcTaskName);
+    while(1);
+}
+</code></pre>
+<h4 id="2">问题2：传感器读取失败</h4>
+<p><strong>症状</strong>：
+- 温湿度显示为0
+- 光照值异常
+- 串口输出错误信息</p>
+<p><strong>可能原因</strong>：
+1. 接线错误
+2. I2C地址不正确
+3. 传感器未初始化
+4. 互斥量死锁</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">/* 1. 检查I2C设备地址 */
+HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(&amp;hi2c1, BH1750_ADDR, 3, 100);
+if(status != HAL_OK) {
+    printf(&quot;BH1750 not found at address 0x%02X\r\n&quot;, BH1750_ADDR);
+}
+
+/* 2. 添加超时保护 */
+if(xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
+    // I2C操作
+    xSemaphoreGive(i2c_mutex);
+} else {
+    printf(&quot;I2C mutex timeout!\r\n&quot;);
+}
+
+/* 3. 添加重试机制 */
+for(int retry = 0; retry &lt; 3; retry++) {
+    status = BSP_DHT22_Read(&amp;temp, &amp;humi);
+    if(status == HAL_OK) break;
+    vTaskDelay(pdMS_TO_TICKS(100));
+}
+</code></pre>
+<h4 id="3oled">问题3：OLED显示异常</h4>
+<p><strong>症状</strong>：
+- OLED无显示
+- 显示内容乱码
+- 显示闪烁</p>
+<p><strong>可能原因</strong>：
+1. I2C通信失败
+2. OLED未正确初始化
+3. 显示刷新太快
+4. 字库问题</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">/* 1. 降低显示刷新率 */
+vTaskDelayUntil(&amp;last_wake_time, pdMS_TO_TICKS(500));  // 从200ms改为500ms
+
+/* 2. 添加初始化检查 */
+HAL_StatusTypeDef status = BSP_OLED_Init(&amp;hi2c1);
+if(status != HAL_OK) {
+    printf(&quot;OLED init failed!\r\n&quot;);
+}
+
+/* 3. 使用成熟的OLED库 */
+// 推荐使用u8g2库替代自己实现的驱动
+</code></pre>
+<h4 id="4">问题4：任务间通信失败</h4>
+<p><strong>症状</strong>：
+- 显示不更新
+- 数据不上传
+- 按键无响应</p>
+<p><strong>可能原因</strong>：
+1. 队列满
+2. 队列为空且一直阻塞
+3. 事件标志未正确设置/清除
+4. 优先级反转</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">/* 1. 增加队列长度 */
+#define QUEUE_LENGTH_SENSOR  10  // 从5增加到10
+
+/* 2. 使用非阻塞发送 */
+if(xQueueSend(sensor_queue, &amp;data, 0) != pdTRUE) {
+    printf(&quot;Queue full, data dropped\r\n&quot;);
+}
+
+/* 3. 添加超时 */
+if(xQueueReceive(sensor_queue, &amp;data, pdMS_TO_TICKS(2000)) != pdTRUE) {
+    printf(&quot;Queue receive timeout\r\n&quot;);
+}
+
+/* 4. 正确清除事件标志 */
+xEventGroupClearBits(system_events, EVENT_BUTTON1_PRESSED);
+</code></pre>
+<h4 id="5">问题5：系统性能下降</h4>
+<p><strong>症状</strong>：
+- 响应变慢
+- CPU使用率高
+- 内存不足</p>
+<p><strong>可能原因</strong>：
+1. 任务优先级设置不合理
+2. 任务执行时间过长
+3. 内存泄漏
+4. 中断频率过高</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">/* 1. 优化任务优先级 */
+// 确保高优先级任务不会长时间占用CPU
+void High_Priority_Task(void *param) {
+    while(1) {
+        // 快速处理
+        vTaskDelay(pdMS_TO_TICKS(10));  // 及时让出CPU
+    }
+}
+
+/* 2. 监控内存使用 */
+uint32_t free_heap = xPortGetFreeHeapSize();
+uint32_t min_free = xPortGetMinimumEverFreeHeapSize();
+printf(&quot;Free: %lu, Min: %lu\r\n&quot;, free_heap, min_free);
+
+/* 3. 使用任务通知替代队列（更高效） */
+xTaskNotifyGive(task_handle);  // 发送通知
+ulTaskNotifyTake(pdTRUE, portMAX_DELAY);  // 等待通知
+
+/* 4. 减少不必要的延时 */
+// 使用vTaskDelayUntil而不是vTaskDelay，保证周期准确
+</code></pre>
+<h3 id="_32">调试技巧</h3>
+<h4 id="1_1">1. 使用串口调试</h4>
+<pre><code class="language-c">/* 添加调试宏 */
+#define DEBUG_PRINT(fmt, ...) \
+    do { \
+        if(xSemaphoreTake(uart_mutex, pdMS_TO_TICKS(100)) == pdTRUE) { \
+            printf(&quot;[%lu] &quot; fmt &quot;\r\n&quot;, xTaskGetTickCount(), ##__VA_ARGS__); \
+            xSemaphoreGive(uart_mutex); \
+        } \
+    } while(0)
+
+/* 使用示例 */
+DEBUG_PRINT(&quot;Sensor task: temp=%.1f, humi=%.1f&quot;, temp, humi);
+</code></pre>
+<h4 id="2_1">2. 使用断言</h4>
+<pre><code class="language-c">/* 启用断言 */
+#define configASSERT(x) \
+    if((x) == 0) { \
+        taskDISABLE_INTERRUPTS(); \
+        printf(&quot;ASSERT failed: %s:%d\r\n&quot;, __FILE__, __LINE__); \
+        while(1); \
+    }
+
+/* 使用示例 */
+configASSERT(sensor_queue != NULL);
+configASSERT(xSemaphoreTake(i2c_mutex, pdMS_TO_TICKS(100)) == pdTRUE);
+</code></pre>
+<h4 id="3">3. 任务状态监控</h4>
+<pre><code class="language-c">/* 打印所有任务状态 */
+void PrintTaskStatus(void) {
+    TaskStatus_t task_status[10];
+    UBaseType_t task_count = uxTaskGetSystemState(task_status, 10, NULL);
+
+    printf(&quot;\r\n=== Task Status ===\r\n&quot;);
+    printf(&quot;%-12s %8s %8s %8s\r\n&quot;, &quot;Name&quot;, &quot;State&quot;, &quot;Priority&quot;, &quot;Stack&quot;);
+
+    for(UBaseType_t i = 0; i &lt; task_count; i++) {
+        const char *state_str[] = {&quot;Run&quot;, &quot;Ready&quot;, &quot;Block&quot;, &quot;Suspend&quot;, &quot;Delete&quot;};
+        printf(&quot;%-12s %8s %8lu %8u\r\n&quot;,
+               task_status[i].pcTaskName,
+               state_str[task_status[i].eCurrentState],
+               task_status[i].uxCurrentPriority,
+               task_status[i].usStackHighWaterMark);
+    }
+}
+</code></pre>
+<h4 id="4_1">4. 使用逻辑分析仪</h4>
+<p>对于I2C、SPI等通信问题，使用逻辑分析仪可以直观地看到波形：
+- 检查时钟频率是否正确
+- 检查数据是否有ACK
+- 检查时序是否符合规范</p>
+<h2 id="_33">扩展思路</h2>
+<h3 id="_34">功能扩展</h3>
+<h4 id="1_2">1. 添加数据存储功能</h4>
+<pre><code class="language-c">/* 使用SD卡存储历史数据 */
+typedef struct {
+    uint32_t timestamp;
+    float temperature;
+    float humidity;
+    uint16_t light;
+    uint16_t air_quality;
+} DataRecord_t;
+
+void SaveDataToSD(ProcessedData_t *data) {
+    DataRecord_t record;
+    record.timestamp = data-&gt;timestamp;
+    record.temperature = data-&gt;temperature;
+    record.humidity = data-&gt;humidity;
+    record.light = data-&gt;light;
+    record.air_quality = data-&gt;air_quality;
+
+    // 写入SD卡
+    f_write(&amp;file, &amp;record, sizeof(record), &amp;bytes_written);
+}
+</code></pre>
+<h4 id="2-wifi">2. 添加WiFi云端上传</h4>
+<pre><code class="language-c">/* 使用ESP8266上传数据到云平台 */
+void UploadToCloud(ProcessedData_t *data) {
+    char mqtt_payload[256];
+
+    // 格式化MQTT消息
+    snprintf(mqtt_payload, sizeof(mqtt_payload),
+        &quot;{\&quot;temp\&quot;:%.1f,\&quot;humi\&quot;:%.1f,\&quot;light\&quot;:%d}&quot;,
+        data-&gt;temperature, data-&gt;humidity, data-&gt;light);
+
+    // 发布到MQTT主题
+    ESP8266_MQTT_Publish(&quot;sensor/data&quot;, mqtt_payload);
+}
+</code></pre>
+<h4 id="3_1">3. 添加远程控制功能</h4>
+<pre><code class="language-c">/* 通过MQTT接收控制命令 */
+void ProcessCommand(const char *cmd) {
+    if(strcmp(cmd, &quot;reset&quot;) == 0) {
+        NVIC_SystemReset();
+    } else if(strcmp(cmd, &quot;calibrate&quot;) == 0) {
+        // 传感器校准
+    } else if(strncmp(cmd, &quot;set_interval:&quot;, 13) == 0) {
+        // 设置采样间隔
+        uint32_t interval = atoi(cmd + 13);
+        // 更新采样间隔
+    }
+}
+</code></pre>
+<h4 id="4_2">4. 添加数据分析功能</h4>
+<pre><code class="language-c">/* 计算24小时平均值 */
+typedef struct {
+    float temp_sum;
+    float humi_sum;
+    uint32_t count;
+} DailyStats_t;
+
+void UpdateDailyStats(ProcessedData_t *data) {
+    static DailyStats_t stats = {0};
+
+    stats.temp_sum += data-&gt;temperature;
+    stats.humi_sum += data-&gt;humidity;
+    stats.count++;
+
+    // 每24小时计算一次平均值
+    if(stats.count &gt;= 86400) {  // 24小时 * 3600秒
+        float avg_temp = stats.temp_sum / stats.count;
+        float avg_humi = stats.humi_sum / stats.count;
+
+        printf(&quot;Daily average: Temp=%.1f, Humi=%.1f\r\n&quot;, avg_temp, avg_humi);
+
+        // 重置统计
+        memset(&amp;stats, 0, sizeof(stats));
+    }
+}
+</code></pre>
+<h3 id="_35">性能优化</h3>
+<h4 id="1-dma">1. 使用DMA传输</h4>
+<pre><code class="language-c">/* 使用DMA进行I2C传输，释放CPU */
+HAL_I2C_Master_Transmit_DMA(&amp;hi2c1, BH1750_ADDR, cmd, 1);
+HAL_I2C_Master_Receive_DMA(&amp;hi2c1, BH1750_ADDR, data, 2);
+</code></pre>
+<h4 id="2_2">2. 降低功耗</h4>
+<pre><code class="language-c">/* 在空闲时进入低功耗模式 */
+void vApplicationIdleHook(void) {
+    /* 进入睡眠模式 */
+    __WFI();  // Wait For Interrupt
+}
+
+/* 动态调整采样频率 */
+void AdjustSamplingRate(void) {
+    // 如果数据变化不大，降低采样频率
+    if(data_stable) {
+        sampling_interval = 5000;  // 5秒
+    } else {
+        sampling_interval = 1000;  // 1秒
+    }
+}
+</code></pre>
+<h4 id="3_2">3. 优化内存使用</h4>
+<pre><code class="language-c">/* 使用内存池替代动态分配 */
+#define POOL_SIZE  10
+static SensorData_t data_pool[POOL_SIZE];
+static uint8_t pool_index = 0;
+
+SensorData_t* AllocateData(void) {
+    SensorData_t *data = &amp;data_pool[pool_index];
+    pool_index = (pool_index + 1) % POOL_SIZE;
+    return data;
+}
+</code></pre>
+<h2 id="_36">项目总结</h2>
+<h3 id="_37">技术要点</h3>
+<p>本项目涵盖了FreeRTOS多任务系统设计的核心技术：</p>
+<ol>
+<li>
+<p><strong>系统架构设计</strong>
+   - 分层架构：驱动层、中间件层、应用层
+   - 模块化设计：每个功能独立模块
+   - 清晰的接口定义</p>
+</li>
+<li>
+<p><strong>任务设计</strong>
+   - 合理的任务划分：7个任务各司其职
+   - 优先级分配：根据实时性要求设置
+   - 周期性任务：使用vTaskDelayUntil保证周期准确</p>
+</li>
+<li>
+<p><strong>任务间通信</strong>
+   - 队列：用于数据传递（生产者-消费者模式）
+   - 互斥量：保护共享资源（I2C、UART）
+   - 事件组：用于事件通知（按键、报警）</p>
+</li>
+<li>
+<p><strong>资源管理</strong>
+   - 互斥量保护I2C总线，避免冲突
+   - 队列缓冲数据，解耦任务
+   - 合理的内存分配策略</p>
+</li>
+<li>
+<p><strong>错误处理</strong>
+   - 超时保护：所有阻塞操作都有超时
+   - 错误检测：检查返回值
+   - 钩子函数：捕获系统错误</p>
+</li>
+</ol>
+<h3 id="_38">学习收获</h3>
+<p>通过本项目，你应该掌握：</p>
+<ul>
+<li>✅ 如何设计一个完整的多任务嵌入式系统</li>
+<li>✅ 如何合理划分任务和设置优先级</li>
+<li>✅ 如何使用FreeRTOS的各种通信机制</li>
+<li>✅ 如何管理共享资源，避免竞态条件</li>
+<li>✅ 如何处理中断与RTOS的交互</li>
+<li>✅ 如何监控和优化系统性能</li>
+<li>✅ 如何调试多任务系统</li>
+<li>✅ 工业级代码的编写规范</li>
+</ul>
+<h3 id="_39">改进建议</h3>
+<p>项目可以进一步改进的方向：</p>
+<ol>
+<li>
+<p><strong>代码质量</strong>
+   - 添加更完善的错误处理
+   - 使用状态机管理复杂逻辑
+   - 添加单元测试</p>
+</li>
+<li>
+<p><strong>功能完善</strong>
+   - 实现配置文件管理
+   - 添加OTA升级功能
+   - 实现数据加密传输</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 使用DMA减少CPU占用
+   - 实现动态功耗管理
+   - 优化内存使用</p>
+</li>
+<li>
+<p><strong>用户体验</strong>
+   - 添加更丰富的显示界面
+   - 实现语音提示
+   - 添加移动APP控制</p>
+</li>
+</ol>
+<h2 id="_40">相关资源</h2>
+<h3 id="_41">官方文档</h3>
+<ul>
+<li><a href="https://www.freertos.org/Documentation/RTOS_book.html">FreeRTOS官方文档</a></li>
+<li><a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4参考手册</a></li>
+<li><a href="https://www.st.com/resource/en/user_manual/dm00105879.pdf">STM32 HAL库文档</a></li>
+</ul>
+<h3 id="_42">推荐书籍</h3>
+<ul>
+<li>《FreeRTOS内核实现与应用开发实战指南》- 野火</li>
+<li>《嵌入式实时操作系统μC/OS-III》- Jean J. Labrosse</li>
+<li>《嵌入式系统设计与实践》- Elecia White</li>
+</ul>
+<h3 id="_43">开源项目</h3>
+<ul>
+<li><a href="https://github.com/FreeRTOS/FreeRTOS">FreeRTOS官方示例</a></li>
+<li><a href="https://github.com/STMicroelectronics/STM32CubeF4">STM32CubeF4示例</a></li>
+<li><a href="https://github.com/olikraus/u8g2">u8g2 OLED库</a></li>
+</ul>
+<h3 id="_44">视频教程</h3>
+<ul>
+<li><a href="https://www.bilibili.com/video/BV1Jb4y1X7Qw">FreeRTOS从入门到精通</a></li>
+<li><a href="https://www.bilibili.com/video/BV1th411z7sn">STM32 HAL库开发教程</a></li>
+</ul>
+<h2 id="_45">下一步</h2>
+<p>完成本项目后，建议继续学习：</p>
+<ul>
+<li>RT-Thread快速入门 - 学习国产RTOS</li>
+<li>嵌入式Linux系统概述 - 学习Linux系统</li>
+<li><a href="../../02-rtos-fundamentals/advanced/01-real-time-schedulability.html">实时性分析与调度可行性</a> - 深入理解实时性</li>
+</ul>
+<h2 id="_46">参考资料</h2>
+<ol>
+<li>Mastering the FreeRTOS Real Time Kernel - Richard Barry</li>
+<li>STM32F407 Datasheet - STMicroelectronics</li>
+<li>DHT22 Datasheet - Aosong Electronics</li>
+<li>BH1750FVI Datasheet - ROHM Semiconductor</li>
+<li>SSD1306 OLED Controller Datasheet - Solomon Systech</li>
+</ol>
+<hr />
+<p><strong>项目难度</strong>：⭐⭐⭐⭐☆ (高级)<br />
+<strong>完成时间</strong>：约220分钟（3.5小时）<br />
+<strong>代码行数</strong>：约2000行<br />
+<strong>适用人群</strong>：有FreeRTOS基础，希望提升系统设计能力的开发者</p>
+<p><strong>项目亮点</strong>：
+- 完整的工业级项目架构
+- 7个任务协同工作
+- 丰富的通信机制应用
+- 详细的代码注释和文档
+- 可直接应用于实际项目</p>
+<p><strong>反馈与讨论</strong>：欢迎在评论区分享你的项目成果、遇到的问题和改进建议！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,2121 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>生物信号处理基础：ECG/EEG信号采集与分析 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/09-industry-domains/">09-industry-domains</a> / <a href="/knowledge/02-technologies/embedded/09-industry-domains/03-medical-devices/">03-medical-devices</a> / <a href="/knowledge/02-technologies/embedded/09-industry-domains/03-medical-devices/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_7">背景知识</a><ul>
+<li><a href="#_8">什么是生物信号？</a></li>
+<li><a href="#ecg">ECG信号基础</a></li>
+<li><a href="#eeg">EEG信号基础</a></li>
+<li><a href="#_9">信号采集的挑战</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1：信号采集电路设计</a><ul>
+<li><a href="#11">1.1 模拟前端架构</a></li>
+<li><a href="#12-ad8232-ecg">1.2 使用AD8232 ECG模块</a></li>
+<li><a href="#13">1.3 电极放置</a></li>
+<li><a href="#14">1.4 电路测试</a></li>
+</ul>
+</li>
+<li><a href="#2adc">步骤2：ADC配置和数据采集</a><ul>
+<li><a href="#21-stm32">2.1 创建STM32项目</a></li>
+<li><a href="#22-adc">2.2 配置ADC</a></li>
+<li><a href="#23-dma">2.3 配置DMA</a></li>
+<li><a href="#24">2.4 配置定时器（用于精确采样）</a></li>
+<li><a href="#25">2.5 编写采集代码</a></li>
+<li><a href="#26">2.6 验证数据采集</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：数字滤波算法实现</a><ul>
+<li><a href="#31">3.1 滤波器设计原理</a></li>
+<li><a href="#32">3.2 实现移动平均滤波器</a></li>
+<li><a href="#33-iir">3.3 实现IIR低通滤波器</a></li>
+<li><a href="#34">3.4 实现高通滤波器</a></li>
+<li><a href="#35">3.5 实现陷波滤波器</a></li>
+<li><a href="#36">3.6 完整的滤波流程</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：特征提取算法</a><ul>
+<li><a href="#41-rpan-tompkins">4.1 R波检测（Pan-Tompkins算法）</a></li>
+<li><a href="#42">4.2 心率计算</a></li>
+<li><a href="#43">4.3 波形特征提取</a></li>
+<li><a href="#44">4.4 完整的特征提取流程</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：数据可视化和分析</a><ul>
+<li><a href="#51-pc">5.1 数据传输到PC</a></li>
+<li><a href="#52-python">5.2 Python数据接收和可视化</a></li>
+<li><a href="#53">5.3 高级数据分析</a></li>
+<li><a href="#54">5.4 数据存储</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：系统集成和测试</a><ul>
+<li><a href="#61">6.1 完整系统代码</a></li>
+<li><a href="#62">6.2 性能优化</a></li>
+<li><a href="#63">6.3 功能测试</a></li>
+<li><a href="#64">6.4 故障排除</a></li>
+</ul>
+</li>
+<li><a href="#_10">扩展功能</a><ul>
+<li><a href="#71-eeg">7.1 EEG信号处理</a></li>
+<li><a href="#72">7.2 实时心率监测</a></li>
+<li><a href="#73-ecg">7.3 多导联ECG</a></li>
+<li><a href="#74">7.4 云端数据上传</a></li>
+<li><a href="#75">7.5 移动应用集成</a></li>
+</ul>
+</li>
+<li><a href="#_11">总结</a></li>
+<li><a href="#_12">进阶挑战</a></li>
+<li><a href="#_13">完整代码</a></li>
+<li><a href="#_14">下一步学习</a></li>
+<li><a href="#_15">参考资料</a><ul>
+<li><a href="#_16">标准和指南</a></li>
+<li><a href="#_17">学术资源</a></li>
+<li><a href="#_18">在线资源</a></li>
+<li><a href="#_19">书籍推荐</a></li>
+<li><a href="#_20">开发工具</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="ecgeeg">生物信号处理基础：ECG/EEG信号采集与分析</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解生物信号的基本特征和采集原理</li>
+<li>[ ] 掌握ECG和EEG信号的生理学基础</li>
+<li>[ ] 实现模拟前端电路的信号调理</li>
+<li>[ ] 应用数字滤波算法去除噪声和干扰</li>
+<li>[ ] 提取生物信号的关键特征参数</li>
+<li>[ ] 开发完整的生物信号采集和处理系统</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解基本的电路原理和模拟电子技术
+- 掌握C语言编程基础
+- 理解数字信号处理的基本概念
+- 熟悉ADC（模数转换器）的工作原理
+- 了解医疗设备的基本安全要求</p>
+<p><strong>技能要求</strong>：
+- 能够使用示波器观察和分析信号
+- 会使用嵌入式开发工具（如STM32CubeIDE）
+- 能够进行基本的电路焊接和调试
+- 熟悉Python或MATLAB进行数据分析（可选）</p>
+<p><strong>推荐预习</strong>：
+- <a href="./01-medical-device-standards.html">医疗设备标准与法规</a> - 了解医疗设备开发的合规要求</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>规格说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>微控制器开发板</td>
+<td>1</td>
+<td>STM32F4系列，带12位ADC</td>
+<td>STM32F407 Discovery</td>
+</tr>
+<tr>
+<td>生物信号采集模块</td>
+<td>1</td>
+<td>AD8232心电采集模块</td>
+<td>AD8232 ECG模块</td>
+</tr>
+<tr>
+<td>运算放大器</td>
+<td>2</td>
+<td>低噪声、高CMRR</td>
+<td>OPA2134, INA128</td>
+</tr>
+<tr>
+<td>滤波电容</td>
+<td>若干</td>
+<td>0.1μF, 1μF, 10μF</td>
+<td>陶瓷/钽电容</td>
+</tr>
+<tr>
+<td>电阻</td>
+<td>若干</td>
+<td>1kΩ-1MΩ</td>
+<td>1%精度金属膜电阻</td>
+</tr>
+<tr>
+<td>电极片</td>
+<td>3</td>
+<td>一次性医用电极</td>
+<td>Ag/AgCl电极</td>
+</tr>
+<tr>
+<td>面包板</td>
+<td>1</td>
+<td>标准面包板</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>公对公、公对母</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB转串口模块</td>
+<td>1</td>
+<td>用于数据传输</td>
+<td>CH340, CP2102</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<p><strong>开发环境</strong>：
+- STM32CubeIDE v1.10+ 或 Keil MDK
+- Python 3.8+ （用于数据分析和可视化）
+- MATLAB R2020a+ （可选，用于信号分析）</p>
+<p><strong>Python库</strong>：</p>
+<pre><code class="language-bash">pip install numpy scipy matplotlib pandas
+pip install pyserial  # 用于串口通信
+</code></pre>
+<p><strong>辅助工具</strong>：
+- 串口调试助手（如PuTTY、Tera Term）
+- 示波器或逻辑分析仪（用于信号调试）
+- ST-Link驱动程序</p>
+<h3 id="_6">环境配置</h3>
+<ol>
+<li>
+<p><strong>安装开发环境</strong>
+   - 下载并安装STM32CubeIDE
+   - 安装ST-Link驱动
+   - 配置Python开发环境</p>
+</li>
+<li>
+<p><strong>测试硬件连接</strong>
+   - 连接开发板到电脑
+   - 验证ST-Link连接正常
+   - 测试串口通信</p>
+</li>
+<li>
+<p><strong>准备测试信号</strong>
+   - 下载标准ECG测试数据（MIT-BIH数据库）
+   - 准备信号发生器（可选）</p>
+</li>
+</ol>
+<h2 id="_7">背景知识</h2>
+<h3 id="_8">什么是生物信号？</h3>
+<p><strong>生物信号（Biosignal）</strong>是指从生物体中测量到的电信号、机械信号或化学信号，这些信号携带了生理状态和病理信息。</p>
+<p><strong>常见的生物电信号</strong>：</p>
+<ol>
+<li>
+<p><strong>ECG（心电图，Electrocardiogram）</strong>
+   - 记录心脏电活动
+   - 频率范围：0.05-100 Hz
+   - 幅度范围：0.5-4 mV
+   - 应用：心脏疾病诊断、心率监测</p>
+</li>
+<li>
+<p><strong>EEG（脑电图，Electroencephalogram）</strong>
+   - 记录大脑电活动
+   - 频率范围：0.5-100 Hz
+   - 幅度范围：10-100 μV
+   - 应用：癫痫诊断、睡眠研究、脑机接口</p>
+</li>
+<li>
+<p><strong>EMG（肌电图，Electromyogram）</strong>
+   - 记录肌肉电活动
+   - 频率范围：10-500 Hz
+   - 幅度范围：0.1-5 mV
+   - 应用：神经肌肉疾病诊断、康复评估</p>
+</li>
+<li>
+<p><strong>EOG（眼电图，Electrooculogram）</strong>
+   - 记录眼球运动
+   - 频率范围：0.1-10 Hz
+   - 幅度范围：50-3500 μV
+   - 应用：睡眠研究、眼动追踪</p>
+</li>
+</ol>
+<h3 id="ecg">ECG信号基础</h3>
+<p><strong>心电图的生理学原理</strong>：</p>
+<p>心脏的电活动由窦房结（SA节点）产生，电信号依次传导到心房、房室结、希氏束、浦肯野纤维，最后到达心室，引起心肌收缩。</p>
+<p><strong>ECG波形组成</strong>：</p>
+<pre><code>      R
+      |
+      |
+  P   |   T
+ / \  |  / \
+/   \ | /   \
+-----\|/-----\___
+      Q      S
+</code></pre>
+<ul>
+<li><strong>P波</strong>：心房去极化（0.08-0.12秒）</li>
+<li><strong>QRS波群</strong>：心室去极化（0.06-0.10秒）</li>
+<li>Q波：室间隔去极化</li>
+<li>R波：心室主要去极化</li>
+<li>S波：心室基底部去极化</li>
+<li><strong>T波</strong>：心室复极化（0.16-0.20秒）</li>
+<li><strong>U波</strong>：浦肯野纤维复极化（可能不明显）</li>
+</ul>
+<p><strong>重要时间间期</strong>：
+- <strong>PR间期</strong>：0.12-0.20秒（心房到心室传导时间）
+- <strong>QRS时限</strong>：0.06-0.10秒（心室去极化时间）
+- <strong>QT间期</strong>：0.35-0.44秒（心室电活动总时间）
+- <strong>RR间期</strong>：心跳周期，用于计算心率</p>
+<p><strong>心率计算</strong>：</p>
+<pre><code>心率(bpm) = 60 / RR间期(秒)
+</code></pre>
+<h3 id="eeg">EEG信号基础</h3>
+<p><strong>脑电图的生理学原理</strong>：</p>
+<p>EEG记录的是大脑皮层神经元的突触后电位的总和。数百万个神经元同步活动产生的电场可以在头皮表面检测到。</p>
+<p><strong>EEG频段分类</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>频段</th>
+<th>频率范围</th>
+<th>特征</th>
+<th>相关状态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Delta (δ)</td>
+<td>0.5-4 Hz</td>
+<td>高幅度</td>
+<td>深度睡眠、婴儿</td>
+</tr>
+<tr>
+<td>Theta (θ)</td>
+<td>4-8 Hz</td>
+<td>中等幅度</td>
+<td>浅睡眠、冥想</td>
+</tr>
+<tr>
+<td>Alpha (α)</td>
+<td>8-13 Hz</td>
+<td>节律性</td>
+<td>放松、闭眼清醒</td>
+</tr>
+<tr>
+<td>Beta (β)</td>
+<td>13-30 Hz</td>
+<td>低幅度</td>
+<td>警觉、思考</td>
+</tr>
+<tr>
+<td>Gamma (γ)</td>
+<td>30-100 Hz</td>
+<td>极低幅度</td>
+<td>认知处理、注意力</td>
+</tr>
+</tbody>
+</table>
+<p><strong>EEG电极位置</strong>：</p>
+<p>国际10-20系统定义了标准的电极位置：
+- Fp（额极）、F（额）、C（中央）、P（顶）、O（枕）、T（颞）
+- 奇数：左半球，偶数：右半球
+- z：中线位置</p>
+<h3 id="_9">信号采集的挑战</h3>
+<p><strong>1. 信号微弱</strong>：
+- ECG：毫伏级（mV）
+- EEG：微伏级（μV）
+- 需要高增益放大器</p>
+<p><strong>2. 噪声干扰</strong>：
+- <strong>工频干扰</strong>：50/60 Hz电源干扰
+- <strong>肌电干扰</strong>：肌肉活动产生的高频噪声
+- <strong>运动伪迹</strong>：电极移动产生的低频漂移
+- <strong>电极接触噪声</strong>：电极与皮肤接触不良</p>
+<p><strong>3. 共模干扰</strong>：
+- 人体作为天线接收环境电磁干扰
+- 需要高共模抑制比（CMRR &gt; 80 dB）</p>
+<p><strong>4. 安全要求</strong>：
+- 患者隔离（电气隔离）
+- 漏电流限制
+- 除颤保护</p>
+<h2 id="1">步骤1：信号采集电路设计</h2>
+<h3 id="11">1.1 模拟前端架构</h3>
+<p>生物信号采集的典型信号链：</p>
+<pre><code>电极 → 保护电路 → 仪表放大器 → 高通滤波 → 增益放大 → 低通滤波 → ADC → MCU
+</code></pre>
+<p><strong>各级功能</strong>：</p>
+<ol>
+<li><strong>保护电路</strong>：防止除颤脉冲和静电损坏</li>
+<li><strong>仪表放大器</strong>：高输入阻抗、高CMRR、低噪声</li>
+<li><strong>高通滤波</strong>：去除直流偏置和低频漂移（0.05 Hz）</li>
+<li><strong>增益放大</strong>：将微弱信号放大到ADC输入范围</li>
+<li><strong>低通滤波</strong>：抗混叠滤波，防止高频噪声（100 Hz）</li>
+<li><strong>ADC</strong>：模数转换，通常12位或更高</li>
+</ol>
+<h3 id="12-ad8232-ecg">1.2 使用AD8232 ECG模块</h3>
+<p><strong>AD8232特点</strong>：
+- 集成仪表放大器和滤波器
+- 高CMRR（80 dB @ 60 Hz）
+- 低功耗（170 μA）
+- 内置右腿驱动（RLD）
+- 导联脱落检测</p>
+<p><strong>电路连接</strong>：</p>
+<pre><code>AD8232模块引脚：
+- RA (Right Arm)  → 右臂电极
+- LA (Left Arm)   → 左臂电极
+- RL (Right Leg)  → 右腿电极（参考）
+- OUTPUT          → MCU ADC输入
+- LO+ / LO-       → 导联脱落检测
+- 3.3V / GND      → 电源
+</code></pre>
+<p><strong>与STM32连接</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>AD8232引脚</th>
+<th>STM32引脚</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OUTPUT</td>
+<td>PA0 (ADC1_IN0)</td>
+<td>ECG信号输出</td>
+</tr>
+<tr>
+<td>LO+</td>
+<td>PA1</td>
+<td>导联脱落检测+</td>
+</tr>
+<tr>
+<td>LO-</td>
+<td>PA2</td>
+<td>导联脱落检测-</td>
+</tr>
+<tr>
+<td>3.3V</td>
+<td>3.3V</td>
+<td>电源</td>
+</tr>
+<tr>
+<td>GND</td>
+<td>GND</td>
+<td>地</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13">1.3 电极放置</h3>
+<p><strong>标准三导联ECG配置</strong>：</p>
+<pre><code>        RA (右臂)
+         |
+         |
+    LA--心脏--RL
+   (左臂)    (右腿)
+</code></pre>
+<p><strong>电极位置</strong>：
+- <strong>RA（右臂）</strong>：右锁骨下方
+- <strong>LA（左臂）</strong>：左锁骨下方
+- <strong>RL（右腿）</strong>：左下腹部或左腿（参考电极）</p>
+<p><strong>注意事项</strong>：
+- 清洁皮肤，去除油脂和死皮
+- 确保电极与皮肤良好接触
+- 避免电极线缠绕和拉扯
+- 保持患者放松，减少肌电干扰</p>
+<h3 id="14">1.4 电路测试</h3>
+<p><strong>使用示波器验证</strong>：</p>
+<ol>
+<li>
+<p><strong>检查电源</strong>：
+   - 测量3.3V电源是否稳定
+   - 检查地线连接</p>
+</li>
+<li>
+<p><strong>观察输出</strong>：
+   - 将示波器探头连接到OUTPUT引脚
+   - 设置时基：200 ms/div
+   - 设置电压：500 mV/div
+   - 应该看到周期性的ECG波形</p>
+</li>
+<li>
+<p><strong>检查噪声</strong>：
+   - 断开电极，观察噪声水平
+   - 噪声应小于10 mV峰峰值
+   - 如果噪声过大，检查接地和屏蔽</p>
+</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 清晰的QRS波群
+- P波和T波可见
+- 基线稳定，无明显漂移
+- 心率约60-100 bpm</p>
+<h2 id="2adc">步骤2：ADC配置和数据采集</h2>
+<h3 id="21-stm32">2.1 创建STM32项目</h3>
+<ol>
+<li>
+<p><strong>新建工程</strong>：
+   - 打开STM32CubeIDE
+   - File → New → STM32 Project
+   - 选择STM32F407VGT6
+   - 项目名称：<code>ECG_Signal_Processing</code></p>
+</li>
+<li>
+<p><strong>配置时钟</strong>：
+   - 在Clock Configuration中设置系统时钟为168 MHz
+   - APB1时钟：42 MHz
+   - APB2时钟：84 MHz</p>
+</li>
+</ol>
+<h3 id="22-adc">2.2 配置ADC</h3>
+<p><strong>ADC参数设置</strong>：</p>
+<ol>
+<li>
+<p><strong>在Pinout视图中配置PA0</strong>：
+   - 右键PA0 → ADC1_IN0</p>
+</li>
+<li>
+<p><strong>ADC1配置</strong>：
+   ```
+   Mode:
+   - IN0: Single-ended</p>
+</li>
+</ol>
+<p>Configuration:
+   - Resolution: 12 bits
+   - Data Alignment: Right alignment
+   - Scan Conversion Mode: Disabled
+   - Continuous Conversion Mode: Enabled
+   - Discontinuous Conversion Mode: Disabled
+   - DMA Continuous Requests: Enabled</p>
+<p>Regular Conversion:
+   - Number of Conversion: 1
+   - External Trigger: Disabled
+   - Rank 1: Channel 0, Sampling Time: 84 Cycles
+   ```</p>
+<ol start="3">
+<li><strong>计算采样率</strong>：
+   <code>ADC时钟 = APB2 / 2 = 84 MHz / 2 = 42 MHz
+   转换时间 = (采样时间 + 12周期) / ADC时钟
+            = (84 + 12) / 42 MHz
+            = 2.29 μs
+   采样率 = 1 / 2.29 μs ≈ 437 kHz</code></li>
+</ol>
+<p>对于ECG信号，我们需要降低采样率到500 Hz左右。</p>
+<h3 id="23-dma">2.3 配置DMA</h3>
+<p><strong>DMA设置</strong>（用于高效数据传输）：</p>
+<ol>
+<li>
+<p><strong>添加DMA请求</strong>：
+   - DMA Settings → Add
+   - DMA Request: ADC1
+   - Stream: DMA2 Stream 0
+   - Direction: Peripheral to Memory
+   - Priority: High
+   - Mode: Circular
+   - Data Width: Half Word (16 bits)</p>
+</li>
+<li>
+<p><strong>配置DMA参数</strong>：
+   ```
+   Increment Address:
+   - Peripheral: Disabled
+   - Memory: Enabled</p>
+</li>
+</ol>
+<p>Data Width:
+   - Peripheral: Half Word
+   - Memory: Half Word
+   ```</p>
+<h3 id="24">2.4 配置定时器（用于精确采样）</h3>
+<p><strong>使用TIM2触发ADC采样</strong>：</p>
+<ol>
+<li>
+<p><strong>配置TIM2</strong>：
+   <code>Clock Source: Internal Clock
+   Prescaler: 8399 (84 MHz / 8400 = 10 kHz)
+   Counter Period: 19 (10 kHz / 20 = 500 Hz)
+   Trigger Output (TRGO): Update Event</code></p>
+</li>
+<li>
+<p><strong>修改ADC触发源</strong>：
+   <code>External Trigger Conversion Source: Timer 2 Trigger Out event
+   External Trigger Conversion Edge: Rising edge</code></p>
+</li>
+</ol>
+<h3 id="25">2.5 编写采集代码</h3>
+<p><strong>在main.c中添加代码</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN Includes */
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+/* USER CODE END Includes */
+
+/* USER CODE BEGIN PV */
+#define BUFFER_SIZE 1000  // 2秒数据 (500 Hz × 2)
+uint16_t adc_buffer[BUFFER_SIZE];
+volatile uint8_t buffer_full = 0;
+/* USER CODE END PV */
+
+/* USER CODE BEGIN 2 */
+// 启动ADC和DMA
+HAL_ADC_Start_DMA(&amp;hadc1, (uint32_t*)adc_buffer, BUFFER_SIZE);
+
+// 启动定时器
+HAL_TIM_Base_Start(&amp;htim2);
+
+printf(&quot;ECG采集系统启动\r\n&quot;);
+printf(&quot;采样率: 500 Hz\r\n&quot;);
+printf(&quot;缓冲区大小: %d 样本\r\n&quot;, BUFFER_SIZE);
+/* USER CODE END 2 */
+
+/* USER CODE BEGIN 4 */
+// DMA传输完成回调
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    if (hadc-&gt;Instance == ADC1) {
+        buffer_full = 1;  // 标记缓冲区已满
+    }
+}
+
+// 串口重定向（用于printf）
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&amp;huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+/* USER CODE END 4 */
+</code></pre>
+<p><strong>主循环处理</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN WHILE */
+while (1)
+{
+    if (buffer_full) {
+        buffer_full = 0;
+
+        // 处理数据（后续步骤实现）
+        process_ecg_data(adc_buffer, BUFFER_SIZE);
+
+        // 发送数据到PC（可选）
+        send_data_to_pc(adc_buffer, BUFFER_SIZE);
+    }
+
+    HAL_Delay(10);
+    /* USER CODE END WHILE */
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 使用DMA循环模式自动采集数据
+- TIM2以500 Hz触发ADC转换
+- 缓冲区满时触发回调函数
+- 数据存储在<code>adc_buffer</code>中供后续处理</p>
+<h3 id="26">2.6 验证数据采集</h3>
+<p><strong>编译和下载</strong>：
+1. 点击Build按钮编译项目
+2. 连接ST-Link
+3. 点击Run按钮下载程序</p>
+<p><strong>测试采集</strong>：
+1. 连接电极到身体
+2. 打开串口终端（115200波特率）
+3. 观察输出信息
+4. 验证数据采集正常</p>
+<p><strong>预期结果</strong>：
+- 串口输出启动信息
+- ADC持续采集数据
+- 无错误提示</p>
+<h2 id="3">步骤3：数字滤波算法实现</h2>
+<h3 id="31">3.1 滤波器设计原理</h3>
+<p><strong>为什么需要滤波？</strong></p>
+<p>原始ECG信号包含：
+- <strong>有用信号</strong>：0.05-100 Hz
+- <strong>工频干扰</strong>：50/60 Hz
+- <strong>基线漂移</strong>：&lt; 0.5 Hz
+- <strong>肌电噪声</strong>：&gt; 100 Hz
+- <strong>高频噪声</strong>：&gt; 500 Hz</p>
+<p><strong>滤波器类型</strong>：</p>
+<ol>
+<li>
+<p><strong>高通滤波器（HPF）</strong>：去除基线漂移
+   - 截止频率：0.5 Hz
+   - 保留：&gt; 0.5 Hz</p>
+</li>
+<li>
+<p><strong>低通滤波器（LPF）</strong>：去除高频噪声
+   - 截止频率：100 Hz
+   - 保留：&lt; 100 Hz</p>
+</li>
+<li>
+<p><strong>陷波滤波器（Notch）</strong>：去除工频干扰
+   - 中心频率：50 Hz 或 60 Hz
+   - 带宽：1-2 Hz</p>
+</li>
+</ol>
+<h3 id="32">3.2 实现移动平均滤波器</h3>
+<p><strong>移动平均滤波器</strong>是最简单的低通滤波器，适合去除高频噪声。</p>
+<p><strong>原理</strong>：</p>
+<pre><code>y[n] = (x[n] + x[n-1] + ... + x[n-N+1]) / N
+</code></pre>
+<p><strong>代码实现</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+#define MA_WINDOW_SIZE 5  // 移动平均窗口大小
+
+// 移动平均滤波器
+float moving_average_filter(float *buffer, int size, int index)
+{
+    float sum = 0;
+    int count = 0;
+
+    // 计算窗口内的平均值
+    for (int i = 0; i &lt; MA_WINDOW_SIZE &amp;&amp; i &lt;= index; i++) {
+        sum += buffer[index - i];
+        count++;
+    }
+
+    return sum / count;
+}
+
+// 批量滤波
+void apply_moving_average(uint16_t *input, float *output, int size)
+{
+    for (int i = 0; i &lt; size; i++) {
+        // 转换ADC值到电压 (假设3.3V参考电压)
+        float voltage = (input[i] * 3.3f) / 4096.0f;
+
+        // 应用移动平均滤波
+        if (i &lt; MA_WINDOW_SIZE) {
+            output[i] = voltage;  // 前几个样本直接使用
+        } else {
+            float sum = 0;
+            for (int j = 0; j &lt; MA_WINDOW_SIZE; j++) {
+                sum += (input[i-j] * 3.3f) / 4096.0f;
+            }
+            output[i] = sum / MA_WINDOW_SIZE;
+        }
+    }
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="33-iir">3.3 实现IIR低通滤波器</h3>
+<p><strong>IIR（无限脉冲响应）滤波器</strong>效率更高，适合实时处理。</p>
+<p><strong>一阶低通滤波器</strong>：</p>
+<pre><code>y[n] = α × x[n] + (1-α) × y[n-1]
+</code></pre>
+<p>其中，α = Δt / (RC + Δt)，Δt是采样周期。</p>
+<p><strong>代码实现</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+#define ALPHA 0.1f  // 滤波系数 (0 &lt; α &lt; 1)
+
+typedef struct {
+    float prev_output;
+    float alpha;
+} IIR_LPF_t;
+
+// 初始化IIR低通滤波器
+void IIR_LPF_Init(IIR_LPF_t *filter, float alpha)
+{
+    filter-&gt;prev_output = 0;
+    filter-&gt;alpha = alpha;
+}
+
+// IIR低通滤波
+float IIR_LPF_Update(IIR_LPF_t *filter, float input)
+{
+    float output = filter-&gt;alpha * input + 
+                   (1.0f - filter-&gt;alpha) * filter-&gt;prev_output;
+    filter-&gt;prev_output = output;
+    return output;
+}
+
+// 批量滤波
+void apply_iir_lpf(uint16_t *input, float *output, int size)
+{
+    IIR_LPF_t filter;
+    IIR_LPF_Init(&amp;filter, ALPHA);
+
+    for (int i = 0; i &lt; size; i++) {
+        float voltage = (input[i] * 3.3f) / 4096.0f;
+        output[i] = IIR_LPF_Update(&amp;filter, voltage);
+    }
+}
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>参数选择</strong>：
+- α = 0.1：强滤波，响应慢
+- α = 0.5：中等滤波
+- α = 0.9：弱滤波，响应快</p>
+<h3 id="34">3.4 实现高通滤波器</h3>
+<p><strong>高通滤波器</strong>用于去除基线漂移。</p>
+<p><strong>一阶高通滤波器</strong>：</p>
+<pre><code>y[n] = α × (y[n-1] + x[n] - x[n-1])
+</code></pre>
+<p><strong>代码实现</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+typedef struct {
+    float prev_input;
+    float prev_output;
+    float alpha;
+} IIR_HPF_t;
+
+// 初始化IIR高通滤波器
+void IIR_HPF_Init(IIR_HPF_t *filter, float alpha)
+{
+    filter-&gt;prev_input = 0;
+    filter-&gt;prev_output = 0;
+    filter-&gt;alpha = alpha;
+}
+
+// IIR高通滤波
+float IIR_HPF_Update(IIR_HPF_t *filter, float input)
+{
+    float output = filter-&gt;alpha * (filter-&gt;prev_output + 
+                                    input - filter-&gt;prev_input);
+    filter-&gt;prev_input = input;
+    filter-&gt;prev_output = output;
+    return output;
+}
+
+// 批量滤波
+void apply_iir_hpf(float *input, float *output, int size)
+{
+    IIR_HPF_t filter;
+    IIR_HPF_Init(&amp;filter, 0.95f);  // α接近1，截止频率低
+
+    for (int i = 0; i &lt; size; i++) {
+        output[i] = IIR_HPF_Update(&amp;filter, input[i]);
+    }
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="35">3.5 实现陷波滤波器</h3>
+<p><strong>陷波滤波器</strong>用于去除50/60 Hz工频干扰。</p>
+<p><strong>二阶陷波滤波器</strong>：</p>
+<pre><code>y[n] = b0×x[n] + b1×x[n-1] + b2×x[n-2] - a1×y[n-1] - a2×y[n-2]
+</code></pre>
+<p><strong>代码实现</strong>（50 Hz陷波）：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+typedef struct {
+    float x1, x2;  // 输入历史
+    float y1, y2;  // 输出历史
+    float b0, b1, b2;  // 分子系数
+    float a1, a2;      // 分母系数
+} Notch_Filter_t;
+
+// 初始化50Hz陷波滤波器 (采样率500Hz)
+void Notch_Filter_Init(Notch_Filter_t *filter)
+{
+    // 50 Hz陷波滤波器系数 (Q=30)
+    filter-&gt;b0 = 0.9802f;
+    filter-&gt;b1 = -1.5557f;
+    filter-&gt;b2 = 0.9802f;
+    filter-&gt;a1 = -1.5557f;
+    filter-&gt;a2 = 0.9604f;
+
+    filter-&gt;x1 = 0;
+    filter-&gt;x2 = 0;
+    filter-&gt;y1 = 0;
+    filter-&gt;y2 = 0;
+}
+
+// 陷波滤波
+float Notch_Filter_Update(Notch_Filter_t *filter, float input)
+{
+    float output = filter-&gt;b0 * input + 
+                   filter-&gt;b1 * filter-&gt;x1 + 
+                   filter-&gt;b2 * filter-&gt;x2 -
+                   filter-&gt;a1 * filter-&gt;y1 - 
+                   filter-&gt;a2 * filter-&gt;y2;
+
+    // 更新历史
+    filter-&gt;x2 = filter-&gt;x1;
+    filter-&gt;x1 = input;
+    filter-&gt;y2 = filter-&gt;y1;
+    filter-&gt;y1 = output;
+
+    return output;
+}
+
+// 批量滤波
+void apply_notch_filter(float *input, float *output, int size)
+{
+    Notch_Filter_t filter;
+    Notch_Filter_Init(&amp;filter);
+
+    for (int i = 0; i &lt; size; i++) {
+        output[i] = Notch_Filter_Update(&amp;filter, input[i]);
+    }
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="36">3.6 完整的滤波流程</h3>
+<p><strong>组合多个滤波器</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+void process_ecg_data(uint16_t *raw_data, int size)
+{
+    static float temp_buffer1[BUFFER_SIZE];
+    static float temp_buffer2[BUFFER_SIZE];
+    static float filtered_data[BUFFER_SIZE];
+
+    // 步骤1：低通滤波 (去除高频噪声)
+    apply_iir_lpf(raw_data, temp_buffer1, size);
+
+    // 步骤2：高通滤波 (去除基线漂移)
+    apply_iir_hpf(temp_buffer1, temp_buffer2, size);
+
+    // 步骤3：陷波滤波 (去除50Hz干扰)
+    apply_notch_filter(temp_buffer2, filtered_data, size);
+
+    // 步骤4：特征提取 (下一步实现)
+    extract_ecg_features(filtered_data, size);
+}
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>代码说明</strong>：
+- 使用多个临时缓冲区存储中间结果
+- 按顺序应用不同的滤波器
+- 最终得到干净的ECG信号</p>
+<h2 id="4">步骤4：特征提取算法</h2>
+<h3 id="41-rpan-tompkins">4.1 R波检测（Pan-Tompkins算法）</h3>
+<p><strong>Pan-Tompkins算法</strong>是经典的QRS波检测算法，包含以下步骤：</p>
+<ol>
+<li>带通滤波（5-15 Hz）</li>
+<li>微分</li>
+<li>平方</li>
+<li>移动窗口积分</li>
+<li>自适应阈值检测</li>
+</ol>
+<p><strong>算法实现</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+#define WINDOW_SIZE 30  // 积分窗口大小 (60ms @ 500Hz)
+
+typedef struct {
+    float threshold;
+    float peak_value;
+    int refractory_period;  // 不应期 (样本数)
+    int last_qrs_index;
+} QRS_Detector_t;
+
+// 初始化QRS检测器
+void QRS_Detector_Init(QRS_Detector_t *detector)
+{
+    detector-&gt;threshold = 0.5f;
+    detector-&gt;peak_value = 0;
+    detector-&gt;refractory_period = 100;  // 200ms @ 500Hz
+    detector-&gt;last_qrs_index = -1000;
+}
+
+// 微分运算
+void derivative(float *input, float *output, int size)
+{
+    for (int i = 2; i &lt; size - 2; i++) {
+        // 五点微分: y[n] = (2x[n+2] + x[n+1] - x[n-1] - 2x[n-2]) / 8
+        output[i] = (2*input[i+2] + input[i+1] - 
+                     input[i-1] - 2*input[i-2]) / 8.0f;
+    }
+}
+
+// 平方运算
+void square(float *input, float *output, int size)
+{
+    for (int i = 0; i &lt; size; i++) {
+        output[i] = input[i] * input[i];
+    }
+}
+
+// 移动窗口积分
+void moving_window_integration(float *input, float *output, int size)
+{
+    for (int i = 0; i &lt; size; i++) {
+        float sum = 0;
+        int count = 0;
+
+        for (int j = 0; j &lt; WINDOW_SIZE &amp;&amp; (i - j) &gt;= 0; j++) {
+            sum += input[i - j];
+            count++;
+        }
+
+        output[i] = sum / count;
+    }
+}
+
+// R波检测
+int detect_r_peaks(float *signal, int size, int *peak_indices, int max_peaks)
+{
+    static float derivative_signal[BUFFER_SIZE];
+    static float squared_signal[BUFFER_SIZE];
+    static float integrated_signal[BUFFER_SIZE];
+
+    // 步骤1：微分
+    derivative(signal, derivative_signal, size);
+
+    // 步骤2：平方
+    square(derivative_signal, squared_signal, size);
+
+    // 步骤3：移动窗口积分
+    moving_window_integration(squared_signal, integrated_signal, size);
+
+    // 步骤4：自适应阈值检测
+    QRS_Detector_t detector;
+    QRS_Detector_Init(&amp;detector);
+
+    int peak_count = 0;
+    float max_value = 0;
+
+    // 找到最大值用于初始化阈值
+    for (int i = 0; i &lt; size; i++) {
+        if (integrated_signal[i] &gt; max_value) {
+            max_value = integrated_signal[i];
+        }
+    }
+    detector.threshold = max_value * 0.3f;  // 初始阈值为最大值的30%
+
+    // 检测峰值
+    for (int i = 1; i &lt; size - 1; i++) {
+        // 检查是否在不应期内
+        if (i - detector.last_qrs_index &lt; detector.refractory_period) {
+            continue;
+        }
+
+        // 检测局部最大值
+        if (integrated_signal[i] &gt; integrated_signal[i-1] &amp;&amp;
+            integrated_signal[i] &gt; integrated_signal[i+1] &amp;&amp;
+            integrated_signal[i] &gt; detector.threshold) {
+
+            if (peak_count &lt; max_peaks) {
+                peak_indices[peak_count++] = i;
+                detector.last_qrs_index = i;
+
+                // 更新阈值 (自适应)
+                detector.threshold = 0.7f * detector.threshold + 
+                                    0.3f * integrated_signal[i];
+            }
+        }
+    }
+
+    return peak_count;
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="42">4.2 心率计算</h3>
+<p><strong>从R波间期计算心率</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+typedef struct {
+    float heart_rate;      // 心率 (bpm)
+    float rr_interval;     // RR间期 (ms)
+    float hrv;             // 心率变异性 (ms)
+} ECG_Features_t;
+
+// 计算心率和HRV
+void calculate_heart_rate(int *peak_indices, int peak_count, 
+                         float sampling_rate, ECG_Features_t *features)
+{
+    if (peak_count &lt; 2) {
+        features-&gt;heart_rate = 0;
+        features-&gt;rr_interval = 0;
+        features-&gt;hrv = 0;
+        return;
+    }
+
+    // 计算RR间期 (样本数转换为毫秒)
+    float *rr_intervals = malloc(sizeof(float) * (peak_count - 1));
+    float sum_rr = 0;
+
+    for (int i = 0; i &lt; peak_count - 1; i++) {
+        rr_intervals[i] = (peak_indices[i+1] - peak_indices[i]) * 
+                         1000.0f / sampling_rate;
+        sum_rr += rr_intervals[i];
+    }
+
+    // 平均RR间期
+    float avg_rr = sum_rr / (peak_count - 1);
+    features-&gt;rr_interval = avg_rr;
+
+    // 心率 (bpm)
+    features-&gt;heart_rate = 60000.0f / avg_rr;
+
+    // 心率变异性 (SDNN - 标准差)
+    float sum_squared_diff = 0;
+    for (int i = 0; i &lt; peak_count - 1; i++) {
+        float diff = rr_intervals[i] - avg_rr;
+        sum_squared_diff += diff * diff;
+    }
+    features-&gt;hrv = sqrtf(sum_squared_diff / (peak_count - 1));
+
+    free(rr_intervals);
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="43">4.3 波形特征提取</h3>
+<p><strong>提取P波、QRS波群、T波的特征</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+typedef struct {
+    int p_wave_index;
+    int q_wave_index;
+    int r_wave_index;
+    int s_wave_index;
+    int t_wave_index;
+
+    float pr_interval;   // PR间期 (ms)
+    float qrs_duration;  // QRS时限 (ms)
+    float qt_interval;   // QT间期 (ms)
+
+    float r_amplitude;   // R波幅度 (mV)
+    float t_amplitude;   // T波幅度 (mV)
+} ECG_Waveform_t;
+
+// 在R波附近查找Q波和S波
+void find_qrs_complex(float *signal, int r_index, 
+                     ECG_Waveform_t *waveform, float sampling_rate)
+{
+    int search_window = (int)(0.08f * sampling_rate);  // 80ms搜索窗口
+
+    // 查找Q波 (R波前的最小值)
+    float min_value = signal[r_index];
+    int q_index = r_index;
+    for (int i = r_index - search_window; i &lt; r_index; i++) {
+        if (i &gt;= 0 &amp;&amp; signal[i] &lt; min_value) {
+            min_value = signal[i];
+            q_index = i;
+        }
+    }
+    waveform-&gt;q_wave_index = q_index;
+
+    // 查找S波 (R波后的最小值)
+    min_value = signal[r_index];
+    int s_index = r_index;
+    for (int i = r_index; i &lt; r_index + search_window; i++) {
+        if (i &lt; BUFFER_SIZE &amp;&amp; signal[i] &lt; min_value) {
+            min_value = signal[i];
+            s_index = i;
+        }
+    }
+    waveform-&gt;s_wave_index = s_index;
+
+    // 查找P波 (Q波前的峰值)
+    float max_value = signal[q_index];
+    int p_index = q_index;
+    int p_search_window = (int)(0.2f * sampling_rate);  // 200ms
+    for (int i = q_index - p_search_window; i &lt; q_index; i++) {
+        if (i &gt;= 0 &amp;&amp; signal[i] &gt; max_value) {
+            max_value = signal[i];
+            p_index = i;
+        }
+    }
+    waveform-&gt;p_wave_index = p_index;
+
+    // 查找T波 (S波后的峰值)
+    max_value = signal[s_index];
+    int t_index = s_index;
+    int t_search_window = (int)(0.3f * sampling_rate);  // 300ms
+    for (int i = s_index; i &lt; s_index + t_search_window; i++) {
+        if (i &lt; BUFFER_SIZE &amp;&amp; signal[i] &gt; max_value) {
+            max_value = signal[i];
+            t_index = i;
+        }
+    }
+    waveform-&gt;t_wave_index = t_index;
+
+    // 计算时间间期
+    waveform-&gt;pr_interval = (q_index - p_index) * 1000.0f / sampling_rate;
+    waveform-&gt;qrs_duration = (s_index - q_index) * 1000.0f / sampling_rate;
+    waveform-&gt;qt_interval = (t_index - q_index) * 1000.0f / sampling_rate;
+
+    // 计算幅度
+    waveform-&gt;r_amplitude = signal[r_index];
+    waveform-&gt;t_amplitude = signal[t_index];
+
+    waveform-&gt;r_wave_index = r_index;
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="44">4.4 完整的特征提取流程</h3>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+void extract_ecg_features(float *filtered_signal, int size)
+{
+    static int peak_indices[100];  // 最多存储100个R波
+    ECG_Features_t features;
+    ECG_Waveform_t waveform;
+
+    // 检测R波
+    int peak_count = detect_r_peaks(filtered_signal, size, 
+                                    peak_indices, 100);
+
+    if (peak_count &gt; 0) {
+        // 计算心率
+        calculate_heart_rate(peak_indices, peak_count, 500.0f, &amp;features);
+
+        // 提取第一个心跳的波形特征
+        find_qrs_complex(filtered_signal, peak_indices[0], &amp;waveform, 500.0f);
+
+        // 输出结果
+        printf(&quot;\r\n=== ECG分析结果 ===\r\n&quot;);
+        printf(&quot;检测到 %d 个心跳\r\n&quot;, peak_count);
+        printf(&quot;心率: %.1f bpm\r\n&quot;, features.heart_rate);
+        printf(&quot;平均RR间期: %.1f ms\r\n&quot;, features.rr_interval);
+        printf(&quot;心率变异性: %.1f ms\r\n&quot;, features.hrv);
+        printf(&quot;\r\n波形特征:\r\n&quot;);
+        printf(&quot;PR间期: %.1f ms\r\n&quot;, waveform.pr_interval);
+        printf(&quot;QRS时限: %.1f ms\r\n&quot;, waveform.qrs_duration);
+        printf(&quot;QT间期: %.1f ms\r\n&quot;, waveform.qt_interval);
+        printf(&quot;R波幅度: %.3f V\r\n&quot;, waveform.r_amplitude);
+        printf(&quot;==================\r\n\r\n&quot;);
+    }
+}
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>代码说明</strong>：
+- 使用Pan-Tompkins算法检测R波
+- 计算心率和心率变异性
+- 提取完整的ECG波形特征
+- 通过串口输出分析结果</p>
+<h2 id="5">步骤5：数据可视化和分析</h2>
+<h3 id="51-pc">5.1 数据传输到PC</h3>
+<p><strong>通过串口发送数据</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+// 发送原始数据到PC
+void send_data_to_pc(uint16_t *data, int size)
+{
+    // 发送数据包头
+    uint8_t header[] = {0xFF, 0xFE, 0xFD, 0xFC};
+    HAL_UART_Transmit(&amp;huart2, header, 4, HAL_MAX_DELAY);
+
+    // 发送数据长度
+    uint16_t length = size;
+    HAL_UART_Transmit(&amp;huart2, (uint8_t*)&amp;length, 2, HAL_MAX_DELAY);
+
+    // 发送数据
+    HAL_UART_Transmit(&amp;huart2, (uint8_t*)data, size * 2, HAL_MAX_DELAY);
+
+    // 发送校验和
+    uint32_t checksum = 0;
+    for (int i = 0; i &lt; size; i++) {
+        checksum += data[i];
+    }
+    HAL_UART_Transmit(&amp;huart2, (uint8_t*)&amp;checksum, 4, HAL_MAX_DELAY);
+}
+
+// 发送滤波后的数据 (浮点数)
+void send_filtered_data(float *data, int size)
+{
+    // 转换为16位整数发送 (节省带宽)
+    static uint16_t temp_buffer[BUFFER_SIZE];
+
+    for (int i = 0; i &lt; size; i++) {
+        // 将电压值映射到0-4095范围
+        temp_buffer[i] = (uint16_t)((data[i] / 3.3f) * 4095.0f);
+    }
+
+    send_data_to_pc(temp_buffer, size);
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="52-python">5.2 Python数据接收和可视化</h3>
+<p><strong>创建Python脚本接收和显示数据</strong>：</p>
+<pre><code class="language-python"># ecg_visualizer.py
+import serial
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
+import struct
+
+class ECGVisualizer:
+    def __init__(self, port='COM3', baudrate=115200):
+        self.ser = serial.Serial(port, baudrate, timeout=1)
+        self.buffer_size = 1000
+        self.data_buffer = np.zeros(self.buffer_size)
+        self.time_axis = np.arange(self.buffer_size) / 500.0  # 500 Hz采样率
+
+        # 创建图形
+        self.fig, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(12, 8))
+        self.line1, = self.ax1.plot(self.time_axis, self.data_buffer, 'b-')
+        self.line2, = self.ax2.plot(self.time_axis, self.data_buffer, 'r-')
+
+        # 设置图形属性
+        self.ax1.set_title('原始ECG信号')
+        self.ax1.set_xlabel('时间 (秒)')
+        self.ax1.set_ylabel('电压 (V)')
+        self.ax1.set_ylim(0, 3.3)
+        self.ax1.grid(True)
+
+        self.ax2.set_title('滤波后ECG信号')
+        self.ax2.set_xlabel('时间 (秒)')
+        self.ax2.set_ylabel('电压 (V)')
+        self.ax2.set_ylim(0, 3.3)
+        self.ax2.grid(True)
+
+        plt.tight_layout()
+
+    def receive_data(self):
+        &quot;&quot;&quot;接收一帧数据&quot;&quot;&quot;
+        try:
+            # 查找数据包头
+            header = self.ser.read(4)
+            if header != b'\xFF\xFE\xFD\xFC':
+                return None
+
+            # 读取数据长度
+            length_bytes = self.ser.read(2)
+            length = struct.unpack('&lt;H', length_bytes)[0]
+
+            # 读取数据
+            data_bytes = self.ser.read(length * 2)
+            data = np.frombuffer(data_bytes, dtype=np.uint16)
+
+            # 读取校验和
+            checksum_bytes = self.ser.read(4)
+            checksum = struct.unpack('&lt;I', checksum_bytes)[0]
+
+            # 验证校验和
+            if np.sum(data) != checksum:
+                print(&quot;校验和错误!&quot;)
+                return None
+
+            # 转换为电压值
+            voltage = (data / 4095.0) * 3.3
+            return voltage
+
+        except Exception as e:
+            print(f&quot;接收数据错误: {e}&quot;)
+            return None
+
+    def update_plot(self, frame):
+        &quot;&quot;&quot;更新图形&quot;&quot;&quot;
+        data = self.receive_data()
+        if data is not None and len(data) == self.buffer_size:
+            self.data_buffer = data
+            self.line1.set_ydata(self.data_buffer)
+
+            # 应用简单的滤波显示
+            filtered = self.apply_filter(self.data_buffer)
+            self.line2.set_ydata(filtered)
+
+        return self.line1, self.line2
+
+    def apply_filter(self, data):
+        &quot;&quot;&quot;应用移动平均滤波&quot;&quot;&quot;
+        window_size = 5
+        filtered = np.convolve(data, np.ones(window_size)/window_size, mode='same')
+        return filtered
+
+    def start(self):
+        &quot;&quot;&quot;启动可视化&quot;&quot;&quot;
+        ani = FuncAnimation(self.fig, self.update_plot, 
+                          interval=100, blit=True)
+        plt.show()
+
+    def close(self):
+        &quot;&quot;&quot;关闭串口&quot;&quot;&quot;
+        self.ser.close()
+
+if __name__ == '__main__':
+    # 创建可视化器
+    visualizer = ECGVisualizer(port='COM3', baudrate=115200)
+
+    try:
+        print(&quot;ECG可视化启动...&quot;)
+        print(&quot;按Ctrl+C停止&quot;)
+        visualizer.start()
+    except KeyboardInterrupt:
+        print(&quot;\n停止可视化&quot;)
+    finally:
+        visualizer.close()
+</code></pre>
+<h3 id="53">5.3 高级数据分析</h3>
+<p><strong>频谱分析</strong>：</p>
+<pre><code class="language-python"># ecg_analysis.py
+import numpy as np
+from scipy import signal
+import matplotlib.pyplot as plt
+
+class ECGAnalyzer:
+    def __init__(self, sampling_rate=500):
+        self.fs = sampling_rate
+
+    def frequency_analysis(self, ecg_data):
+        &quot;&quot;&quot;频谱分析&quot;&quot;&quot;
+        # 计算功率谱密度
+        frequencies, psd = signal.welch(ecg_data, self.fs, 
+                                       nperseg=256)
+
+        # 绘制频谱
+        plt.figure(figsize=(10, 6))
+        plt.semilogy(frequencies, psd)
+        plt.xlabel('频率 (Hz)')
+        plt.ylabel('功率谱密度 (V²/Hz)')
+        plt.title('ECG信号频谱分析')
+        plt.grid(True)
+        plt.xlim(0, 100)
+        plt.show()
+
+        return frequencies, psd
+
+    def heart_rate_variability(self, rr_intervals):
+        &quot;&quot;&quot;心率变异性分析&quot;&quot;&quot;
+        # 时域指标
+        sdnn = np.std(rr_intervals)  # 标准差
+        rmssd = np.sqrt(np.mean(np.diff(rr_intervals)**2))  # 均方根
+
+        # 频域指标
+        # 重采样到均匀时间间隔
+        time = np.cumsum(rr_intervals) / 1000.0  # 转换为秒
+        uniform_time = np.arange(0, time[-1], 1.0/4.0)  # 4 Hz重采样
+        uniform_rr = np.interp(uniform_time, time, rr_intervals)
+
+        # 计算功率谱
+        frequencies, psd = signal.welch(uniform_rr, 4.0, nperseg=256)
+
+        # 计算频段功率
+        vlf_power = np.trapz(psd[(frequencies &gt;= 0.003) &amp; (frequencies &lt; 0.04)])
+        lf_power = np.trapz(psd[(frequencies &gt;= 0.04) &amp; (frequencies &lt; 0.15)])
+        hf_power = np.trapz(psd[(frequencies &gt;= 0.15) &amp; (frequencies &lt; 0.4)])
+
+        results = {
+            'SDNN': sdnn,
+            'RMSSD': rmssd,
+            'VLF_Power': vlf_power,
+            'LF_Power': lf_power,
+            'HF_Power': hf_power,
+            'LF_HF_Ratio': lf_power / hf_power if hf_power &gt; 0 else 0
+        }
+
+        return results
+
+    def detect_arrhythmia(self, rr_intervals):
+        &quot;&quot;&quot;简单的心律失常检测&quot;&quot;&quot;
+        mean_rr = np.mean(rr_intervals)
+        std_rr = np.std(rr_intervals)
+
+        # 检测异常心跳
+        abnormal_beats = []
+        for i, rr in enumerate(rr_intervals):
+            # 如果RR间期偏离平均值超过2个标准差
+            if abs(rr - mean_rr) &gt; 2 * std_rr:
+                abnormal_beats.append(i)
+
+        # 检测心动过速 (心率 &gt; 100 bpm)
+        tachycardia = mean_rr &lt; 600  # 600ms对应100bpm
+
+        # 检测心动过缓 (心率 &lt; 60 bpm)
+        bradycardia = mean_rr &gt; 1000  # 1000ms对应60bpm
+
+        results = {
+            'abnormal_beats': abnormal_beats,
+            'abnormal_count': len(abnormal_beats),
+            'tachycardia': tachycardia,
+            'bradycardia': bradycardia
+        }
+
+        return results
+
+    def generate_report(self, ecg_data, rr_intervals):
+        &quot;&quot;&quot;生成分析报告&quot;&quot;&quot;
+        print(&quot;\n&quot; + &quot;=&quot;*50)
+        print(&quot;ECG信号分析报告&quot;)
+        print(&quot;=&quot;*50)
+
+        # 基本统计
+        print(f&quot;\n信号统计:&quot;)
+        print(f&quot;  采样点数: {len(ecg_data)}&quot;)
+        print(f&quot;  信号时长: {len(ecg_data)/self.fs:.2f} 秒&quot;)
+        print(f&quot;  平均值: {np.mean(ecg_data):.3f} V&quot;)
+        print(f&quot;  标准差: {np.std(ecg_data):.3f} V&quot;)
+
+        # 心率分析
+        mean_hr = 60000.0 / np.mean(rr_intervals)
+        print(f&quot;\n心率分析:&quot;)
+        print(f&quot;  平均心率: {mean_hr:.1f} bpm&quot;)
+        print(f&quot;  最小心率: {60000.0/np.max(rr_intervals):.1f} bpm&quot;)
+        print(f&quot;  最大心率: {60000.0/np.min(rr_intervals):.1f} bpm&quot;)
+
+        # HRV分析
+        hrv_results = self.heart_rate_variability(rr_intervals)
+        print(f&quot;\n心率变异性:&quot;)
+        print(f&quot;  SDNN: {hrv_results['SDNN']:.2f} ms&quot;)
+        print(f&quot;  RMSSD: {hrv_results['RMSSD']:.2f} ms&quot;)
+        print(f&quot;  LF/HF比值: {hrv_results['LF_HF_Ratio']:.2f}&quot;)
+
+        # 心律失常检测
+        arrhythmia = self.detect_arrhythmia(rr_intervals)
+        print(f&quot;\n心律失常检测:&quot;)
+        print(f&quot;  异常心跳数: {arrhythmia['abnormal_count']}&quot;)
+        print(f&quot;  心动过速: {'是' if arrhythmia['tachycardia'] else '否'}&quot;)
+        print(f&quot;  心动过缓: {'是' if arrhythmia['bradycardia'] else '否'}&quot;)
+
+        print(&quot;\n&quot; + &quot;=&quot;*50 + &quot;\n&quot;)
+
+# 使用示例
+if __name__ == '__main__':
+    # 加载数据
+    ecg_data = np.load('ecg_data.npy')
+    rr_intervals = np.load('rr_intervals.npy')
+
+    # 创建分析器
+    analyzer = ECGAnalyzer(sampling_rate=500)
+
+    # 频谱分析
+    analyzer.frequency_analysis(ecg_data)
+
+    # 生成报告
+    analyzer.generate_report(ecg_data, rr_intervals)
+</code></pre>
+<h3 id="54">5.4 数据存储</h3>
+<p><strong>保存数据到文件</strong>：</p>
+<pre><code class="language-python"># data_logger.py
+import numpy as np
+import datetime
+import json
+
+class ECGDataLogger:
+    def __init__(self, base_path='./ecg_data'):
+        self.base_path = base_path
+        self.session_id = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    def save_raw_data(self, data, metadata=None):
+        &quot;&quot;&quot;保存原始数据&quot;&quot;&quot;
+        filename = f&quot;{self.base_path}/raw_{self.session_id}.npy&quot;
+        np.save(filename, data)
+
+        # 保存元数据
+        if metadata:
+            meta_filename = f&quot;{self.base_path}/meta_{self.session_id}.json&quot;
+            with open(meta_filename, 'w') as f:
+                json.dump(metadata, f, indent=2)
+
+        print(f&quot;数据已保存: {filename}&quot;)
+
+    def save_features(self, features):
+        &quot;&quot;&quot;保存特征数据&quot;&quot;&quot;
+        filename = f&quot;{self.base_path}/features_{self.session_id}.json&quot;
+        with open(filename, 'w') as f:
+            json.dump(features, f, indent=2)
+
+        print(f&quot;特征已保存: {filename}&quot;)
+
+    def load_session(self, session_id):
+        &quot;&quot;&quot;加载会话数据&quot;&quot;&quot;
+        raw_file = f&quot;{self.base_path}/raw_{session_id}.npy&quot;
+        meta_file = f&quot;{self.base_path}/meta_{session_id}.json&quot;
+
+        data = np.load(raw_file)
+
+        with open(meta_file, 'r') as f:
+            metadata = json.load(f)
+
+        return data, metadata
+</code></pre>
+<h2 id="6">步骤6：系统集成和测试</h2>
+<h3 id="61">6.1 完整系统代码</h3>
+<p><strong>main.c完整实现</strong>：</p>
+<pre><code class="language-c">/* Includes */
+#include &quot;main.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;math.h&gt;
+
+/* Private defines */
+#define BUFFER_SIZE 1000
+#define SAMPLING_RATE 500.0f
+
+/* Private variables */
+uint16_t adc_buffer[BUFFER_SIZE];
+volatile uint8_t buffer_full = 0;
+
+/* Function prototypes */
+void SystemClock_Config(void);
+void process_ecg_data(uint16_t *raw_data, int size);
+void send_data_to_pc(uint16_t *data, int size);
+
+int main(void)
+{
+    /* MCU Configuration */
+    HAL_Init();
+    SystemClock_Config();
+
+    /* Initialize peripherals */
+    MX_GPIO_Init();
+    MX_DMA_Init();
+    MX_ADC1_Init();
+    MX_TIM2_Init();
+    MX_USART2_UART_Init();
+
+    /* Start ADC with DMA */
+    HAL_ADC_Start_DMA(&amp;hadc1, (uint32_t*)adc_buffer, BUFFER_SIZE);
+
+    /* Start Timer */
+    HAL_TIM_Base_Start(&amp;htim2);
+
+    printf(&quot;\r\n=================================\r\n&quot;);
+    printf(&quot;ECG信号采集与处理系统\r\n&quot;);
+    printf(&quot;=================================\r\n&quot;);
+    printf(&quot;采样率: %.0f Hz\r\n&quot;, SAMPLING_RATE);
+    printf(&quot;缓冲区大小: %d 样本\r\n&quot;, BUFFER_SIZE);
+    printf(&quot;系统就绪，开始采集...\r\n&quot;);
+    printf(&quot;=================================\r\n\r\n&quot;);
+
+    /* Infinite loop */
+    while (1)
+    {
+        if (buffer_full) {
+            buffer_full = 0;
+
+            // 处理ECG数据
+            process_ecg_data(adc_buffer, BUFFER_SIZE);
+
+            // 发送数据到PC
+            send_data_to_pc(adc_buffer, BUFFER_SIZE);
+        }
+
+        HAL_Delay(10);
+    }
+}
+
+/* DMA transfer complete callback */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc)
+{
+    if (hadc-&gt;Instance == ADC1) {
+        buffer_full = 1;
+    }
+}
+
+/* Printf redirection */
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&amp;huart2, (uint8_t*)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+</code></pre>
+<h3 id="62">6.2 性能优化</h3>
+<p><strong>优化内存使用</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+// 使用静态内存避免频繁分配
+static float temp_buffer1[BUFFER_SIZE];
+static float temp_buffer2[BUFFER_SIZE];
+static float filtered_data[BUFFER_SIZE];
+static int peak_indices[100];
+
+// 使用定点数代替浮点数（可选，提高性能）
+typedef int32_t fixed_point_t;
+#define FIXED_POINT_SHIFT 16
+#define FLOAT_TO_FIXED(x) ((fixed_point_t)((x) * (1 &lt;&lt; FIXED_POINT_SHIFT)))
+#define FIXED_TO_FLOAT(x) ((float)(x) / (1 &lt;&lt; FIXED_POINT_SHIFT))
+
+// 定点数乘法
+fixed_point_t fixed_multiply(fixed_point_t a, fixed_point_t b)
+{
+    return (fixed_point_t)(((int64_t)a * b) &gt;&gt; FIXED_POINT_SHIFT);
+}
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>优化滤波器性能</strong>：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+// 使用查找表加速三角函数计算
+#define LUT_SIZE 256
+static float sin_lut[LUT_SIZE];
+static float cos_lut[LUT_SIZE];
+
+void init_trig_lut(void)
+{
+    for (int i = 0; i &lt; LUT_SIZE; i++) {
+        float angle = 2.0f * M_PI * i / LUT_SIZE;
+        sin_lut[i] = sinf(angle);
+        cos_lut[i] = cosf(angle);
+    }
+}
+
+// 快速三角函数
+float fast_sin(float angle)
+{
+    int index = (int)(angle * LUT_SIZE / (2.0f * M_PI)) % LUT_SIZE;
+    return sin_lut[index];
+}
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="63">6.3 功能测试</h3>
+<p><strong>测试清单</strong>：</p>
+<ol>
+<li>
+<p><strong>硬件测试</strong>：
+   - [ ] 电源电压正常（3.3V ± 0.1V）
+   - [ ] ADC采样正常
+   - [ ] 串口通信正常
+   - [ ] 电极连接良好</p>
+</li>
+<li>
+<p><strong>信号质量测试</strong>：
+   - [ ] 基线稳定，无明显漂移
+   - [ ] QRS波群清晰可见
+   - [ ] P波和T波可识别
+   - [ ] 噪声水平可接受（&lt; 10 mV）</p>
+</li>
+<li>
+<p><strong>算法测试</strong>：
+   - [ ] R波检测准确率 &gt; 95%
+   - [ ] 心率计算误差 &lt; 5 bpm
+   - [ ] 滤波效果良好
+   - [ ] 特征提取正确</p>
+</li>
+<li>
+<p><strong>性能测试</strong>：
+   - [ ] CPU占用率 &lt; 50%
+   - [ ] 内存使用合理
+   - [ ] 实时处理无延迟
+   - [ ] 长时间运行稳定</p>
+</li>
+</ol>
+<h3 id="64">6.4 故障排除</h3>
+<p><strong>常见问题和解决方法</strong>：</p>
+<p><strong>问题1：无法检测到ECG信号</strong></p>
+<p><strong>可能原因</strong>：
+- 电极连接不良
+- 电极位置不正确
+- 电路连接错误
+- AD8232模块损坏</p>
+<p><strong>解决方法</strong>：
+1. 检查电极是否贴紧皮肤
+2. 清洁皮肤，去除油脂
+3. 验证电极位置是否正确
+4. 用示波器检查AD8232输出
+5. 检查电源和地线连接</p>
+<p><strong>问题2：信号噪声过大</strong></p>
+<p><strong>可能原因</strong>：
+- 工频干扰（50/60 Hz）
+- 肌电干扰
+- 电极接触不良
+- 接地不良</p>
+<p><strong>解决方法</strong>：
+1. 启用陷波滤波器
+2. 保持身体放松，减少肌肉紧张
+3. 更换电极或重新贴附
+4. 改善接地连接
+5. 远离电源线和电器</p>
+<p><strong>问题3：R波检测不准确</strong></p>
+<p><strong>可能原因</strong>：
+- 阈值设置不当
+- 信号质量差
+- 算法参数不合适</p>
+<p><strong>解决方法</strong>：
+1. 调整检测阈值
+2. 改善信号质量
+3. 调整滤波器参数
+4. 增加信号预处理步骤</p>
+<p><strong>问题4：心率计算错误</strong></p>
+<p><strong>可能原因</strong>：
+- R波漏检或误检
+- RR间期计算错误
+- 采样率设置错误</p>
+<p><strong>解决方法</strong>：
+1. 改进R波检测算法
+2. 验证采样率设置
+3. 检查时间计算公式
+4. 使用中值滤波去除异常值</p>
+<p><strong>问题5：数据传输丢失</strong></p>
+<p><strong>可能原因</strong>：
+- 串口波特率不匹配
+- 缓冲区溢出
+- 数据包格式错误</p>
+<p><strong>解决方法</strong>：
+1. 确认波特率设置一致
+2. 增加缓冲区大小
+3. 添加流控制
+4. 验证数据包格式和校验和</p>
+<h2 id="_10">扩展功能</h2>
+<h3 id="71-eeg">7.1 EEG信号处理</h3>
+<p><strong>EEG信号采集的特殊要求</strong>：</p>
+<pre><code class="language-c">/* EEG特定配置 */
+#define EEG_SAMPLING_RATE 250.0f  // EEG通常使用较低采样率
+#define EEG_CHANNELS 8            // 多通道EEG
+
+// EEG频段滤波器
+typedef struct {
+    float delta[BUFFER_SIZE];  // 0.5-4 Hz
+    float theta[BUFFER_SIZE];  // 4-8 Hz
+    float alpha[BUFFER_SIZE];  // 8-13 Hz
+    float beta[BUFFER_SIZE];   // 13-30 Hz
+    float gamma[BUFFER_SIZE];  // 30-100 Hz
+} EEG_Bands_t;
+
+// 带通滤波器提取特定频段
+void extract_eeg_bands(float *signal, int size, EEG_Bands_t *bands)
+{
+    // 使用IIR带通滤波器提取各频段
+    // Delta波段 (0.5-4 Hz)
+    apply_bandpass_filter(signal, bands-&gt;delta, size, 0.5f, 4.0f);
+
+    // Theta波段 (4-8 Hz)
+    apply_bandpass_filter(signal, bands-&gt;theta, size, 4.0f, 8.0f);
+
+    // Alpha波段 (8-13 Hz)
+    apply_bandpass_filter(signal, bands-&gt;alpha, size, 8.0f, 13.0f);
+
+    // Beta波段 (13-30 Hz)
+    apply_bandpass_filter(signal, bands-&gt;beta, size, 13.0f, 30.0f);
+
+    // Gamma波段 (30-100 Hz)
+    apply_bandpass_filter(signal, bands-&gt;gamma, size, 30.0f, 100.0f);
+}
+
+// 计算频段功率
+float calculate_band_power(float *band_signal, int size)
+{
+    float power = 0;
+    for (int i = 0; i &lt; size; i++) {
+        power += band_signal[i] * band_signal[i];
+    }
+    return power / size;
+}
+</code></pre>
+<h3 id="72">7.2 实时心率监测</h3>
+<p><strong>实现心率趋势监测</strong>：</p>
+<pre><code class="language-c">/* 心率趋势监测 */
+#define HR_HISTORY_SIZE 60  // 保存60秒历史
+
+typedef struct {
+    float hr_history[HR_HISTORY_SIZE];
+    int history_index;
+    float hr_trend;  // 心率趋势 (bpm/min)
+    uint8_t alert_flag;
+} HR_Monitor_t;
+
+void HR_Monitor_Init(HR_Monitor_t *monitor)
+{
+    memset(monitor-&gt;hr_history, 0, sizeof(monitor-&gt;hr_history));
+    monitor-&gt;history_index = 0;
+    monitor-&gt;hr_trend = 0;
+    monitor-&gt;alert_flag = 0;
+}
+
+void HR_Monitor_Update(HR_Monitor_t *monitor, float current_hr)
+{
+    // 更新历史记录
+    monitor-&gt;hr_history[monitor-&gt;history_index] = current_hr;
+    monitor-&gt;history_index = (monitor-&gt;history_index + 1) % HR_HISTORY_SIZE;
+
+    // 计算趋势 (线性回归)
+    float sum_x = 0, sum_y = 0, sum_xy = 0, sum_xx = 0;
+    int n = HR_HISTORY_SIZE;
+
+    for (int i = 0; i &lt; n; i++) {
+        float x = i;
+        float y = monitor-&gt;hr_history[i];
+        sum_x += x;
+        sum_y += y;
+        sum_xy += x * y;
+        sum_xx += x * x;
+    }
+
+    // 斜率 = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²)
+    monitor-&gt;hr_trend = (n * sum_xy - sum_x * sum_y) / 
+                       (n * sum_xx - sum_x * sum_x);
+
+    // 检查异常
+    if (current_hr &gt; 120 || current_hr &lt; 50) {
+        monitor-&gt;alert_flag = 1;
+        printf(&quot;警告: 心率异常 (%.1f bpm)\r\n&quot;, current_hr);
+    } else {
+        monitor-&gt;alert_flag = 0;
+    }
+}
+</code></pre>
+<h3 id="73-ecg">7.3 多导联ECG</h3>
+<p><strong>12导联ECG系统</strong>：</p>
+<pre><code class="language-c">/* 12导联ECG配置 */
+#define ECG_LEADS 12
+
+typedef enum {
+    LEAD_I = 0,    // I导联: LA - RA
+    LEAD_II,       // II导联: LL - RA
+    LEAD_III,      // III导联: LL - LA
+    LEAD_aVR,      // aVR: RA - (LA+LL)/2
+    LEAD_aVL,      // aVL: LA - (RA+LL)/2
+    LEAD_aVF,      // aVF: LL - (RA+LA)/2
+    LEAD_V1,       // V1: 胸导联1
+    LEAD_V2,       // V2: 胸导联2
+    LEAD_V3,       // V3: 胸导联3
+    LEAD_V4,       // V4: 胸导联4
+    LEAD_V5,       // V5: 胸导联5
+    LEAD_V6        // V6: 胸导联6
+} ECG_Lead_t;
+
+typedef struct {
+    float ra;  // 右臂
+    float la;  // 左臂
+    float ll;  // 左腿
+    float v1;  // 胸导联1
+    float v2;  // 胸导联2
+    float v3;  // 胸导联3
+    float v4;  // 胸导联4
+    float v5;  // 胸导联5
+    float v6;  // 胸导联6
+} ECG_Electrodes_t;
+
+// 计算12导联信号
+void calculate_12_leads(ECG_Electrodes_t *electrodes, float *leads)
+{
+    // 肢体导联
+    leads[LEAD_I] = electrodes-&gt;la - electrodes-&gt;ra;
+    leads[LEAD_II] = electrodes-&gt;ll - electrodes-&gt;ra;
+    leads[LEAD_III] = electrodes-&gt;ll - electrodes-&gt;la;
+
+    // 加压肢体导联
+    float wct = (electrodes-&gt;ra + electrodes-&gt;la + electrodes-&gt;ll) / 3.0f;
+    leads[LEAD_aVR] = electrodes-&gt;ra - wct;
+    leads[LEAD_aVL] = electrodes-&gt;la - wct;
+    leads[LEAD_aVF] = electrodes-&gt;ll - wct;
+
+    // 胸导联
+    leads[LEAD_V1] = electrodes-&gt;v1 - wct;
+    leads[LEAD_V2] = electrodes-&gt;v2 - wct;
+    leads[LEAD_V3] = electrodes-&gt;v3 - wct;
+    leads[LEAD_V4] = electrodes-&gt;v4 - wct;
+    leads[LEAD_V5] = electrodes-&gt;v5 - wct;
+    leads[LEAD_V6] = electrodes-&gt;v6 - wct;
+}
+</code></pre>
+<h3 id="74">7.4 云端数据上传</h3>
+<p><strong>通过WiFi上传数据到云端</strong>：</p>
+<pre><code class="language-c">/* WiFi模块配置 (ESP8266) */
+#define WIFI_SSID &quot;YourWiFi&quot;
+#define WIFI_PASSWORD &quot;YourPassword&quot;
+#define SERVER_URL &quot;http://your-server.com/api/ecg&quot;
+
+// 初始化WiFi连接
+void WiFi_Init(void)
+{
+    // 发送AT命令配置ESP8266
+    HAL_UART_Transmit(&amp;huart3, &quot;AT+CWMODE=1\r\n&quot;, 13, 1000);
+    HAL_Delay(1000);
+
+    char cmd[100];
+    sprintf(cmd, &quot;AT+CWJAP=\&quot;%s\&quot;,\&quot;%s\&quot;\r\n&quot;, WIFI_SSID, WIFI_PASSWORD);
+    HAL_UART_Transmit(&amp;huart3, (uint8_t*)cmd, strlen(cmd), 1000);
+    HAL_Delay(5000);
+}
+
+// 上传ECG数据
+void upload_ecg_data(ECG_Features_t *features)
+{
+    char json_data[256];
+    sprintf(json_data, 
+            &quot;{\&quot;heart_rate\&quot;:%.1f,\&quot;rr_interval\&quot;:%.1f,\&quot;hrv\&quot;:%.1f}&quot;,
+            features-&gt;heart_rate, 
+            features-&gt;rr_interval, 
+            features-&gt;hrv);
+
+    // 构建HTTP POST请求
+    char http_request[512];
+    sprintf(http_request,
+            &quot;POST /api/ecg HTTP/1.1\r\n&quot;
+            &quot;Host: your-server.com\r\n&quot;
+            &quot;Content-Type: application/json\r\n&quot;
+            &quot;Content-Length: %d\r\n&quot;
+            &quot;\r\n&quot;
+            &quot;%s&quot;,
+            strlen(json_data), json_data);
+
+    // 发送数据
+    HAL_UART_Transmit(&amp;huart3, (uint8_t*)http_request, 
+                     strlen(http_request), 5000);
+}
+</code></pre>
+<h3 id="75">7.5 移动应用集成</h3>
+<p><strong>蓝牙BLE数据传输</strong>：</p>
+<pre><code class="language-c">/* BLE配置 (HM-10模块) */
+#define BLE_SERVICE_UUID &quot;FFE0&quot;
+#define BLE_CHAR_UUID &quot;FFE1&quot;
+
+// 初始化BLE模块
+void BLE_Init(void)
+{
+    // 设置设备名称
+    HAL_UART_Transmit(&amp;huart3, &quot;AT+NAME=ECG_Monitor\r\n&quot;, 20, 1000);
+    HAL_Delay(500);
+
+    // 设置为从机模式
+    HAL_UART_Transmit(&amp;huart3, &quot;AT+ROLE=0\r\n&quot;, 11, 1000);
+    HAL_Delay(500);
+}
+
+// 通过BLE发送心率数据
+void BLE_Send_HeartRate(float heart_rate)
+{
+    uint8_t hr_data[2];
+    hr_data[0] = 0x00;  // 标志位
+    hr_data[1] = (uint8_t)heart_rate;  // 心率值
+
+    HAL_UART_Transmit(&amp;huart3, hr_data, 2, 100);
+}
+</code></pre>
+<h2 id="_11">总结</h2>
+<p>通过本教程，你已经学习了：</p>
+<ul>
+<li>✅ 生物信号的基本特征和生理学原理</li>
+<li>✅ ECG和EEG信号的采集方法</li>
+<li>✅ 模拟前端电路的设计和实现</li>
+<li>✅ ADC配置和高效数据采集</li>
+<li>✅ 数字滤波算法的原理和实现</li>
+<li>✅ R波检测和特征提取算法</li>
+<li>✅ 心率和心率变异性的计算</li>
+<li>✅ 数据可视化和分析方法</li>
+<li>✅ 完整系统的集成和测试</li>
+</ul>
+<p><strong>关键要点</strong>：</p>
+<ol>
+<li><strong>信号质量是关键</strong>：良好的电极接触和适当的滤波是获得高质量信号的基础</li>
+<li><strong>算法选择要合理</strong>：根据实际需求选择合适的滤波器和检测算法</li>
+<li><strong>实时性能很重要</strong>：优化代码以满足实时处理要求</li>
+<li><strong>安全性不可忽视</strong>：医疗设备必须符合安全标准和法规要求</li>
+<li><strong>测试验证要充分</strong>：使用标准数据库验证算法性能</li>
+</ol>
+<p><strong>实际应用场景</strong>：</p>
+<ul>
+<li>便携式心电监护仪</li>
+<li>运动健康监测设备</li>
+<li>睡眠质量分析系统</li>
+<li>远程医疗监护平台</li>
+<li>脑机接口研究</li>
+<li>情绪识别系统</li>
+</ul>
+<h2 id="_12">进阶挑战</h2>
+<p>尝试以下挑战来巩固和扩展你的技能：</p>
+<ol>
+<li>
+<p><strong>挑战1：实现实时心律失常检测</strong>
+   - 检测房颤、室颤等常见心律失常
+   - 实现自动报警功能
+   - 提示：研究MIT-BIH心律失常数据库</p>
+</li>
+<li>
+<p><strong>挑战2：开发多通道EEG采集系统</strong>
+   - 实现8通道或16通道EEG采集
+   - 实现频段功率分析
+   - 提示：使用ADS1299芯片</p>
+</li>
+<li>
+<p><strong>挑战3：实现自适应滤波器</strong>
+   - 使用LMS或RLS算法
+   - 自动调整滤波器参数
+   - 提示：研究自适应信号处理理论</p>
+</li>
+<li>
+<p><strong>挑战4：开发移动端应用</strong>
+   - 通过蓝牙连接设备
+   - 实时显示ECG波形
+   - 提示：使用React Native或Flutter</p>
+</li>
+<li>
+<p><strong>挑战5：实现机器学习分类</strong>
+   - 使用深度学习进行心律失常分类
+   - 训练CNN或LSTM模型
+   - 提示：使用TensorFlow Lite for Microcontrollers</p>
+</li>
+</ol>
+<h2 id="_13">完整代码</h2>
+<p>完整的项目代码可以在GitHub上获取：</p>
+<ul>
+<li><strong>STM32代码</strong>：<a href="https://github.com/embedded-platform/ecg-signal-processing">github.com/embedded-platform/ecg-signal-processing</a></li>
+<li><strong>Python分析工具</strong>：<a href="https://github.com/embedded-platform/ecg-analyzer">github.com/embedded-platform/ecg-analyzer</a></li>
+<li><strong>测试数据</strong>：<a href="https://physionet.org/content/mitdb/">physionet.org/content/mitdb/</a></li>
+</ul>
+<h2 id="_14">下一步学习</h2>
+<p>建议继续学习以下内容：</p>
+<ul>
+<li><a href="../intermediate/01-medical-data-security.html">医疗数据安全与隐私</a> - 了解医疗数据的安全保护</li>
+<li><a href="../advanced/01-portable-medical-device.html">便携式医疗设备开发</a> - 开发完整的医疗设备产品</li>
+<li><a href="../../10-cross-cutting-concerns/05-embedded-ml/">嵌入式机器学习</a> - 在嵌入式设备上运行AI模型</li>
+<li><a href="../../10-cross-cutting-concerns/02-power-management/">低功耗设计</a> - 优化便携设备的功耗</li>
+</ul>
+<h2 id="_15">参考资料</h2>
+<h3 id="_16">标准和指南</h3>
+<ol>
+<li><strong>IEC 60601-2-27</strong> - 心电监护设备的特殊要求</li>
+<li><strong>IEC 60601-2-26</strong> - 脑电图设备的特殊要求</li>
+<li><strong>ANSI/AAMI EC11</strong> - 诊断心电图设备标准</li>
+<li><strong>ANSI/AAMI EC13</strong> - 心电监护仪标准</li>
+</ol>
+<h3 id="_17">学术资源</h3>
+<ol>
+<li><strong>Pan J, Tompkins WJ.</strong> "A Real-Time QRS Detection Algorithm." IEEE Trans Biomed Eng. 1985.</li>
+<li><strong>Hamilton PS, Tompkins WJ.</strong> "Quantitative Investigation of QRS Detection Rules Using the MIT/BIH Arrhythmia Database." IEEE Trans Biomed Eng. 1986.</li>
+<li><strong>Task Force of ESC and NASPE.</strong> "Heart Rate Variability: Standards of Measurement." Circulation. 1996.</li>
+</ol>
+<h3 id="_18">在线资源</h3>
+<ol>
+<li><a href="https://physionet.org/">PhysioNet</a> - 生理信号数据库和工具</li>
+<li><a href="https://physionet.org/content/mitdb/">MIT-BIH数据库</a> - 标准ECG数据库</li>
+<li><a href="https://github.com/PIA-Group/BioSPPy">BioSPPy</a> - Python生物信号处理库</li>
+<li><a href="https://neuropsychology.github.io/NeuroKit/">NeuroKit2</a> - 神经生理信号处理工具</li>
+</ol>
+<h3 id="_19">书籍推荐</h3>
+<ol>
+<li><strong>《生物医学信号处理》</strong> - 张元亭著</li>
+<li><strong>《心电图学》</strong> - 郭继鸿著</li>
+<li><strong>"Biomedical Signal Processing and Signal Modeling"</strong> - Eugene N. Bruce</li>
+<li><strong>"Digital Signal Processing in Modern Communication Systems"</strong> - Andreas Schwarzinger</li>
+</ol>
+<h3 id="_20">开发工具</h3>
+<ol>
+<li><strong>MATLAB Signal Processing Toolbox</strong> - 信号处理工具箱</li>
+<li><strong>Python SciPy</strong> - 科学计算库</li>
+<li><strong>GNU Octave</strong> - 开源MATLAB替代品</li>
+<li><strong>Sigview</strong> - 信号分析软件</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>解释ECG信号中P波、QRS波群和T波分别代表什么生理过程？</li>
+<li>为什么生物信号采集需要高共模抑制比（CMRR）？如何实现？</li>
+<li>比较IIR滤波器和FIR滤波器在生物信号处理中的优缺点。</li>
+<li>Pan-Tompkins算法的核心步骤是什么？为什么要进行微分和平方运算？</li>
+<li>心率变异性（HRV）有什么临床意义？如何计算时域和频域HRV指标？</li>
+</ol>
+<p><strong>实验任务</strong>：</p>
+<ol>
+<li>使用MIT-BIH数据库测试你的R波检测算法，计算检测准确率</li>
+<li>实现一个自适应阈值算法，能够适应不同幅度的ECG信号</li>
+<li>比较不同滤波器（移动平均、IIR、FIR）对ECG信号的滤波效果</li>
+<li>实现一个简单的心律失常检测算法，能够识别心动过速和心动过缓</li>
+<li>开发一个Python GUI应用，实时显示ECG波形和心率</li>
+</ol>
+<hr />
+<p><strong>反馈与支持</strong>：</p>
+<p>如果你在学习过程中遇到问题或有任何建议，欢迎：
+- 在评论区留言讨论
+- 提交GitHub Issue
+- 加入我们的技术社区
+- 联系作者获取帮助</p>
+<p><strong>免责声明</strong>：本教程仅用于教育和学习目的。开发实际的医疗设备需要遵守相关法规和标准，并获得必要的认证。请勿将本教程中的设备用于临床诊断或治疗。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

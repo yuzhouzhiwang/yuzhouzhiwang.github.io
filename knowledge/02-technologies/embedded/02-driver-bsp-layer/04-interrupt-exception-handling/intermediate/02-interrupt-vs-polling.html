@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>中断与轮询的选择策略 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/04-interrupt-exception-handling/">04-interrupt-exception-handling</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/04-interrupt-exception-handling/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">什么是轮询？</a></li>
+<li><a href="#_5">什么是中断？</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#1">1. 轮询机制详解</a><ul>
+<li><a href="#11">1.1 轮询的实现方式</a></li>
+<li><a href="#12">1.2 轮询的优点</a></li>
+<li><a href="#13">1.3 轮询的缺点</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 中断机制详解</a><ul>
+<li><a href="#21">2.1 中断的实现方式</a></li>
+<li><a href="#22">2.2 中断的优点</a></li>
+<li><a href="#23">2.3 中断的缺点</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 性能对比分析</a><ul>
+<li><a href="#31">3.1 响应时间对比</a></li>
+<li><a href="#32-cpu">3.2 CPU利用率对比</a></li>
+<li><a href="#33">3.3 功耗对比</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 选择策略</a><ul>
+<li><a href="#41">4.1 使用轮询的场景</a></li>
+<li><a href="#42">4.2 使用中断的场景</a></li>
+</ul>
+</li>
+<li><a href="#5">5. 混合策略</a><ul>
+<li><a href="#51">5.1 中断触发 + 轮询处理</a></li>
+<li><a href="#52">5.2 定时中断 + 轮询检查</a></li>
+<li><a href="#53">5.3 优先级分层策略</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 实战案例分析</a><ul>
+<li><a href="#1_1">案例1：串口通信</a></li>
+<li><a href="#2_1">案例2：按键检测</a></li>
+<li><a href="#3adc">案例3：ADC数据采集</a></li>
+</ul>
+</li>
+<li><a href="#7">7. 决策流程图</a></li>
+<li><a href="#8">8. 性能优化技巧</a><ul>
+<li><a href="#81">8.1 轮询优化</a></li>
+<li><a href="#82">8.2 中断优化</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_7">深入理解</a><ul>
+<li><a href="#_8">中断开销分析</a></li>
+<li><a href="#_9">轮询的隐藏成本</a></li>
+<li><a href="#_10">混合策略的优势</a></li>
+</ul>
+</li>
+<li><a href="#_11">最佳实践</a><ul>
+<li><a href="#1_2">1. 选择原则</a></li>
+<li><a href="#2_2">2. 实现建议</a></li>
+<li><a href="#3_1">3. 常见陷阱</a></li>
+</ul>
+</li>
+<li><a href="#_12">常见问题</a><ul>
+<li><a href="#q1">Q1: 什么时候应该使用轮询而不是中断？</a></li>
+<li><a href="#q2">Q2: 中断会增加多少系统开销？</a></li>
+<li><a href="#q3">Q3: 如何在轮询和中断之间做出选择？</a></li>
+<li><a href="#q4">Q4: 混合策略如何实现？</a></li>
+<li><a href="#q5">Q5: 如何测量和优化性能？</a></li>
+</ul>
+</li>
+<li><a href="#_13">总结</a></li>
+<li><a href="#_14">延伸阅读</a></li>
+<li><a href="#_15">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">中断与轮询的选择策略</h1>
+<h2 id="_2">概述</h2>
+<p>在嵌入式系统开发中，处理外部事件有两种基本机制：中断（Interrupt）和轮询（Polling）。选择合适的机制对系统的性能、功耗和实时性有重要影响。本文将深入分析这两种机制的特点、优缺点和适用场景，帮助你做出正确的设计决策。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解中断和轮询的工作原理和特点</li>
+<li>掌握两种机制的优缺点和性能特征</li>
+<li>学会根据应用场景选择合适的机制</li>
+<li>理解混合策略的设计方法</li>
+<li>掌握性能分析和优化技巧</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">什么是轮询？</h3>
+<p>轮询是一种主动检查机制，处理器周期性地检查某个条件或状态，直到满足特定条件后执行相应操作。</p>
+<p><strong>轮询的基本流程</strong>：</p>
+<pre><code>主程序循环
+    ↓
+检查事件标志
+    ↓
+事件发生？
+    ├─ 是 → 处理事件 → 继续循环
+    └─ 否 → 继续循环
+</code></pre>
+<h3 id="_5">什么是中断？</h3>
+<p>中断是一种被动响应机制，当事件发生时，硬件自动通知处理器，处理器暂停当前任务，转而执行中断服务程序。</p>
+<p><strong>中断的基本流程</strong>：</p>
+<pre><code>主程序执行
+    ↓
+事件发生（硬件信号）
+    ↓
+自动保存现场
+    ↓
+执行中断服务程序
+    ↓
+恢复现场
+    ↓
+返回主程序
+</code></pre>
+<h2 id="_6">核心内容</h2>
+<h3 id="1">1. 轮询机制详解</h3>
+<h4 id="11">1.1 轮询的实现方式</h4>
+<p><strong>简单轮询</strong>：</p>
+<pre><code class="language-c">// 最基本的轮询实现
+void simple_polling(void)
+{
+    while (1) {
+        // 检查按键状态
+        if (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN) == GPIO_PIN_SET) {
+            // 处理按键事件
+            handle_button_press();
+
+            // 等待按键释放
+            while (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN) == GPIO_PIN_SET);
+        }
+    }
+}
+</code></pre>
+<p><strong>多事件轮询</strong>：</p>
+<pre><code class="language-c">// 轮询多个事件源
+void multi_event_polling(void)
+{
+    while (1) {
+        // 检查按键
+        if (button_pressed()) {
+            handle_button();
+        }
+
+        // 检查串口数据
+        if (uart_data_available()) {
+            handle_uart_data();
+        }
+
+        // 检查定时器
+        if (timer_expired()) {
+            handle_timer();
+        }
+
+        // 检查ADC转换完成
+        if (adc_conversion_complete()) {
+            handle_adc_data();
+        }
+    }
+}
+</code></pre>
+<p><strong>定时轮询</strong>：</p>
+<pre><code class="language-c">// 使用定时器控制轮询频率
+void timed_polling(void)
+{
+    uint32_t last_check_time = 0;
+    const uint32_t POLL_INTERVAL = 10;  // 10ms轮询间隔
+
+    while (1) {
+        uint32_t current_time = HAL_GetTick();
+
+        if (current_time - last_check_time &gt;= POLL_INTERVAL) {
+            last_check_time = current_time;
+
+            // 执行轮询检查
+            check_all_events();
+        }
+
+        // 执行其他任务
+        do_other_work();
+    }
+}
+</code></pre>
+<h4 id="12">1.2 轮询的优点</h4>
+<p><strong>1. 实现简单</strong>
+- 代码逻辑清晰，易于理解
+- 不需要配置中断控制器
+- 调试方便，流程可预测</p>
+<p><strong>2. 无中断开销</strong>
+- 没有上下文切换
+- 没有中断延迟
+- 没有中断嵌套问题</p>
+<p><strong>3. 时序可控</strong>
+- 检查顺序固定
+- 响应时间可预测
+- 适合简单的状态机</p>
+<p><strong>4. 资源占用少</strong>
+- 不需要中断向量表
+- 不需要额外的栈空间
+- 适合资源受限的系统</p>
+<h4 id="13">1.3 轮询的缺点</h4>
+<p><strong>1. CPU利用率低</strong>
+- 大量时间浪费在检查上
+- 即使没有事件也要不断检查
+- 功耗较高</p>
+<p><strong>2. 响应延迟</strong>
+- 事件发生到被检测之间有延迟
+- 延迟取决于轮询周期
+- 可能错过快速事件</p>
+<p><strong>3. 实时性差</strong>
+- 无法保证及时响应
+- 多个事件时响应时间不确定
+- 不适合硬实时系统</p>
+<p><strong>4. 可扩展性差</strong>
+- 事件源增多时效率下降
+- 轮询周期难以平衡
+- 代码复杂度增加</p>
+<h3 id="2">2. 中断机制详解</h3>
+<h4 id="21">2.1 中断的实现方式</h4>
+<p><strong>外部中断</strong>：</p>
+<pre><code class="language-c">// 配置外部中断
+void external_interrupt_init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    // 配置GPIO为中断模式
+    GPIO_InitStruct.Pin = BUTTON_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+    GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+    HAL_GPIO_Init(BUTTON_PORT, &amp;GPIO_InitStruct);
+
+    // 配置NVIC
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+
+// 中断服务函数
+void EXTI0_IRQHandler(void)
+{
+    if (__HAL_GPIO_EXTI_GET_IT(BUTTON_PIN)) {
+        __HAL_GPIO_EXTI_CLEAR_IT(BUTTON_PIN);
+
+        // 快速处理或设置标志
+        button_event_flag = 1;
+    }
+}
+
+// 主循环
+void main_loop(void)
+{
+    while (1) {
+        if (button_event_flag) {
+            button_event_flag = 0;
+            // 处理按键事件
+            handle_button_event();
+        }
+
+        // 执行其他任务
+        do_other_work();
+    }
+}
+</code></pre>
+<p><strong>定时器中断</strong>：</p>
+<pre><code class="language-c">// 配置定时器中断
+void timer_interrupt_init(void)
+{
+    // 配置定时器为1ms中断
+    htim2.Instance = TIM2;
+    htim2.Init.Period = 1000 - 1;  // 1ms
+    htim2.Init.Prescaler = 72 - 1;  // 72MHz / 72 = 1MHz
+    HAL_TIM_Base_Init(&amp;htim2);
+
+    // 使能中断
+    HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(TIM2_IRQn);
+
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+}
+
+// 定时器中断服务函数
+void TIM2_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+        // 周期性任务
+        system_tick++;
+
+        // 触发周期任务标志
+        if (system_tick % 100 == 0) {
+            periodic_task_flag = 1;
+        }
+    }
+}
+</code></pre>
+<h4 id="22">2.2 中断的优点</h4>
+<p><strong>1. 响应快速</strong>
+- 微秒级响应时间
+- 事件驱动，无需等待
+- 适合实时系统</p>
+<p><strong>2. CPU利用率高</strong>
+- 只在事件发生时处理
+- 空闲时可以执行其他任务
+- 可以进入低功耗模式</p>
+<p><strong>3. 实时性好</strong>
+- 可以保证响应时间
+- 支持优先级管理
+- 适合硬实时应用</p>
+<p><strong>4. 可扩展性好</strong>
+- 多个中断源独立处理
+- 不影响主程序流程
+- 易于添加新的事件源</p>
+<h4 id="23">2.3 中断的缺点</h4>
+<p><strong>1. 实现复杂</strong>
+- 需要配置中断控制器
+- 需要管理优先级
+- 调试相对困难</p>
+<p><strong>2. 有中断开销</strong>
+- 上下文切换需要时间
+- 保存和恢复寄存器
+- 中断延迟和抖动</p>
+<p><strong>3. 可能有竞态条件</strong>
+- 需要保护共享资源
+- 可能发生优先级反转
+- 需要考虑中断嵌套</p>
+<p><strong>4. 资源占用</strong>
+- 需要中断向量表
+- 需要额外的栈空间
+- 可能增加功耗（频繁中断）</p>
+<h3 id="3">3. 性能对比分析</h3>
+<h4 id="31">3.1 响应时间对比</h4>
+<p><strong>轮询的响应时间</strong>：</p>
+<pre><code>最小响应时间 = 0（刚好检查到）
+最大响应时间 = 轮询周期
+平均响应时间 = 轮询周期 / 2
+
+示例：轮询周期 = 10ms
+- 最小响应：0ms
+- 最大响应：10ms
+- 平均响应：5ms
+</code></pre>
+<p><strong>中断的响应时间</strong>：</p>
+<pre><code>响应时间 = 中断延迟 + ISR执行时间
+
+中断延迟组成：
+- 硬件延迟：1-2个时钟周期
+- 保存上下文：12个时钟周期
+- 跳转到ISR：2-3个时钟周期
+
+示例：72MHz系统
+- 中断延迟：约15-20个时钟周期 = 0.2-0.3μs
+- ISR执行：取决于代码（通常&lt;10μs）
+- 总响应时间：&lt;10μs
+</code></pre>
+<p><strong>对比表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>轮询</th>
+<th>中断</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>最小响应时间</td>
+<td>0</td>
+<td>0.2-0.3μs</td>
+</tr>
+<tr>
+<td>典型响应时间</td>
+<td>毫秒级</td>
+<td>微秒级</td>
+</tr>
+<tr>
+<td>响应时间确定性</td>
+<td>较差</td>
+<td>很好</td>
+</tr>
+<tr>
+<td>适合实时系统</td>
+<td>否</td>
+<td>是</td>
+</tr>
+</tbody>
+</table>
+<h4 id="32-cpu">3.2 CPU利用率对比</h4>
+<p><strong>轮询的CPU利用率</strong>：</p>
+<pre><code class="language-c">// 测量轮询的CPU占用
+void measure_polling_cpu_usage(void)
+{
+    uint32_t idle_count = 0;
+    uint32_t total_count = 0;
+    uint32_t start_time = HAL_GetTick();
+
+    while (HAL_GetTick() - start_time &lt; 1000) {  // 测量1秒
+        total_count++;
+
+        // 轮询检查
+        if (check_event()) {
+            handle_event();
+        } else {
+            idle_count++;
+        }
+    }
+
+    float cpu_usage = (1.0f - (float)idle_count / total_count) * 100;
+    printf(&quot;Polling CPU Usage: %.2f%%\n&quot;, cpu_usage);
+}
+
+// 典型结果：
+// 事件频率低时：CPU利用率 &gt; 90%（大部分时间在空转）
+// 事件频率高时：CPU利用率接近100%
+</code></pre>
+<p><strong>中断的CPU利用率</strong>：</p>
+<pre><code class="language-c">// 测量中断的CPU占用
+volatile uint32_t isr_entry_count = 0;
+volatile uint32_t isr_total_cycles = 0;
+
+void IRQHandler(void)
+{
+    uint32_t start = DWT-&gt;CYCCNT;
+
+    // 中断处理
+    handle_interrupt();
+
+    uint32_t end = DWT-&gt;CYCCNT;
+    isr_total_cycles += (end - start);
+    isr_entry_count++;
+}
+
+void measure_interrupt_cpu_usage(void)
+{
+    uint32_t start_time = HAL_GetTick();
+    uint32_t start_cycles = DWT-&gt;CYCCNT;
+
+    HAL_Delay(1000);  // 测量1秒
+
+    uint32_t total_cycles = DWT-&gt;CYCCNT - start_cycles;
+    float cpu_usage = ((float)isr_total_cycles / total_cycles) * 100;
+
+    printf(&quot;Interrupt CPU Usage: %.2f%%\n&quot;, cpu_usage);
+    printf(&quot;Interrupt Count: %lu\n&quot;, isr_entry_count);
+}
+
+// 典型结果：
+// 事件频率低时：CPU利用率 &lt; 1%
+// 事件频率高时：取决于ISR执行时间
+</code></pre>
+<h4 id="33">3.3 功耗对比</h4>
+<p><strong>轮询的功耗特征</strong>：</p>
+<pre><code class="language-c">// 轮询模式 - 高功耗
+void polling_mode(void)
+{
+    while (1) {
+        // CPU持续运行，无法进入低功耗模式
+        if (check_event()) {
+            handle_event();
+        }
+        // CPU一直处于活动状态
+    }
+}
+
+// 功耗特点：
+// - CPU持续运行：高功耗
+// - 无法进入睡眠模式
+// - 不适合电池供电设备
+</code></pre>
+<p><strong>中断的功耗特征</strong>：</p>
+<pre><code class="language-c">// 中断模式 - 低功耗
+void interrupt_mode(void)
+{
+    // 配置中断
+    configure_interrupts();
+
+    while (1) {
+        // 处理标志位
+        if (event_flag) {
+            event_flag = 0;
+            handle_event();
+        }
+
+        // 进入低功耗模式，等待中断唤醒
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    }
+}
+
+// 功耗特点：
+// - 空闲时进入睡眠：低功耗
+// - 中断唤醒：快速响应
+// - 适合电池供电设备
+</code></pre>
+<p><strong>功耗对比表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>活动电流</th>
+<th>睡眠电流</th>
+<th>平均功耗（事件少）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>轮询</td>
+<td>50mA</td>
+<td>N/A</td>
+<td>50mA</td>
+</tr>
+<tr>
+<td>中断</td>
+<td>50mA</td>
+<td>2mA</td>
+<td>2-5mA</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4">4. 选择策略</h3>
+<h4 id="41">4.1 使用轮询的场景</h4>
+<p><strong>1. 事件频率高且可预测</strong></p>
+<pre><code class="language-c">// 示例：高速ADC采样
+void high_speed_adc_polling(void)
+{
+    while (1) {
+        // 启动转换
+        HAL_ADC_Start(&amp;hadc1);
+
+        // 轮询等待转换完成（很快，几微秒）
+        while (HAL_ADC_PollForConversion(&amp;hadc1, 1) != HAL_OK);
+
+        // 读取数据
+        uint32_t value = HAL_ADC_GetValue(&amp;hadc1);
+        process_adc_data(value);
+    }
+}
+
+// 适用原因：
+// - 转换频率高（kHz级别）
+// - 转换时间短且可预测
+// - 使用中断反而增加开销
+</code></pre>
+<p><strong>2. 系统简单，资源受限</strong></p>
+<pre><code class="language-c">// 示例：简单的LED闪烁控制
+void simple_led_control(void)
+{
+    while (1) {
+        // 检查按键
+        if (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN) == GPIO_PIN_SET) {
+            HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
+            HAL_Delay(200);  // 防抖
+        }
+    }
+}
+
+// 适用原因：
+// - 功能简单
+// - 不需要复杂的中断配置
+// - 代码易于理解和维护
+</code></pre>
+<p><strong>3. 响应时间要求不严格</strong></p>
+<pre><code class="language-c">// 示例：状态监控
+void status_monitor(void)
+{
+    while (1) {
+        // 每秒检查一次温度
+        HAL_Delay(1000);
+
+        float temperature = read_temperature();
+        if (temperature &gt; THRESHOLD) {
+            trigger_alarm();
+        }
+    }
+}
+
+// 适用原因：
+// - 1秒的响应延迟可以接受
+// - 不需要实时响应
+// - 轮询更简单
+</code></pre>
+<p><strong>4. 调试和测试阶段</strong></p>
+<pre><code class="language-c">// 示例：功能验证
+void function_test(void)
+{
+    while (1) {
+        // 轮询方式便于单步调试
+        if (sensor_ready()) {
+            uint32_t data = read_sensor();
+            printf(&quot;Sensor data: %lu\n&quot;, data);
+        }
+
+        HAL_Delay(100);
+    }
+}
+
+// 适用原因：
+// - 流程清晰，易于调试
+// - 可以单步跟踪
+// - 验证功能正确性
+</code></pre>
+<h4 id="42">4.2 使用中断的场景</h4>
+<p><strong>1. 事件频率低且不可预测</strong></p>
+<pre><code class="language-c">// 示例：按键输入
+void button_interrupt_mode(void)
+{
+    // 配置按键中断
+    configure_button_interrupt();
+
+    while (1) {
+        // CPU可以执行其他任务或进入睡眠
+        do_other_work();
+
+        // 或进入低功耗模式
+        // HAL_PWR_EnterSLEEPMode(...);
+    }
+}
+
+void EXTI_IRQHandler(void)
+{
+    // 按键按下时才响应
+    button_pressed_flag = 1;
+}
+
+// 适用原因：
+// - 按键事件不频繁
+// - 发生时间不可预测
+// - 轮询会浪费CPU资源
+</code></pre>
+<p><strong>2. 需要快速响应</strong></p>
+<pre><code class="language-c">// 示例：紧急停止
+void emergency_stop_interrupt(void)
+{
+    // 配置最高优先级中断
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+}
+
+void EXTI0_IRQHandler(void)
+{
+    // 微秒级响应
+    __HAL_GPIO_EXTI_CLEAR_IT(EMERGENCY_PIN);
+
+    // 立即停止所有运动
+    stop_all_motors();
+    system_state = EMERGENCY_STOP;
+}
+
+// 适用原因：
+// - 需要微秒级响应
+// - 安全关键应用
+// - 轮询延迟不可接受
+</code></pre>
+<p><strong>3. 多任务并发处理</strong></p>
+<pre><code class="language-c">// 示例：多个独立事件源
+void multi_source_interrupt(void)
+{
+    // 配置多个中断源
+    configure_uart_interrupt();    // 串口接收
+    configure_timer_interrupt();   // 定时任务
+    configure_adc_interrupt();     // ADC转换完成
+    configure_dma_interrupt();     // DMA传输完成
+
+    while (1) {
+        // 主循环处理后台任务
+        background_tasks();
+    }
+}
+
+// 各个中断独立处理
+void UART_IRQHandler(void) { /* 处理串口 */ }
+void TIM_IRQHandler(void) { /* 处理定时器 */ }
+void ADC_IRQHandler(void) { /* 处理ADC */ }
+void DMA_IRQHandler(void) { /* 处理DMA */ }
+
+// 适用原因：
+// - 多个事件源独立处理
+// - 不相互干扰
+// - 轮询难以管理多个源
+</code></pre>
+<p><strong>4. 低功耗应用</strong></p>
+<pre><code class="language-c">// 示例：电池供电设备
+void low_power_application(void)
+{
+    // 配置唤醒中断
+    configure_wakeup_interrupts();
+
+    while (1) {
+        // 处理事件
+        if (event_flag) {
+            event_flag = 0;
+            handle_event();
+        }
+
+        // 进入深度睡眠，等待中断唤醒
+        enter_deep_sleep();
+    }
+}
+
+void EXTI_IRQHandler(void)
+{
+    // 中断唤醒系统
+    event_flag = 1;
+}
+
+// 适用原因：
+// - 大部分时间处于睡眠
+// - 中断唤醒快速响应
+// - 延长电池寿命
+</code></pre>
+<h3 id="5">5. 混合策略</h3>
+<h4 id="51">5.1 中断触发 + 轮询处理</h4>
+<p>这是最常用的混合策略：中断快速响应事件，轮询处理复杂逻辑。</p>
+<pre><code class="language-c">// 中断设置标志
+volatile uint8_t data_ready = 0;
+volatile uint8_t uart_buffer[256];
+volatile uint16_t uart_index = 0;
+
+void UART_IRQHandler(void)
+{
+    if (__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        // 快速读取数据
+        uart_buffer[uart_index++] = huart1.Instance-&gt;DR;
+
+        // 接收完整帧
+        if (uart_index &gt;= FRAME_SIZE) {
+            data_ready = 1;
+            uart_index = 0;
+        }
+    }
+}
+
+// 主循环轮询处理
+void main_loop(void)
+{
+    while (1) {
+        // 轮询检查标志
+        if (data_ready) {
+            data_ready = 0;
+
+            // 复杂的数据处理（在主循环中）
+            parse_protocol(uart_buffer);
+            process_command(uart_buffer);
+            send_response();
+        }
+
+        // 执行其他任务
+        do_other_work();
+    }
+}
+
+// 优点：
+// - 中断快速响应，不丢失数据
+// - 复杂处理在主循环，不阻塞中断
+// - 平衡了响应性和系统复杂度
+</code></pre>
+<h4 id="52">5.2 定时中断 + 轮询检查</h4>
+<p>使用定时器中断控制轮询频率，既保证了响应时间，又降低了CPU占用。</p>
+<pre><code class="language-c">// 定时器中断设置轮询标志
+volatile uint8_t poll_flag = 0;
+
+void TIM_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+        // 每10ms设置一次轮询标志
+        poll_flag = 1;
+    }
+}
+
+// 主循环按标志轮询
+void main_loop(void)
+{
+    while (1) {
+        if (poll_flag) {
+            poll_flag = 0;
+
+            // 轮询检查多个事件
+            check_button_state();
+            check_sensor_data();
+            update_display();
+        }
+
+        // 空闲时可以进入低功耗模式
+        __WFI();  // 等待中断
+    }
+}
+
+// 优点：
+// - 精确控制轮询频率
+// - 降低CPU占用
+// - 可以进入低功耗模式
+</code></pre>
+<h4 id="53">5.3 优先级分层策略</h4>
+<p>根据事件的重要性和实时性要求，采用不同的处理方式。</p>
+<pre><code class="language-c">// 高优先级事件：使用中断
+void configure_high_priority_events(void)
+{
+    // 紧急停止 - 最高优先级中断
+    HAL_NVIC_SetPriority(EMERGENCY_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EMERGENCY_IRQn);
+
+    // 编码器 - 高优先级中断
+    HAL_NVIC_SetPriority(ENCODER_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(ENCODER_IRQn);
+}
+
+// 中优先级事件：中断触发 + 标志处理
+volatile uint8_t uart_flag = 0;
+volatile uint8_t adc_flag = 0;
+
+void UART_IRQHandler(void) { uart_flag = 1; }
+void ADC_IRQHandler(void) { adc_flag = 1; }
+
+// 低优先级事件：定时轮询
+void main_loop(void)
+{
+    uint32_t last_poll_time = 0;
+
+    while (1) {
+        // 处理中优先级事件标志
+        if (uart_flag) {
+            uart_flag = 0;
+            handle_uart_data();
+        }
+
+        if (adc_flag) {
+            adc_flag = 0;
+            handle_adc_data();
+        }
+
+        // 定时轮询低优先级事件
+        if (HAL_GetTick() - last_poll_time &gt;= 100) {
+            last_poll_time = HAL_GetTick();
+
+            check_button();
+            update_led();
+            check_temperature();
+        }
+    }
+}
+
+// 优点：
+// - 关键事件快速响应
+// - 一般事件及时处理
+// - 低优先级事件不影响系统
+</code></pre>
+<h3 id="6">6. 实战案例分析</h3>
+<h4 id="1_1">案例1：串口通信</h4>
+<p><strong>场景</strong>：接收不定长的串口数据包</p>
+<p><strong>方案A：纯轮询</strong></p>
+<pre><code class="language-c">// ❌ 不推荐：纯轮询方式
+void uart_polling_receive(void)
+{
+    uint8_t buffer[256];
+    uint16_t index = 0;
+
+    while (1) {
+        // 不断检查是否有数据
+        if (__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+            buffer[index++] = huart1.Instance-&gt;DR;
+
+            if (index &gt;= 256 || buffer[index-1] == '\n') {
+                process_data(buffer, index);
+                index = 0;
+            }
+        }
+
+        // 问题：
+        // 1. CPU一直在检查，利用率高
+        // 2. 高波特率时可能丢失数据
+        // 3. 无法执行其他任务
+    }
+}
+</code></pre>
+<p><strong>方案B：中断接收</strong></p>
+<pre><code class="language-c">// ✅ 推荐：中断方式
+volatile uint8_t rx_buffer[256];
+volatile uint16_t rx_index = 0;
+volatile uint8_t rx_complete = 0;
+
+void UART_IRQHandler(void)
+{
+    if (__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        uint8_t data = huart1.Instance-&gt;DR;
+
+        rx_buffer[rx_index++] = data;
+
+        if (data == '\n' || rx_index &gt;= 256) {
+            rx_complete = 1;
+            rx_index = 0;
+        }
+    }
+}
+
+void main_loop(void)
+{
+    while (1) {
+        if (rx_complete) {
+            rx_complete = 0;
+            process_data(rx_buffer, rx_index);
+        }
+
+        // 可以执行其他任务
+        do_other_work();
+    }
+}
+
+// 优点：
+// 1. 不会丢失数据
+// 2. CPU利用率低
+// 3. 可以执行其他任务
+</code></pre>
+<h4 id="2_1">案例2：按键检测</h4>
+<p><strong>场景</strong>：检测按键按下并防抖</p>
+<p><strong>方案A：纯轮询</strong></p>
+<pre><code class="language-c">// ✅ 适合：简单应用的轮询方式
+void button_polling(void)
+{
+    uint8_t last_state = 0;
+    uint32_t press_time = 0;
+
+    while (1) {
+        uint8_t current_state = HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN);
+
+        // 检测按下
+        if (current_state &amp;&amp; !last_state) {
+            press_time = HAL_GetTick();
+        }
+
+        // 检测释放（防抖）
+        if (!current_state &amp;&amp; last_state) {
+            if (HAL_GetTick() - press_time &gt; 50) {  // 50ms防抖
+                handle_button_press();
+            }
+        }
+
+        last_state = current_state;
+        HAL_Delay(10);  // 10ms轮询间隔
+    }
+}
+
+// 适用原因：
+// 1. 按键响应延迟10-20ms可接受
+// 2. 代码简单，易于理解
+// 3. 防抖逻辑清晰
+</code></pre>
+<p><strong>方案B：中断方式</strong></p>
+<pre><code class="language-c">// ✅ 适合：低功耗应用的中断方式
+volatile uint32_t button_press_time = 0;
+volatile uint8_t button_event = 0;
+
+void EXTI_IRQHandler(void)
+{
+    if (__HAL_GPIO_EXTI_GET_IT(BUTTON_PIN)) {
+        __HAL_GPIO_EXTI_CLEAR_IT(BUTTON_PIN);
+
+        // 记录按下时间
+        button_press_time = HAL_GetTick();
+        button_event = 1;
+    }
+}
+
+void main_loop(void)
+{
+    while (1) {
+        if (button_event) {
+            button_event = 0;
+
+            // 软件防抖
+            HAL_Delay(50);
+
+            // 确认仍然按下
+            if (HAL_GPIO_ReadPin(BUTTON_PORT, BUTTON_PIN)) {
+                handle_button_press();
+            }
+        }
+
+        // 进入低功耗模式
+        HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+    }
+}
+
+// 适用原因：
+// 1. 低功耗应用
+// 2. 按键事件不频繁
+// 3. 可以进入睡眠模式
+</code></pre>
+<h4 id="3adc">案例3：ADC数据采集</h4>
+<p><strong>场景</strong>：周期性采集多通道ADC数据</p>
+<p><strong>方案A：轮询方式</strong></p>
+<pre><code class="language-c">// ✅ 适合：高速连续采样
+void adc_polling_mode(void)
+{
+    uint32_t adc_values[8];
+
+    while (1) {
+        for (int i = 0; i &lt; 8; i++) {
+            // 选择通道
+            select_adc_channel(i);
+
+            // 启动转换
+            HAL_ADC_Start(&amp;hadc1);
+
+            // 轮询等待转换完成（很快，几微秒）
+            HAL_ADC_PollForConversion(&amp;hadc1, 10);
+
+            // 读取数据
+            adc_values[i] = HAL_ADC_GetValue(&amp;hadc1);
+        }
+
+        // 处理数据
+        process_adc_data(adc_values, 8);
+    }
+}
+
+// 适用原因：
+// 1. 需要连续高速采样
+// 2. 转换时间短且可预测
+// 3. 中断开销反而降低效率
+</code></pre>
+<p><strong>方案B：中断 + DMA方式</strong></p>
+<pre><code class="language-c">// ✅ 适合：周期性采样 + 其他任务
+uint32_t adc_buffer[8];
+volatile uint8_t adc_complete = 0;
+
+void ADC_DMA_Init(void)
+{
+    // 配置ADC为DMA模式
+    HAL_ADC_Start_DMA(&amp;hadc1, adc_buffer, 8);
+}
+
+void DMA_IRQHandler(void)
+{
+    if (__HAL_DMA_GET_FLAG(DMA_FLAG_TC)) {
+        __HAL_DMA_CLEAR_FLAG(DMA_FLAG_TC);
+
+        adc_complete = 1;
+
+        // 重新启动DMA
+        HAL_ADC_Start_DMA(&amp;hadc1, adc_buffer, 8);
+    }
+}
+
+void main_loop(void)
+{
+    while (1) {
+        if (adc_complete) {
+            adc_complete = 0;
+            process_adc_data(adc_buffer, 8);
+        }
+
+        // 执行其他任务
+        do_other_work();
+    }
+}
+
+// 适用原因：
+// 1. 周期性采样（不是连续）
+// 2. 需要执行其他任务
+// 3. DMA自动传输，CPU占用低
+</code></pre>
+<h3 id="7">7. 决策流程图</h3>
+<p>选择中断还是轮询，可以按照以下流程决策：</p>
+<pre><code>开始
+  ↓
+事件频率高且可预测？
+  ├─ 是 → 使用轮询
+  └─ 否 ↓
+需要微秒级响应？
+  ├─ 是 → 使用中断
+  └─ 否 ↓
+需要低功耗？
+  ├─ 是 → 使用中断
+  └─ 否 ↓
+系统简单，资源受限？
+  ├─ 是 → 使用轮询
+  └─ 否 ↓
+多个独立事件源？
+  ├─ 是 → 使用中断
+  └─ 否 ↓
+考虑混合策略
+</code></pre>
+<h3 id="8">8. 性能优化技巧</h3>
+<h4 id="81">8.1 轮询优化</h4>
+<p><strong>1. 降低轮询频率</strong></p>
+<pre><code class="language-c">// ❌ 不好：过高的轮询频率
+void bad_polling(void)
+{
+    while (1) {
+        check_event();  // 每次循环都检查
+    }
+}
+
+// ✅ 好：合理的轮询频率
+void good_polling(void)
+{
+    uint32_t last_check = 0;
+
+    while (1) {
+        if (HAL_GetTick() - last_check &gt;= 10) {  // 10ms检查一次
+            last_check = HAL_GetTick();
+            check_event();
+        }
+
+        do_other_work();
+    }
+}
+</code></pre>
+<p><strong>2. 优先级轮询</strong></p>
+<pre><code class="language-c">// 按优先级顺序轮询
+void priority_polling(void)
+{
+    while (1) {
+        // 高优先级事件：每次都检查
+        if (check_critical_event()) {
+            handle_critical_event();
+        }
+
+        // 中优先级事件：每10ms检查
+        static uint32_t mid_last = 0;
+        if (HAL_GetTick() - mid_last &gt;= 10) {
+            mid_last = HAL_GetTick();
+            if (check_normal_event()) {
+                handle_normal_event();
+            }
+        }
+
+        // 低优先级事件：每100ms检查
+        static uint32_t low_last = 0;
+        if (HAL_GetTick() - low_last &gt;= 100) {
+            low_last = HAL_GetTick();
+            if (check_low_priority_event()) {
+                handle_low_priority_event();
+            }
+        }
+    }
+}
+</code></pre>
+<h4 id="82">8.2 中断优化</h4>
+<p><strong>1. 缩短ISR执行时间</strong></p>
+<pre><code class="language-c">// ❌ 不好：ISR中执行复杂处理
+void BAD_IRQHandler(void)
+{
+    __HAL_GPIO_EXTI_CLEAR_IT(PIN);
+
+    // 复杂处理（阻塞其他中断）
+    for (int i = 0; i &lt; 1000; i++) {
+        complex_calculation();
+    }
+}
+
+// ✅ 好：ISR只设置标志
+volatile uint8_t event_flag = 0;
+
+void GOOD_IRQHandler(void)
+{
+    __HAL_GPIO_EXTI_CLEAR_IT(PIN);
+    event_flag = 1;  // 快速返回
+}
+
+void main_loop(void)
+{
+    if (event_flag) {
+        event_flag = 0;
+        // 在主循环中处理
+        complex_calculation();
+    }
+}
+</code></pre>
+<p><strong>2. 使用DMA减少中断频率</strong></p>
+<pre><code class="language-c">// ❌ 不好：每个字节触发一次中断
+void byte_by_byte_interrupt(void)
+{
+    HAL_UART_Receive_IT(&amp;huart1, &amp;rx_byte, 1);
+}
+
+void UART_IRQHandler(void)
+{
+    // 每接收一个字节就中断一次
+    buffer[index++] = rx_byte;
+    HAL_UART_Receive_IT(&amp;huart1, &amp;rx_byte, 1);
+}
+
+// ✅ 好：使用DMA批量传输
+void dma_transfer(void)
+{
+    HAL_UART_Receive_DMA(&amp;huart1, rx_buffer, 256);
+}
+
+void DMA_IRQHandler(void)
+{
+    // 传输完256字节才中断一次
+    process_buffer(rx_buffer, 256);
+}
+</code></pre>
+<h2 id="_7">深入理解</h2>
+<h3 id="_8">中断开销分析</h3>
+<p>中断的总开销包括：</p>
+<pre><code>总开销 = 中断延迟 + ISR执行时间 + 恢复时间
+
+详细分解（ARM Cortex-M3，72MHz）：
+1. 中断延迟：15-20个时钟周期（0.2-0.3μs）
+   - 硬件识别：1-2周期
+   - 保存上下文：12周期
+   - 跳转到ISR：2-3周期
+
+2. ISR执行时间：取决于代码
+   - 简单标志设置：5-10周期（&lt;0.1μs）
+   - 数据读取：20-50周期（0.3-0.7μs）
+   - 复杂处理：&gt;1000周期（&gt;14μs）
+
+3. 恢复时间：12个时钟周期（0.17μs）
+   - 恢复上下文：12周期
+
+最小总开销：约32个时钟周期（0.4μs）
+</code></pre>
+<h3 id="_9">轮询的隐藏成本</h3>
+<p>轮询看似简单，但有隐藏成本：</p>
+<pre><code>1. CPU占用成本
+   - 即使没有事件，CPU也在运行
+   - 无法进入低功耗模式
+   - 功耗增加
+
+2. 响应延迟成本
+   - 平均延迟 = 轮询周期 / 2
+   - 可能错过快速事件
+   - 实时性差
+
+3. 可扩展性成本
+   - 事件源增多时，轮询周期变长
+   - 或者需要提高轮询频率，增加CPU占用
+   - 难以平衡
+
+4. 代码复杂度成本
+   - 多个事件源的轮询逻辑复杂
+   - 状态管理困难
+   - 维护成本高
+</code></pre>
+<h3 id="_10">混合策略的优势</h3>
+<p>混合策略结合了两种机制的优点：</p>
+<pre><code>中断部分：
+- 快速响应事件
+- 不丢失数据
+- 低功耗
+
+轮询部分：
+- 复杂处理在主循环
+- 不阻塞中断
+- 易于调试
+
+结果：
+- 响应快速
+- CPU利用率高
+- 系统稳定
+- 易于维护
+</code></pre>
+<h2 id="_11">最佳实践</h2>
+<h3 id="1_2">1. 选择原则</h3>
+<pre><code class="language-c">// 决策矩阵
+typedef struct {
+    uint32_t event_frequency;    // 事件频率（Hz）
+    uint32_t response_time;      // 响应时间要求（μs）
+    uint8_t  low_power_required; // 是否需要低功耗
+    uint8_t  system_complexity;  // 系统复杂度（1-10）
+} EventCharacteristics;
+
+MechanismType select_mechanism(EventCharacteristics *event)
+{
+    // 规则1：高频率事件使用轮询
+    if (event-&gt;event_frequency &gt; 1000) {  // &gt;1kHz
+        return POLLING;
+    }
+
+    // 规则2：需要快速响应使用中断
+    if (event-&gt;response_time &lt; 100) {  // &lt;100μs
+        return INTERRUPT;
+    }
+
+    // 规则3：低功耗应用使用中断
+    if (event-&gt;low_power_required) {
+        return INTERRUPT;
+    }
+
+    // 规则4：简单系统可以使用轮询
+    if (event-&gt;system_complexity &lt; 3) {
+        return POLLING;
+    }
+
+    // 默认：使用混合策略
+    return HYBRID;
+}
+</code></pre>
+<h3 id="2_2">2. 实现建议</h3>
+<p><strong>轮询实现建议</strong>：</p>
+<pre><code class="language-c">// ✅ 好的轮询实现
+void good_polling_implementation(void)
+{
+    uint32_t last_poll_time = 0;
+    const uint32_t POLL_INTERVAL = 10;  // 明确的轮询间隔
+
+    while (1) {
+        uint32_t current_time = HAL_GetTick();
+
+        // 定时轮询
+        if (current_time - last_poll_time &gt;= POLL_INTERVAL) {
+            last_poll_time = current_time;
+
+            // 按优先级检查
+            if (check_high_priority_event()) {
+                handle_high_priority_event();
+            }
+
+            if (check_normal_event()) {
+                handle_normal_event();
+            }
+        }
+
+        // 执行其他任务
+        do_background_work();
+
+        // 可选：短暂睡眠降低功耗
+        // HAL_Delay(1);
+    }
+}
+</code></pre>
+<p><strong>中断实现建议</strong>：</p>
+<pre><code class="language-c">// ✅ 好的中断实现
+volatile uint8_t event_flags = 0;
+#define FLAG_UART    (1 &lt;&lt; 0)
+#define FLAG_TIMER   (1 &lt;&lt; 1)
+#define FLAG_ADC     (1 &lt;&lt; 2)
+
+// ISR只设置标志
+void UART_IRQHandler(void)
+{
+    if (__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        rx_buffer[rx_index++] = huart1.Instance-&gt;DR;
+        event_flags |= FLAG_UART;
+    }
+}
+
+void TIM_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+        event_flags |= FLAG_TIMER;
+    }
+}
+
+// 主循环处理
+void main_loop(void)
+{
+    while (1) {
+        // 原子读取并清除标志
+        uint8_t flags = __disable_irq_and_read(&amp;event_flags);
+        event_flags = 0;
+        __enable_irq();
+
+        // 按优先级处理
+        if (flags &amp; FLAG_UART) {
+            handle_uart_event();
+        }
+
+        if (flags &amp; FLAG_TIMER) {
+            handle_timer_event();
+        }
+
+        if (flags &amp; FLAG_ADC) {
+            handle_adc_event();
+        }
+
+        // 空闲时进入低功耗
+        if (event_flags == 0) {
+            __WFI();
+        }
+    }
+}
+</code></pre>
+<h3 id="3_1">3. 常见陷阱</h3>
+<p><strong>陷阱1：轮询频率过高</strong></p>
+<pre><code class="language-c">// ❌ 错误：无意义的高频轮询
+void bad_high_frequency_polling(void)
+{
+    while (1) {
+        // 检查按键（人类反应时间&gt;100ms）
+        if (button_pressed()) {
+            handle_button();
+        }
+        // 每次循环都检查，浪费CPU
+    }
+}
+
+// ✅ 正确：合理的轮询频率
+void good_polling_frequency(void)
+{
+    while (1) {
+        // 10ms检查一次足够
+        HAL_Delay(10);
+        if (button_pressed()) {
+            handle_button();
+        }
+    }
+}
+</code></pre>
+<p><strong>陷阱2：ISR执行时间过长</strong></p>
+<pre><code class="language-c">// ❌ 错误：ISR中执行复杂操作
+void BAD_IRQHandler(void)
+{
+    __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+    // 复杂的浮点运算
+    float result = sqrt(pow(x, 2) + pow(y, 2));
+
+    // 长时间循环
+    for (int i = 0; i &lt; 10000; i++) {
+        process_data(i);
+    }
+
+    // 阻塞延时
+    HAL_Delay(100);
+}
+
+// ✅ 正确：ISR快速返回
+volatile uint8_t data_ready = 0;
+
+void GOOD_IRQHandler(void)
+{
+    __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+    data_ready = 1;  // 只设置标志
+}
+</code></pre>
+<p><strong>陷阱3：忽略中断优先级</strong></p>
+<pre><code class="language-c">// ❌ 错误：所有中断使用相同优先级
+void bad_priority_config(void)
+{
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(TIM2_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(UART1_IRQn, 2, 0);
+    // 无法保证重要中断的实时性
+}
+
+// ✅ 正确：合理分配优先级
+void good_priority_config(void)
+{
+    // 紧急事件：最高优先级
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+
+    // 实时控制：高优先级
+    HAL_NVIC_SetPriority(TIM2_IRQn, 1, 0);
+
+    // 通信：中等优先级
+    HAL_NVIC_SetPriority(UART1_IRQn, 2, 0);
+}
+</code></pre>
+<h2 id="_12">常见问题</h2>
+<h3 id="q1">Q1: 什么时候应该使用轮询而不是中断？</h3>
+<p><strong>A</strong>: 以下场景适合使用轮询：</p>
+<ol>
+<li>
+<p><strong>事件频率非常高</strong>（&gt;1kHz）
+   - 中断开销会降低效率
+   - 例如：高速ADC连续采样</p>
+</li>
+<li>
+<p><strong>系统非常简单</strong>
+   - 只有1-2个事件源
+   - 不需要复杂的中断配置
+   - 例如：简单的LED闪烁控制</p>
+</li>
+<li>
+<p><strong>响应时间要求不严格</strong>
+   - 毫秒级延迟可以接受
+   - 例如：温度监控（每秒检查一次）</p>
+</li>
+<li>
+<p><strong>调试和原型阶段</strong>
+   - 轮询代码更容易调试
+   - 流程清晰，便于验证功能</p>
+</li>
+</ol>
+<h3 id="q2">Q2: 中断会增加多少系统开销？</h3>
+<p><strong>A</strong>: 中断开销取决于多个因素：</p>
+<p><strong>单次中断开销</strong>：</p>
+<pre><code>最小开销（只设置标志）：
+- 中断延迟：0.2-0.3μs
+- ISR执行：&lt;0.1μs
+- 恢复时间：0.17μs
+- 总计：&lt;0.5μs
+
+典型开销（读取数据）：
+- 中断延迟：0.2-0.3μs
+- ISR执行：0.5-1μs
+- 恢复时间：0.17μs
+- 总计：1-1.5μs
+</code></pre>
+<p><strong>频繁中断的影响</strong>：</p>
+<pre><code>中断频率：1kHz
+单次开销：1μs
+总开销：1ms/s = 0.1% CPU占用
+
+中断频率：10kHz
+单次开销：1μs
+总开销：10ms/s = 1% CPU占用
+
+中断频率：100kHz
+单次开销：1μs
+总开销：100ms/s = 10% CPU占用
+</code></pre>
+<p><strong>建议</strong>：
+- 中断频率&lt;10kHz：开销可忽略
+- 中断频率10-100kHz：需要优化ISR
+- 中断频率&gt;100kHz：考虑使用DMA或轮询</p>
+<h3 id="q3">Q3: 如何在轮询和中断之间做出选择？</h3>
+<p><strong>A</strong>: 使用以下决策树：</p>
+<pre><code>1. 事件频率是否&gt;1kHz？
+   是 → 使用轮询
+   否 → 继续
+
+2. 是否需要微秒级响应？
+   是 → 使用中断
+   否 → 继续
+
+3. 是否需要低功耗？
+   是 → 使用中断
+   否 → 继续
+
+4. 系统是否非常简单（&lt;3个事件源）？
+   是 → 可以使用轮询
+   否 → 使用中断或混合策略
+
+5. 是否有多个独立事件源？
+   是 → 使用中断
+   否 → 考虑混合策略
+</code></pre>
+<p><strong>实际应用示例</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>应用场景</th>
+<th>推荐方案</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>按键输入</td>
+<td>轮询或中断</td>
+<td>简单系统用轮询，低功耗用中断</td>
+</tr>
+<tr>
+<td>串口通信</td>
+<td>中断</td>
+<td>不可预测，需要快速响应</td>
+</tr>
+<tr>
+<td>高速ADC</td>
+<td>轮询或DMA</td>
+<td>频率高，中断开销大</td>
+</tr>
+<tr>
+<td>定时任务</td>
+<td>中断</td>
+<td>精确定时，事件驱动</td>
+</tr>
+<tr>
+<td>传感器读取</td>
+<td>混合</td>
+<td>中断触发，轮询处理</td>
+</tr>
+<tr>
+<td>紧急停止</td>
+<td>中断</td>
+<td>需要最快响应</td>
+</tr>
+</tbody>
+</table>
+<h3 id="q4">Q4: 混合策略如何实现？</h3>
+<p><strong>A</strong>: 混合策略的典型实现模式：</p>
+<p><strong>模式1：中断触发 + 轮询处理</strong></p>
+<pre><code class="language-c">// 中断快速响应
+volatile uint8_t event_pending = 0;
+
+void IRQHandler(void)
+{
+    // 快速设置标志
+    event_pending = 1;
+}
+
+// 主循环轮询处理
+void main_loop(void)
+{
+    while (1) {
+        if (event_pending) {
+            event_pending = 0;
+            // 复杂处理
+            handle_event();
+        }
+
+        do_other_work();
+    }
+}
+</code></pre>
+<p><strong>模式2：定时中断 + 轮询检查</strong></p>
+<pre><code class="language-c">// 定时器控制轮询频率
+volatile uint8_t poll_flag = 0;
+
+void TIM_IRQHandler(void)
+{
+    poll_flag = 1;  // 每10ms设置一次
+}
+
+void main_loop(void)
+{
+    while (1) {
+        if (poll_flag) {
+            poll_flag = 0;
+            // 轮询检查多个事件
+            check_all_events();
+        }
+    }
+}
+</code></pre>
+<p><strong>模式3：分层处理</strong></p>
+<pre><code class="language-c">// 高优先级：中断
+void HIGH_PRIORITY_IRQHandler(void) {
+    handle_critical_event();
+}
+
+// 中优先级：中断触发 + 标志
+volatile uint8_t mid_flag = 0;
+void MID_PRIORITY_IRQHandler(void) {
+    mid_flag = 1;
+}
+
+// 低优先级：定时轮询
+void main_loop(void)
+{
+    uint32_t last_poll = 0;
+
+    while (1) {
+        // 处理中优先级标志
+        if (mid_flag) {
+            mid_flag = 0;
+            handle_mid_priority();
+        }
+
+        // 定时轮询低优先级
+        if (HAL_GetTick() - last_poll &gt;= 100) {
+            last_poll = HAL_GetTick();
+            check_low_priority();
+        }
+    }
+}
+</code></pre>
+<h3 id="q5">Q5: 如何测量和优化性能？</h3>
+<p><strong>A</strong>: 性能测量和优化方法：</p>
+<p><strong>1. 测量响应时间</strong></p>
+<pre><code class="language-c">// 使用GPIO标记
+void measure_response_time(void)
+{
+    // 事件发生时拉高GPIO
+    HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN, GPIO_PIN_SET);
+}
+
+void IRQHandler(void)
+{
+    // 响应时拉低GPIO
+    HAL_GPIO_WritePin(DEBUG_PORT, DEBUG_PIN, GPIO_PIN_RESET);
+
+    // 使用逻辑分析仪测量高电平持续时间
+    // = 响应延迟
+}
+</code></pre>
+<p><strong>2. 测量CPU占用</strong></p>
+<pre><code class="language-c">// 使用DWT计数器
+void measure_cpu_usage(void)
+{
+    uint32_t start_cycles = DWT-&gt;CYCCNT;
+    uint32_t start_time = HAL_GetTick();
+
+    // 运行1秒
+    while (HAL_GetTick() - start_time &lt; 1000);
+
+    uint32_t total_cycles = DWT-&gt;CYCCNT - start_cycles;
+    uint32_t isr_cycles = get_isr_cycles();  // 累计ISR周期数
+
+    float cpu_usage = ((float)isr_cycles / total_cycles) * 100;
+    printf(&quot;CPU Usage: %.2f%%\n&quot;, cpu_usage);
+}
+</code></pre>
+<p><strong>3. 优化建议</strong></p>
+<pre><code class="language-c">// 优化1：减少轮询频率
+// 从1ms改为10ms，CPU占用降低10倍
+
+// 优化2：使用DMA
+// 减少中断频率，降低CPU占用
+
+// 优化3：批量处理
+// 累积多个事件后一次处理
+
+// 优化4：缩短ISR
+// 只在ISR中设置标志，主循环处理
+</code></pre>
+<h2 id="_13">总结</h2>
+<p>本文深入分析了中断和轮询两种事件处理机制，核心要点包括：</p>
+<ol>
+<li>
+<p><strong>轮询机制</strong>
+   - 主动检查，实现简单
+   - CPU占用高，响应延迟大
+   - 适合高频事件和简单系统</p>
+</li>
+<li>
+<p><strong>中断机制</strong>
+   - 被动响应，快速高效
+   - 实现复杂，有中断开销
+   - 适合低频事件和实时系统</p>
+</li>
+<li>
+<p><strong>性能对比</strong>
+   - 响应时间：中断微秒级，轮询毫秒级
+   - CPU利用率：中断低，轮询高
+   - 功耗：中断低，轮询高</p>
+</li>
+<li>
+<p><strong>选择策略</strong>
+   - 根据事件频率、响应时间、功耗要求选择
+   - 高频事件用轮询
+   - 低频事件用中断
+   - 复杂系统用混合策略</p>
+</li>
+<li>
+<p><strong>混合策略</strong>
+   - 中断触发 + 轮询处理
+   - 定时中断 + 轮询检查
+   - 分层处理不同优先级事件</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>
+   - 合理设置轮询频率
+   - 缩短ISR执行时间
+   - 正确配置中断优先级
+   - 使用DMA减少中断频率</p>
+</li>
+</ol>
+<p>掌握这些知识后，你就可以根据具体应用场景，选择最合适的事件处理机制，设计出高效、可靠的嵌入式系统。</p>
+<h2 id="_14">延伸阅读</h2>
+<ul>
+<li><a href="../beginner/01-interrupt-basics.html">中断系统基础概念</a> - 深入理解中断原理</li>
+<li><a href="01-interrupt-priority.html">中断优先级配置与抢占机制</a> - 学习优先级管理</li>
+<li><a href="03-interrupt-safety.html">中断安全与临界区保护</a> - 掌握中断安全编程</li>
+</ul>
+<h2 id="_15">参考资料</h2>
+<ol>
+<li>"Embedded Systems Design" by Steve Heath</li>
+<li>"Real-Time Systems Design and Analysis" by Phillip A. Laplante</li>
+<li>ARM Cortex-M Programming Guide - ARM官方文档</li>
+<li>"Making Embedded Systems" by Elecia White</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>
+<p>分析你当前项目中的事件处理方式，是否可以优化？</p>
+</li>
+<li>
+<p>设计一个混合策略系统，包含：紧急按键（中断）、定时任务（中断）、温度监控（轮询）。</p>
+</li>
+<li>
+<p>测量你的系统中中断的CPU占用率，如果超过10%，如何优化？</p>
+</li>
+<li>
+<p>实现一个自适应轮询系统，根据事件频率动态调整轮询间隔。</p>
+</li>
+<li>
+<p>比较以下场景应该使用中断还是轮询：
+   - 100Hz的ADC采样
+   - 不定时的串口数据接收
+   - 每秒一次的温度读取
+   - 紧急停止按键
+   - 1kHz的PWM更新</p>
+</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="03-interrupt-safety.html">中断安全与临界区保护</a>，了解如何在中断环境下安全地访问共享资源。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

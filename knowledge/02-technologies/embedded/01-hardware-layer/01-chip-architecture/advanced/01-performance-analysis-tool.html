@@ -1,0 +1,2460 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>基于性能计数器的系统性能分析工具 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/">01-chip-architecture</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">项目概述</a><ul>
+<li><a href="#_3">项目目标</a></li>
+<li><a href="#_4">应用场景</a></li>
+<li><a href="#_5">技术栈</a></li>
+<li><a href="#_6">项目特点</a></li>
+</ul>
+</li>
+<li><a href="#dwt">DWT性能计数器详解</a><ul>
+<li><a href="#dwt_1">DWT简介</a></li>
+<li><a href="#dwt_2">DWT寄存器映射</a></li>
+<li><a href="#dwt_3">DWT工作原理</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心模块设计</a><ul>
+<li><a href="#_8">模块架构</a></li>
+<li><a href="#_9">数据结构设计</a></li>
+</ul>
+</li>
+<li><a href="#dwt_4">DWT驱动实现</a><ul>
+<li><a href="#dwt_5">DWT初始化</a></li>
+</ul>
+</li>
+<li><a href="#api">性能测量API</a><ul>
+<li><a href="#api_1">核心API实现</a></li>
+<li><a href="#_10">便捷宏定义</a></li>
+</ul>
+</li>
+<li><a href="#_11">性能报告生成</a><ul>
+<li><a href="#_12">文本格式报告</a></li>
+<li><a href="#json">JSON格式输出</a></li>
+</ul>
+</li>
+<li><a href="#_13">使用示例</a><ul>
+<li><a href="#_14">基本使用</a></li>
+<li><a href="#_15">算法性能对比</a></li>
+<li><a href="#_16">实时系统性能监控</a></li>
+</ul>
+</li>
+<li><a href="#_17">高级功能</a><ul>
+<li><a href="#_18">性能瓶颈自动检测</a></li>
+<li><a href="#_19">性能趋势分析</a></li>
+</ul>
+</li>
+<li><a href="#_20">可视化工具</a><ul>
+<li><a href="#python">Python可视化脚本</a></li>
+</ul>
+</li>
+<li><a href="#_21">项目集成</a><ul>
+<li><a href="#makefile">Makefile配置</a></li>
+<li><a href="#cmake">CMake配置</a></li>
+</ul>
+</li>
+<li><a href="#_22">最佳实践</a><ul>
+<li><a href="#_23">性能测量注意事项</a></li>
+<li><a href="#_24">性能优化流程</a></li>
+<li><a href="#_25">常见问题排查</a></li>
+</ul>
+</li>
+<li><a href="#_26">项目扩展</a><ul>
+<li><a href="#_27">支持多核处理器</a></li>
+<li><a href="#rtos">支持RTOS集成</a></li>
+<li><a href="#_28">网络远程监控</a></li>
+</ul>
+</li>
+<li><a href="#_29">项目总结</a><ul>
+<li><a href="#_30">项目成果</a></li>
+<li><a href="#_31">关键技术点</a></li>
+<li><a href="#_32">性能指标</a></li>
+<li><a href="#_33">应用场景总结</a></li>
+<li><a href="#_34">后续改进方向</a></li>
+</ul>
+</li>
+<li><a href="#_35">参考资料</a><ul>
+<li><a href="#_36">官方文档</a></li>
+<li><a href="#_37">推荐阅读</a></li>
+<li><a href="#_38">开源项目</a></li>
+<li><a href="#_39">在线资源</a></li>
+</ul>
+</li>
+<li><a href="#_40">附录</a><ul>
+<li><a href="#_41">完整代码仓库</a></li>
+<li><a href="#mcu">支持的MCU列表</a></li>
+<li><a href="#faq">常见问题FAQ</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">基于性能计数器的系统性能分析工具</h1>
+<h2 id="_2">项目概述</h2>
+<h3 id="_3">项目目标</h3>
+<p>构建一个功能完整的嵌入式系统性能分析工具，能够：</p>
+<ol>
+<li><strong>精确测量</strong>：利用DWT计数器实现周期级精度的性能测量</li>
+<li><strong>性能分析</strong>：识别代码中的性能瓶颈和热点函数</li>
+<li><strong>实时监控</strong>：在系统运行时实时监控性能指标</li>
+<li><strong>数据可视化</strong>：通过串口或网络接口输出性能数据，支持可视化展示</li>
+<li><strong>多维度分析</strong>：支持函数级、模块级和系统级性能分析</li>
+</ol>
+<h3 id="_4">应用场景</h3>
+<ul>
+<li>嵌入式系统性能优化</li>
+<li>实时系统响应时间分析</li>
+<li>算法性能对比测试</li>
+<li>系统资源使用监控</li>
+<li>产品性能基准测试</li>
+</ul>
+<h3 id="_5">技术栈</h3>
+<ul>
+<li><strong>硬件平台</strong>：ARM Cortex-M3/M4/M7（支持DWT）</li>
+<li><strong>开发工具</strong>：GCC/Keil/IAR</li>
+<li><strong>调试接口</strong>：UART/USB/RTT</li>
+<li><strong>可视化</strong>：Python脚本或Web界面</li>
+</ul>
+<h3 id="_6">项目特点</h3>
+<ul>
+<li>零侵入性：不影响被测代码的执行逻辑</li>
+<li>高精度：周期级测量精度</li>
+<li>低开销：最小化性能分析本身的开销</li>
+<li>易集成：简单的API接口</li>
+<li>可扩展：支持自定义性能指标</li>
+</ul>
+<h2 id="dwt">DWT性能计数器详解</h2>
+<h3 id="dwt_1">DWT简介</h3>
+<p>DWT（Data Watchpoint and Trace）是ARM Cortex-M处理器的调试组件，提供：</p>
+<ul>
+<li><strong>CYCCNT</strong>：周期计数器，记录CPU执行的时钟周期数</li>
+<li><strong>CPICNT</strong>：CPI（Cycles Per Instruction）计数器</li>
+<li><strong>EXCCNT</strong>：异常开销计数器</li>
+<li><strong>SLEEPCNT</strong>：睡眠周期计数器</li>
+<li><strong>LSUCNT</strong>：加载/存储单元计数器</li>
+<li><strong>FOLDCNT</strong>：指令折叠计数器</li>
+</ul>
+<h3 id="dwt_2">DWT寄存器映射</h3>
+<pre><code>DWT基地址：0xE0001000
+
+关键寄存器：
+- DWT_CTRL     (0xE0001000): 控制寄存器
+- DWT_CYCCNT   (0xE0001004): 周期计数器
+- DWT_CPICNT   (0xE0001008): CPI计数器
+- DWT_EXCCNT   (0xE000100C): 异常计数器
+- DWT_SLEEPCNT (0xE0001010): 睡眠计数器
+- DWT_LSUCNT   (0xE0001014): LSU计数器
+- DWT_FOLDCNT  (0xE0001018): 折叠计数器
+</code></pre>
+<h3 id="dwt_3">DWT工作原理</h3>
+<pre><code>┌─────────────────────────────────────────┐
+│         ARM Cortex-M 处理器              │
+│                                         │
+│  ┌──────────┐      ┌──────────────┐   │
+│  │   CPU    │─────▶│  DWT单元     │   │
+│  │  Core    │      │              │   │
+│  └──────────┘      │ ┌──────────┐ │   │
+│                    │ │ CYCCNT   │ │   │
+│  ┌──────────┐      │ ├──────────┤ │   │
+│  │ 总线接口  │      │ │ CPICNT   │ │   │
+│  └──────────┘      │ ├──────────┤ │   │
+│                    │ │ EXCCNT   │ │   │
+│  ┌──────────┐      │ ├──────────┤ │   │
+│  │ 中断控制  │─────▶│ │ SLEEPCNT │ │   │
+│  └──────────┘      │ ├──────────┤ │   │
+│                    │ │ LSUCNT   │ │   │
+│                    │ ├──────────┤ │   │
+│                    │ │ FOLDCNT  │ │   │
+│                    │ └──────────┘ │   │
+│                    └──────────────┘   │
+└─────────────────────────────────────────┘
+</code></pre>
+<h2 id="_7">核心模块设计</h2>
+<h3 id="_8">模块架构</h3>
+<pre><code>┌─────────────────────────────────────────────────────┐
+│           性能分析工具架构                            │
+├─────────────────────────────────────────────────────┤
+│                                                     │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────┐ │
+│  │  DWT驱动层   │  │  测量引擎    │  │ 数据管理 │ │
+│  │              │  │              │  │          │ │
+│  │ - 初始化     │  │ - 开始测量   │  │ - 存储   │ │
+│  │ - 配置       │  │ - 停止测量   │  │ - 查询   │ │
+│  │ - 读取计数器 │  │ - 计算统计   │  │ - 导出   │ │
+│  └──────────────┘  └──────────────┘  └──────────┘ │
+│         │                  │                │      │
+│         └──────────────────┴────────────────┘      │
+│                        │                           │
+│  ┌─────────────────────┴────────────────────────┐ │
+│  │            API接口层                          │ │
+│  │                                               │ │
+│  │  - PERF_Init()                               │ │
+│  │  - PERF_Start(name)                          │ │
+│  │  - PERF_Stop(name)                           │ │
+│  │  - PERF_Report()                             │ │
+│  └───────────────────────────────────────────────┘ │
+│                        │                           │
+│  ┌─────────────────────┴────────────────────────┐ │
+│  │            输出层                             │ │
+│  │                                               │ │
+│  │  - UART输出                                   │ │
+│  │  - RTT输出                                    │ │
+│  │  - JSON格式化                                 │ │
+│  └───────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="_9">数据结构设计</h3>
+<pre><code class="language-c">/**
+ * @file perf_counter.h
+ * @brief 性能计数器头文件
+ */
+
+#ifndef PERF_COUNTER_H
+#define PERF_COUNTER_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* 配置参数 */
+#define PERF_MAX_COUNTERS       32      // 最大计数器数量
+#define PERF_NAME_MAX_LEN       32      // 名称最大长度
+#define PERF_HISTORY_SIZE       10      // 历史记录数量
+
+/* DWT寄存器定义 */
+#define DWT_CTRL                (*(volatile uint32_t *)0xE0001000)
+#define DWT_CYCCNT              (*(volatile uint32_t *)0xE0001004)
+#define DWT_CPICNT              (*(volatile uint32_t *)0xE0001008)
+#define DWT_EXCCNT              (*(volatile uint32_t *)0xE000100C)
+#define DWT_SLEEPCNT            (*(volatile uint32_t *)0xE0001010)
+#define DWT_LSUCNT              (*(volatile uint32_t *)0xE0001014)
+#define DWT_FOLDCNT             (*(volatile uint32_t *)0xE0001018)
+
+#define CoreDebug_DEMCR         (*(volatile uint32_t *)0xE000EDFC)
+#define CoreDebug_DEMCR_TRCENA  (1 &lt;&lt; 24)
+
+/* DWT控制位 */
+#define DWT_CTRL_CYCCNTENA      (1 &lt;&lt; 0)
+#define DWT_CTRL_CPIEVTENA      (1 &lt;&lt; 17)
+#define DWT_CTRL_EXCEVTENA      (1 &lt;&lt; 18)
+#define DWT_CTRL_SLEEPEVTENA    (1 &lt;&lt; 19)
+#define DWT_CTRL_LSUEVTENA      (1 &lt;&lt; 20)
+#define DWT_CTRL_FOLDEVTENA     (1 &lt;&lt; 21)
+
+/**
+ * @brief 性能计数器状态
+ */
+typedef enum {
+    PERF_STATE_IDLE = 0,        // 空闲
+    PERF_STATE_RUNNING,         // 运行中
+    PERF_STATE_STOPPED,         // 已停止
+    PERF_STATE_ERROR            // 错误
+} perf_state_t;
+
+/**
+ * @brief 性能统计数据
+ */
+typedef struct {
+    uint32_t cycles;            // 周期数
+    uint32_t cpi_count;         // CPI计数
+    uint32_t exc_count;         // 异常计数
+    uint32_t sleep_count;       // 睡眠计数
+    uint32_t lsu_count;         // LSU计数
+    uint32_t fold_count;        // 折叠计数
+    uint32_t timestamp;         // 时间戳
+} perf_snapshot_t;
+
+/**
+ * @brief 性能计数器
+ */
+typedef struct {
+    char name[PERF_NAME_MAX_LEN];       // 计数器名称
+    perf_state_t state;                 // 状态
+    perf_snapshot_t start;              // 开始快照
+    perf_snapshot_t end;                // 结束快照
+    uint32_t call_count;                // 调用次数
+    uint64_t total_cycles;              // 总周期数
+    uint32_t min_cycles;                // 最小周期数
+    uint32_t max_cycles;                // 最大周期数
+    uint32_t history[PERF_HISTORY_SIZE]; // 历史记录
+    uint8_t history_index;              // 历史索引
+    bool enabled;                       // 是否启用
+} perf_counter_t;
+
+/**
+ * @brief 性能分析器
+ */
+typedef struct {
+    perf_counter_t counters[PERF_MAX_COUNTERS];
+    uint8_t counter_count;
+    bool initialized;
+    uint32_t cpu_freq_mhz;
+} perf_analyzer_t;
+
+#endif /* PERF_COUNTER_H */
+</code></pre>
+<h2 id="dwt_4">DWT驱动实现</h2>
+<h3 id="dwt_5">DWT初始化</h3>
+<pre><code class="language-c">/**
+ * @file perf_counter.c
+ * @brief 性能计数器实现
+ */
+
+#include &quot;perf_counter.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/* 全局性能分析器实例 */
+static perf_analyzer_t g_perf_analyzer = {0};
+
+/**
+ * @brief 初始化DWT
+ * @param cpu_freq_mhz CPU频率（MHz）
+ * @retval 0: 成功, -1: 失败
+ */
+int PERF_DWT_Init(uint32_t cpu_freq_mhz) {
+    // 使能DWT和ITM
+    CoreDebug_DEMCR |= CoreDebug_DEMCR_TRCENA;
+
+    // 复位周期计数器
+    DWT_CYCCNT = 0;
+
+    // 使能周期计数器
+    DWT_CTRL |= DWT_CTRL_CYCCNTENA;
+
+    // 使能其他计数器（可选）
+    DWT_CTRL |= DWT_CTRL_CPIEVTENA;   // CPI计数
+    DWT_CTRL |= DWT_CTRL_EXCEVTENA;   // 异常计数
+    DWT_CTRL |= DWT_CTRL_SLEEPEVTENA; // 睡眠计数
+    DWT_CTRL |= DWT_CTRL_LSUEVTENA;   // LSU计数
+    DWT_CTRL |= DWT_CTRL_FOLDEVTENA;  // 折叠计数
+
+    // 清零所有计数器
+    DWT_CPICNT = 0;
+    DWT_EXCCNT = 0;
+    DWT_SLEEPCNT = 0;
+    DWT_LSUCNT = 0;
+    DWT_FOLDCNT = 0;
+
+    // 验证DWT是否工作
+    uint32_t test_start = DWT_CYCCNT;
+    for (volatile int i = 0; i &lt; 100; i++);
+    uint32_t test_end = DWT_CYCCNT;
+
+    if (test_end &lt;= test_start) {
+        return -1;  // DWT未工作
+    }
+
+    g_perf_analyzer.cpu_freq_mhz = cpu_freq_mhz;
+    g_perf_analyzer.initialized = true;
+
+    return 0;
+}
+
+/**
+ * @brief 读取DWT快照
+ * @param snapshot 快照结构指针
+ */
+static void PERF_DWT_ReadSnapshot(perf_snapshot_t *snapshot) {
+    // 读取所有计数器（原子操作）
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    snapshot-&gt;cycles = DWT_CYCCNT;
+    snapshot-&gt;cpi_count = DWT_CPICNT;
+    snapshot-&gt;exc_count = DWT_EXCCNT;
+    snapshot-&gt;sleep_count = DWT_SLEEPCNT;
+    snapshot-&gt;lsu_count = DWT_LSUCNT;
+    snapshot-&gt;fold_count = DWT_FOLDCNT;
+    snapshot-&gt;timestamp = DWT_CYCCNT;  // 使用周期计数作为时间戳
+
+    __set_PRIMASK(primask);
+}
+
+/**
+ * @brief 计算两个快照之间的差值
+ * @param start 开始快照
+ * @param end 结束快照
+ * @param diff 差值快照
+ */
+static void PERF_DWT_CalcDiff(const perf_snapshot_t *start,
+                               const perf_snapshot_t *end,
+                               perf_snapshot_t *diff) {
+    // 处理计数器溢出（32位）
+    diff-&gt;cycles = (end-&gt;cycles &gt;= start-&gt;cycles) ?
+                   (end-&gt;cycles - start-&gt;cycles) :
+                   (0xFFFFFFFF - start-&gt;cycles + end-&gt;cycles + 1);
+
+    diff-&gt;cpi_count = (end-&gt;cpi_count &gt;= start-&gt;cpi_count) ?
+                      (end-&gt;cpi_count - start-&gt;cpi_count) :
+                      (0xFFFFFFFF - start-&gt;cpi_count + end-&gt;cpi_count + 1);
+
+    diff-&gt;exc_count = (end-&gt;exc_count &gt;= start-&gt;exc_count) ?
+                      (end-&gt;exc_count - start-&gt;exc_count) :
+                      (0xFFFFFFFF - start-&gt;exc_count + end-&gt;exc_count + 1);
+
+    diff-&gt;sleep_count = (end-&gt;sleep_count &gt;= start-&gt;sleep_count) ?
+                        (end-&gt;sleep_count - start-&gt;sleep_count) :
+                        (0xFFFFFFFF - start-&gt;sleep_count + end-&gt;sleep_count + 1);
+
+    diff-&gt;lsu_count = (end-&gt;lsu_count &gt;= start-&gt;lsu_count) ?
+                      (end-&gt;lsu_count - start-&gt;lsu_count) :
+                      (0xFFFFFFFF - start-&gt;lsu_count + end-&gt;lsu_count + 1);
+
+    diff-&gt;fold_count = (end-&gt;fold_count &gt;= start-&gt;fold_count) ?
+                       (end-&gt;fold_count - start-&gt;fold_count) :
+                       (0xFFFFFFFF - start-&gt;fold_count + end-&gt;fold_count + 1);
+}
+
+/**
+ * @brief 复位DWT计数器
+ */
+void PERF_DWT_Reset(void) {
+    DWT_CYCCNT = 0;
+    DWT_CPICNT = 0;
+    DWT_EXCCNT = 0;
+    DWT_SLEEPCNT = 0;
+    DWT_LSUCNT = 0;
+    DWT_FOLDCNT = 0;
+}
+</code></pre>
+<h2 id="api">性能测量API</h2>
+<h3 id="api_1">核心API实现</h3>
+<pre><code class="language-c">/**
+ * @brief 初始化性能分析器
+ * @param cpu_freq_mhz CPU频率（MHz）
+ * @retval 0: 成功, -1: 失败
+ */
+int PERF_Init(uint32_t cpu_freq_mhz) {
+    if (g_perf_analyzer.initialized) {
+        return 0;  // 已初始化
+    }
+
+    // 清零分析器
+    memset(&amp;g_perf_analyzer, 0, sizeof(perf_analyzer_t));
+
+    // 初始化DWT
+    if (PERF_DWT_Init(cpu_freq_mhz) != 0) {
+        return -1;
+    }
+
+    printf(&quot;[PERF] 性能分析器已初始化 (CPU: %u MHz)\n&quot;, 
+           (unsigned int)cpu_freq_mhz);
+
+    return 0;
+}
+
+/**
+ * @brief 查找或创建计数器
+ * @param name 计数器名称
+ * @retval 计数器指针，NULL表示失败
+ */
+static perf_counter_t* PERF_FindOrCreateCounter(const char *name) {
+    // 查找现有计数器
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+            return &amp;g_perf_analyzer.counters[i];
+        }
+    }
+
+    // 创建新计数器
+    if (g_perf_analyzer.counter_count &gt;= PERF_MAX_COUNTERS) {
+        printf(&quot;[PERF] 错误: 计数器数量已达上限\n&quot;);
+        return NULL;
+    }
+
+    perf_counter_t *counter = &amp;g_perf_analyzer.counters[g_perf_analyzer.counter_count++];
+
+    // 初始化计数器
+    memset(counter, 0, sizeof(perf_counter_t));
+    strncpy(counter-&gt;name, name, PERF_NAME_MAX_LEN - 1);
+    counter-&gt;name[PERF_NAME_MAX_LEN - 1] = '\0';
+    counter-&gt;state = PERF_STATE_IDLE;
+    counter-&gt;enabled = true;
+    counter-&gt;min_cycles = 0xFFFFFFFF;
+    counter-&gt;max_cycles = 0;
+
+    return counter;
+}
+
+/**
+ * @brief 开始性能测量
+ * @param name 测量点名称
+ * @retval 0: 成功, -1: 失败
+ */
+int PERF_Start(const char *name) {
+    if (!g_perf_analyzer.initialized) {
+        return -1;
+    }
+
+    perf_counter_t *counter = PERF_FindOrCreateCounter(name);
+    if (counter == NULL) {
+        return -1;
+    }
+
+    if (!counter-&gt;enabled) {
+        return 0;  // 计数器已禁用
+    }
+
+    if (counter-&gt;state == PERF_STATE_RUNNING) {
+        printf(&quot;[PERF] 警告: 计数器 '%s' 已在运行\n&quot;, name);
+        return -1;
+    }
+
+    // 读取开始快照
+    PERF_DWT_ReadSnapshot(&amp;counter-&gt;start);
+    counter-&gt;state = PERF_STATE_RUNNING;
+
+    return 0;
+}
+
+/**
+ * @brief 停止性能测量
+ * @param name 测量点名称
+ * @retval 0: 成功, -1: 失败
+ */
+int PERF_Stop(const char *name) {
+    if (!g_perf_analyzer.initialized) {
+        return -1;
+    }
+
+    perf_counter_t *counter = PERF_FindOrCreateCounter(name);
+    if (counter == NULL) {
+        return -1;
+    }
+
+    if (!counter-&gt;enabled) {
+        return 0;
+    }
+
+    if (counter-&gt;state != PERF_STATE_RUNNING) {
+        printf(&quot;[PERF] 警告: 计数器 '%s' 未运行\n&quot;, name);
+        return -1;
+    }
+
+    // 读取结束快照
+    PERF_DWT_ReadSnapshot(&amp;counter-&gt;end);
+    counter-&gt;state = PERF_STATE_STOPPED;
+
+    // 计算差值
+    perf_snapshot_t diff;
+    PERF_DWT_CalcDiff(&amp;counter-&gt;start, &amp;counter-&gt;end, &amp;diff);
+
+    // 更新统计信息
+    counter-&gt;call_count++;
+    counter-&gt;total_cycles += diff.cycles;
+
+    if (diff.cycles &lt; counter-&gt;min_cycles) {
+        counter-&gt;min_cycles = diff.cycles;
+    }
+
+    if (diff.cycles &gt; counter-&gt;max_cycles) {
+        counter-&gt;max_cycles = diff.cycles;
+    }
+
+    // 更新历史记录
+    counter-&gt;history[counter-&gt;history_index] = diff.cycles;
+    counter-&gt;history_index = (counter-&gt;history_index + 1) % PERF_HISTORY_SIZE;
+
+    return 0;
+}
+
+/**
+ * @brief 获取计数器统计信息
+ * @param name 计数器名称
+ * @param cycles 输出：周期数
+ * @retval 0: 成功, -1: 失败
+ */
+int PERF_GetCycles(const char *name, uint32_t *cycles) {
+    if (!g_perf_analyzer.initialized || cycles == NULL) {
+        return -1;
+    }
+
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+            perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+
+            if (counter-&gt;call_count &gt; 0) {
+                *cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+            } else {
+                *cycles = 0;
+            }
+
+            return 0;
+        }
+    }
+
+    return -1;  // 未找到计数器
+}
+
+/**
+ * @brief 复位计数器
+ * @param name 计数器名称（NULL表示复位所有）
+ */
+void PERF_Reset(const char *name) {
+    if (name == NULL) {
+        // 复位所有计数器
+        for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+            perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+            counter-&gt;call_count = 0;
+            counter-&gt;total_cycles = 0;
+            counter-&gt;min_cycles = 0xFFFFFFFF;
+            counter-&gt;max_cycles = 0;
+            counter-&gt;history_index = 0;
+            memset(counter-&gt;history, 0, sizeof(counter-&gt;history));
+        }
+    } else {
+        // 复位指定计数器
+        for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+            if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+                perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+                counter-&gt;call_count = 0;
+                counter-&gt;total_cycles = 0;
+                counter-&gt;min_cycles = 0xFFFFFFFF;
+                counter-&gt;max_cycles = 0;
+                counter-&gt;history_index = 0;
+                memset(counter-&gt;history, 0, sizeof(counter-&gt;history));
+                break;
+            }
+        }
+    }
+}
+
+/**
+ * @brief 启用/禁用计数器
+ * @param name 计数器名称
+ * @param enabled true: 启用, false: 禁用
+ */
+void PERF_SetEnabled(const char *name, bool enabled) {
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+            g_perf_analyzer.counters[i].enabled = enabled;
+            break;
+        }
+    }
+}
+</code></pre>
+<h3 id="_10">便捷宏定义</h3>
+<pre><code class="language-c">/**
+ * @file perf_macros.h
+ * @brief 性能测量便捷宏
+ */
+
+#ifndef PERF_MACROS_H
+#define PERF_MACROS_H
+
+#include &quot;perf_counter.h&quot;
+
+/* 性能测量宏 */
+#define PERF_MEASURE_START(name)    PERF_Start(#name)
+#define PERF_MEASURE_STOP(name)     PERF_Stop(#name)
+
+/* 函数性能测量宏 */
+#define PERF_FUNCTION_START()       PERF_Start(__FUNCTION__)
+#define PERF_FUNCTION_STOP()        PERF_Stop(__FUNCTION__)
+
+/* 代码块性能测量 */
+#define PERF_BLOCK_START(name)      do { PERF_Start(name);
+#define PERF_BLOCK_END(name)        PERF_Stop(name); } while(0)
+
+/* 自动性能测量（使用作用域） */
+typedef struct {
+    const char *name;
+} perf_scope_t;
+
+static inline perf_scope_t perf_scope_begin(const char *name) {
+    PERF_Start(name);
+    perf_scope_t scope = {name};
+    return scope;
+}
+
+static inline void perf_scope_end(perf_scope_t *scope) {
+    if (scope &amp;&amp; scope-&gt;name) {
+        PERF_Stop(scope-&gt;name);
+    }
+}
+
+#define PERF_SCOPE(name) \
+    perf_scope_t __perf_scope_##name __attribute__((cleanup(perf_scope_end))) = \
+        perf_scope_begin(#name)
+
+/* 条件性能测量 */
+#ifdef ENABLE_PERF_MEASURE
+    #define PERF_MEASURE(name, code) \
+        do { \
+            PERF_Start(name); \
+            code; \
+            PERF_Stop(name); \
+        } while(0)
+#else
+    #define PERF_MEASURE(name, code) do { code; } while(0)
+#endif
+
+#endif /* PERF_MACROS_H */
+</code></pre>
+<h2 id="_11">性能报告生成</h2>
+<h3 id="_12">文本格式报告</h3>
+<pre><code class="language-c">/**
+ * @brief 打印性能报告
+ */
+void PERF_Report(void) {
+    if (!g_perf_analyzer.initialized) {
+        printf(&quot;[PERF] 错误: 性能分析器未初始化\n&quot;);
+        return;
+    }
+
+    printf(&quot;\n&quot;);
+    printf(&quot;╔════════════════════════════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║              性能分析报告                                      ║\n&quot;);
+    printf(&quot;╠════════════════════════════════════════════════════════════════╣\n&quot;);
+    printf(&quot;║ CPU频率: %u MHz                                               ║\n&quot;, 
+           (unsigned int)g_perf_analyzer.cpu_freq_mhz);
+    printf(&quot;║ 计数器数量: %u                                                ║\n&quot;, 
+           g_perf_analyzer.counter_count);
+    printf(&quot;╚════════════════════════════════════════════════════════════════╝\n&quot;);
+    printf(&quot;\n&quot;);
+
+    if (g_perf_analyzer.counter_count == 0) {
+        printf(&quot;没有性能数据\n&quot;);
+        return;
+    }
+
+    // 表头
+    printf(&quot;┌────────────────────────┬────────┬──────────┬──────────┬──────────┬──────────┐\n&quot;);
+    printf(&quot;│ 名称                   │ 调用次 │ 平均周期 │ 最小周期 │ 最大周期 │ 平均时间 │\n&quot;);
+    printf(&quot;├────────────────────────┼────────┼──────────┼──────────┼──────────┼──────────┤\n&quot;);
+
+    // 数据行
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+
+        if (counter-&gt;call_count == 0) {
+            continue;
+        }
+
+        uint32_t avg_cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+        float avg_time_us = (float)avg_cycles / g_perf_analyzer.cpu_freq_mhz;
+
+        printf(&quot;│ %-22s │ %6u │ %8u │ %8u │ %8u │ %7.2f  │\n&quot;,
+               counter-&gt;name,
+               (unsigned int)counter-&gt;call_count,
+               (unsigned int)avg_cycles,
+               (unsigned int)counter-&gt;min_cycles,
+               (unsigned int)counter-&gt;max_cycles,
+               avg_time_us);
+    }
+
+    printf(&quot;└────────────────────────┴────────┴──────────┴──────────┴──────────┴──────────┘\n&quot;);
+    printf(&quot;\n&quot;);
+}
+
+/**
+ * @brief 打印详细性能报告
+ * @param name 计数器名称
+ */
+void PERF_ReportDetailed(const char *name) {
+    if (!g_perf_analyzer.initialized) {
+        return;
+    }
+
+    perf_counter_t *counter = NULL;
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+            counter = &amp;g_perf_analyzer.counters[i];
+            break;
+        }
+    }
+
+    if (counter == NULL || counter-&gt;call_count == 0) {
+        printf(&quot;[PERF] 未找到计数器 '%s' 或无数据\n&quot;, name);
+        return;
+    }
+
+    uint32_t avg_cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+    float avg_time_us = (float)avg_cycles / g_perf_analyzer.cpu_freq_mhz;
+    float min_time_us = (float)counter-&gt;min_cycles / g_perf_analyzer.cpu_freq_mhz;
+    float max_time_us = (float)counter-&gt;max_cycles / g_perf_analyzer.cpu_freq_mhz;
+
+    printf(&quot;\n&quot;);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  详细性能报告: %s\n&quot;, counter-&gt;name);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  调用次数:     %u\n&quot;, (unsigned int)counter-&gt;call_count);
+    printf(&quot;  总周期数:     %llu\n&quot;, (unsigned long long)counter-&gt;total_cycles);
+    printf(&quot;  平均周期:     %u (%.2f μs)\n&quot;, (unsigned int)avg_cycles, avg_time_us);
+    printf(&quot;  最小周期:     %u (%.2f μs)\n&quot;, (unsigned int)counter-&gt;min_cycles, min_time_us);
+    printf(&quot;  最大周期:     %u (%.2f μs)\n&quot;, (unsigned int)counter-&gt;max_cycles, max_time_us);
+    printf(&quot;  周期变化:     %u (%.1f%%)\n&quot;, 
+           (unsigned int)(counter-&gt;max_cycles - counter-&gt;min_cycles),
+           100.0f * (counter-&gt;max_cycles - counter-&gt;min_cycles) / avg_cycles);
+
+    // 打印历史记录
+    printf(&quot;\n  最近%d次测量:\n&quot;, PERF_HISTORY_SIZE);
+    printf(&quot;  ┌&quot;);
+    for (int i = 0; i &lt; PERF_HISTORY_SIZE; i++) {
+        printf(&quot;────────┬&quot;);
+    }
+    printf(&quot;\b┐\n&quot;);
+
+    printf(&quot;  │&quot;);
+    for (int i = 0; i &lt; PERF_HISTORY_SIZE; i++) {
+        int idx = (counter-&gt;history_index + i) % PERF_HISTORY_SIZE;
+        if (counter-&gt;history[idx] &gt; 0) {
+            printf(&quot; %6u │&quot;, (unsigned int)counter-&gt;history[idx]);
+        } else {
+            printf(&quot;   --   │&quot;);
+        }
+    }
+    printf(&quot;\n&quot;);
+
+    printf(&quot;  └&quot;);
+    for (int i = 0; i &lt; PERF_HISTORY_SIZE; i++) {
+        printf(&quot;────────┴&quot;);
+    }
+    printf(&quot;\b┘\n&quot;);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;\n&quot;);
+}
+</code></pre>
+<h3 id="json">JSON格式输出</h3>
+<pre><code class="language-c">/**
+ * @brief 生成JSON格式报告
+ */
+void PERF_ReportJSON(void) {
+    if (!g_perf_analyzer.initialized) {
+        return;
+    }
+
+    printf(&quot;{\n&quot;);
+    printf(&quot;  \&quot;performance_report\&quot;: {\n&quot;);
+    printf(&quot;    \&quot;cpu_freq_mhz\&quot;: %u,\n&quot;, (unsigned int)g_perf_analyzer.cpu_freq_mhz);
+    printf(&quot;    \&quot;counter_count\&quot;: %u,\n&quot;, g_perf_analyzer.counter_count);
+    printf(&quot;    \&quot;counters\&quot;: [\n&quot;);
+
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+
+        if (counter-&gt;call_count == 0) {
+            continue;
+        }
+
+        uint32_t avg_cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+        float avg_time_us = (float)avg_cycles / g_perf_analyzer.cpu_freq_mhz;
+
+        printf(&quot;      {\n&quot;);
+        printf(&quot;        \&quot;name\&quot;: \&quot;%s\&quot;,\n&quot;, counter-&gt;name);
+        printf(&quot;        \&quot;call_count\&quot;: %u,\n&quot;, (unsigned int)counter-&gt;call_count);
+        printf(&quot;        \&quot;total_cycles\&quot;: %llu,\n&quot;, (unsigned long long)counter-&gt;total_cycles);
+        printf(&quot;        \&quot;avg_cycles\&quot;: %u,\n&quot;, (unsigned int)avg_cycles);
+        printf(&quot;        \&quot;min_cycles\&quot;: %u,\n&quot;, (unsigned int)counter-&gt;min_cycles);
+        printf(&quot;        \&quot;max_cycles\&quot;: %u,\n&quot;, (unsigned int)counter-&gt;max_cycles);
+        printf(&quot;        \&quot;avg_time_us\&quot;: %.2f,\n&quot;, avg_time_us);
+        printf(&quot;        \&quot;history\&quot;: [&quot;);
+
+        for (int j = 0; j &lt; PERF_HISTORY_SIZE; j++) {
+            if (j &gt; 0) printf(&quot;, &quot;);
+            printf(&quot;%u&quot;, (unsigned int)counter-&gt;history[j]);
+        }
+
+        printf(&quot;]\n&quot;);
+        printf(&quot;      }&quot;);
+
+        if (i &lt; g_perf_analyzer.counter_count - 1) {
+            printf(&quot;,&quot;);
+        }
+        printf(&quot;\n&quot;);
+    }
+
+    printf(&quot;    ]\n&quot;);
+    printf(&quot;  }\n&quot;);
+    printf(&quot;}\n&quot;);
+}
+
+/**
+ * @brief 生成CSV格式报告
+ */
+void PERF_ReportCSV(void) {
+    if (!g_perf_analyzer.initialized) {
+        return;
+    }
+
+    // CSV表头
+    printf(&quot;Name,CallCount,TotalCycles,AvgCycles,MinCycles,MaxCycles,AvgTimeUs\n&quot;);
+
+    // 数据行
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+
+        if (counter-&gt;call_count == 0) {
+            continue;
+        }
+
+        uint32_t avg_cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+        float avg_time_us = (float)avg_cycles / g_perf_analyzer.cpu_freq_mhz;
+
+        printf(&quot;%s,%u,%llu,%u,%u,%u,%.2f\n&quot;,
+               counter-&gt;name,
+               (unsigned int)counter-&gt;call_count,
+               (unsigned long long)counter-&gt;total_cycles,
+               (unsigned int)avg_cycles,
+               (unsigned int)counter-&gt;min_cycles,
+               (unsigned int)counter-&gt;max_cycles,
+               avg_time_us);
+    }
+}
+</code></pre>
+<h2 id="_13">使用示例</h2>
+<h3 id="_14">基本使用</h3>
+<pre><code class="language-c">/**
+ * @file main.c
+ * @brief 性能分析工具使用示例
+ */
+
+#include &quot;perf_counter.h&quot;
+#include &quot;perf_macros.h&quot;
+#include &lt;stdio.h&gt;
+
+/* 测试函数 */
+void test_function_1(void) {
+    PERF_FUNCTION_START();
+
+    // 模拟一些计算
+    volatile int sum = 0;
+    for (int i = 0; i &lt; 1000; i++) {
+        sum += i;
+    }
+
+    PERF_FUNCTION_STOP();
+}
+
+void test_function_2(void) {
+    PERF_FUNCTION_START();
+
+    // 模拟更复杂的计算
+    volatile float result = 0.0f;
+    for (int i = 0; i &lt; 500; i++) {
+        result += (float)i * 1.5f;
+    }
+
+    PERF_FUNCTION_STOP();
+}
+
+void test_nested_measurement(void) {
+    PERF_START(&quot;outer_function&quot;);
+
+    // 外层代码
+    volatile int x = 0;
+    for (int i = 0; i &lt; 100; i++) {
+        x += i;
+    }
+
+    // 内层测量
+    PERF_START(&quot;inner_function&quot;);
+    volatile int y = 0;
+    for (int i = 0; i &lt; 200; i++) {
+        y += i * 2;
+    }
+    PERF_STOP(&quot;inner_function&quot;);
+
+    // 外层代码继续
+    for (int i = 0; i &lt; 100; i++) {
+        x -= i;
+    }
+
+    PERF_STOP(&quot;outer_function&quot;);
+}
+
+int main(void) {
+    // 系统初始化
+    SystemClock_Config();  // 配置系统时钟
+
+    // 初始化性能分析器（假设CPU频率为168MHz）
+    if (PERF_Init(168) != 0) {
+        printf(&quot;性能分析器初始化失败\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;性能分析工具示例\n&quot;);
+    printf(&quot;==================\n\n&quot;);
+
+    // 示例1: 基本测量
+    printf(&quot;示例1: 基本函数性能测量\n&quot;);
+    for (int i = 0; i &lt; 10; i++) {
+        test_function_1();
+        test_function_2();
+    }
+    PERF_Report();
+
+    // 示例2: 嵌套测量
+    printf(&quot;\n示例2: 嵌套性能测量\n&quot;);
+    PERF_Reset(NULL);  // 复位所有计数器
+    for (int i = 0; i &lt; 5; i++) {
+        test_nested_measurement();
+    }
+    PERF_Report();
+
+    // 示例3: 详细报告
+    printf(&quot;\n示例3: 详细性能报告\n&quot;);
+    PERF_ReportDetailed(&quot;test_function_1&quot;);
+
+    // 示例4: JSON输出
+    printf(&quot;\n示例4: JSON格式输出\n&quot;);
+    PERF_ReportJSON();
+
+    while (1) {
+        // 主循环
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="_15">算法性能对比</h3>
+<pre><code class="language-c">/**
+ * @brief 冒泡排序
+ */
+void bubble_sort(int *arr, int n) {
+    PERF_FUNCTION_START();
+
+    for (int i = 0; i &lt; n - 1; i++) {
+        for (int j = 0; j &lt; n - i - 1; j++) {
+            if (arr[j] &gt; arr[j + 1]) {
+                int temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+
+    PERF_FUNCTION_STOP();
+}
+
+/**
+ * @brief 快速排序
+ */
+void quick_sort(int *arr, int low, int high) {
+    if (low &lt; high) {
+        int pivot = arr[high];
+        int i = low - 1;
+
+        for (int j = low; j &lt; high; j++) {
+            if (arr[j] &lt; pivot) {
+                i++;
+                int temp = arr[i];
+                arr[i] = arr[j];
+                arr[j] = temp;
+            }
+        }
+
+        int temp = arr[i + 1];
+        arr[i + 1] = arr[high];
+        arr[high] = temp;
+
+        int pi = i + 1;
+        quick_sort(arr, low, pi - 1);
+        quick_sort(arr, pi + 1, high);
+    }
+}
+
+void quick_sort_wrapper(int *arr, int n) {
+    PERF_START(&quot;quick_sort&quot;);
+    quick_sort(arr, 0, n - 1);
+    PERF_STOP(&quot;quick_sort&quot;);
+}
+
+/**
+ * @brief 排序算法性能对比
+ */
+void test_sorting_algorithms(void) {
+    const int SIZE = 100;
+    int arr1[SIZE], arr2[SIZE];
+
+    // 初始化数组
+    for (int i = 0; i &lt; SIZE; i++) {
+        arr1[i] = SIZE - i;  // 逆序
+        arr2[i] = SIZE - i;
+    }
+
+    printf(&quot;\n排序算法性能对比 (数组大小: %d)\n&quot;, SIZE);
+    printf(&quot;=====================================\n&quot;);
+
+    // 测试冒泡排序
+    for (int i = 0; i &lt; 10; i++) {
+        // 重新初始化数组
+        for (int j = 0; j &lt; SIZE; j++) {
+            arr1[j] = SIZE - j;
+        }
+        bubble_sort(arr1, SIZE);
+    }
+
+    // 测试快速排序
+    for (int i = 0; i &lt; 10; i++) {
+        // 重新初始化数组
+        for (int j = 0; j &lt; SIZE; j++) {
+            arr2[j] = SIZE - j;
+        }
+        quick_sort_wrapper(arr2, SIZE);
+    }
+
+    PERF_Report();
+
+    // 计算加速比
+    uint32_t bubble_cycles, quick_cycles;
+    if (PERF_GetCycles(&quot;bubble_sort&quot;, &amp;bubble_cycles) == 0 &amp;&amp;
+        PERF_GetCycles(&quot;quick_sort&quot;, &amp;quick_cycles) == 0) {
+        float speedup = (float)bubble_cycles / quick_cycles;
+        printf(&quot;\n快速排序加速比: %.2fx\n&quot;, speedup);
+    }
+}
+</code></pre>
+<h3 id="_16">实时系统性能监控</h3>
+<pre><code class="language-c">/**
+ * @brief 实时任务性能监控
+ */
+
+/* 模拟RTOS任务 */
+void task_sensor_read(void) {
+    PERF_START(&quot;task_sensor&quot;);
+
+    // 模拟传感器读取
+    volatile int sensor_data = 0;
+    for (int i = 0; i &lt; 500; i++) {
+        sensor_data += i;
+    }
+
+    PERF_STOP(&quot;task_sensor&quot;);
+}
+
+void task_data_process(void) {
+    PERF_START(&quot;task_process&quot;);
+
+    // 模拟数据处理
+    volatile float result = 0.0f;
+    for (int i = 0; i &lt; 300; i++) {
+        result += (float)i * 0.5f;
+    }
+
+    PERF_STOP(&quot;task_process&quot;);
+}
+
+void task_communication(void) {
+    PERF_START(&quot;task_comm&quot;);
+
+    // 模拟通信
+    volatile int checksum = 0;
+    for (int i = 0; i &lt; 200; i++) {
+        checksum ^= i;
+    }
+
+    PERF_STOP(&quot;task_comm&quot;);
+}
+
+/**
+ * @brief 系统性能监控循环
+ */
+void system_performance_monitor(void) {
+    static uint32_t report_counter = 0;
+    const uint32_t REPORT_INTERVAL = 1000;  // 每1000次循环报告一次
+
+    while (1) {
+        // 执行各个任务
+        task_sensor_read();
+        task_data_process();
+        task_communication();
+
+        report_counter++;
+
+        // 定期生成报告
+        if (report_counter &gt;= REPORT_INTERVAL) {
+            printf(&quot;\n=== 系统性能报告 (循环: %u) ===\n&quot;, 
+                   (unsigned int)report_counter);
+            PERF_Report();
+
+            // 检查是否有任务超时
+            uint32_t sensor_cycles, process_cycles, comm_cycles;
+            PERF_GetCycles(&quot;task_sensor&quot;, &amp;sensor_cycles);
+            PERF_GetCycles(&quot;task_process&quot;, &amp;process_cycles);
+            PERF_GetCycles(&quot;task_comm&quot;, &amp;comm_cycles);
+
+            // 假设每个任务的超时阈值（周期数）
+            const uint32_t SENSOR_TIMEOUT = 100000;
+            const uint32_t PROCESS_TIMEOUT = 80000;
+            const uint32_t COMM_TIMEOUT = 50000;
+
+            if (sensor_cycles &gt; SENSOR_TIMEOUT) {
+                printf(&quot;[警告] 传感器任务超时: %u 周期\n&quot;, 
+                       (unsigned int)sensor_cycles);
+            }
+            if (process_cycles &gt; PROCESS_TIMEOUT) {
+                printf(&quot;[警告] 处理任务超时: %u 周期\n&quot;, 
+                       (unsigned int)process_cycles);
+            }
+            if (comm_cycles &gt; COMM_TIMEOUT) {
+                printf(&quot;[警告] 通信任务超时: %u 周期\n&quot;, 
+                       (unsigned int)comm_cycles);
+            }
+
+            report_counter = 0;
+            PERF_Reset(NULL);  // 复位计数器
+        }
+
+        // 模拟延时
+        for (volatile int i = 0; i &lt; 10000; i++);
+    }
+}
+</code></pre>
+<h2 id="_17">高级功能</h2>
+<h3 id="_18">性能瓶颈自动检测</h3>
+<pre><code class="language-c">/**
+ * @brief 性能瓶颈检测
+ * @param threshold_percent 阈值百分比（相对于总时间）
+ */
+void PERF_DetectBottlenecks(float threshold_percent) {
+    if (!g_perf_analyzer.initialized || g_perf_analyzer.counter_count == 0) {
+        return;
+    }
+
+    // 计算总周期数
+    uint64_t total_cycles = 0;
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        total_cycles += g_perf_analyzer.counters[i].total_cycles;
+    }
+
+    if (total_cycles == 0) {
+        return;
+    }
+
+    printf(&quot;\n&quot;);
+    printf(&quot;╔════════════════════════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║           性能瓶颈分析 (阈值: %.1f%%)                      ║\n&quot;, 
+           threshold_percent);
+    printf(&quot;╠════════════════════════════════════════════════════════════╣\n&quot;);
+
+    bool found_bottleneck = false;
+
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        perf_counter_t *counter = &amp;g_perf_analyzer.counters[i];
+
+        if (counter-&gt;call_count == 0) {
+            continue;
+        }
+
+        float percent = (float)(counter-&gt;total_cycles * 100.0) / total_cycles;
+
+        if (percent &gt;= threshold_percent) {
+            found_bottleneck = true;
+
+            uint32_t avg_cycles = (uint32_t)(counter-&gt;total_cycles / counter-&gt;call_count);
+            float avg_time_us = (float)avg_cycles / g_perf_analyzer.cpu_freq_mhz;
+
+            printf(&quot;║ [瓶颈] %-20s                              ║\n&quot;, counter-&gt;name);
+            printf(&quot;║   占用时间: %.1f%%                                        ║\n&quot;, percent);
+            printf(&quot;║   调用次数: %u                                           ║\n&quot;, 
+                   (unsigned int)counter-&gt;call_count);
+            printf(&quot;║   平均耗时: %.2f μs                                      ║\n&quot;, avg_time_us);
+            printf(&quot;╠════════════════════════════════════════════════════════════╣\n&quot;);
+        }
+    }
+
+    if (!found_bottleneck) {
+        printf(&quot;║ 未检测到明显的性能瓶颈                                     ║\n&quot;);
+        printf(&quot;╠════════════════════════════════════════════════════════════╣\n&quot;);
+    }
+
+    printf(&quot;║ 总周期数: %llu                                            ║\n&quot;, 
+           (unsigned long long)total_cycles);
+    printf(&quot;╚════════════════════════════════════════════════════════════╝\n&quot;);
+    printf(&quot;\n&quot;);
+}
+
+/**
+ * @brief 性能对比分析
+ * @param name1 第一个计数器名称
+ * @param name2 第二个计数器名称
+ */
+void PERF_Compare(const char *name1, const char *name2) {
+    perf_counter_t *counter1 = NULL;
+    perf_counter_t *counter2 = NULL;
+
+    // 查找计数器
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name1) == 0) {
+            counter1 = &amp;g_perf_analyzer.counters[i];
+        }
+        if (strcmp(g_perf_analyzer.counters[i].name, name2) == 0) {
+            counter2 = &amp;g_perf_analyzer.counters[i];
+        }
+    }
+
+    if (counter1 == NULL || counter2 == NULL) {
+        printf(&quot;[PERF] 错误: 未找到计数器\n&quot;);
+        return;
+    }
+
+    if (counter1-&gt;call_count == 0 || counter2-&gt;call_count == 0) {
+        printf(&quot;[PERF] 错误: 计数器无数据\n&quot;);
+        return;
+    }
+
+    uint32_t avg1 = (uint32_t)(counter1-&gt;total_cycles / counter1-&gt;call_count);
+    uint32_t avg2 = (uint32_t)(counter2-&gt;total_cycles / counter2-&gt;call_count);
+
+    float time1_us = (float)avg1 / g_perf_analyzer.cpu_freq_mhz;
+    float time2_us = (float)avg2 / g_perf_analyzer.cpu_freq_mhz;
+
+    printf(&quot;\n&quot;);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  性能对比: %s vs %s\n&quot;, name1, name2);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  %-20s │ %-20s\n&quot;, name1, name2);
+    printf(&quot;───────────────────────────┼───────────────────────────\n&quot;);
+    printf(&quot;  平均周期: %8u     │ 平均周期: %8u\n&quot;, 
+           (unsigned int)avg1, (unsigned int)avg2);
+    printf(&quot;  平均时间: %8.2f μs │ 平均时间: %8.2f μs\n&quot;, time1_us, time2_us);
+    printf(&quot;  最小周期: %8u     │ 最小周期: %8u\n&quot;, 
+           (unsigned int)counter1-&gt;min_cycles, (unsigned int)counter2-&gt;min_cycles);
+    printf(&quot;  最大周期: %8u     │ 最大周期: %8u\n&quot;, 
+           (unsigned int)counter1-&gt;max_cycles, (unsigned int)counter2-&gt;max_cycles);
+    printf(&quot;  调用次数: %8u     │ 调用次数: %8u\n&quot;, 
+           (unsigned int)counter1-&gt;call_count, (unsigned int)counter2-&gt;call_count);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+
+    if (avg1 &gt; avg2) {
+        float speedup = (float)avg1 / avg2;
+        printf(&quot;  %s 比 %s 慢 %.2fx\n&quot;, name1, name2, speedup);
+    } else if (avg2 &gt; avg1) {
+        float speedup = (float)avg2 / avg1;
+        printf(&quot;  %s 比 %s 快 %.2fx\n&quot;, name1, name2, speedup);
+    } else {
+        printf(&quot;  两者性能相当\n&quot;);
+    }
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;\n&quot;);
+}
+</code></pre>
+<h3 id="_19">性能趋势分析</h3>
+<pre><code class="language-c">/**
+ * @brief 性能趋势分析
+ * @param name 计数器名称
+ */
+void PERF_AnalyzeTrend(const char *name) {
+    perf_counter_t *counter = NULL;
+
+    for (int i = 0; i &lt; g_perf_analyzer.counter_count; i++) {
+        if (strcmp(g_perf_analyzer.counters[i].name, name) == 0) {
+            counter = &amp;g_perf_analyzer.counters[i];
+            break;
+        }
+    }
+
+    if (counter == NULL || counter-&gt;call_count == 0) {
+        printf(&quot;[PERF] 未找到计数器或无数据\n&quot;);
+        return;
+    }
+
+    // 计算历史数据的统计信息
+    uint32_t sum = 0;
+    uint32_t count = 0;
+    uint32_t min = 0xFFFFFFFF;
+    uint32_t max = 0;
+
+    for (int i = 0; i &lt; PERF_HISTORY_SIZE; i++) {
+        if (counter-&gt;history[i] &gt; 0) {
+            sum += counter-&gt;history[i];
+            count++;
+            if (counter-&gt;history[i] &lt; min) min = counter-&gt;history[i];
+            if (counter-&gt;history[i] &gt; max) max = counter-&gt;history[i];
+        }
+    }
+
+    if (count == 0) {
+        printf(&quot;[PERF] 历史数据不足\n&quot;);
+        return;
+    }
+
+    uint32_t avg = sum / count;
+
+    // 计算标准差
+    uint64_t variance_sum = 0;
+    for (int i = 0; i &lt; PERF_HISTORY_SIZE; i++) {
+        if (counter-&gt;history[i] &gt; 0) {
+            int32_t diff = (int32_t)counter-&gt;history[i] - (int32_t)avg;
+            variance_sum += (uint64_t)(diff * diff);
+        }
+    }
+
+    float std_dev = sqrtf((float)variance_sum / count);
+    float cv = (std_dev / avg) * 100.0f;  // 变异系数
+
+    printf(&quot;\n&quot;);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  性能趋势分析: %s\n&quot;, counter-&gt;name);
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;  样本数量:     %u\n&quot;, count);
+    printf(&quot;  平均值:       %u 周期\n&quot;, avg);
+    printf(&quot;  标准差:       %.2f 周期\n&quot;, std_dev);
+    printf(&quot;  变异系数:     %.2f%%\n&quot;, cv);
+    printf(&quot;  最小值:       %u 周期\n&quot;, min);
+    printf(&quot;  最大值:       %u 周期\n&quot;, max);
+    printf(&quot;  范围:         %u 周期\n&quot;, max - min);
+    printf(&quot;───────────────────────────────────────────────────────────\n&quot;);
+
+    // 性能稳定性评估
+    if (cv &lt; 5.0f) {
+        printf(&quot;  稳定性评估:   优秀 (变化很小)\n&quot;);
+    } else if (cv &lt; 10.0f) {
+        printf(&quot;  稳定性评估:   良好 (变化较小)\n&quot;);
+    } else if (cv &lt; 20.0f) {
+        printf(&quot;  稳定性评估:   一般 (有一定波动)\n&quot;);
+    } else {
+        printf(&quot;  稳定性评估:   较差 (波动较大)\n&quot;);
+    }
+
+    printf(&quot;═══════════════════════════════════════════════════════════\n&quot;);
+    printf(&quot;\n&quot;);
+}
+</code></pre>
+<h2 id="_20">可视化工具</h2>
+<h3 id="python">Python可视化脚本</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+性能数据可视化工具
+读取JSON格式的性能报告并生成图表
+&quot;&quot;&quot;
+
+import json
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib import rcParams
+
+# 配置中文字体
+rcParams['font.sans-serif'] = ['SimHei']  # 用黑体显示中文
+rcParams['axes.unicode_minus'] = False    # 正常显示负号
+
+def load_performance_data(filename):
+    &quot;&quot;&quot;加载性能数据&quot;&quot;&quot;
+    with open(filename, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+    return data['performance_report']
+
+def plot_performance_comparison(data):
+    &quot;&quot;&quot;绘制性能对比柱状图&quot;&quot;&quot;
+    counters = data['counters']
+
+    names = [c['name'] for c in counters]
+    avg_cycles = [c['avg_cycles'] for c in counters]
+
+    plt.figure(figsize=(12, 6))
+    bars = plt.bar(range(len(names)), avg_cycles, color='steelblue', alpha=0.8)
+
+    # 添加数值标签
+    for i, bar in enumerate(bars):
+        height = bar.get_height()
+        plt.text(bar.get_x() + bar.get_width()/2., height,
+                f'{int(height)}',
+                ha='center', va='bottom', fontsize=9)
+
+    plt.xlabel('测量点', fontsize=12)
+    plt.ylabel('平均周期数', fontsize=12)
+    plt.title('性能对比分析', fontsize=14, fontweight='bold')
+    plt.xticks(range(len(names)), names, rotation=45, ha='right')
+    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('performance_comparison.png', dpi=300)
+    print(&quot;已生成: performance_comparison.png&quot;)
+
+def plot_performance_distribution(data):
+    &quot;&quot;&quot;绘制性能分布饼图&quot;&quot;&quot;
+    counters = data['counters']
+
+    names = [c['name'] for c in counters]
+    total_cycles = [c['total_cycles'] for c in counters]
+
+    plt.figure(figsize=(10, 8))
+    colors = plt.cm.Set3(np.linspace(0, 1, len(names)))
+
+    wedges, texts, autotexts = plt.pie(total_cycles, labels=names, autopct='%1.1f%%',
+                                        colors=colors, startangle=90)
+
+    # 美化文本
+    for text in texts:
+        text.set_fontsize(10)
+    for autotext in autotexts:
+        autotext.set_color('white')
+        autotext.set_fontweight('bold')
+        autotext.set_fontsize(9)
+
+    plt.title('性能占用分布', fontsize=14, fontweight='bold')
+    plt.axis('equal')
+    plt.tight_layout()
+    plt.savefig('performance_distribution.png', dpi=300)
+    print(&quot;已生成: performance_distribution.png&quot;)
+
+def plot_performance_history(data):
+    &quot;&quot;&quot;绘制性能历史趋势图&quot;&quot;&quot;
+    counters = data['counters']
+
+    plt.figure(figsize=(14, 8))
+
+    for counter in counters:
+        name = counter['name']
+        history = counter['history']
+
+        # 过滤掉0值
+        valid_history = [h for h in history if h &gt; 0]
+        if len(valid_history) &gt; 0:
+            plt.plot(range(len(valid_history)), valid_history, 
+                    marker='o', label=name, linewidth=2, markersize=6)
+
+    plt.xlabel('测量序号', fontsize=12)
+    plt.ylabel('周期数', fontsize=12)
+    plt.title('性能历史趋势', fontsize=14, fontweight='bold')
+    plt.legend(loc='best', fontsize=10)
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('performance_history.png', dpi=300)
+    print(&quot;已生成: performance_history.png&quot;)
+
+def plot_min_max_range(data):
+    &quot;&quot;&quot;绘制最小/最大/平均值对比图&quot;&quot;&quot;
+    counters = data['counters']
+
+    names = [c['name'] for c in counters]
+    min_cycles = [c['min_cycles'] for c in counters]
+    avg_cycles = [c['avg_cycles'] for c in counters]
+    max_cycles = [c['max_cycles'] for c in counters]
+
+    x = np.arange(len(names))
+    width = 0.25
+
+    plt.figure(figsize=(14, 6))
+
+    plt.bar(x - width, min_cycles, width, label='最小值', color='lightgreen', alpha=0.8)
+    plt.bar(x, avg_cycles, width, label='平均值', color='steelblue', alpha=0.8)
+    plt.bar(x + width, max_cycles, width, label='最大值', color='coral', alpha=0.8)
+
+    plt.xlabel('测量点', fontsize=12)
+    plt.ylabel('周期数', fontsize=12)
+    plt.title('性能范围分析', fontsize=14, fontweight='bold')
+    plt.xticks(x, names, rotation=45, ha='right')
+    plt.legend(fontsize=10)
+    plt.grid(axis='y', alpha=0.3)
+    plt.tight_layout()
+    plt.savefig('performance_range.png', dpi=300)
+    print(&quot;已生成: performance_range.png&quot;)
+
+def generate_html_report(data):
+    &quot;&quot;&quot;生成HTML报告&quot;&quot;&quot;
+    html = &quot;&quot;&quot;
+&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;zh-CN&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;性能分析报告&lt;/title&gt;
+    &lt;style&gt;
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #4CAF50;
+            color: white;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .chart {
+            margin: 30px 0;
+            text-align: center;
+        }
+        .chart img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .info-box {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+        }
+    &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div class=&quot;container&quot;&gt;
+        &lt;h1&gt;🚀 性能分析报告&lt;/h1&gt;
+
+        &lt;div class=&quot;info-box&quot;&gt;
+            &lt;strong&gt;CPU频率:&lt;/strong&gt; {cpu_freq} MHz&lt;br&gt;
+            &lt;strong&gt;测量点数量:&lt;/strong&gt; {counter_count}&lt;br&gt;
+            &lt;strong&gt;生成时间:&lt;/strong&gt; &lt;span id=&quot;datetime&quot;&gt;&lt;/span&gt;
+        &lt;/div&gt;
+
+        &lt;h2&gt;📊 性能数据表&lt;/h2&gt;
+        &lt;table&gt;
+            &lt;thead&gt;
+                &lt;tr&gt;
+                    &lt;th&gt;名称&lt;/th&gt;
+                    &lt;th&gt;调用次数&lt;/th&gt;
+                    &lt;th&gt;平均周期&lt;/th&gt;
+                    &lt;th&gt;最小周期&lt;/th&gt;
+                    &lt;th&gt;最大周期&lt;/th&gt;
+                    &lt;th&gt;平均时间 (μs)&lt;/th&gt;
+                &lt;/tr&gt;
+            &lt;/thead&gt;
+            &lt;tbody&gt;
+                {table_rows}
+            &lt;/tbody&gt;
+        &lt;/table&gt;
+
+        &lt;h2&gt;📈 性能图表&lt;/h2&gt;
+
+        &lt;div class=&quot;chart&quot;&gt;
+            &lt;h3&gt;性能对比&lt;/h3&gt;
+            &lt;img src=&quot;performance_comparison.png&quot; alt=&quot;性能对比&quot;&gt;
+        &lt;/div&gt;
+
+        &lt;div class=&quot;chart&quot;&gt;
+            &lt;h3&gt;性能分布&lt;/h3&gt;
+            &lt;img src=&quot;performance_distribution.png&quot; alt=&quot;性能分布&quot;&gt;
+        &lt;/div&gt;
+
+        &lt;div class=&quot;chart&quot;&gt;
+            &lt;h3&gt;性能历史趋势&lt;/h3&gt;
+            &lt;img src=&quot;performance_history.png&quot; alt=&quot;性能历史&quot;&gt;
+        &lt;/div&gt;
+
+        &lt;div class=&quot;chart&quot;&gt;
+            &lt;h3&gt;性能范围分析&lt;/h3&gt;
+            &lt;img src=&quot;performance_range.png&quot; alt=&quot;性能范围&quot;&gt;
+        &lt;/div&gt;
+    &lt;/div&gt;
+
+    &lt;script&gt;
+        document.getElementById('datetime').textContent = new Date().toLocaleString('zh-CN');
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+    &quot;&quot;&quot;
+
+    # 生成表格行
+    table_rows = &quot;&quot;
+    for counter in data['counters']:
+        table_rows += f&quot;&quot;&quot;
+                &lt;tr&gt;
+                    &lt;td&gt;{counter['name']}&lt;/td&gt;
+                    &lt;td&gt;{counter['call_count']}&lt;/td&gt;
+                    &lt;td&gt;{counter['avg_cycles']}&lt;/td&gt;
+                    &lt;td&gt;{counter['min_cycles']}&lt;/td&gt;
+                    &lt;td&gt;{counter['max_cycles']}&lt;/td&gt;
+                    &lt;td&gt;{counter['avg_time_us']:.2f}&lt;/td&gt;
+                &lt;/tr&gt;
+        &quot;&quot;&quot;
+
+    html = html.format(
+        cpu_freq=data['cpu_freq_mhz'],
+        counter_count=data['counter_count'],
+        table_rows=table_rows
+    )
+
+    with open('performance_report.html', 'w', encoding='utf-8') as f:
+        f.write(html)
+
+    print(&quot;已生成: performance_report.html&quot;)
+
+def main():
+    &quot;&quot;&quot;主函数&quot;&quot;&quot;
+    import sys
+
+    if len(sys.argv) &lt; 2:
+        print(&quot;用法: python visualize.py &lt;performance_data.json&gt;&quot;)
+        sys.exit(1)
+
+    filename = sys.argv[1]
+
+    try:
+        data = load_performance_data(filename)
+
+        print(&quot;正在生成可视化图表...&quot;)
+        plot_performance_comparison(data)
+        plot_performance_distribution(data)
+        plot_performance_history(data)
+        plot_min_max_range(data)
+
+        print(&quot;\n正在生成HTML报告...&quot;)
+        generate_html_report(data)
+
+        print(&quot;\n✅ 所有报告已生成完成!&quot;)
+        print(&quot;请打开 performance_report.html 查看完整报告&quot;)
+
+    except Exception as e:
+        print(f&quot;错误: {e}&quot;)
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
+</code></pre>
+<h2 id="_21">项目集成</h2>
+<h3 id="makefile">Makefile配置</h3>
+<pre><code class="language-makefile"># Makefile for Performance Analysis Tool
+
+# 编译器配置
+CC = arm-none-eabi-gcc
+OBJCOPY = arm-none-eabi-objcopy
+SIZE = arm-none-eabi-size
+
+# 目标MCU
+MCU = -mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16
+
+# 编译选项
+CFLAGS = $(MCU)
+CFLAGS += -O2 -g3
+CFLAGS += -Wall -Wextra
+CFLAGS += -ffunction-sections -fdata-sections
+CFLAGS += -DUSE_HAL_DRIVER -DSTM32F407xx
+CFLAGS += -DENABLE_PERF_MEASURE  # 启用性能测量
+
+# 包含路径
+INCLUDES = -IInc
+INCLUDES += -IDrivers/CMSIS/Include
+INCLUDES += -IDrivers/CMSIS/Device/ST/STM32F4xx/Include
+INCLUDES += -IDrivers/STM32F4xx_HAL_Driver/Inc
+INCLUDES += -Iperformance  # 性能分析工具头文件
+
+# 链接选项
+LDFLAGS = $(MCU)
+LDFLAGS += -specs=nano.specs
+LDFLAGS += -T STM32F407VGTx_FLASH.ld
+LDFLAGS += -Wl,-Map=build/output.map,--cref
+LDFLAGS += -Wl,--gc-sections
+
+# 源文件
+SOURCES = Src/main.c
+SOURCES += Src/system_stm32f4xx.c
+SOURCES += Src/stm32f4xx_it.c
+SOURCES += performance/perf_counter.c  # 性能分析工具源文件
+SOURCES += $(wildcard Drivers/STM32F4xx_HAL_Driver/Src/*.c)
+
+# 目标文件
+OBJECTS = $(addprefix build/,$(notdir $(SOURCES:.c=.o)))
+
+# 默认目标
+all: build/firmware.elf build/firmware.bin build/firmware.hex
+    $(SIZE) build/firmware.elf
+
+# 编译规则
+build/%.o: Src/%.c | build
+    $(CC) $(CFLAGS) $(INCLUDES) -c $&lt; -o $@
+
+build/%.o: performance/%.c | build
+    $(CC) $(CFLAGS) $(INCLUDES) -c $&lt; -o $@
+
+build/%.o: Drivers/STM32F4xx_HAL_Driver/Src/%.c | build
+    $(CC) $(CFLAGS) $(INCLUDES) -c $&lt; -o $@
+
+# 链接
+build/firmware.elf: $(OBJECTS)
+    $(CC) $(LDFLAGS) $^ -o $@
+
+# 生成二进制文件
+build/firmware.bin: build/firmware.elf
+    $(OBJCOPY) -O binary $&lt; $@
+
+build/firmware.hex: build/firmware.elf
+    $(OBJCOPY) -O ihex $&lt; $@
+
+# 创建构建目录
+build:
+    mkdir -p build
+
+# 清理
+clean:
+    rm -rf build
+
+# 烧录
+flash: build/firmware.bin
+    st-flash write build/firmware.bin 0x8000000
+
+# 调试
+debug: build/firmware.elf
+    arm-none-eabi-gdb -ex &quot;target remote localhost:3333&quot; build/firmware.elf
+
+.PHONY: all clean flash debug
+</code></pre>
+<h3 id="cmake">CMake配置</h3>
+<pre><code class="language-cmake"># CMakeLists.txt for Performance Analysis Tool
+
+cmake_minimum_required(VERSION 3.15)
+
+# 项目配置
+project(PerformanceAnalysisTool C ASM)
+
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+
+# 工具链配置
+set(CMAKE_SYSTEM_NAME Generic)
+set(CMAKE_SYSTEM_PROCESSOR ARM)
+
+set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
+set(CMAKE_OBJCOPY arm-none-eabi-objcopy)
+set(CMAKE_SIZE arm-none-eabi-size)
+
+# MCU配置
+set(MCU_FLAGS &quot;-mcpu=cortex-m4 -mthumb -mfloat-abi=hard -mfpu=fpv4-sp-d16&quot;)
+
+# 编译选项
+set(CMAKE_C_FLAGS &quot;${MCU_FLAGS} -O2 -g3 -Wall -Wextra&quot;)
+set(CMAKE_C_FLAGS &quot;${CMAKE_C_FLAGS} -ffunction-sections -fdata-sections&quot;)
+set(CMAKE_C_FLAGS &quot;${CMAKE_C_FLAGS} -DUSE_HAL_DRIVER -DSTM32F407xx&quot;)
+set(CMAKE_C_FLAGS &quot;${CMAKE_C_FLAGS} -DENABLE_PERF_MEASURE&quot;)
+
+# 链接选项
+set(CMAKE_EXE_LINKER_FLAGS &quot;${MCU_FLAGS} -specs=nano.specs&quot;)
+set(CMAKE_EXE_LINKER_FLAGS &quot;${CMAKE_EXE_LINKER_FLAGS} -T ${CMAKE_SOURCE_DIR}/STM32F407VGTx_FLASH.ld&quot;)
+set(CMAKE_EXE_LINKER_FLAGS &quot;${CMAKE_EXE_LINKER_FLAGS} -Wl,-Map=output.map,--cref&quot;)
+set(CMAKE_EXE_LINKER_FLAGS &quot;${CMAKE_EXE_LINKER_FLAGS} -Wl,--gc-sections&quot;)
+
+# 包含目录
+include_directories(
+    Inc
+    Drivers/CMSIS/Include
+    Drivers/CMSIS/Device/ST/STM32F4xx/Include
+    Drivers/STM32F4xx_HAL_Driver/Inc
+    performance  # 性能分析工具
+)
+
+# 源文件
+file(GLOB_RECURSE SOURCES
+    &quot;Src/*.c&quot;
+    &quot;performance/*.c&quot;  # 性能分析工具源文件
+    &quot;Drivers/STM32F4xx_HAL_Driver/Src/*.c&quot;
+)
+
+# 可执行文件
+add_executable(${PROJECT_NAME}.elf ${SOURCES})
+
+# 生成二进制文件
+add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
+    COMMAND ${CMAKE_OBJCOPY} -O binary ${PROJECT_NAME}.elf ${PROJECT_NAME}.bin
+    COMMAND ${CMAKE_OBJCOPY} -O ihex ${PROJECT_NAME}.elf ${PROJECT_NAME}.hex
+    COMMAND ${CMAKE_SIZE} ${PROJECT_NAME}.elf
+    COMMENT &quot;Building binary and hex files&quot;
+)
+</code></pre>
+<h2 id="_22">最佳实践</h2>
+<h3 id="_23">性能测量注意事项</h3>
+<ol>
+<li><strong>最小化测量开销</strong></li>
+</ol>
+<pre><code class="language-c">// 不好的做法：频繁的字符串操作
+for (int i = 0; i &lt; 1000; i++) {
+    char name[32];
+    sprintf(name, &quot;loop_%d&quot;, i);
+    PERF_Start(name);  // 每次都创建新计数器
+    // ...
+    PERF_Stop(name);
+}
+
+// 好的做法：使用固定名称
+PERF_Start(&quot;loop_operation&quot;);
+for (int i = 0; i &lt; 1000; i++) {
+    // ...
+}
+PERF_Stop(&quot;loop_operation&quot;);
+</code></pre>
+<ol start="2">
+<li><strong>避免在中断中使用</strong></li>
+</ol>
+<pre><code class="language-c">// 不推荐：在高频中断中测量
+void TIM2_IRQHandler(void) {
+    PERF_START(&quot;isr&quot;);  // 会增加中断延迟
+    // 中断处理代码
+    PERF_STOP(&quot;isr&quot;);
+}
+
+// 推荐：测量中断外的代码
+void process_data(void) {
+    PERF_START(&quot;process&quot;);
+    // 数据处理代码
+    PERF_STOP(&quot;process&quot;);
+}
+</code></pre>
+<ol start="3">
+<li><strong>合理设置测量粒度</strong></li>
+</ol>
+<pre><code class="language-c">// 粗粒度测量：适合整体性能分析
+PERF_START(&quot;main_loop&quot;);
+sensor_read();
+data_process();
+communication();
+PERF_STOP(&quot;main_loop&quot;);
+
+// 细粒度测量：适合性能优化
+PERF_START(&quot;sensor_read&quot;);
+sensor_read();
+PERF_STOP(&quot;sensor_read&quot;);
+
+PERF_START(&quot;data_process&quot;);
+data_process();
+PERF_STOP(&quot;data_process&quot;);
+
+PERF_START(&quot;communication&quot;);
+communication();
+PERF_STOP(&quot;communication&quot;);
+</code></pre>
+<h3 id="_24">性能优化流程</h3>
+<pre><code>┌─────────────────────────────────────────┐
+│  1. 建立性能基准                         │
+│     - 测量当前性能                       │
+│     - 记录关键指标                       │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  2. 识别性能瓶颈                         │
+│     - 使用PERF_DetectBottlenecks()      │
+│     - 分析热点函数                       │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  3. 优化实施                             │
+│     - 算法优化                           │
+│     - 代码优化                           │
+│     - 编译器优化                         │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  4. 验证优化效果                         │
+│     - 重新测量性能                       │
+│     - 使用PERF_Compare()对比            │
+└─────────────────┬───────────────────────┘
+                  │
+                  ▼
+            是否达到目标？
+                  │
+        ┌─────────┴─────────┐
+        │                   │
+       是                   否
+        │                   │
+        ▼                   │
+    完成优化        ────────┘
+</code></pre>
+<h3 id="_25">常见问题排查</h3>
+<p><strong>问题1：DWT计数器不工作</strong></p>
+<pre><code class="language-c">// 检查DWT是否使能
+void debug_dwt_status(void) {
+    printf(&quot;CoreDebug_DEMCR: 0x%08X\n&quot;, (unsigned int)CoreDebug_DEMCR);
+    printf(&quot;DWT_CTRL: 0x%08X\n&quot;, (unsigned int)DWT_CTRL);
+    printf(&quot;DWT_CYCCNT: 0x%08X\n&quot;, (unsigned int)DWT_CYCCNT);
+
+    if (!(CoreDebug_DEMCR &amp; CoreDebug_DEMCR_TRCENA)) {
+        printf(&quot;错误: TRCENA未使能\n&quot;);
+    }
+
+    if (!(DWT_CTRL &amp; DWT_CTRL_CYCCNTENA)) {
+        printf(&quot;错误: CYCCNTENA未使能\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>问题2：测量结果不准确</strong></p>
+<pre><code class="language-c">// 确保禁用中断以获得准确测量
+void accurate_measurement(void) {
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+
+    PERF_START(&quot;critical_section&quot;);
+    // 关键代码
+    PERF_STOP(&quot;critical_section&quot;);
+
+    __set_PRIMASK(primask);
+}
+</code></pre>
+<p><strong>问题3：计数器溢出</strong></p>
+<pre><code class="language-c">// 对于长时间运行的代码，注意32位溢出
+// DWT_CYCCNT在168MHz下约25.5秒溢出
+void handle_long_running_code(void) {
+    // 方法1：分段测量
+    PERF_START(&quot;segment_1&quot;);
+    long_running_part_1();
+    PERF_STOP(&quot;segment_1&quot;);
+
+    PERF_START(&quot;segment_2&quot;);
+    long_running_part_2();
+    PERF_STOP(&quot;segment_2&quot;);
+
+    // 方法2：使用64位累加器（已在工具中实现）
+}
+</code></pre>
+<h2 id="_26">项目扩展</h2>
+<h3 id="_27">支持多核处理器</h3>
+<pre><code class="language-c">/**
+ * @brief 多核性能分析器
+ */
+typedef struct {
+    perf_analyzer_t core_analyzers[4];  // 支持最多4核
+    uint8_t core_count;
+} multi_core_perf_analyzer_t;
+
+/**
+ * @brief 初始化多核性能分析
+ */
+int PERF_MultiCore_Init(uint8_t core_count, uint32_t cpu_freq_mhz) {
+    // 为每个核心初始化独立的分析器
+    // 实现略
+    return 0;
+}
+
+/**
+ * @brief 获取当前核心ID
+ */
+static uint8_t get_current_core_id(void) {
+    // 根据具体MCU实现
+    return 0;
+}
+
+/**
+ * @brief 多核性能测量开始
+ */
+int PERF_MultiCore_Start(const char *name) {
+    uint8_t core_id = get_current_core_id();
+    // 在对应核心的分析器上开始测量
+    return 0;
+}
+</code></pre>
+<h3 id="rtos">支持RTOS集成</h3>
+<pre><code class="language-c">/**
+ * @brief FreeRTOS任务性能监控
+ */
+
+#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+/**
+ * @brief 任务性能统计
+ */
+typedef struct {
+    char task_name[configMAX_TASK_NAME_LEN];
+    uint32_t total_runtime;
+    uint32_t percentage;
+} task_perf_stats_t;
+
+/**
+ * @brief 获取所有任务的性能统计
+ */
+void PERF_GetTaskStats(task_perf_stats_t *stats, uint8_t *count) {
+    TaskStatus_t *task_status_array;
+    volatile UBaseType_t task_count;
+    uint32_t total_runtime;
+
+    // 获取任务数量
+    task_count = uxTaskGetNumberOfTasks();
+
+    // 分配内存
+    task_status_array = pvPortMalloc(task_count * sizeof(TaskStatus_t));
+
+    if (task_status_array != NULL) {
+        // 获取任务状态
+        task_count = uxTaskGetSystemState(task_status_array, 
+                                          task_count, 
+                                          &amp;total_runtime);
+
+        // 计算每个任务的CPU占用率
+        for (UBaseType_t i = 0; i &lt; task_count; i++) {
+            strncpy(stats[i].task_name, 
+                   task_status_array[i].pcTaskName, 
+                   configMAX_TASK_NAME_LEN);
+
+            stats[i].total_runtime = task_status_array[i].ulRunTimeCounter;
+
+            if (total_runtime &gt; 0) {
+                stats[i].percentage = (stats[i].total_runtime * 100) / total_runtime;
+            } else {
+                stats[i].percentage = 0;
+            }
+        }
+
+        *count = task_count;
+        vPortFree(task_status_array);
+    }
+}
+
+/**
+ * @brief 打印任务性能报告
+ */
+void PERF_PrintTaskStats(void) {
+    task_perf_stats_t stats[16];
+    uint8_t count = 0;
+
+    PERF_GetTaskStats(stats, &amp;count);
+
+    printf(&quot;\n&quot;);
+    printf(&quot;╔════════════════════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║           RTOS任务性能统计                             ║\n&quot;);
+    printf(&quot;╠════════════════════════════════════════════════════════╣\n&quot;);
+    printf(&quot;║ 任务名称              │ 运行时间    │ CPU占用率       ║\n&quot;);
+    printf(&quot;╠═══════════════════════╪═════════════╪═════════════════╣\n&quot;);
+
+    for (uint8_t i = 0; i &lt; count; i++) {
+        printf(&quot;║ %-21s │ %10u  │ %6u%%        ║\n&quot;,
+               stats[i].task_name,
+               (unsigned int)stats[i].total_runtime,
+               (unsigned int)stats[i].percentage);
+    }
+
+    printf(&quot;╚════════════════════════════════════════════════════════╝\n&quot;);
+    printf(&quot;\n&quot;);
+}
+</code></pre>
+<h3 id="_28">网络远程监控</h3>
+<pre><code class="language-c">/**
+ * @brief 通过网络发送性能数据
+ */
+
+#include &quot;lwip/tcp.h&quot;
+
+#define PERF_SERVER_PORT 8080
+
+/**
+ * @brief 发送性能数据到远程服务器
+ */
+int PERF_SendToServer(const char *server_ip, uint16_t port) {
+    // 创建TCP连接
+    struct tcp_pcb *pcb = tcp_new();
+
+    if (pcb == NULL) {
+        return -1;
+    }
+
+    // 连接到服务器
+    ip_addr_t server_addr;
+    ipaddr_aton(server_ip, &amp;server_addr);
+
+    err_t err = tcp_connect(pcb, &amp;server_addr, port, NULL);
+
+    if (err != ERR_OK) {
+        tcp_close(pcb);
+        return -1;
+    }
+
+    // 生成JSON数据
+    char json_buffer[2048];
+    generate_json_report(json_buffer, sizeof(json_buffer));
+
+    // 发送数据
+    tcp_write(pcb, json_buffer, strlen(json_buffer), TCP_WRITE_FLAG_COPY);
+    tcp_output(pcb);
+
+    // 关闭连接
+    tcp_close(pcb);
+
+    return 0;
+}
+
+/**
+ * @brief 启动性能监控HTTP服务器
+ */
+void PERF_StartHTTPServer(void) {
+    // 创建HTTP服务器
+    // 提供REST API接口查询性能数据
+    // 实现略
+}
+</code></pre>
+<h2 id="_29">项目总结</h2>
+<h3 id="_30">项目成果</h3>
+<p>通过本项目，你将获得：</p>
+<ol>
+<li>
+<p><strong>完整的性能分析工具</strong>
+   - DWT驱动程序
+   - 性能测量API
+   - 报告生成模块
+   - 可视化工具</p>
+</li>
+<li>
+<p><strong>实用的开发技能</strong>
+   - 底层硬件编程
+   - 性能优化方法
+   - 数据可视化
+   - 工具开发经验</p>
+</li>
+<li>
+<p><strong>可复用的代码库</strong>
+   - 模块化设计
+   - 易于集成
+   - 跨平台支持
+   - 完整文档</p>
+</li>
+</ol>
+<h3 id="_31">关键技术点</h3>
+<ol>
+<li>
+<p><strong>DWT性能计数器</strong>
+   - 周期计数器（CYCCNT）
+   - CPI计数器
+   - 异常计数器
+   - 其他专用计数器</p>
+</li>
+<li>
+<p><strong>精确时间测量</strong>
+   - 周期级精度
+   - 溢出处理
+   - 中断影响最小化</p>
+</li>
+<li>
+<p><strong>数据管理</strong>
+   - 统计信息计算
+   - 历史记录维护
+   - 趋势分析</p>
+</li>
+<li>
+<p><strong>可视化展示</strong>
+   - 多种报告格式
+   - 图表生成
+   - Web界面</p>
+</li>
+</ol>
+<h3 id="_32">性能指标</h3>
+<p>工具本身的性能开销：</p>
+<table>
+<thead>
+<tr>
+<th>操作</th>
+<th>开销（周期）</th>
+<th>时间（@168MHz）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PERF_Start()</td>
+<td>~50</td>
+<td>~0.3 μs</td>
+</tr>
+<tr>
+<td>PERF_Stop()</td>
+<td>~100</td>
+<td>~0.6 μs</td>
+</tr>
+<tr>
+<td>单次完整测量</td>
+<td>~150</td>
+<td>~0.9 μs</td>
+</tr>
+<tr>
+<td>报告生成</td>
+<td>~10000</td>
+<td>~60 μs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_33">应用场景总结</h3>
+<ol>
+<li>
+<p><strong>算法优化</strong>
+   - 对比不同算法实现
+   - 找出性能瓶颈
+   - 验证优化效果</p>
+</li>
+<li>
+<p><strong>实时系统分析</strong>
+   - 任务执行时间监控
+   - 响应时间测量
+   - 系统负载分析</p>
+</li>
+<li>
+<p><strong>产品性能测试</strong>
+   - 建立性能基准
+   - 回归测试
+   - 性能报告生成</p>
+</li>
+<li>
+<p><strong>教学和学习</strong>
+   - 理解代码性能
+   - 学习优化技术
+   - 实践性能分析</p>
+</li>
+</ol>
+<h3 id="_34">后续改进方向</h3>
+<ol>
+<li>
+<p><strong>功能扩展</strong>
+   - 支持更多MCU平台
+   - 增加内存分析功能
+   - 集成功耗测量
+   - 支持无线数据传输</p>
+</li>
+<li>
+<p><strong>工具优化</strong>
+   - 降低测量开销
+   - 提高数据精度
+   - 优化存储效率
+   - 增强可视化效果</p>
+</li>
+<li>
+<p><strong>生态建设</strong>
+   - 开发IDE插件
+   - 提供在线分析平台
+   - 建立性能数据库
+   - 社区分享机制</p>
+</li>
+</ol>
+<h2 id="_35">参考资料</h2>
+<h3 id="_36">官方文档</h3>
+<ul>
+<li><a href="https://developer.arm.com/documentation/100166/latest/">ARM Cortex-M4 Technical Reference Manual</a></li>
+<li><a href="https://developer.arm.com/documentation/ihi0029/latest/">ARM CoreSight Architecture Specification</a></li>
+<li><a href="https://developer.arm.com/documentation/ddi0337/latest/">DWT and ITM Programming Guide</a></li>
+</ul>
+<h3 id="_37">推荐阅读</h3>
+<ul>
+<li>《ARM Cortex-M4 Cookbook》- Mark Fisher</li>
+<li>《Embedded Systems Architecture》- Daniele Lacamera</li>
+<li>《Real-Time Systems》- Jane W. S. Liu</li>
+</ul>
+<h3 id="_38">开源项目</h3>
+<ul>
+<li><a href="https://www.segger.com/products/development-tools/systemview/">SEGGER SystemView</a></li>
+<li><a href="https://percepio.com/tracealyzer/">Percepio Tracealyzer</a></li>
+<li><a href="https://github.com/ARM-software/CMSIS_5">ARM CMSIS</a></li>
+</ul>
+<h3 id="_39">在线资源</h3>
+<ul>
+<li>ARM Developer官网</li>
+<li>STM32社区论坛</li>
+<li>Embedded.com技术文章</li>
+<li>GitHub性能分析工具集合</li>
+</ul>
+<h2 id="_40">附录</h2>
+<h3 id="_41">完整代码仓库</h3>
+<p>项目完整代码已上传至GitHub：</p>
+<pre><code>https://github.com/embedded-knowledge/performance-analysis-tool
+</code></pre>
+<p>仓库包含：
+- 完整源代码
+- 示例项目
+- 测试用例
+- 文档和教程
+- Python可视化脚本</p>
+<h3 id="mcu">支持的MCU列表</h3>
+<table>
+<thead>
+<tr>
+<th>MCU系列</th>
+<th>支持状态</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32F4</td>
+<td>✅ 完全支持</td>
+<td>已测试</td>
+</tr>
+<tr>
+<td>STM32F7</td>
+<td>✅ 完全支持</td>
+<td>已测试</td>
+</tr>
+<tr>
+<td>STM32H7</td>
+<td>✅ 完全支持</td>
+<td>已测试</td>
+</tr>
+<tr>
+<td>STM32L4</td>
+<td>✅ 完全支持</td>
+<td>已测试</td>
+</tr>
+<tr>
+<td>NXP i.MX RT</td>
+<td>⚠️ 部分支持</td>
+<td>需要适配</td>
+</tr>
+<tr>
+<td>Nordic nRF52</td>
+<td>⚠️ 部分支持</td>
+<td>需要适配</td>
+</tr>
+<tr>
+<td>TI TM4C</td>
+<td>⚠️ 部分支持</td>
+<td>需要适配</td>
+</tr>
+</tbody>
+</table>
+<h3 id="faq">常见问题FAQ</h3>
+<p><strong>Q1: 工具支持哪些开发环境？</strong></p>
+<p>A: 支持Keil MDK、IAR EWARM、STM32CubeIDE、GCC等主流开发环境。</p>
+<p><strong>Q2: 如何最小化测量开销？</strong></p>
+<p>A: 使用条件编译、减少测量点数量、避免在中断中使用。</p>
+<p><strong>Q3: 可以在生产环境使用吗？</strong></p>
+<p>A: 可以，但建议通过条件编译在发布版本中禁用。</p>
+<p><strong>Q4: 如何处理多任务环境？</strong></p>
+<p>A: 工具支持RTOS环境，每个任务可以独立测量。</p>
+<p><strong>Q5: 数据如何导出？</strong></p>
+<p>A: 支持UART、USB、网络等多种方式，可输出JSON、CSV等格式。</p>
+<hr />
+<p><strong>项目作者</strong>: 嵌入式知识平台内容团队<br />
+<strong>最后更新</strong>: 2026-03-07<br />
+<strong>版本</strong>: 1.0.0<br />
+<strong>许可证</strong>: MIT License</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,2673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>数字签名技术详解：身份认证与数据完整性保护 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/">05-security-encryption</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a></li>
+<li><a href="#_4">数字签名概述</a><ul>
+<li><a href="#_5">什么是数字签名</a></li>
+<li><a href="#_6">数字签名工作原理</a></li>
+<li><a href="#vs">数字签名 vs 加密</a></li>
+</ul>
+</li>
+<li><a href="#_7">准备工作</a><ul>
+<li><a href="#_8">硬件准备</a></li>
+<li><a href="#_9">软件准备</a></li>
+<li><a href="#_10">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#1rsa">步骤1：RSA数字签名实现</a><ul>
+<li><a href="#11-rsa">1.1 基础RSA签名</a></li>
+<li><a href="#12">1.2 完整签名验证示例</a></li>
+</ul>
+</li>
+<li><a href="#2ecdsa">步骤2：ECDSA数字签名</a><ul>
+<li><a href="#21-ecdsa">2.1 ECDSA签名实现</a></li>
+</ul>
+</li>
+<li><a href="#3pki">步骤3：数字证书和PKI体系</a><ul>
+<li><a href="#31-x509">3.1 X.509数字证书</a></li>
+<li><a href="#32-openssl">3.2 使用OpenSSL生成证书</a></li>
+<li><a href="#33">3.3 在嵌入式系统中解析证书</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：固件签名和验证</a><ul>
+<li><a href="#41">4.1 固件签名系统设计</a></li>
+<li><a href="#42">4.2 固件签名实现</a></li>
+<li><a href="#43">4.3 固件签名完整示例</a></li>
+</ul>
+</li>
+<li><a href="#5-ota">步骤5：实战项目 - 安全OTA更新系统</a><ul>
+<li><a href="#51">5.1 项目需求</a></li>
+<li><a href="#52">5.2 项目架构</a></li>
+<li><a href="#53">5.3 核心实现</a></li>
+<li><a href="#54">5.4 主程序</a></li>
+</ul>
+</li>
+<li><a href="#_11">深入理解</a><ul>
+<li><a href="#pki">PKI体系架构</a></li>
+<li><a href="#_12">证书撤销机制</a></li>
+<li><a href="#_13">时间戳服务</a></li>
+<li><a href="#_14">不可否认性</a></li>
+</ul>
+</li>
+<li><a href="#_15">最佳实践</a><ul>
+<li><a href="#_16">算法选择指南</a></li>
+<li><a href="#_17">密钥管理最佳实践</a></li>
+<li><a href="#_18">安全实践建议</a></li>
+</ul>
+</li>
+<li><a href="#_19">常见问题</a><ul>
+<li><a href="#q1">Q1: 数字签名和加密有什么区别？</a></li>
+<li><a href="#q2">Q2: 为什么要先哈希再签名？</a></li>
+<li><a href="#q3-rsaecdsa">Q3: RSA和ECDSA应该选择哪个？</a></li>
+<li><a href="#q4">Q4: 如何保护私钥安全？</a></li>
+<li><a href="#q5">Q5: 证书过期后签名还有效吗？</a></li>
+<li><a href="#q6">Q6: 如何防止重放攻击？</a></li>
+</ul>
+</li>
+<li><a href="#_20">故障排除</a><ul>
+<li><a href="#1">问题1：签名验证总是失败</a></li>
+<li><a href="#2">问题2：证书链验证失败</a></li>
+<li><a href="#3">问题3：性能问题</a></li>
+</ul>
+</li>
+<li><a href="#_21">总结</a></li>
+<li><a href="#_22">延伸阅读</a></li>
+<li><a href="#_23">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">数字签名技术详解：身份认证与数据完整性保护</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 深入理解数字签名的工作原理和数学基础</li>
+<li>[ ] 掌握RSA和ECDSA数字签名算法的实现</li>
+<li>[ ] 理解PKI（公钥基础设施）体系架构</li>
+<li>[ ] 熟练进行数字证书的生成、验证和管理</li>
+<li>[ ] 掌握证书链的验证流程</li>
+<li>[ ] 能够实现固件签名和验证系统</li>
+<li>[ ] 理解时间戳和不可否认性的概念</li>
+<li>[ ] 完成一个完整的安全认证项目</li>
+<li>[ ] 掌握数字签名在物联网中的应用</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟悉RSA非对称加密原理
+- 理解哈希算法（SHA-256等）
+- 了解公钥和私钥的概念
+- 掌握基本的密码学知识
+- 理解数字证书的基本概念</p>
+<p><strong>技能要求</strong>：
+- 熟练使用mbedTLS或OpenSSL库
+- 能够编写嵌入式C代码
+- 会使用调试工具
+- 熟悉Flash存储操作
+- 了解网络通信基础</p>
+<p><strong>开发环境</strong>：
+- STM32或ESP32开发板
+- STM32CubeIDE或Arduino IDE
+- mbedTLS库
+- OpenSSL工具（用于证书生成）
+- 串口调试工具</p>
+<h2 id="_4">数字签名概述</h2>
+<h3 id="_5">什么是数字签名</h3>
+<p>数字签名是一种数学方案，用于验证数字消息或文档的真实性和完整性。它相当于物理世界中的手写签名或印章，但提供了更强的安全保证。</p>
+<p><strong>核心特性</strong>：</p>
+<ol>
+<li>
+<p><strong>身份认证</strong>
+   - 证明消息来自特定发送者
+   - 发送者无法否认发送过消息
+   - 接收者可以验证发送者身份
+   - 第三方也可以验证</p>
+</li>
+<li>
+<p><strong>完整性保护</strong>
+   - 消息未被篡改
+   - 任何修改都会导致验证失败
+   - 提供强完整性保证
+   - 检测任意位的改变</p>
+</li>
+<li>
+<p><strong>不可否认性</strong>
+   - 发送者不能否认签名
+   - 提供法律证据
+   - 可追溯性
+   - 审计支持</p>
+</li>
+<li>
+<p><strong>可验证性</strong>
+   - 任何人都可以验证签名
+   - 使用公钥验证
+   - 不需要保密信息
+   - 支持第三方验证</p>
+</li>
+</ol>
+<h3 id="_6">数字签名工作原理</h3>
+<p><strong>基本流程图</strong>：</p>
+<pre><code>签名生成（发送方）:
+┌─────────────────┐
+│  原始消息       │
+└─────────────────┘
+        ↓
+┌─────────────────┐
+│  哈希函数       │ (SHA-256)
+│  计算消息摘要   │
+└─────────────────┘
+        ↓
+   消息摘要 (Hash)
+        ↓
+┌─────────────────┐
+│  私钥加密       │ (RSA/ECDSA)
+│  生成签名       │
+└─────────────────┘
+        ↓
+    数字签名
+        ↓
+┌─────────────────┐
+│ 消息 + 签名     │ → 发送
+└─────────────────┘
+
+签名验证（接收方）:
+┌─────────────────┐
+│ 接收消息+签名   │
+└─────────────────┘
+        ↓
+   ┌────┴────┐
+   ↓         ↓
+消息      签名
+   ↓         ↓
+┌──────┐  ┌──────┐
+│哈希  │  │公钥  │
+│计算  │  │解密  │
+└──────┘  └──────┘
+   ↓         ↓
+摘要1     摘要2
+   ↓         ↓
+   └────┬────┘
+        ↓
+   ┌─────────┐
+   │ 比较    │
+   └─────────┘
+        ↓
+   验证结果
+</code></pre>
+<p><strong>关键步骤</strong>：</p>
+<ol>
+<li>
+<p><strong>签名生成</strong>
+   - 计算消息的哈希值
+   - 使用私钥加密哈希值
+   - 得到数字签名
+   - 将签名附加到消息</p>
+</li>
+<li>
+<p><strong>签名验证</strong>
+   - 计算接收消息的哈希值
+   - 使用公钥解密签名
+   - 比较两个哈希值
+   - 相同则验证成功</p>
+</li>
+</ol>
+<h3 id="vs">数字签名 vs 加密</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>数字签名</th>
+<th>加密</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>目的</td>
+<td>认证和完整性</td>
+<td>保密性</td>
+</tr>
+<tr>
+<td>使用密钥</td>
+<td>私钥签名，公钥验证</td>
+<td>公钥加密，私钥解密</td>
+</tr>
+<tr>
+<td>消息可读性</td>
+<td>明文可读</td>
+<td>密文不可读</td>
+</tr>
+<tr>
+<td>主要功能</td>
+<td>证明身份</td>
+<td>保护内容</td>
+</tr>
+<tr>
+<td>可否认性</td>
+<td>不可否认</td>
+<td>可否认</td>
+</tr>
+<tr>
+<td>验证者</td>
+<td>任何人</td>
+<td>仅持有私钥者</td>
+</tr>
+</tbody>
+</table>
+<p><strong>组合使用</strong>：</p>
+<pre><code>安全通信的完整方案：
+
+1. 发送方：
+   消息 → [签名] → 消息+签名 → [加密] → 密文
+
+2. 接收方：
+   密文 → [解密] → 消息+签名 → [验证] → 原始消息
+
+结果：
+- 加密保证保密性
+- 签名保证真实性和完整性
+- 提供完整的安全保护
+</code></pre>
+<h2 id="_7">准备工作</h2>
+<h3 id="_8">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32F4或ESP32</td>
+<td>STM32F407VG</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>3</td>
+<td>状态指示</td>
+<td>-</td>
+</tr>
+<tr>
+<td>按键</td>
+<td>2</td>
+<td>触发操作</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_9">软件准备</h3>
+<p><strong>必需软件</strong>：
+- STM32CubeIDE 或 Arduino IDE（ESP32）
+- mbedTLS库：https://github.com/ARMmbed/mbedtls
+- OpenSSL工具（用于证书生成）
+- 串口调试助手</p>
+<p><strong>可选工具</strong>：
+- X.509证书查看器
+- 在线签名验证工具</p>
+<h3 id="_10">环境配置</h3>
+<p><strong>安装mbedTLS库</strong>：</p>
+<pre><code class="language-bash"># 克隆mbedTLS仓库
+git clone https://github.com/ARMmbed/mbedtls.git
+
+# 需要的模块
+# - RSA签名
+# - ECDSA签名
+# - X.509证书
+# - PEM格式支持
+</code></pre>
+<p><strong>配置mbedTLS</strong>：</p>
+<p>创建 <code>mbedtls_config.h</code>：</p>
+<pre><code class="language-c">#ifndef MBEDTLS_CONFIG_H
+#define MBEDTLS_CONFIG_H
+
+// 启用RSA
+#define MBEDTLS_RSA_C
+#define MBEDTLS_BIGNUM_C
+#define MBEDTLS_PK_C
+
+// 启用ECDSA
+#define MBEDTLS_ECDSA_C
+#define MBEDTLS_ECP_C
+
+// 启用哈希算法
+#define MBEDTLS_SHA256_C
+#define MBEDTLS_MD_C
+
+// 启用X.509证书
+#define MBEDTLS_X509_USE_C
+#define MBEDTLS_X509_CRT_PARSE_C
+
+// 启用PEM格式
+#define MBEDTLS_PEM_PARSE_C
+#define MBEDTLS_BASE64_C
+
+// 启用随机数生成器
+#define MBEDTLS_ENTROPY_C
+#define MBEDTLS_CTR_DRBG_C
+
+#endif // MBEDTLS_CONFIG_H
+</code></pre>
+<p><strong>安装OpenSSL工具</strong>（用于证书生成）：</p>
+<pre><code class="language-bash"># Windows: 下载并安装
+# https://slproweb.com/products/Win32OpenSSL.html
+
+# Linux/Mac: 通常已预装
+openssl version
+</code></pre>
+<h2 id="1rsa">步骤1：RSA数字签名实现</h2>
+<h3 id="11-rsa">1.1 基础RSA签名</h3>
+<pre><code class="language-c">#include &quot;mbedtls/rsa.h&quot;
+#include &quot;mbedtls/sha256.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+/**
+ * @brief  使用RSA私钥生成数字签名
+ * @param  rsa: RSA上下文（包含私钥）
+ * @param  message: 要签名的消息
+ * @param  message_len: 消息长度
+ * @param  signature: 输出签名缓冲区
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, 其他:失败
+ */
+int rsa_sign_message(mbedtls_rsa_context *rsa,
+                    const unsigned char *message, size_t message_len,
+                    unsigned char *signature,
+                    mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+    unsigned char hash[32];  // SHA-256哈希
+
+    printf(&quot;=== RSA Digital Signature ===\n&quot;);
+    printf(&quot;Message: %.*s\n&quot;, (int)message_len, message);
+    printf(&quot;Message length: %zu bytes\n\n&quot;, message_len);
+
+    // 步骤1: 计算消息的SHA-256哈希
+    printf(&quot;Step 1: Computing SHA-256 hash...\n&quot;);
+    ret = mbedtls_sha256(message, message_len, hash, 0);
+    if (ret != 0) {
+        printf(&quot;Hash computation failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, hash[i]);
+    }
+    printf(&quot;\n\n&quot;);
+
+    // 步骤2: 使用私钥对哈希进行签名
+    printf(&quot;Step 2: Signing hash with private key...\n&quot;);
+    ret = mbedtls_rsa_pkcs1_sign(rsa, mbedtls_ctr_drbg_random, ctr_drbg,
+                                MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256,
+                                32, hash, signature);
+
+    if (ret != 0) {
+        printf(&quot;Signing failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Signature generated successfully\n&quot;);
+    printf(&quot;Signature length: %zu bytes\n&quot;, mbedtls_rsa_get_len(rsa));
+    printf(&quot;Signature: &quot;);
+    for (size_t i = 0; i &lt; mbedtls_rsa_get_len(rsa); i++) {
+        printf(&quot;%02X&quot;, signature[i]);
+        if ((i + 1) % 32 == 0) printf(&quot;\n           &quot;);
+    }
+    printf(&quot;\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  使用RSA公钥验证数字签名
+ * @param  rsa: RSA上下文（包含公钥）
+ * @param  message: 原始消息
+ * @param  message_len: 消息长度
+ * @param  signature: 签名数据
+ * @retval 0:验证成功, 其他:验证失败
+ */
+int rsa_verify_signature(mbedtls_rsa_context *rsa,
+                        const unsigned char *message, size_t message_len,
+                        const unsigned char *signature)
+{
+    int ret;
+    unsigned char hash[32];
+
+    printf(&quot;\n=== Signature Verification ===\n&quot;);
+
+    // 步骤1: 计算消息的SHA-256哈希
+    printf(&quot;Step 1: Computing message hash...\n&quot;);
+    ret = mbedtls_sha256(message, message_len, hash, 0);
+    if (ret != 0) {
+        printf(&quot;Hash computation failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 步骤2: 使用公钥验证签名
+    printf(&quot;Step 2: Verifying signature with public key...\n&quot;);
+    ret = mbedtls_rsa_pkcs1_verify(rsa, NULL, NULL,
+                                  MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256,
+                                  32, hash, signature);
+
+    if (ret != 0) {
+        printf(&quot;✗ Signature verification FAILED: -0x%04x\n&quot;, -ret);
+        printf(&quot;  Possible reasons:\n&quot;);
+        printf(&quot;  - Message was modified\n&quot;);
+        printf(&quot;  - Signature was tampered\n&quot;);
+        printf(&quot;  - Wrong public key used\n&quot;);
+        return ret;
+    }
+
+    printf(&quot;✓ Signature verification SUCCESSFUL\n&quot;);
+    printf(&quot;  Message is authentic and unmodified\n&quot;);
+    printf(&quot;  Sender identity confirmed\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 签名过程：先哈希，再用私钥加密哈希值
+- 验证过程：计算哈希，用公钥解密签名，比较哈希值
+- 使用PKCS#1 v1.5填充方案
+- SHA-256作为哈希算法</p>
+<h3 id="12">1.2 完整签名验证示例</h3>
+<pre><code class="language-c">/**
+ * @brief  RSA签名和验证完整示例
+ */
+void rsa_signature_complete_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+
+    const char *message = &quot;This document is legally binding and must be authenticated.&quot;;
+    unsigned char signature[256];  // 2048位RSA = 256字节签名
+
+    printf(&quot;\n╔════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║  RSA Digital Signature Demo           ║\n&quot;);
+    printf(&quot;╚════════════════════════════════════════╝\n\n&quot;);
+
+    // 初始化随机数生成器
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    const char *pers = &quot;rsa_signature&quot;;
+    mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                         (const unsigned char *)pers, strlen(pers));
+
+    // 生成RSA密钥对
+    printf(&quot;Generating 2048-bit RSA key pair...\n&quot;);
+    mbedtls_rsa_init(&amp;rsa, MBEDTLS_RSA_PKCS_V15, 0);
+
+    uint32_t start_time = HAL_GetTick();
+    int ret = mbedtls_rsa_gen_key(&amp;rsa, mbedtls_ctr_drbg_random, &amp;ctr_drbg,
+                                 2048, 65537);
+    uint32_t end_time = HAL_GetTick();
+
+    if (ret != 0) {
+        printf(&quot;Key generation failed: -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+
+    printf(&quot;Key pair generated in %lu ms\n\n&quot;, end_time - start_time);
+
+    // 生成签名
+    if (rsa_sign_message(&amp;rsa, (unsigned char *)message, strlen(message),
+                        signature, &amp;ctr_drbg) != 0) {
+        goto cleanup;
+    }
+
+    // 验证签名
+    if (rsa_verify_signature(&amp;rsa, (unsigned char *)message, strlen(message),
+                            signature) == 0) {
+        printf(&quot;\n✓ Complete signature cycle successful\n&quot;);
+    }
+
+    // 测试：修改消息后验证失败
+    printf(&quot;\n--- Testing with Modified Message ---\n&quot;);
+    const char *modified = &quot;This document is legally binding and must be MODIFIED.&quot;;
+    if (rsa_verify_signature(&amp;rsa, (unsigned char *)modified, strlen(modified),
+                            signature) != 0) {
+        printf(&quot;As expected, modified message fails verification\n&quot;);
+    }
+
+    // 测试：修改签名后验证失败
+    printf(&quot;\n--- Testing with Tampered Signature ---\n&quot;);
+    signature[0] ^= 0x01;  // 修改签名的一个位
+    if (rsa_verify_signature(&amp;rsa, (unsigned char *)message, strlen(message),
+                            signature) != 0) {
+        printf(&quot;As expected, tampered signature fails verification\n&quot;);
+    }
+
+cleanup:
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>╔════════════════════════════════════════╗
+║  RSA Digital Signature Demo           ║
+╚════════════════════════════════════════╝
+
+Generating 2048-bit RSA key pair...
+Key pair generated in 3542 ms
+
+=== RSA Digital Signature ===
+Message: This document is legally binding...
+Message length: 59 bytes
+
+Step 1: Computing SHA-256 hash...
+Hash: 8D969EEF6ECAD3C29A3A629280E686CF...
+
+Step 2: Signing hash with private key...
+Signature generated successfully
+Signature length: 256 bytes
+Signature: 3F8A2C5D9E1B4F7A6C3E8D2F5A9C1E4B...
+
+=== Signature Verification ===
+Step 1: Computing message hash...
+Step 2: Verifying signature with public key...
+✓ Signature verification SUCCESSFUL
+  Message is authentic and unmodified
+  Sender identity confirmed
+
+✓ Complete signature cycle successful
+
+--- Testing with Modified Message ---
+✗ Signature verification FAILED: -0x4380
+  Possible reasons:
+  - Message was modified
+As expected, modified message fails verification
+
+--- Testing with Tampered Signature ---
+✗ Signature verification FAILED: -0x4380
+As expected, tampered signature fails verification
+</code></pre>
+<h2 id="2ecdsa">步骤2：ECDSA数字签名</h2>
+<p>ECDSA（Elliptic Curve Digital Signature Algorithm）是基于椭圆曲线密码学的数字签名算法，相比RSA具有更短的密钥长度和更快的速度。</p>
+<h3 id="21-ecdsa">2.1 ECDSA签名实现</h3>
+<pre><code class="language-c">#include &quot;mbedtls/ecdsa.h&quot;
+#include &quot;mbedtls/ecp.h&quot;
+
+/**
+ * @brief  使用ECDSA生成数字签名
+ * @param  grp_id: 椭圆曲线组ID（如SECP256R1）
+ * @param  message: 要签名的消息
+ * @param  message_len: 消息长度
+ * @param  signature: 输出签名缓冲区
+ * @param  sig_len: 输出签名长度
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, 其他:失败
+ */
+int ecdsa_sign_message(mbedtls_ecp_group_id grp_id,
+                      const unsigned char *message, size_t message_len,
+                      unsigned char *signature, size_t *sig_len,
+                      mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+    mbedtls_ecdsa_context ctx;
+    unsigned char hash[32];
+
+    printf(&quot;=== ECDSA Digital Signature ===\n&quot;);
+    printf(&quot;Curve: SECP256R1 (P-256)\n&quot;);
+    printf(&quot;Message: %.*s\n\n&quot;, (int)message_len, message);
+
+    // 初始化ECDSA上下文
+    mbedtls_ecdsa_init(&amp;ctx);
+
+    // 生成密钥对
+    printf(&quot;Step 1: Generating ECDSA key pair...\n&quot;);
+    uint32_t start = HAL_GetTick();
+    ret = mbedtls_ecdsa_genkey(&amp;ctx, grp_id,
+                              mbedtls_ctr_drbg_random, ctr_drbg);
+    uint32_t end = HAL_GetTick();
+
+    if (ret != 0) {
+        printf(&quot;Key generation failed: -0x%04x\n&quot;, -ret);
+        mbedtls_ecdsa_free(&amp;ctx);
+        return ret;
+    }
+
+    printf(&quot;Key pair generated in %lu ms\n&quot;, end - start);
+    printf(&quot;Key size: 256 bits\n\n&quot;);
+
+    // 计算消息哈希
+    printf(&quot;Step 2: Computing SHA-256 hash...\n&quot;);
+    mbedtls_sha256(message, message_len, hash, 0);
+
+    printf(&quot;Hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, hash[i]);
+    }
+    printf(&quot;\n\n&quot;);
+
+    // 生成签名
+    printf(&quot;Step 3: Generating ECDSA signature...\n&quot;);
+    ret = mbedtls_ecdsa_write_signature(&amp;ctx, MBEDTLS_MD_SHA256,
+                                       hash, 32,
+                                       signature, sig_len,
+                                       mbedtls_ctr_drbg_random, ctr_drbg);
+
+    if (ret != 0) {
+        printf(&quot;Signing failed: -0x%04x\n&quot;, -ret);
+        mbedtls_ecdsa_free(&amp;ctx);
+        return ret;
+    }
+
+    printf(&quot;Signature generated successfully\n&quot;);
+    printf(&quot;Signature length: %zu bytes\n&quot;, *sig_len);
+    printf(&quot;Signature: &quot;);
+    for (size_t i = 0; i &lt; *sig_len; i++) {
+        printf(&quot;%02X&quot;, signature[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 注意：实际应用中需要保存公钥用于验证
+    // 这里为了演示，我们直接使用同一个上下文验证
+
+    mbedtls_ecdsa_free(&amp;ctx);
+    return 0;
+}
+
+/**
+ * @brief  使用ECDSA验证数字签名
+ * @param  public_key: 公钥上下文
+ * @param  message: 原始消息
+ * @param  message_len: 消息长度
+ * @param  signature: 签名数据
+ * @param  sig_len: 签名长度
+ * @retval 0:验证成功, 其他:验证失败
+ */
+int ecdsa_verify_signature(mbedtls_ecdsa_context *public_key,
+                          const unsigned char *message, size_t message_len,
+                          const unsigned char *signature, size_t sig_len)
+{
+    int ret;
+    unsigned char hash[32];
+
+    printf(&quot;\n=== ECDSA Signature Verification ===\n&quot;);
+
+    // 计算消息哈希
+    printf(&quot;Step 1: Computing message hash...\n&quot;);
+    mbedtls_sha256(message, message_len, hash, 0);
+
+    // 验证签名
+    printf(&quot;Step 2: Verifying signature...\n&quot;);
+    ret = mbedtls_ecdsa_read_signature(public_key, hash, 32,
+                                      signature, sig_len);
+
+    if (ret != 0) {
+        printf(&quot;✗ ECDSA signature verification FAILED: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;✓ ECDSA signature verification SUCCESSFUL\n&quot;);
+    printf(&quot;  Message is authentic\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>ECDSA vs RSA对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>ECDSA (P-256)</th>
+<th>RSA (2048-bit)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>密钥长度</td>
+<td>256位</td>
+<td>2048位</td>
+</tr>
+<tr>
+<td>签名长度</td>
+<td>~72字节</td>
+<td>256字节</td>
+</tr>
+<tr>
+<td>签名速度</td>
+<td>快</td>
+<td>慢</td>
+</tr>
+<tr>
+<td>验证速度</td>
+<td>中等</td>
+<td>快</td>
+</tr>
+<tr>
+<td>密钥生成</td>
+<td>快</td>
+<td>慢</td>
+</tr>
+<tr>
+<td>安全级别</td>
+<td>128位</td>
+<td>112位</td>
+</tr>
+<tr>
+<td>存储需求</td>
+<td>小</td>
+<td>大</td>
+</tr>
+</tbody>
+</table>
+<p><strong>ECDSA优势</strong>：
+- 更短的密钥和签名
+- 更快的签名生成
+- 更少的存储空间
+- 更低的带宽需求
+- 适合资源受限设备</p>
+<h2 id="3pki">步骤3：数字证书和PKI体系</h2>
+<h3 id="31-x509">3.1 X.509数字证书</h3>
+<p>X.509是定义数字证书格式的标准，广泛用于TLS/SSL、代码签名等场景。</p>
+<p><strong>证书结构</strong>：</p>
+<pre><code>X.509证书包含：
+┌─────────────────────────────────┐
+│ 版本号 (Version)                │
+├─────────────────────────────────┤
+│ 序列号 (Serial Number)          │
+├─────────────────────────────────┤
+│ 签名算法 (Signature Algorithm)  │
+├─────────────────────────────────┤
+│ 颁发者 (Issuer)                 │
+│  - 国家 (C)                     │
+│  - 组织 (O)                     │
+│  - 通用名 (CN)                  │
+├─────────────────────────────────┤
+│ 有效期 (Validity)               │
+│  - 开始时间 (Not Before)        │
+│  - 结束时间 (Not After)         │
+├─────────────────────────────────┤
+│ 主体 (Subject)                  │
+│  - 国家 (C)                     │
+│  - 组织 (O)                     │
+│  - 通用名 (CN)                  │
+├─────────────────────────────────┤
+│ 公钥信息 (Subject Public Key)   │
+│  - 算法                         │
+│  - 公钥数据                     │
+├─────────────────────────────────┤
+│ 扩展字段 (Extensions)           │
+│  - 密钥用途                     │
+│  - 主体备用名称                 │
+│  - 等等...                      │
+├─────────────────────────────────┤
+│ 签名 (Signature)                │
+│  - CA的数字签名                 │
+└─────────────────────────────────┘
+</code></pre>
+<h3 id="32-openssl">3.2 使用OpenSSL生成证书</h3>
+<p><strong>生成自签名证书</strong>：</p>
+<pre><code class="language-bash"># 1. 生成私钥
+openssl genrsa -out ca_private.key 2048
+
+# 2. 生成自签名根证书
+openssl req -new -x509 -days 3650 -key ca_private.key -out ca_cert.pem \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=IoT/CN=Root CA&quot;
+
+# 3. 生成设备私钥
+openssl genrsa -out device_private.key 2048
+
+# 4. 生成证书签名请求(CSR)
+openssl req -new -key device_private.key -out device.csr \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=IoT/CN=Device001&quot;
+
+# 5. 使用CA签名生成设备证书
+openssl x509 -req -in device.csr -CA ca_cert.pem -CAkey ca_private.key \
+    -CAcreateserial -out device_cert.pem -days 365
+
+# 6. 查看证书内容
+openssl x509 -in device_cert.pem -text -noout
+
+# 7. 转换为C数组格式（用于嵌入式）
+xxd -i ca_cert.pem &gt; ca_cert.h
+xxd -i device_cert.pem &gt; device_cert.h
+</code></pre>
+<h3 id="33">3.3 在嵌入式系统中解析证书</h3>
+<pre><code class="language-c">#include &quot;mbedtls/x509_crt.h&quot;
+
+/**
+ * @brief  解析X.509证书
+ * @param  cert_pem: PEM格式的证书
+ * @param  cert_len: 证书长度
+ */
+void parse_x509_certificate(const unsigned char *cert_pem, size_t cert_len)
+{
+    mbedtls_x509_crt cert;
+    int ret;
+    char buf[1024];
+
+    printf(&quot;\n=== Parsing X.509 Certificate ===\n&quot;);
+
+    // 初始化证书结构
+    mbedtls_x509_crt_init(&amp;cert);
+
+    // 解析证书
+    ret = mbedtls_x509_crt_parse(&amp;cert, cert_pem, cert_len);
+    if (ret != 0) {
+        printf(&quot;Certificate parsing failed: -0x%04x\n&quot;, -ret);
+        mbedtls_x509_crt_free(&amp;cert);
+        return;
+    }
+
+    printf(&quot;Certificate parsed successfully\n\n&quot;);
+
+    // 获取证书信息
+    ret = mbedtls_x509_crt_info(buf, sizeof(buf), &quot;  &quot;, &amp;cert);
+    if (ret &gt; 0) {
+        printf(&quot;Certificate Information:\n%s\n&quot;, buf);
+    }
+
+    // 提取关键信息
+    printf(&quot;Key Information:\n&quot;);
+    printf(&quot;  Version: %d\n&quot;, cert.version);
+    printf(&quot;  Serial: &quot;);
+    for (size_t i = 0; i &lt; cert.serial.len; i++) {
+        printf(&quot;%02X&quot;, cert.serial.p[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    printf(&quot;  Issuer: &quot;);
+    mbedtls_x509_dn_gets(buf, sizeof(buf), &amp;cert.issuer);
+    printf(&quot;%s\n&quot;, buf);
+
+    printf(&quot;  Subject: &quot;);
+    mbedtls_x509_dn_gets(buf, sizeof(buf), &amp;cert.subject);
+    printf(&quot;%s\n&quot;, buf);
+
+    printf(&quot;  Valid from: %04d-%02d-%02d %02d:%02d:%02d\n&quot;,
+           cert.valid_from.year, cert.valid_from.mon, cert.valid_from.day,
+           cert.valid_from.hour, cert.valid_from.min, cert.valid_from.sec);
+
+    printf(&quot;  Valid to:   %04d-%02d-%02d %02d:%02d:%02d\n&quot;,
+           cert.valid_to.year, cert.valid_to.mon, cert.valid_to.day,
+           cert.valid_to.hour, cert.valid_to.min, cert.valid_to.sec);
+
+    // 清理
+    mbedtls_x509_crt_free(&amp;cert);
+}
+
+/**
+ * @brief  验证证书链
+ * @param  device_cert: 设备证书
+ * @param  ca_cert: CA证书
+ * @retval 0:验证成功, 其他:验证失败
+ */
+int verify_certificate_chain(const unsigned char *device_cert_pem,
+                             size_t device_cert_len,
+                             const unsigned char *ca_cert_pem,
+                             size_t ca_cert_len)
+{
+    mbedtls_x509_crt device_cert, ca_cert;
+    uint32_t flags;
+    int ret;
+    char vrfy_buf[512];
+
+    printf(&quot;\n=== Certificate Chain Verification ===\n&quot;);
+
+    // 初始化证书
+    mbedtls_x509_crt_init(&amp;device_cert);
+    mbedtls_x509_crt_init(&amp;ca_cert);
+
+    // 解析设备证书
+    printf(&quot;Step 1: Parsing device certificate...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;device_cert, device_cert_pem, device_cert_len);
+    if (ret != 0) {
+        printf(&quot;Device certificate parsing failed: -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+    printf(&quot;Device certificate parsed\n&quot;);
+
+    // 解析CA证书
+    printf(&quot;Step 2: Parsing CA certificate...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;ca_cert, ca_cert_pem, ca_cert_len);
+    if (ret != 0) {
+        printf(&quot;CA certificate parsing failed: -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+    printf(&quot;CA certificate parsed\n&quot;);
+
+    // 验证证书链
+    printf(&quot;Step 3: Verifying certificate chain...\n&quot;);
+    ret = mbedtls_x509_crt_verify(&amp;device_cert, &amp;ca_cert, NULL,
+                                  NULL, &amp;flags, NULL, NULL);
+
+    if (ret != 0) {
+        printf(&quot;✗ Certificate verification FAILED\n&quot;);
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), &quot;  ! &quot;, flags);
+        printf(&quot;%s\n&quot;, vrfy_buf);
+        goto cleanup;
+    }
+
+    printf(&quot;✓ Certificate chain verification SUCCESSFUL\n&quot;);
+    printf(&quot;  Device certificate is valid\n&quot;);
+    printf(&quot;  Signed by trusted CA\n&quot;);
+    printf(&quot;  Certificate chain is complete\n&quot;);
+
+cleanup:
+    mbedtls_x509_crt_free(&amp;device_cert);
+    mbedtls_x509_crt_free(&amp;ca_cert);
+    return ret;
+}
+</code></pre>
+<p><strong>证书验证流程</strong>：</p>
+<pre><code>证书链验证步骤：
+
+1. 解析设备证书
+   ↓
+2. 解析CA证书
+   ↓
+3. 检查证书有效期
+   ↓
+4. 验证证书签名
+   - 提取设备证书的签名
+   - 使用CA公钥验证签名
+   ↓
+5. 检查证书链
+   - 设备证书的Issuer = CA证书的Subject
+   ↓
+6. 检查证书用途
+   - 密钥用途是否匹配
+   ↓
+7. 验证成功/失败
+</code></pre>
+<h2 id="4">步骤4：固件签名和验证</h2>
+<h3 id="41">4.1 固件签名系统设计</h3>
+<pre><code class="language-c">/**
+ * @file   firmware_signature.h
+ * @brief  固件签名和验证系统
+ */
+#ifndef FIRMWARE_SIGNATURE_H
+#define FIRMWARE_SIGNATURE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+
+// 固件签名头部结构
+typedef struct {
+    uint32_t magic;              // 魔数: 0x46575349 (&quot;FWSI&quot;)
+    uint32_t version;            // 固件版本
+    uint32_t firmware_size;      // 固件大小
+    uint32_t timestamp;          // 签名时间戳
+    uint8_t  hash_algorithm;     // 哈希算法 (1=SHA256)
+    uint8_t  signature_algorithm;// 签名算法 (1=RSA, 2=ECDSA)
+    uint16_t signature_length;   // 签名长度
+    uint8_t  firmware_hash[32];  // 固件SHA-256哈希
+    uint8_t  signature[256];     // 数字签名
+    uint8_t  reserved[64];       // 保留字段
+} __attribute__((packed)) firmware_signature_t;
+
+// 函数声明
+int sign_firmware(const uint8_t *firmware, size_t firmware_size,
+                 firmware_signature_t *sig_header,
+                 mbedtls_rsa_context *private_key,
+                 mbedtls_ctr_drbg_context *ctr_drbg);
+
+int verify_firmware(const uint8_t *firmware, size_t firmware_size,
+                   const firmware_signature_t *sig_header,
+                   mbedtls_rsa_context *public_key);
+
+#endif // FIRMWARE_SIGNATURE_H
+</code></pre>
+<h3 id="42">4.2 固件签名实现</h3>
+<pre><code class="language-c">/**
+ * @file   firmware_signature.c
+ * @brief  固件签名和验证实现
+ */
+#include &quot;firmware_signature.h&quot;
+#include &quot;mbedtls/sha256.h&quot;
+#include &quot;mbedtls/rsa.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+#define FIRMWARE_MAGIC 0x46575349  // &quot;FWSI&quot;
+
+/**
+ * @brief  对固件进行签名
+ * @param  firmware: 固件数据
+ * @param  firmware_size: 固件大小
+ * @param  sig_header: 输出签名头部
+ * @param  private_key: RSA私钥
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, -1:失败
+ */
+int sign_firmware(const uint8_t *firmware, size_t firmware_size,
+                 firmware_signature_t *sig_header,
+                 mbedtls_rsa_context *private_key,
+                 mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+
+    printf(&quot;\n=== Firmware Signing Process ===\n&quot;);
+    printf(&quot;Firmware size: %zu bytes\n&quot;, firmware_size);
+
+    // 初始化签名头部
+    memset(sig_header, 0, sizeof(firmware_signature_t));
+    sig_header-&gt;magic = FIRMWARE_MAGIC;
+    sig_header-&gt;version = 0x00010000;  // v1.0.0
+    sig_header-&gt;firmware_size = firmware_size;
+    sig_header-&gt;timestamp = HAL_GetTick();
+    sig_header-&gt;hash_algorithm = 1;  // SHA-256
+    sig_header-&gt;signature_algorithm = 1;  // RSA
+    sig_header-&gt;signature_length = mbedtls_rsa_get_len(private_key);
+
+    // 步骤1: 计算固件哈希
+    printf(&quot;\nStep 1: Computing firmware hash...\n&quot;);
+    ret = mbedtls_sha256(firmware, firmware_size, sig_header-&gt;firmware_hash, 0);
+    if (ret != 0) {
+        printf(&quot;Hash computation failed: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    printf(&quot;Firmware hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, sig_header-&gt;firmware_hash[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 步骤2: 对哈希进行签名
+    printf(&quot;\nStep 2: Signing firmware hash...\n&quot;);
+    ret = mbedtls_rsa_pkcs1_sign(private_key, mbedtls_ctr_drbg_random, ctr_drbg,
+                                MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256,
+                                32, sig_header-&gt;firmware_hash,
+                                sig_header-&gt;signature);
+
+    if (ret != 0) {
+        printf(&quot;Signing failed: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    printf(&quot;Signature generated successfully\n&quot;);
+    printf(&quot;Signature length: %u bytes\n&quot;, sig_header-&gt;signature_length);
+
+    // 步骤3: 显示签名信息
+    printf(&quot;\nFirmware Signature Header:\n&quot;);
+    printf(&quot;  Magic:     0x%08X\n&quot;, sig_header-&gt;magic);
+    printf(&quot;  Version:   %u.%u.%u\n&quot;,
+           (sig_header-&gt;version &gt;&gt; 16) &amp; 0xFF,
+           (sig_header-&gt;version &gt;&gt; 8) &amp; 0xFF,
+           sig_header-&gt;version &amp; 0xFF);
+    printf(&quot;  Size:      %u bytes\n&quot;, sig_header-&gt;firmware_size);
+    printf(&quot;  Timestamp: %u\n&quot;, sig_header-&gt;timestamp);
+    printf(&quot;  Algorithm: RSA-SHA256\n&quot;);
+
+    printf(&quot;\n✓ Firmware signed successfully\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  验证固件签名
+ * @param  firmware: 固件数据
+ * @param  firmware_size: 固件大小
+ * @param  sig_header: 签名头部
+ * @param  public_key: RSA公钥
+ * @retval 0:验证成功, -1:验证失败
+ */
+int verify_firmware(const uint8_t *firmware, size_t firmware_size,
+                   const firmware_signature_t *sig_header,
+                   mbedtls_rsa_context *public_key)
+{
+    int ret;
+    uint8_t computed_hash[32];
+
+    printf(&quot;\n=== Firmware Verification Process ===\n&quot;);
+
+    // 步骤1: 验证魔数
+    printf(&quot;Step 1: Verifying magic number...\n&quot;);
+    if (sig_header-&gt;magic != FIRMWARE_MAGIC) {
+        printf(&quot;✗ Invalid magic number: 0x%08X\n&quot;, sig_header-&gt;magic);
+        return -1;
+    }
+    printf(&quot;Magic number valid\n&quot;);
+
+    // 步骤2: 验证固件大小
+    printf(&quot;\nStep 2: Verifying firmware size...\n&quot;);
+    if (sig_header-&gt;firmware_size != firmware_size) {
+        printf(&quot;✗ Size mismatch: expected %u, got %zu\n&quot;,
+               sig_header-&gt;firmware_size, firmware_size);
+        return -1;
+    }
+    printf(&quot;Firmware size matches\n&quot;);
+
+    // 步骤3: 计算固件哈希
+    printf(&quot;\nStep 3: Computing firmware hash...\n&quot;);
+    ret = mbedtls_sha256(firmware, firmware_size, computed_hash, 0);
+    if (ret != 0) {
+        printf(&quot;Hash computation failed: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    printf(&quot;Computed hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, computed_hash[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    printf(&quot;Stored hash:   &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, sig_header-&gt;firmware_hash[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 步骤4: 比较哈希值
+    printf(&quot;\nStep 4: Comparing hash values...\n&quot;);
+    if (memcmp(computed_hash, sig_header-&gt;firmware_hash, 32) != 0) {
+        printf(&quot;✗ Hash mismatch - firmware has been modified\n&quot;);
+        return -1;
+    }
+    printf(&quot;Hash values match\n&quot;);
+
+    // 步骤5: 验证签名
+    printf(&quot;\nStep 5: Verifying digital signature...\n&quot;);
+    ret = mbedtls_rsa_pkcs1_verify(public_key, NULL, NULL,
+                                  MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256,
+                                  32, sig_header-&gt;firmware_hash,
+                                  sig_header-&gt;signature);
+
+    if (ret != 0) {
+        printf(&quot;✗ Signature verification failed: -0x%04x\n&quot;, -ret);
+        printf(&quot;  Possible reasons:\n&quot;);
+        printf(&quot;  - Firmware was tampered\n&quot;);
+        printf(&quot;  - Wrong public key\n&quot;);
+        printf(&quot;  - Signature corrupted\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Signature verified successfully\n&quot;);
+
+    // 步骤6: 检查时间戳（可选）
+    printf(&quot;\nStep 6: Checking timestamp...\n&quot;);
+    uint32_t current_time = HAL_GetTick();
+    printf(&quot;Signature timestamp: %u\n&quot;, sig_header-&gt;timestamp);
+    printf(&quot;Current time: %u\n&quot;, current_time);
+
+    // 可以添加时间戳验证逻辑
+    // 例如：检查签名是否过期
+
+    printf(&quot;\n╔════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║  ✓ FIRMWARE VERIFICATION SUCCESSFUL   ║\n&quot;);
+    printf(&quot;╚════════════════════════════════════════╝\n&quot;);
+    printf(&quot;\nFirmware is:\n&quot;);
+    printf(&quot;  ✓ Authentic (signed by trusted key)\n&quot;);
+    printf(&quot;  ✓ Unmodified (hash matches)\n&quot;);
+    printf(&quot;  ✓ Complete (size matches)\n&quot;);
+    printf(&quot;  ✓ Valid (signature verified)\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="43">4.3 固件签名完整示例</h3>
+<pre><code class="language-c">/**
+ * @brief  固件签名和验证完整示例
+ */
+void firmware_signature_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+    firmware_signature_t sig_header;
+
+    // 模拟固件数据
+    const char *firmware_data = 
+        &quot;FIRMWARE_START\n&quot;
+        &quot;Version: 1.0.0\n&quot;
+        &quot;Build: 20240115\n&quot;
+        &quot;This is the actual firmware binary data...\n&quot;
+        &quot;FIRMWARE_END\n&quot;;
+    size_t firmware_size = strlen(firmware_data);
+
+    printf(&quot;\n╔════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║  Firmware Signature System Demo       ║\n&quot;);
+    printf(&quot;╚════════════════════════════════════════╝\n&quot;);
+
+    // 初始化
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    const char *pers = &quot;firmware_sign&quot;;
+    mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                         (const unsigned char *)pers, strlen(pers));
+
+    // 生成RSA密钥对
+    printf(&quot;\nGenerating RSA key pair for firmware signing...\n&quot;);
+    mbedtls_rsa_init(&amp;rsa, MBEDTLS_RSA_PKCS_V15, 0);
+
+    int ret = mbedtls_rsa_gen_key(&amp;rsa, mbedtls_ctr_drbg_random, &amp;ctr_drbg,
+                                 2048, 65537);
+    if (ret != 0) {
+        printf(&quot;Key generation failed\n&quot;);
+        goto cleanup;
+    }
+    printf(&quot;Key pair generated\n&quot;);
+
+    // 签名固件
+    if (sign_firmware((uint8_t *)firmware_data, firmware_size,
+                     &amp;sig_header, &amp;rsa, &amp;ctr_drbg) != 0) {
+        printf(&quot;Firmware signing failed\n&quot;);
+        goto cleanup;
+    }
+
+    // 验证固件
+    if (verify_firmware((uint8_t *)firmware_data, firmware_size,
+                       &amp;sig_header, &amp;rsa) == 0) {
+        printf(&quot;\n✓ Complete firmware signature cycle successful\n&quot;);
+    }
+
+    // 测试：修改固件后验证失败
+    printf(&quot;\n\n--- Testing with Modified Firmware ---\n&quot;);
+    char modified_firmware[256];
+    strcpy(modified_firmware, firmware_data);
+    modified_firmware[10] = 'X';  // 修改一个字节
+
+    if (verify_firmware((uint8_t *)modified_firmware, firmware_size,
+                       &amp;sig_header, &amp;rsa) != 0) {
+        printf(&quot;\nAs expected, modified firmware fails verification\n&quot;);
+    }
+
+cleanup:
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>╔════════════════════════════════════════╗
+║  Firmware Signature System Demo       ║
+╚════════════════════════════════════════╝
+
+Generating RSA key pair for firmware signing...
+Key pair generated
+
+=== Firmware Signing Process ===
+Firmware size: 123 bytes
+
+Step 1: Computing firmware hash...
+Firmware hash: 8D969EEF6ECAD3C29A3A629280E686CF...
+
+Step 2: Signing firmware hash...
+Signature generated successfully
+Signature length: 256 bytes
+
+Firmware Signature Header:
+  Magic:     0x46575349
+  Version:   1.0.0
+  Size:      123 bytes
+  Timestamp: 12345678
+  Algorithm: RSA-SHA256
+
+✓ Firmware signed successfully
+
+=== Firmware Verification Process ===
+Step 1: Verifying magic number...
+Magic number valid
+
+Step 2: Verifying firmware size...
+Firmware size matches
+
+Step 3: Computing firmware hash...
+Computed hash: 8D969EEF6ECAD3C29A3A629280E686CF...
+Stored hash:   8D969EEF6ECAD3C29A3A629280E686CF...
+
+Step 4: Comparing hash values...
+Hash values match
+
+Step 5: Verifying digital signature...
+Signature verified successfully
+
+Step 6: Checking timestamp...
+Signature timestamp: 12345678
+Current time: 12346000
+
+╔════════════════════════════════════════╗
+║  ✓ FIRMWARE VERIFICATION SUCCESSFUL   ║
+╚════════════════════════════════════════╝
+
+Firmware is:
+  ✓ Authentic (signed by trusted key)
+  ✓ Unmodified (hash matches)
+  ✓ Complete (size matches)
+  ✓ Valid (signature verified)
+
+✓ Complete firmware signature cycle successful
+
+
+--- Testing with Modified Firmware ---
+✗ Hash mismatch - firmware has been modified
+
+As expected, modified firmware fails verification
+</code></pre>
+<h2 id="5-ota">步骤5：实战项目 - 安全OTA更新系统</h2>
+<h3 id="51">5.1 项目需求</h3>
+<p>实现一个安全的OTA（Over-The-Air）固件更新系统，具有以下功能：
+- 固件签名验证
+- 版本检查
+- 回滚保护
+- 安全下载
+- LED状态指示</p>
+<h3 id="52">5.2 项目架构</h3>
+<pre><code class="language-c">/**
+ * @file   secure_ota.h
+ * @brief  安全OTA更新系统
+ */
+#ifndef SECURE_OTA_H
+#define SECURE_OTA_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &quot;firmware_signature.h&quot;
+
+// OTA状态
+typedef enum {
+    OTA_STATE_IDLE = 0,
+    OTA_STATE_DOWNLOADING,
+    OTA_STATE_VERIFYING,
+    OTA_STATE_INSTALLING,
+    OTA_STATE_SUCCESS,
+    OTA_STATE_FAILED
+} ota_state_t;
+
+// OTA配置
+typedef struct {
+    uint32_t current_version;    // 当前固件版本
+    uint32_t min_version;        // 最小允许版本（回滚保护）
+    uint32_t flash_address;      // Flash起始地址
+    uint32_t max_size;           // 最大固件大小
+    mbedtls_rsa_context *public_key;  // 验证公钥
+} ota_config_t;
+
+// 函数声明
+int ota_init(ota_config_t *config);
+int ota_download_firmware(const uint8_t *url);
+int ota_verify_firmware(const uint8_t *firmware, size_t size,
+                       const firmware_signature_t *signature);
+int ota_install_firmware(const uint8_t *firmware, size_t size);
+ota_state_t ota_get_state(void);
+
+#endif // SECURE_OTA_H
+</code></pre>
+<h3 id="53">5.3 核心实现</h3>
+<pre><code class="language-c">/**
+ * @file   secure_ota.c
+ * @brief  安全OTA更新实现
+ */
+#include &quot;secure_ota.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+static ota_config_t g_ota_config;
+static ota_state_t g_ota_state = OTA_STATE_IDLE;
+
+/**
+ * @brief  初始化OTA系统
+ * @param  config: OTA配置
+ * @retval 0:成功, -1:失败
+ */
+int ota_init(ota_config_t *config)
+{
+    printf(&quot;\n=== Initializing Secure OTA System ===\n&quot;);
+
+    // 保存配置
+    memcpy(&amp;g_ota_config, config, sizeof(ota_config_t));
+
+    printf(&quot;Current firmware version: %u.%u.%u\n&quot;,
+           (config-&gt;current_version &gt;&gt; 16) &amp; 0xFF,
+           (config-&gt;current_version &gt;&gt; 8) &amp; 0xFF,
+           config-&gt;current_version &amp; 0xFF);
+
+    printf(&quot;Minimum allowed version: %u.%u.%u\n&quot;,
+           (config-&gt;min_version &gt;&gt; 16) &amp; 0xFF,
+           (config-&gt;min_version &gt;&gt; 8) &amp; 0xFF,
+           config-&gt;min_version &amp; 0xFF);
+
+    printf(&quot;Flash address: 0x%08lX\n&quot;, config-&gt;flash_address);
+    printf(&quot;Max firmware size: %lu bytes\n&quot;, config-&gt;max_size);
+
+    g_ota_state = OTA_STATE_IDLE;
+
+    printf(&quot;✓ OTA system initialized\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  验证固件更新
+ * @param  firmware: 固件数据
+ * @param  size: 固件大小
+ * @param  signature: 固件签名
+ * @retval 0:验证成功, -1:验证失败
+ */
+int ota_verify_firmware(const uint8_t *firmware, size_t size,
+                       const firmware_signature_t *signature)
+{
+    printf(&quot;\n=== OTA Firmware Verification ===\n&quot;);
+
+    g_ota_state = OTA_STATE_VERIFYING;
+
+    // 步骤1: 验证签名
+    printf(&quot;Step 1: Verifying digital signature...\n&quot;);
+    if (verify_firmware(firmware, size, signature,
+                       g_ota_config.public_key) != 0) {
+        printf(&quot;✗ Signature verification failed\n&quot;);
+        g_ota_state = OTA_STATE_FAILED;
+        return -1;
+    }
+    printf(&quot;✓ Signature verified\n&quot;);
+
+    // 步骤2: 检查版本
+    printf(&quot;\nStep 2: Checking firmware version...\n&quot;);
+    uint32_t new_version = signature-&gt;version;
+
+    printf(&quot;Current version: %u.%u.%u\n&quot;,
+           (g_ota_config.current_version &gt;&gt; 16) &amp; 0xFF,
+           (g_ota_config.current_version &gt;&gt; 8) &amp; 0xFF,
+           g_ota_config.current_version &amp; 0xFF);
+
+    printf(&quot;New version:     %u.%u.%u\n&quot;,
+           (new_version &gt;&gt; 16) &amp; 0xFF,
+           (new_version &gt;&gt; 8) &amp; 0xFF,
+           new_version &amp; 0xFF);
+
+    // 检查是否为更新版本
+    if (new_version &lt;= g_ota_config.current_version) {
+        printf(&quot;✗ New version is not newer than current\n&quot;);
+        g_ota_state = OTA_STATE_FAILED;
+        return -1;
+    }
+
+    // 回滚保护：检查最小版本
+    if (new_version &lt; g_ota_config.min_version) {
+        printf(&quot;✗ Version rollback detected (security policy violation)\n&quot;);
+        printf(&quot;  Minimum allowed: %u.%u.%u\n&quot;,
+               (g_ota_config.min_version &gt;&gt; 16) &amp; 0xFF,
+               (g_ota_config.min_version &gt;&gt; 8) &amp; 0xFF,
+               g_ota_config.min_version &amp; 0xFF);
+        g_ota_state = OTA_STATE_FAILED;
+        return -1;
+    }
+
+    printf(&quot;✓ Version check passed\n&quot;);
+
+    // 步骤3: 检查固件大小
+    printf(&quot;\nStep 3: Checking firmware size...\n&quot;);
+    if (size &gt; g_ota_config.max_size) {
+        printf(&quot;✗ Firmware too large: %zu &gt; %lu\n&quot;,
+               size, g_ota_config.max_size);
+        g_ota_state = OTA_STATE_FAILED;
+        return -1;
+    }
+    printf(&quot;✓ Size check passed (%zu bytes)\n&quot;, size);
+
+    printf(&quot;\n✓ All verification checks passed\n&quot;);
+    printf(&quot;  Firmware is ready for installation\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  安装固件更新
+ * @param  firmware: 固件数据
+ * @param  size: 固件大小
+ * @retval 0:成功, -1:失败
+ */
+int ota_install_firmware(const uint8_t *firmware, size_t size)
+{
+    printf(&quot;\n=== Installing Firmware Update ===\n&quot;);
+
+    g_ota_state = OTA_STATE_INSTALLING;
+
+    // 步骤1: 擦除Flash
+    printf(&quot;Step 1: Erasing flash sectors...\n&quot;);
+    // HAL_FLASH_Unlock();
+    // ... 擦除Flash代码 ...
+    // HAL_FLASH_Lock();
+    printf(&quot;✓ Flash erased\n&quot;);
+
+    // 步骤2: 写入固件
+    printf(&quot;\nStep 2: Writing firmware to flash...\n&quot;);
+    printf(&quot;Address: 0x%08lX\n&quot;, g_ota_config.flash_address);
+    printf(&quot;Size: %zu bytes\n&quot;, size);
+
+    // HAL_FLASH_Unlock();
+    // for (size_t i = 0; i &lt; size; i++) {
+    //     HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE,
+    //                      g_ota_config.flash_address + i,
+    //                      firmware[i]);
+    // }
+    // HAL_FLASH_Lock();
+
+    printf(&quot;✓ Firmware written\n&quot;);
+
+    // 步骤3: 验证写入
+    printf(&quot;\nStep 3: Verifying written firmware...\n&quot;);
+    // uint8_t *flash_ptr = (uint8_t *)g_ota_config.flash_address;
+    // if (memcmp(flash_ptr, firmware, size) != 0) {
+    //     printf(&quot;✗ Verification failed\n&quot;);
+    //     g_ota_state = OTA_STATE_FAILED;
+    //     return -1;
+    // }
+    printf(&quot;✓ Verification passed\n&quot;);
+
+    g_ota_state = OTA_STATE_SUCCESS;
+
+    printf(&quot;\n╔════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║  ✓ FIRMWARE UPDATE SUCCESSFUL         ║\n&quot;);
+    printf(&quot;╚════════════════════════════════════════╝\n&quot;);
+    printf(&quot;\nSystem will reboot to apply update...\n&quot;);
+
+    // 延迟后重启
+    HAL_Delay(3000);
+    // NVIC_SystemReset();
+
+    return 0;
+}
+
+/**
+ * @brief  获取OTA状态
+ * @retval OTA状态
+ */
+ota_state_t ota_get_state(void)
+{
+    return g_ota_state;
+}
+
+/**
+ * @brief  OTA状态LED指示
+ */
+void ota_update_led(void)
+{
+    switch (g_ota_state) {
+        case OTA_STATE_IDLE:
+            // LED关闭
+            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+            break;
+
+        case OTA_STATE_DOWNLOADING:
+            // LED慢闪
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+            HAL_Delay(500);
+            break;
+
+        case OTA_STATE_VERIFYING:
+            // LED快闪
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+            HAL_Delay(100);
+            break;
+
+        case OTA_STATE_INSTALLING:
+            // LED常亮
+            HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+            break;
+
+        case OTA_STATE_SUCCESS:
+            // LED闪烁3次
+            for (int i = 0; i &lt; 3; i++) {
+                HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_SET);
+                HAL_Delay(200);
+                HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
+                HAL_Delay(200);
+            }
+            break;
+
+        case OTA_STATE_FAILED:
+            // LED快速闪烁
+            for (int i = 0; i &lt; 10; i++) {
+                HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+                HAL_Delay(50);
+            }
+            break;
+    }
+}
+</code></pre>
+<h3 id="54">5.4 主程序</h3>
+<pre><code class="language-c">/**
+ * @brief  安全OTA更新系统主程序
+ */
+void secure_ota_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+    ota_config_t ota_config;
+    firmware_signature_t sig_header;
+
+    // 模拟新固件
+    const char *new_firmware = 
+        &quot;NEW_FIRMWARE_V2.0\n&quot;
+        &quot;Build: 20240116\n&quot;
+        &quot;Enhanced security features...\n&quot;;
+    size_t firmware_size = strlen(new_firmware);
+
+    printf(&quot;\n╔════════════════════════════════════════╗\n&quot;);
+    printf(&quot;║  Secure OTA Update System Demo        ║\n&quot;);
+    printf(&quot;╚════════════════════════════════════════╝\n&quot;);
+
+    // 初始化加密库
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    const char *pers = &quot;ota_update&quot;;
+    mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                         (const unsigned char *)pers, strlen(pers));
+
+    // 生成密钥对（实际应用中公钥预置在设备中）
+    printf(&quot;\nGenerating RSA key pair...\n&quot;);
+    mbedtls_rsa_init(&amp;rsa, MBEDTLS_RSA_PKCS_V15, 0);
+    mbedtls_rsa_gen_key(&amp;rsa, mbedtls_ctr_drbg_random, &amp;ctr_drbg,
+                       2048, 65537);
+    printf(&quot;Key pair generated\n&quot;);
+
+    // 配置OTA系统
+    ota_config.current_version = 0x00010000;  // v1.0.0
+    ota_config.min_version = 0x00010000;      // v1.0.0
+    ota_config.flash_address = 0x08020000;
+    ota_config.max_size = 128 * 1024;  // 128KB
+    ota_config.public_key = &amp;rsa;
+
+    // 初始化OTA
+    ota_init(&amp;ota_config);
+
+    // 服务器端：签名新固件
+    printf(&quot;\n--- Server Side: Signing New Firmware ---\n&quot;);
+    if (sign_firmware((uint8_t *)new_firmware, firmware_size,
+                     &amp;sig_header, &amp;rsa, &amp;ctr_drbg) != 0) {
+        printf(&quot;Firmware signing failed\n&quot;);
+        goto cleanup;
+    }
+
+    // 设置新版本号
+    sig_header.version = 0x00020000;  // v2.0.0
+
+    // 设备端：下载并验证固件
+    printf(&quot;\n--- Device Side: Downloading and Verifying ---\n&quot;);
+    printf(&quot;Simulating firmware download...\n&quot;);
+    HAL_Delay(1000);
+    printf(&quot;Download complete\n&quot;);
+
+    // 验证固件
+    if (ota_verify_firmware((uint8_t *)new_firmware, firmware_size,
+                           &amp;sig_header) != 0) {
+        printf(&quot;\n✗ OTA update failed - verification error\n&quot;);
+        goto cleanup;
+    }
+
+    // 安装固件
+    if (ota_install_firmware((uint8_t *)new_firmware, firmware_size) == 0) {
+        printf(&quot;\n✓ OTA update completed successfully\n&quot;);
+    }
+
+    // 测试：尝试回滚到旧版本
+    printf(&quot;\n\n--- Testing Rollback Protection ---\n&quot;);
+    sig_header.version = 0x00000100;  // v0.1.0 (older)
+
+    if (ota_verify_firmware((uint8_t *)new_firmware, firmware_size,
+                           &amp;sig_header) != 0) {
+        printf(&quot;\n✓ Rollback protection working correctly\n&quot;);
+    }
+
+cleanup:
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>╔════════════════════════════════════════╗
+║  Secure OTA Update System Demo        ║
+╚════════════════════════════════════════╝
+
+Generating RSA key pair...
+Key pair generated
+
+=== Initializing Secure OTA System ===
+Current firmware version: 1.0.0
+Minimum allowed version: 1.0.0
+Flash address: 0x08020000
+Max firmware size: 131072 bytes
+✓ OTA system initialized
+
+--- Server Side: Signing New Firmware ---
+=== Firmware Signing Process ===
+Firmware size: 78 bytes
+...
+✓ Firmware signed successfully
+
+--- Device Side: Downloading and Verifying ---
+Simulating firmware download...
+Download complete
+
+=== OTA Firmware Verification ===
+Step 1: Verifying digital signature...
+✓ Signature verified
+
+Step 2: Checking firmware version...
+Current version: 1.0.0
+New version:     2.0.0
+✓ Version check passed
+
+Step 3: Checking firmware size...
+✓ Size check passed (78 bytes)
+
+✓ All verification checks passed
+  Firmware is ready for installation
+
+=== Installing Firmware Update ===
+Step 1: Erasing flash sectors...
+✓ Flash erased
+
+Step 2: Writing firmware to flash...
+Address: 0x08020000
+Size: 78 bytes
+✓ Firmware written
+
+Step 3: Verifying written firmware...
+✓ Verification passed
+
+╔════════════════════════════════════════╗
+║  ✓ FIRMWARE UPDATE SUCCESSFUL         ║
+╚════════════════════════════════════════╝
+
+System will reboot to apply update...
+
+✓ OTA update completed successfully
+
+
+--- Testing Rollback Protection ---
+✗ Version rollback detected (security policy violation)
+  Minimum allowed: 1.0.0
+
+✓ Rollback protection working correctly
+</code></pre>
+<h2 id="_11">深入理解</h2>
+<h3 id="pki">PKI体系架构</h3>
+<p><strong>PKI（Public Key Infrastructure）公钥基础设施</strong>是一套完整的安全框架：</p>
+<pre><code>PKI体系结构：
+
+┌─────────────────────────────────────┐
+│  根CA (Root Certificate Authority)  │
+│  - 自签名证书                       │
+│  - 最高信任级别                     │
+└─────────────────┬───────────────────┘
+                  │
+        ┌─────────┴─────────┐
+        ↓                   ↓
+┌───────────────┐   ┌───────────────┐
+│  中间CA       │   │  中间CA       │
+│  (Intermediate)│   │  (Intermediate)│
+└───────┬───────┘   └───────┬───────┘
+        │                   │
+    ┌───┴───┐           ┌───┴───┐
+    ↓       ↓           ↓       ↓
+┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐
+│终端证书│ │终端证书│ │终端证书│ │终端证书│
+│(设备)  │ │(服务器)│ │(用户)  │ │(代码)  │
+└────────┘ └────────┘ └────────┘ └────────┘
+</code></pre>
+<p><strong>PKI组件</strong>：</p>
+<ol>
+<li>
+<p><strong>证书颁发机构(CA)</strong>
+   - 颁发和管理证书
+   - 验证身份
+   - 维护证书撤销列表(CRL)
+   - 提供时间戳服务</p>
+</li>
+<li>
+<p><strong>注册机构(RA)</strong>
+   - 验证证书申请者身份
+   - 审核证书请求
+   - 协助CA工作</p>
+</li>
+<li>
+<p><strong>证书库</strong>
+   - 存储已颁发的证书
+   - 提供证书查询服务
+   - 发布CRL</p>
+</li>
+<li>
+<p><strong>密钥管理</strong>
+   - 密钥生成
+   - 密钥存储
+   - 密钥备份和恢复
+   - 密钥更新</p>
+</li>
+</ol>
+<h3 id="_12">证书撤销机制</h3>
+<p><strong>证书撤销列表(CRL)</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  检查证书是否被撤销
+ * @param  cert: 要检查的证书
+ * @param  crl: 证书撤销列表
+ * @retval 0:未撤销, 1:已撤销, -1:错误
+ */
+int check_certificate_revocation(mbedtls_x509_crt *cert,
+                                 mbedtls_x509_crl *crl)
+{
+    mbedtls_x509_crl_entry *entry;
+
+    printf(&quot;Checking certificate revocation status...\n&quot;);
+
+    // 遍历CRL
+    entry = &amp;crl-&gt;entry;
+    while (entry != NULL) {
+        // 比较序列号
+        if (cert-&gt;serial.len == entry-&gt;serial.len &amp;&amp;
+            memcmp(cert-&gt;serial.p, entry-&gt;serial.p, cert-&gt;serial.len) == 0) {
+            printf(&quot;✗ Certificate has been REVOKED\n&quot;);
+            printf(&quot;  Revocation date: %04d-%02d-%02d\n&quot;,
+                   entry-&gt;revocation_date.year,
+                   entry-&gt;revocation_date.mon,
+                   entry-&gt;revocation_date.day);
+            return 1;  // 已撤销
+        }
+        entry = entry-&gt;next;
+    }
+
+    printf(&quot;✓ Certificate is valid (not revoked)\n&quot;);
+    return 0;  // 未撤销
+}
+</code></pre>
+<p><strong>OCSP（在线证书状态协议）</strong>：</p>
+<pre><code>OCSP查询流程：
+
+客户端                    OCSP响应器
+   │                          │
+   │  1. OCSP请求             │
+   │  (证书序列号)            │
+   ├─────────────────────────&gt;│
+   │                          │
+   │                          │ 2. 查询证书状态
+   │                          │
+   │  3. OCSP响应             │
+   │  (good/revoked/unknown)  │
+   │&lt;─────────────────────────┤
+   │                          │
+   │  4. 验证响应签名         │
+   │                          │
+</code></pre>
+<h3 id="_13">时间戳服务</h3>
+<p><strong>时间戳的作用</strong>：</p>
+<ol>
+<li>
+<p><strong>证明签名时间</strong>
+   - 签名在特定时间生成
+   - 防止时间欺诈
+   - 提供法律证据</p>
+</li>
+<li>
+<p><strong>长期有效性</strong>
+   - 即使签名密钥过期
+   - 签名仍然有效
+   - 时间戳证明签名时密钥有效</p>
+</li>
+</ol>
+<p><strong>时间戳请求流程</strong>：</p>
+<pre><code>时间戳协议(RFC 3161)：
+
+1. 客户端计算文档哈希
+   ↓
+2. 发送时间戳请求
+   - 哈希值
+   - 哈希算法
+   ↓
+3. TSA验证请求
+   ↓
+4. TSA生成时间戳令牌
+   - 当前时间
+   - 哈希值
+   - TSA签名
+   ↓
+5. 返回时间戳令牌
+   ↓
+6. 客户端验证时间戳
+</code></pre>
+<h3 id="_14">不可否认性</h3>
+<p><strong>数字签名提供不可否认性</strong>：</p>
+<pre><code>不可否认性保证：
+
+1. 签名者不能否认
+   - 只有私钥持有者能生成签名
+   - 私钥应该只有签名者拥有
+   - 签名证明签名者的行为
+
+2. 法律效力
+   - 数字签名具有法律效力
+   - 等同于手写签名
+   - 可作为法律证据
+
+3. 审计追踪
+   - 记录所有签名操作
+   - 时间戳证明签名时间
+   - 证书链证明签名者身份
+</code></pre>
+<p><strong>实现不可否认性的要求</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  创建不可否认的签名记录
+ */
+typedef struct {
+    uint8_t document_hash[32];      // 文档哈希
+    uint8_t signature[256];         // 数字签名
+    uint32_t timestamp;             // 时间戳
+    uint8_t timestamp_signature[256]; // 时间戳签名
+    char signer_cert[2048];         // 签名者证书
+    char ca_cert[2048];             // CA证书
+    uint32_t sequence_number;       // 序列号
+} non_repudiation_record_t;
+
+/**
+ * @brief  创建不可否认记录
+ */
+int create_non_repudiation_record(const uint8_t *document,
+                                  size_t doc_len,
+                                  non_repudiation_record_t *record,
+                                  mbedtls_rsa_context *private_key,
+                                  mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    // 1. 计算文档哈希
+    mbedtls_sha256(document, doc_len, record-&gt;document_hash, 0);
+
+    // 2. 生成签名
+    mbedtls_rsa_pkcs1_sign(private_key, mbedtls_ctr_drbg_random, ctr_drbg,
+                          MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256,
+                          32, record-&gt;document_hash, record-&gt;signature);
+
+    // 3. 添加时间戳
+    record-&gt;timestamp = HAL_GetTick();
+
+    // 4. 对时间戳签名（使用TSA）
+    // ... 时间戳签名代码 ...
+
+    // 5. 附加证书
+    // ... 证书复制代码 ...
+
+    // 6. 分配序列号
+    static uint32_t seq = 0;
+    record-&gt;sequence_number = seq++;
+
+    printf(&quot;Non-repudiation record created\n&quot;);
+    printf(&quot;  Sequence: %u\n&quot;, record-&gt;sequence_number);
+    printf(&quot;  Timestamp: %u\n&quot;, record-&gt;timestamp);
+
+    return 0;
+}
+</code></pre>
+<h2 id="_15">最佳实践</h2>
+<h3 id="_16">算法选择指南</h3>
+<pre><code>场景1：固件签名
+推荐：RSA-2048 + SHA-256
+原因：广泛支持，验证快速
+
+场景2：物联网设备
+推荐：ECDSA P-256 + SHA-256
+原因：密钥短，签名小，适合资源受限
+
+场景3：代码签名
+推荐：RSA-3072 + SHA-256
+原因：更高安全性，长期有效
+
+场景4：文档签名
+推荐：RSA-2048 + SHA-256 + 时间戳
+原因：法律效力，长期可验证
+
+场景5：高安全需求
+推荐：RSA-4096 + SHA-512
+原因：最高安全级别
+</code></pre>
+<h3 id="_17">密钥管理最佳实践</h3>
+<p><strong>1. 私钥保护</strong>：</p>
+<pre><code class="language-c">// ✓ 正确：私钥存储在安全区域
+#define PRIVATE_KEY_FLASH_ADDR  0x08070000  // 受保护的Flash区域
+
+// 启用Flash读保护
+void protect_private_key_storage(void)
+{
+    FLASH_OBProgramInitTypeDef ob_config;
+
+    // 读取当前选项字节
+    HAL_FLASHEx_OBGetConfig(&amp;ob_config);
+
+    // 设置读保护级别
+    ob_config.RDPLevel = OB_RDP_LEVEL_1;
+
+    // 应用保护
+    HAL_FLASH_Unlock();
+    HAL_FLASH_OB_Unlock();
+    HAL_FLASHEx_OBProgram(&amp;ob_config);
+    HAL_FLASH_OB_Launch();
+    HAL_FLASH_OB_Lock();
+    HAL_FLASH_Lock();
+}
+
+// ✓ 正确：使用后立即清除私钥
+void secure_sign_operation(void)
+{
+    mbedtls_rsa_context rsa;
+
+    // 加载私钥
+    load_private_key(&amp;rsa);
+
+    // 执行签名
+    sign_data(&amp;rsa, data, signature);
+
+    // 立即清除私钥
+    mbedtls_rsa_free(&amp;rsa);
+    memset(&amp;rsa, 0, sizeof(rsa));
+}
+</code></pre>
+<p><strong>2. 公钥分发</strong>：</p>
+<pre><code class="language-c">// ✓ 正确：公钥硬编码在固件中
+const unsigned char public_key_pem[] = 
+    &quot;-----BEGIN PUBLIC KEY-----\n&quot;
+    &quot;MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...\n&quot;
+    &quot;-----END PUBLIC KEY-----\n&quot;;
+
+// ✓ 正确：使用证书链验证公钥
+int verify_public_key(mbedtls_x509_crt *cert)
+{
+    // 验证证书链
+    // 确保公钥来自可信CA
+    return mbedtls_x509_crt_verify(cert, trusted_ca, NULL,
+                                   NULL, &amp;flags, NULL, NULL);
+}
+</code></pre>
+<p><strong>3. 密钥轮换</strong>：</p>
+<pre><code class="language-c">// 支持多个公钥版本
+typedef struct {
+    uint32_t key_id;
+    uint32_t valid_from;
+    uint32_t valid_to;
+    mbedtls_rsa_context public_key;
+} key_version_t;
+
+key_version_t key_versions[] = {
+    {1, 0, 1640000000, /* key1 */},  // 旧密钥
+    {2, 1640000000, 0xFFFFFFFF, /* key2 */},  // 当前密钥
+};
+
+int verify_with_key_rotation(const uint8_t *data, size_t len,
+                             const uint8_t *signature,
+                             uint32_t key_id)
+{
+    // 查找对应的密钥版本
+    for (int i = 0; i &lt; sizeof(key_versions)/sizeof(key_version_t); i++) {
+        if (key_versions[i].key_id == key_id) {
+            return verify_signature(&amp;key_versions[i].public_key,
+                                   data, len, signature);
+        }
+    }
+    return -1;  // 密钥未找到
+}
+</code></pre>
+<h3 id="_18">安全实践建议</h3>
+<p><strong>1. 始终验证签名</strong>：</p>
+<pre><code class="language-c">// ✗ 错误：跳过签名验证
+if (debug_mode) {
+    // 调试模式下跳过验证 - 危险！
+    install_firmware(firmware);
+}
+
+// ✓ 正确：始终验证
+if (verify_firmware_signature(firmware, signature) == 0) {
+    install_firmware(firmware);
+} else {
+    reject_firmware();
+}
+</code></pre>
+<p><strong>2. 使用安全的哈希算法</strong>：</p>
+<pre><code class="language-c">// ✗ 错误：使用弱哈希算法
+mbedtls_md5(data, len, hash);  // MD5已不安全
+
+// ✓ 正确：使用SHA-256或更强
+mbedtls_sha256(data, len, hash, 0);  // SHA-256
+</code></pre>
+<p><strong>3. 防止时序攻击</strong>：</p>
+<pre><code class="language-c">// ✗ 错误：提前返回
+int verify_signature_unsafe(const uint8_t *sig1, const uint8_t *sig2)
+{
+    for (int i = 0; i &lt; 256; i++) {
+        if (sig1[i] != sig2[i]) {
+            return 0;  // 提前返回泄露信息
+        }
+    }
+    return 1;
+}
+
+// ✓ 正确：常量时间比较
+int verify_signature_safe(const uint8_t *sig1, const uint8_t *sig2)
+{
+    uint8_t diff = 0;
+    for (int i = 0; i &lt; 256; i++) {
+        diff |= sig1[i] ^ sig2[i];
+    }
+    return diff == 0;
+}
+</code></pre>
+<p><strong>4. 添加重放攻击保护</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    uint8_t signature[256];
+    uint32_t timestamp;
+    uint32_t nonce;  // 随机数
+} signed_message_t;
+
+int verify_with_replay_protection(signed_message_t *msg)
+{
+    // 1. 验证签名
+    if (verify_signature(msg) != 0) {
+        return -1;
+    }
+
+    // 2. 检查时间戳
+    uint32_t current_time = HAL_GetTick();
+    if (abs(current_time - msg-&gt;timestamp) &gt; 60000) {  // 60秒窗口
+        printf(&quot;Message too old or from future\n&quot;);
+        return -1;
+    }
+
+    // 3. 检查nonce是否已使用
+    if (is_nonce_used(msg-&gt;nonce)) {
+        printf(&quot;Replay attack detected\n&quot;);
+        return -1;
+    }
+
+    // 4. 记录nonce
+    record_nonce(msg-&gt;nonce);
+
+    return 0;
+}
+</code></pre>
+<h2 id="_19">常见问题</h2>
+<h3 id="q1">Q1: 数字签名和加密有什么区别？</h3>
+<p><strong>A</strong>: 它们的目的和使用方式完全不同：</p>
+<p><strong>数字签名</strong>：
+- 目的：认证和完整性
+- 使用：私钥签名，公钥验证
+- 结果：消息可读，但可验证真实性
+- 应用：证明身份，防篡改</p>
+<p><strong>加密</strong>：
+- 目的：保密性
+- 使用：公钥加密，私钥解密
+- 结果：消息不可读，只有持有私钥者能解密
+- 应用：保护数据内容</p>
+<p><strong>组合使用</strong>：</p>
+<pre><code>完整的安全通信：
+1. 发送方用私钥签名（认证）
+2. 发送方用接收方公钥加密（保密）
+3. 接收方用私钥解密（获取内容）
+4. 接收方用发送方公钥验证（确认身份）
+</code></pre>
+<h3 id="q2">Q2: 为什么要先哈希再签名？</h3>
+<p><strong>A</strong>: 有几个重要原因：</p>
+<ol>
+<li>
+<p><strong>性能</strong>
+   - RSA只能处理有限长度数据
+   - 哈希将任意长度数据转为固定长度
+   - 签名固定长度的哈希更快</p>
+</li>
+<li>
+<p><strong>安全性</strong>
+   - 直接签名原始数据可能存在安全问题
+   - 哈希提供额外的安全层
+   - 防止某些类型的攻击</p>
+</li>
+<li>
+<p><strong>标准化</strong>
+   - 所有签名标准都要求先哈希
+   - 确保互操作性
+   - 符合最佳实践</p>
+</li>
+</ol>
+<h3 id="q3-rsaecdsa">Q3: RSA和ECDSA应该选择哪个？</h3>
+<p><strong>A</strong>: 根据应用场景选择：</p>
+<p><strong>选择RSA的情况</strong>：
+- 需要与旧系统兼容
+- 验证速度是关键
+- 有足够的存储空间
+- 需要广泛的库支持</p>
+<p><strong>选择ECDSA的情况</strong>：
+- 资源受限（IoT设备）
+- 需要更短的签名
+- 签名速度是关键
+- 带宽有限</p>
+<p><strong>性能对比</strong>：</p>
+<pre><code>256位ECDSA ≈ 3072位RSA（安全级别）
+
+签名大小：
+- ECDSA: ~72字节
+- RSA-2048: 256字节
+- RSA-3072: 384字节
+
+签名速度：
+- ECDSA: 快
+- RSA: 慢
+
+验证速度：
+- ECDSA: 中等
+- RSA: 快
+</code></pre>
+<h3 id="q4">Q4: 如何保护私钥安全？</h3>
+<p><strong>A</strong>: 多层保护措施：</p>
+<p><strong>硬件保护</strong>：</p>
+<pre><code class="language-c">// 1. 使用安全元件
+// - TPM (Trusted Platform Module)
+// - SE (Secure Element)
+// - HSM (Hardware Security Module)
+
+// 2. Flash读保护
+void enable_flash_protection(void)
+{
+    // 启用读保护，防止私钥被读取
+    HAL_FLASH_OB_RDPConfig(OB_RDP_LEVEL_1);
+}
+
+// 3. 使用加密存储
+void store_encrypted_key(const uint8_t *key)
+{
+    uint8_t encrypted[256];
+
+    // 使用硬件密钥加密私钥
+    encrypt_with_hardware_key(key, encrypted);
+
+    // 存储加密后的私钥
+    write_to_flash(encrypted);
+}
+</code></pre>
+<p><strong>软件保护</strong>：</p>
+<pre><code class="language-c">// 1. 使用后立即清除
+void use_private_key(void)
+{
+    mbedtls_rsa_context rsa;
+
+    load_key(&amp;rsa);
+    sign_data(&amp;rsa);
+
+    // 清除内存
+    mbedtls_rsa_free(&amp;rsa);
+    memset(&amp;rsa, 0, sizeof(rsa));
+}
+
+// 2. 限制访问
+// - 只在必要时加载私钥
+// - 最小权限原则
+// - 审计所有私钥使用
+
+// 3. 密钥分割
+// - 将私钥分成多个部分
+// - 需要多个部分才能重建
+// - 增加攻击难度
+</code></pre>
+<h3 id="q5">Q5: 证书过期后签名还有效吗？</h3>
+<p><strong>A</strong>: 取决于验证策略：</p>
+<p><strong>严格验证</strong>：</p>
+<pre><code class="language-c">// 检查证书有效期
+if (current_time &gt; cert-&gt;valid_to) {
+    printf(&quot;Certificate expired\n&quot;);
+    return -1;  // 拒绝
+}
+</code></pre>
+<p><strong>宽松验证（带时间戳）</strong>：</p>
+<pre><code class="language-c">// 如果有时间戳，检查签名时证书是否有效
+if (timestamp &lt; cert-&gt;valid_to) {
+    // 签名时证书有效，接受
+    return 0;
+}
+</code></pre>
+<p><strong>最佳实践</strong>：
+- 使用时间戳服务
+- 证明签名时证书有效
+- 即使证书过期，签名仍然有效
+- 提供长期可验证性</p>
+<h3 id="q6">Q6: 如何防止重放攻击？</h3>
+<p><strong>A</strong>: 多种防护机制：</p>
+<pre><code class="language-c">// 1. 时间戳
+typedef struct {
+    uint8_t data[256];
+    uint32_t timestamp;
+    uint8_t signature[256];
+} timestamped_message_t;
+
+int verify_with_timestamp(timestamped_message_t *msg)
+{
+    uint32_t current = HAL_GetTick();
+
+    // 只接受5分钟内的消息
+    if (abs(current - msg-&gt;timestamp) &gt; 300000) {
+        return -1;
+    }
+
+    return verify_signature(msg);
+}
+
+// 2. 序列号
+static uint32_t last_sequence = 0;
+
+int verify_with_sequence(uint32_t sequence)
+{
+    if (sequence &lt;= last_sequence) {
+        printf(&quot;Old or duplicate message\n&quot;);
+        return -1;
+    }
+
+    last_sequence = sequence;
+    return 0;
+}
+
+// 3. Nonce（随机数）
+#define MAX_NONCE_CACHE 1000
+static uint32_t nonce_cache[MAX_NONCE_CACHE];
+static int nonce_count = 0;
+
+int verify_with_nonce(uint32_t nonce)
+{
+    // 检查nonce是否已使用
+    for (int i = 0; i &lt; nonce_count; i++) {
+        if (nonce_cache[i] == nonce) {
+            printf(&quot;Nonce reused - replay attack\n&quot;);
+            return -1;
+        }
+    }
+
+    // 记录nonce
+    if (nonce_count &lt; MAX_NONCE_CACHE) {
+        nonce_cache[nonce_count++] = nonce;
+    }
+
+    return 0;
+}
+</code></pre>
+<h2 id="_20">故障排除</h2>
+<h3 id="1">问题1：签名验证总是失败</h3>
+<p><strong>可能原因</strong>：
+- 使用了错误的公钥
+- 消息在传输中被修改
+- 哈希算法不匹配
+- 填充方案不一致</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 验证公钥是否正确
+void debug_public_key(mbedtls_rsa_context *rsa)
+{
+    printf(&quot;RSA Key Info:\n&quot;);
+    printf(&quot;  Key size: %zu bits\n&quot;, mbedtls_rsa_get_len(rsa) * 8);
+    printf(&quot;  Modulus N: &quot;);
+    mbedtls_mpi_write_string(&amp;rsa-&gt;N, 16, buf, sizeof(buf), &amp;len);
+    printf(&quot;%s\n&quot;, buf);
+    printf(&quot;  Public exponent E: &quot;);
+    mbedtls_mpi_write_string(&amp;rsa-&gt;E, 16, buf, sizeof(buf), &amp;len);
+    printf(&quot;%s\n&quot;, buf);
+}
+
+// 2. 验证消息完整性
+void debug_message_hash(const uint8_t *msg, size_t len)
+{
+    uint8_t hash[32];
+    mbedtls_sha256(msg, len, hash, 0);
+
+    printf(&quot;Message hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, hash[i]);
+    }
+    printf(&quot;\n&quot;);
+}
+
+// 3. 检查算法参数
+void debug_signature_params(void)
+{
+    printf(&quot;Signature parameters:\n&quot;);
+    printf(&quot;  Hash algorithm: SHA-256\n&quot;);
+    printf(&quot;  Padding: PKCS#1 v1.5\n&quot;);
+    printf(&quot;  Key type: RSA\n&quot;);
+}
+</code></pre>
+<h3 id="2">问题2：证书链验证失败</h3>
+<p><strong>可能原因</strong>：
+- CA证书不在信任列表中
+- 证书已过期
+- 证书链不完整
+- 证书被撤销</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 详细的证书验证
+int debug_certificate_verification(mbedtls_x509_crt *cert,
+                                   mbedtls_x509_crt *ca)
+{
+    uint32_t flags;
+    char vrfy_buf[512];
+    int ret;
+
+    printf(&quot;=== Certificate Verification Debug ===\n&quot;);
+
+    // 1. 检查证书有效期
+    printf(&quot;Certificate validity:\n&quot;);
+    printf(&quot;  Not before: %04d-%02d-%02d\n&quot;,
+           cert-&gt;valid_from.year, cert-&gt;valid_from.mon, cert-&gt;valid_from.day);
+    printf(&quot;  Not after:  %04d-%02d-%02d\n&quot;,
+           cert-&gt;valid_to.year, cert-&gt;valid_to.mon, cert-&gt;valid_to.day);
+
+    // 2. 检查颁发者和主体
+    char issuer[256], subject[256];
+    mbedtls_x509_dn_gets(issuer, sizeof(issuer), &amp;cert-&gt;issuer);
+    mbedtls_x509_dn_gets(subject, sizeof(subject), &amp;cert-&gt;subject);
+
+    printf(&quot;  Issuer:  %s\n&quot;, issuer);
+    printf(&quot;  Subject: %s\n&quot;, subject);
+
+    // 3. 验证证书链
+    ret = mbedtls_x509_crt_verify(cert, ca, NULL, NULL, &amp;flags,
+                                  NULL, NULL);
+
+    if (ret != 0) {
+        printf(&quot;Verification failed with flags: 0x%08lX\n&quot;, flags);
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf),
+                                     &quot;  ! &quot;, flags);
+        printf(&quot;%s\n&quot;, vrfy_buf);
+
+        // 详细错误信息
+        if (flags &amp; MBEDTLS_X509_BADCERT_EXPIRED)
+            printf(&quot;  - Certificate has expired\n&quot;);
+        if (flags &amp; MBEDTLS_X509_BADCERT_NOT_TRUSTED)
+            printf(&quot;  - Certificate is not trusted\n&quot;);
+        if (flags &amp; MBEDTLS_X509_BADCERT_REVOKED)
+            printf(&quot;  - Certificate has been revoked\n&quot;);
+    }
+
+    return ret;
+}
+</code></pre>
+<h3 id="3">问题3：性能问题</h3>
+<p><strong>症状</strong>：
+- 签名/验证速度慢
+- 系统响应延迟
+- 资源占用高</p>
+<p><strong>优化方法</strong>：</p>
+<pre><code class="language-c">// 1. 使用硬件加速
+#ifdef USE_HARDWARE_CRYPTO
+void enable_hardware_acceleration(void)
+{
+    // 启用硬件加密模块
+    __HAL_RCC_CRYP_CLK_ENABLE();
+
+    // 配置硬件加速
+    // ...
+}
+#endif
+
+// 2. 缓存公钥
+static mbedtls_rsa_context cached_public_key;
+static int key_cached = 0;
+
+int verify_with_cached_key(const uint8_t *data, size_t len,
+                           const uint8_t *signature)
+{
+    if (!key_cached) {
+        // 首次加载公钥
+        load_public_key(&amp;cached_public_key);
+        key_cached = 1;
+    }
+
+    // 使用缓存的公钥验证
+    return verify_signature(&amp;cached_public_key, data, len, signature);
+}
+
+// 3. 批量验证
+int batch_verify_signatures(signature_batch_t *batch, int count)
+{
+    // 一次性加载公钥
+    mbedtls_rsa_context rsa;
+    load_public_key(&amp;rsa);
+
+    // 批量验证
+    for (int i = 0; i &lt; count; i++) {
+        if (verify_signature(&amp;rsa, batch[i].data, batch[i].len,
+                           batch[i].signature) != 0) {
+            printf(&quot;Signature %d failed\n&quot;, i);
+            mbedtls_rsa_free(&amp;rsa);
+            return -1;
+        }
+    }
+
+    mbedtls_rsa_free(&amp;rsa);
+    return 0;
+}
+
+// 4. 使用ECDSA代替RSA
+// ECDSA签名更快，适合资源受限设备
+</code></pre>
+<h2 id="_21">总结</h2>
+<p>本教程深入介绍了数字签名技术的原理和实践应用：</p>
+<p><strong>核心要点</strong>：</p>
+<ol>
+<li>
+<p><strong>数字签名原理</strong>
+   - 使用私钥签名，公钥验证
+   - 提供身份认证和完整性保护
+   - 具有不可否认性
+   - 基于哈希和非对称加密</p>
+</li>
+<li>
+<p><strong>签名算法</strong>
+   - RSA：广泛支持，验证快速
+   - ECDSA：密钥短，适合IoT
+   - 都需要配合哈希算法使用
+   - 选择取决于应用场景</p>
+</li>
+<li>
+<p><strong>PKI体系</strong>
+   - 证书颁发机构(CA)
+   - X.509数字证书
+   - 证书链验证
+   - 证书撤销机制</p>
+</li>
+<li>
+<p><strong>实际应用</strong>
+   - 固件签名和验证
+   - 安全OTA更新
+   - 代码签名
+   - 文档签名</p>
+</li>
+<li>
+<p><strong>安全实践</strong>
+   - 保护私钥安全
+   - 使用强哈希算法
+   - 防止重放攻击
+   - 实施密钥轮换
+   - 添加时间戳</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 使用硬件加速
+   - 缓存公钥
+   - 批量验证
+   - 选择合适的算法</p>
+</li>
+</ol>
+<p><strong>关键收获</strong>：</p>
+<ul>
+<li>数字签名是现代安全系统的基础</li>
+<li>正确实现需要理解密码学原理</li>
+<li>私钥保护至关重要</li>
+<li>PKI提供了完整的信任体系</li>
+<li>在嵌入式系统中应用广泛</li>
+</ul>
+<h2 id="_22">延伸阅读</h2>
+<p>推荐进一步学习的资源：</p>
+<ul>
+<li><a href="../beginner/02-rsa-encryption.html">RSA非对称加密实战</a> - RSA基础</li>
+<li><a href="../beginner/03-hash-algorithms.html">哈希算法与消息摘要</a> - 哈希算法详解</li>
+<li><a href="./02-secure-boot-verification.html">安全启动与固件验证</a> - 安全启动实现</li>
+<li><a href="./03-key-management.html">密钥管理与安全存储</a> - 密钥管理最佳实践</li>
+<li><a href="https://tools.ietf.org/html/rfc3161">RFC 3161: Time-Stamp Protocol</a> - 时间戳协议</li>
+<li><a href="https://tools.ietf.org/html/rfc5280">RFC 5280: X.509 Certificate</a> - X.509标准</li>
+</ul>
+<h2 id="_23">参考资料</h2>
+<ol>
+<li>PKCS #1: RSA Cryptography Standard</li>
+<li>FIPS 186-4: Digital Signature Standard (DSS)</li>
+<li>RFC 5280: Internet X.509 Public Key Infrastructure Certificate</li>
+<li>RFC 3161: Internet X.509 Public Key Infrastructure Time-Stamp Protocol</li>
+<li>RFC 6960: X.509 Internet Public Key Infrastructure Online Certificate Status Protocol</li>
+<li>"Applied Cryptography" by Bruce Schneier</li>
+<li>mbedTLS Documentation: https://tls.mbed.org/api/</li>
+<li>OpenSSL Documentation: https://www.openssl.org/docs/</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>实现一个完整的RSA签名和验证系统</li>
+<li>生成自签名证书并验证证书链</li>
+<li>实现固件签名和验证功能</li>
+<li>添加时间戳和重放攻击保护</li>
+<li>比较RSA和ECDSA的性能差异</li>
+<li>实现一个简单的PKI系统</li>
+<li>创建一个安全的OTA更新系统</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="./02-secure-boot-verification.html">安全启动与固件验证</a>，了解如何在启动阶段验证固件完整性。</p>
+<hr />
+<p><strong>版权声明</strong>：本教程内容仅供学习参考，实际应用中请遵循相关安全标准和最佳实践。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>RSA非对称加密实战：公钥密码学入门 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/">05-security-encryption</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#rsa_1">RSA加密概述</a><ul>
+<li><a href="#rsa_2">什么是RSA</a></li>
+<li><a href="#rsa_3">RSA工作原理</a></li>
+<li><a href="#rsa-vs-aes">RSA vs AES对比</a></li>
+</ul>
+</li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#1rsa">步骤1：生成RSA密钥对</a><ul>
+<li><a href="#11">1.1 初始化随机数生成器</a></li>
+<li><a href="#12">1.2 生成密钥对</a></li>
+<li><a href="#13">1.3 导出密钥</a></li>
+<li><a href="#14">1.4 完整示例</a></li>
+</ul>
+</li>
+<li><a href="#2rsa">步骤2：RSA加密和解密</a><ul>
+<li><a href="#21">2.1 公钥加密</a></li>
+<li><a href="#22">2.2 私钥解密</a></li>
+<li><a href="#23">2.3 完整加密解密示例</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：数字签名</a><ul>
+<li><a href="#31">3.1 生成数字签名</a></li>
+<li><a href="#32">3.2 验证数字签名</a></li>
+<li><a href="#33">3.3 数字签名完整示例</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：混合加密方案</a><ul>
+<li><a href="#41-rsa-aes">4.1 RSA + AES混合加密</a></li>
+<li><a href="#42">4.2 完整混合加密示例</a></li>
+<li><a href="#43">4.3 混合加密的优势</a></li>
+</ul>
+</li>
+<li><a href="#5-">步骤5：实战项目 - 安全消息系统</a><ul>
+<li><a href="#51">5.1 项目需求</a></li>
+<li><a href="#52">5.2 项目架构</a></li>
+<li><a href="#53">5.3 核心实现</a></li>
+<li><a href="#54">5.4 主程序</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：密钥管理</a><ul>
+<li><a href="#61">6.1 密钥存储</a></li>
+<li><a href="#62">6.2 密钥导入导出</a></li>
+</ul>
+</li>
+<li><a href="#_7">故障排除</a><ul>
+<li><a href="#1">问题1：密钥生成太慢</a></li>
+<li><a href="#2">问题2：加密数据太大</a></li>
+<li><a href="#3_1">问题3：签名验证失败</a></li>
+<li><a href="#4_1">问题4：内存不足</a></li>
+<li><a href="#5">问题5：性能优化</a></li>
+</ul>
+</li>
+<li><a href="#_8">总结</a></li>
+<li><a href="#_9">进阶挑战</a></li>
+<li><a href="#_10">完整代码</a></li>
+<li><a href="#_11">下一步</a></li>
+<li><a href="#_12">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rsa">RSA非对称加密实战：公钥密码学入门</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解RSA非对称加密的基本原理和数学基础</li>
+<li>[ ] 掌握公钥和私钥的概念及其应用场景</li>
+<li>[ ] 熟练使用RSA库进行密钥对生成</li>
+<li>[ ] 掌握RSA加密和解密的实现方法</li>
+<li>[ ] 理解数字签名的原理和实现</li>
+<li>[ ] 能够实现安全的密钥交换机制</li>
+<li>[ ] 完成一个完整的安全通信项目</li>
+<li>[ ] 掌握RSA与AES的混合加密方案</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟悉C语言编程
+- 了解基本的密码学概念
+- 理解对称加密原理（建议先学习AES）
+- 了解二进制和十六进制表示
+- 掌握基本的数学概念（模运算、质数）</p>
+<p><strong>技能要求</strong>：
+- 能够编写嵌入式C代码
+- 会使用调试工具
+- 熟悉内存操作
+- 了解Flash存储操作
+- 能够使用串口调试</p>
+<p><strong>开发环境</strong>：
+- STM32或ESP32开发板
+- Keil MDK或STM32CubeIDE
+- 串口调试工具
+- mbedTLS库或Tiny RSA库</p>
+<h2 id="rsa_1">RSA加密概述</h2>
+<h3 id="rsa_2">什么是RSA</h3>
+<p>RSA是一种非对称加密算法，由Ron Rivest、Adi Shamir和Leonard Adleman在1977年提出。它是目前应用最广泛的公钥加密算法。</p>
+<p><strong>核心特性</strong>：</p>
+<ol>
+<li>
+<p><strong>非对称加密</strong>
+   - 使用公钥加密，私钥解密
+   - 公钥可以公开，私钥必须保密
+   - 加密和解密使用不同的密钥
+   - 安全性基于大数分解难题</p>
+</li>
+<li>
+<p><strong>密钥对</strong>
+   - 公钥(Public Key)：用于加密和验证签名
+   - 私钥(Private Key)：用于解密和生成签名
+   - 密钥长度：1024、2048或4096位
+   - 密钥对数学上相关但无法互推</p>
+</li>
+<li>
+<p><strong>应用场景</strong>
+   - 密钥交换：安全传输对称密钥
+   - 数字签名：验证身份和完整性
+   - 身份认证：证明身份
+   - 安全通信：建立加密通道</p>
+</li>
+<li>
+<p><strong>安全性</strong>
+   - 基于大数分解难题
+   - 2048位密钥目前安全
+   - 计算量大，速度较慢
+   - 通常与对称加密混合使用</p>
+</li>
+</ol>
+<h3 id="rsa_3">RSA工作原理</h3>
+<p><strong>加密解密流程图</strong>：</p>
+<pre><code>密钥生成阶段：
+┌─────────────────┐
+│  选择两个大质数  │
+│    p 和 q       │
+└─────────────────┘
+        ↓
+┌─────────────────┐
+│  计算 n = p × q │
+│  φ(n)=(p-1)(q-1)│
+└─────────────────┘
+        ↓
+┌─────────────────┐
+│  选择公钥指数 e  │
+│  计算私钥指数 d  │
+└─────────────────┘
+        ↓
+┌─────────────────┐
+│ 公钥: (n, e)    │
+│ 私钥: (n, d)    │
+└─────────────────┘
+
+加密阶段：
+明文 M → C = M^e mod n → 密文 C
+
+解密阶段：
+密文 C → M = C^d mod n → 明文 M
+</code></pre>
+<p><strong>数学原理</strong>：</p>
+<ol>
+<li>
+<p><strong>密钥生成</strong>
+   - 选择两个大质数 p 和 q
+   - 计算 n = p × q（模数）
+   - 计算 φ(n) = (p-1) × (q-1)（欧拉函数）
+   - 选择公钥指数 e，满足 1 &lt; e &lt; φ(n) 且 gcd(e, φ(n)) = 1
+   - 计算私钥指数 d，满足 d × e ≡ 1 (mod φ(n))</p>
+</li>
+<li>
+<p><strong>加密过程</strong>
+   - 密文 C = M^e mod n
+   - M 是明文（必须 &lt; n）
+   - e 和 n 是公钥</p>
+</li>
+<li>
+<p><strong>解密过程</strong>
+   - 明文 M = C^d mod n
+   - C 是密文
+   - d 和 n 是私钥</p>
+</li>
+</ol>
+<h3 id="rsa-vs-aes">RSA vs AES对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>RSA（非对称）</th>
+<th>AES（对称）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>密钥类型</td>
+<td>公钥+私钥</td>
+<td>单一密钥</td>
+</tr>
+<tr>
+<td>加密速度</td>
+<td>慢（100-1000倍）</td>
+<td>快</td>
+</tr>
+<tr>
+<td>密钥长度</td>
+<td>2048-4096位</td>
+<td>128-256位</td>
+</tr>
+<tr>
+<td>数据量</td>
+<td>小数据（&lt;密钥长度）</td>
+<td>任意大小</td>
+</tr>
+<tr>
+<td>密钥分发</td>
+<td>公钥可公开</td>
+<td>密钥需保密传输</td>
+</tr>
+<tr>
+<td>主要用途</td>
+<td>密钥交换、签名</td>
+<td>数据加密</td>
+</tr>
+<tr>
+<td>计算复杂度</td>
+<td>高</td>
+<td>低</td>
+</tr>
+<tr>
+<td>资源消耗</td>
+<td>大</td>
+<td>小</td>
+</tr>
+</tbody>
+</table>
+<p><strong>混合加密方案</strong>：</p>
+<pre><code>实际应用中的最佳实践：
+
+1. 使用RSA加密AES密钥
+   ┌──────────┐
+   │ AES密钥  │
+   └──────────┘
+        ↓ RSA公钥加密
+   ┌──────────┐
+   │ 加密密钥 │ → 传输
+   └──────────┘
+        ↓ RSA私钥解密
+   ┌──────────┐
+   │ AES密钥  │
+   └──────────┘
+
+2. 使用AES加密实际数据
+   ┌──────────┐
+   │ 大量数据 │
+   └──────────┘
+        ↓ AES加密
+   ┌──────────┐
+   │ 加密数据 │ → 传输
+   └──────────┘
+        ↓ AES解密
+   ┌──────────┐
+   │ 原始数据 │
+   └──────────┘
+
+优点：
+- 结合两者优势
+- RSA保护密钥安全
+- AES提供高效加密
+- 适合大数据传输
+</code></pre>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32F4或ESP32</td>
+<td>STM32F407VG</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>2</td>
+<td>状态指示</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<p><strong>必需软件</strong>：
+- STM32CubeIDE 或 Arduino IDE（ESP32）
+- mbedTLS库：https://github.com/ARMmbed/mbedtls
+- 或 Tiny RSA库（简化版）
+- 串口调试助手</p>
+<p><strong>可选工具</strong>：
+- OpenSSL（生成和验证密钥）
+- 在线RSA工具（验证结果）</p>
+<h3 id="_6">环境配置</h3>
+<p><strong>使用mbedTLS库（推荐）</strong></p>
+<pre><code class="language-bash"># 克隆mbedTLS仓库
+git clone https://github.com/ARMmbed/mbedtls.git
+
+# 需要的文件
+# - library/rsa.c
+# - library/bignum.c
+# - library/pk.c
+# - include/mbedtls/*.h
+</code></pre>
+<p><strong>配置说明</strong>：</p>
+<ol>
+<li>将mbedTLS源码添加到工程</li>
+<li>配置包含路径</li>
+<li>启用必要的模块</li>
+</ol>
+<p>创建 <code>mbedtls_config.h</code>：</p>
+<pre><code class="language-c">#ifndef MBEDTLS_CONFIG_H
+#define MBEDTLS_CONFIG_H
+
+// 启用RSA
+#define MBEDTLS_RSA_C
+#define MBEDTLS_BIGNUM_C
+#define MBEDTLS_PK_C
+
+// 启用随机数生成器
+#define MBEDTLS_ENTROPY_C
+#define MBEDTLS_CTR_DRBG_C
+
+// 启用哈希算法（RSA需要）
+#define MBEDTLS_SHA256_C
+#define MBEDTLS_MD_C
+
+// 密钥长度
+#define MBEDTLS_MPI_MAX_SIZE 1024
+
+#endif // MBEDTLS_CONFIG_H
+</code></pre>
+<h2 id="1rsa">步骤1：生成RSA密钥对</h2>
+<h3 id="11">1.1 初始化随机数生成器</h3>
+<p>RSA密钥生成需要高质量的随机数：</p>
+<pre><code class="language-c">#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &quot;mbedtls/rsa.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+/**
+ * @brief  初始化随机数生成器
+ * @param  entropy: 熵源上下文
+ * @param  ctr_drbg: 随机数生成器上下文
+ * @retval 0:成功, 其他:失败
+ */
+int init_random_generator(mbedtls_entropy_context *entropy,
+                         mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+    const char *pers = &quot;rsa_keygen&quot;;
+
+    // 初始化熵源
+    mbedtls_entropy_init(entropy);
+
+    // 初始化随机数生成器
+    mbedtls_ctr_drbg_init(ctr_drbg);
+
+    // 种子化随机数生成器
+    ret = mbedtls_ctr_drbg_seed(ctr_drbg, mbedtls_entropy_func, entropy,
+                                (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        printf(&quot;Failed to seed random generator: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Random generator initialized\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="12">1.2 生成密钥对</h3>
+<pre><code class="language-c">/**
+ * @brief  生成RSA密钥对
+ * @param  rsa: RSA上下文
+ * @param  ctr_drbg: 随机数生成器
+ * @param  key_size: 密钥长度（位），推荐2048
+ * @param  exponent: 公钥指数，通常使用65537
+ * @retval 0:成功, 其他:失败
+ */
+int generate_rsa_keypair(mbedtls_rsa_context *rsa,
+                        mbedtls_ctr_drbg_context *ctr_drbg,
+                        unsigned int key_size,
+                        int exponent)
+{
+    int ret;
+
+    // 初始化RSA上下文
+    mbedtls_rsa_init(rsa, MBEDTLS_RSA_PKCS_V15, 0);
+
+    printf(&quot;Generating %d-bit RSA key pair...\n&quot;, key_size);
+    printf(&quot;This may take a while...\n&quot;);
+
+    uint32_t start_time = HAL_GetTick();
+
+    // 生成密钥对
+    ret = mbedtls_rsa_gen_key(rsa, mbedtls_ctr_drbg_random, ctr_drbg,
+                             key_size, exponent);
+
+    uint32_t end_time = HAL_GetTick();
+
+    if (ret != 0) {
+        printf(&quot;Failed to generate key pair: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Key pair generated successfully\n&quot;);
+    printf(&quot;Time taken: %lu ms\n&quot;, end_time - start_time);
+
+    return 0;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>key_size</code>: 密钥长度，2048位是当前推荐值
+- <code>exponent</code>: 公钥指数，65537是标准值
+- 密钥生成是计算密集型操作，可能需要几秒钟
+- 生成时间取决于MCU性能和密钥长度</p>
+<h3 id="13">1.3 导出密钥</h3>
+<pre><code class="language-c">/**
+ * @brief  导出公钥（PEM格式）
+ * @param  rsa: RSA上下文
+ * @param  buf: 输出缓冲区
+ * @param  buf_len: 缓冲区长度
+ * @retval 0:成功, 其他:失败
+ */
+int export_public_key(mbedtls_rsa_context *rsa, char *buf, size_t buf_len)
+{
+    int ret;
+    mbedtls_pk_context pk;
+
+    mbedtls_pk_init(&amp;pk);
+    mbedtls_pk_setup(&amp;pk, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+
+    // 关联RSA上下文
+    mbedtls_rsa_context *rsa_ctx = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_copy(rsa_ctx, rsa);
+
+    // 导出公钥
+    ret = mbedtls_pk_write_pubkey_pem(&amp;pk, (unsigned char *)buf, buf_len);
+
+    mbedtls_pk_free(&amp;pk);
+
+    if (ret != 0) {
+        printf(&quot;Failed to export public key: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Public key exported:\n%s\n&quot;, buf);
+    return 0;
+}
+
+/**
+ * @brief  导出私钥（PEM格式）
+ * @param  rsa: RSA上下文
+ * @param  buf: 输出缓冲区
+ * @param  buf_len: 缓冲区长度
+ * @retval 0:成功, 其他:失败
+ */
+int export_private_key(mbedtls_rsa_context *rsa, char *buf, size_t buf_len)
+{
+    int ret;
+    mbedtls_pk_context pk;
+
+    mbedtls_pk_init(&amp;pk);
+    mbedtls_pk_setup(&amp;pk, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+
+    // 关联RSA上下文
+    mbedtls_rsa_context *rsa_ctx = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_copy(rsa_ctx, rsa);
+
+    // 导出私钥
+    ret = mbedtls_pk_write_key_pem(&amp;pk, (unsigned char *)buf, buf_len);
+
+    mbedtls_pk_free(&amp;pk);
+
+    if (ret != 0) {
+        printf(&quot;Failed to export private key: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Private key exported (keep it secret!)\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="14">1.4 完整示例</h3>
+<pre><code class="language-c">/**
+ * @brief  密钥生成完整示例
+ */
+void rsa_keygen_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+    char pub_key_buf[1024];
+    char priv_key_buf[2048];
+
+    // 初始化随机数生成器
+    if (init_random_generator(&amp;entropy, &amp;ctr_drbg) != 0) {
+        return;
+    }
+
+    // 生成2048位密钥对
+    if (generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537) != 0) {
+        goto cleanup;
+    }
+
+    // 导出公钥
+    export_public_key(&amp;rsa, pub_key_buf, sizeof(pub_key_buf));
+
+    // 导出私钥（注意：私钥必须保密！）
+    export_private_key(&amp;rsa, priv_key_buf, sizeof(priv_key_buf));
+
+    // 可以将密钥保存到Flash
+    // save_key_to_flash(pub_key_buf, priv_key_buf);
+
+cleanup:
+    // 清理资源
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>Random generator initialized
+Generating 2048-bit RSA key pair...
+This may take a while...
+Key pair generated successfully
+Time taken: 3542 ms
+Public key exported:
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA...
+-----END PUBLIC KEY-----
+Private key exported (keep it secret!)
+</code></pre>
+<h2 id="2rsa">步骤2：RSA加密和解密</h2>
+<h3 id="21">2.1 公钥加密</h3>
+<pre><code class="language-c">/**
+ * @brief  使用公钥加密数据
+ * @param  rsa: RSA上下文（包含公钥）
+ * @param  plaintext: 明文数据
+ * @param  plaintext_len: 明文长度
+ * @param  ciphertext: 密文缓冲区
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, 其他:失败
+ */
+int rsa_public_encrypt(mbedtls_rsa_context *rsa,
+                      const unsigned char *plaintext, size_t plaintext_len,
+                      unsigned char *ciphertext,
+                      mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+
+    // 检查数据长度
+    size_t max_len = mbedtls_rsa_get_len(rsa) - 11;  // PKCS#1 v1.5填充
+    if (plaintext_len &gt; max_len) {
+        printf(&quot;Error: Data too long (%zu bytes, max %zu bytes)\n&quot;,
+               plaintext_len, max_len);
+        return -1;
+    }
+
+    printf(&quot;Encrypting %zu bytes with public key...\n&quot;, plaintext_len);
+
+    // 使用公钥加密
+    ret = mbedtls_rsa_pkcs1_encrypt(rsa, mbedtls_ctr_drbg_random, ctr_drbg,
+                                   MBEDTLS_RSA_PUBLIC,
+                                   plaintext_len, plaintext, ciphertext);
+
+    if (ret != 0) {
+        printf(&quot;Encryption failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Encryption successful\n&quot;);
+    printf(&quot;Ciphertext (%zu bytes): &quot;, mbedtls_rsa_get_len(rsa));
+    for (size_t i = 0; i &lt; mbedtls_rsa_get_len(rsa); i++) {
+        printf(&quot;%02X &quot;, ciphertext[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>重要提示</strong>：
+- RSA加密的数据长度有限制
+- 对于2048位密钥，最大明文长度约为245字节
+- 超过限制需要分块或使用混合加密</p>
+<h3 id="22">2.2 私钥解密</h3>
+<pre><code class="language-c">/**
+ * @brief  使用私钥解密数据
+ * @param  rsa: RSA上下文（包含私钥）
+ * @param  ciphertext: 密文数据
+ * @param  plaintext: 明文缓冲区
+ * @param  plaintext_len: 输出明文长度
+ * @retval 0:成功, 其他:失败
+ */
+int rsa_private_decrypt(mbedtls_rsa_context *rsa,
+                       const unsigned char *ciphertext,
+                       unsigned char *plaintext, size_t *plaintext_len)
+{
+    int ret;
+
+    printf(&quot;Decrypting with private key...\n&quot;);
+
+    // 使用私钥解密
+    ret = mbedtls_rsa_pkcs1_decrypt(rsa, NULL, NULL,
+                                   MBEDTLS_RSA_PRIVATE,
+                                   plaintext_len, ciphertext,
+                                   plaintext, 256);
+
+    if (ret != 0) {
+        printf(&quot;Decryption failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Decryption successful\n&quot;);
+    printf(&quot;Plaintext (%zu bytes): %.*s\n&quot;,
+           *plaintext_len, (int)*plaintext_len, plaintext);
+
+    return 0;
+}
+</code></pre>
+<h3 id="23">2.3 完整加密解密示例</h3>
+<pre><code class="language-c">/**
+ * @brief  RSA加密解密完整示例
+ */
+void rsa_encrypt_decrypt_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+
+    // 明文数据
+    const char *message = &quot;Hello RSA! This is a secret message.&quot;;
+    size_t message_len = strlen(message);
+
+    // 密文缓冲区（大小为密钥长度）
+    unsigned char ciphertext[256];  // 2048位 = 256字节
+
+    // 解密后的明文缓冲区
+    unsigned char decrypted[256];
+    size_t decrypted_len;
+
+    printf(&quot;\n=== RSA Encryption/Decryption Demo ===\n&quot;);
+    printf(&quot;Original message: %s\n&quot;, message);
+    printf(&quot;Message length: %zu bytes\n\n&quot;, message_len);
+
+    // 初始化
+    init_random_generator(&amp;entropy, &amp;ctr_drbg);
+
+    // 生成密钥对
+    if (generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537) != 0) {
+        goto cleanup;
+    }
+
+    // 加密
+    if (rsa_public_encrypt(&amp;rsa, (unsigned char *)message, message_len,
+                          ciphertext, &amp;ctr_drbg) != 0) {
+        goto cleanup;
+    }
+
+    printf(&quot;\n&quot;);
+
+    // 解密
+    if (rsa_private_decrypt(&amp;rsa, ciphertext, decrypted, &amp;decrypted_len) != 0) {
+        goto cleanup;
+    }
+
+    // 验证
+    if (decrypted_len == message_len &amp;&amp;
+        memcmp(message, decrypted, message_len) == 0) {
+        printf(&quot;\n✓ Verification successful: Decrypted message matches original\n&quot;);
+    } else {
+        printf(&quot;\n✗ Verification failed: Messages do not match\n&quot;);
+    }
+
+cleanup:
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>=== RSA Encryption/Decryption Demo ===
+Original message: Hello RSA! This is a secret message.
+Message length: 37 bytes
+
+Generating 2048-bit RSA key pair...
+Key pair generated successfully
+Time taken: 3542 ms
+Encrypting 37 bytes with public key...
+Encryption successful
+Ciphertext (256 bytes): 8A 3F 2C 5D ...
+
+Decrypting with private key...
+Decryption successful
+Plaintext (37 bytes): Hello RSA! This is a secret message.
+
+✓ Verification successful: Decrypted message matches original
+</code></pre>
+<h2 id="3">步骤3：数字签名</h2>
+<h3 id="31">3.1 生成数字签名</h3>
+<p>数字签名用于验证数据的完整性和发送者身份：</p>
+<pre><code class="language-c">/**
+ * @brief  使用私钥生成数字签名
+ * @param  rsa: RSA上下文（包含私钥）
+ * @param  message: 要签名的消息
+ * @param  message_len: 消息长度
+ * @param  signature: 签名缓冲区
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, 其他:失败
+ */
+int rsa_sign_message(mbedtls_rsa_context *rsa,
+                    const unsigned char *message, size_t message_len,
+                    unsigned char *signature,
+                    mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    int ret;
+    unsigned char hash[32];  // SHA-256哈希
+
+    printf(&quot;Signing message (%zu bytes)...\n&quot;, message_len);
+
+    // 1. 计算消息的SHA-256哈希
+    mbedtls_sha256(message, message_len, hash, 0);
+
+    printf(&quot;Message hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X &quot;, hash[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 2. 使用私钥对哈希进行签名
+    ret = mbedtls_rsa_pkcs1_sign(rsa, mbedtls_ctr_drbg_random, ctr_drbg,
+                                MBEDTLS_RSA_PRIVATE, MBEDTLS_MD_SHA256,
+                                32, hash, signature);
+
+    if (ret != 0) {
+        printf(&quot;Signing failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Signature generated successfully\n&quot;);
+    printf(&quot;Signature (%zu bytes): &quot;, mbedtls_rsa_get_len(rsa));
+    for (size_t i = 0; i &lt; mbedtls_rsa_get_len(rsa); i++) {
+        printf(&quot;%02X &quot;, signature[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="32">3.2 验证数字签名</h3>
+<pre><code class="language-c">/**
+ * @brief  使用公钥验证数字签名
+ * @param  rsa: RSA上下文（包含公钥）
+ * @param  message: 原始消息
+ * @param  message_len: 消息长度
+ * @param  signature: 签名数据
+ * @retval 0:验证成功, 其他:验证失败
+ */
+int rsa_verify_signature(mbedtls_rsa_context *rsa,
+                        const unsigned char *message, size_t message_len,
+                        const unsigned char *signature)
+{
+    int ret;
+    unsigned char hash[32];  // SHA-256哈希
+
+    printf(&quot;Verifying signature...\n&quot;);
+
+    // 1. 计算消息的SHA-256哈希
+    mbedtls_sha256(message, message_len, hash, 0);
+
+    // 2. 使用公钥验证签名
+    ret = mbedtls_rsa_pkcs1_verify(rsa, NULL, NULL,
+                                  MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256,
+                                  32, hash, signature);
+
+    if (ret != 0) {
+        printf(&quot;✗ Signature verification failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;✓ Signature verified successfully\n&quot;);
+    printf(&quot;  Message is authentic and unmodified\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="33">3.3 数字签名完整示例</h3>
+<pre><code class="language-c">/**
+ * @brief  数字签名完整示例
+ */
+void rsa_signature_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+
+    // 要签名的消息
+    const char *message = &quot;This is an important message that needs authentication.&quot;;
+    size_t message_len = strlen(message);
+
+    // 签名缓冲区
+    unsigned char signature[256];
+
+    printf(&quot;\n=== RSA Digital Signature Demo ===\n&quot;);
+    printf(&quot;Message: %s\n\n&quot;, message);
+
+    // 初始化
+    init_random_generator(&amp;entropy, &amp;ctr_drbg);
+
+    // 生成密钥对
+    if (generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537) != 0) {
+        goto cleanup;
+    }
+
+    printf(&quot;\n&quot;);
+
+    // 生成签名（使用私钥）
+    if (rsa_sign_message(&amp;rsa, (unsigned char *)message, message_len,
+                        signature, &amp;ctr_drbg) != 0) {
+        goto cleanup;
+    }
+
+    printf(&quot;\n&quot;);
+
+    // 验证签名（使用公钥）
+    if (rsa_verify_signature(&amp;rsa, (unsigned char *)message, message_len,
+                            signature) == 0) {
+        printf(&quot;\n✓ Digital signature is valid\n&quot;);
+    }
+
+    // 测试：修改消息后验证失败
+    printf(&quot;\n--- Testing with modified message ---\n&quot;);
+    const char *modified = &quot;This is a MODIFIED message that needs authentication.&quot;;
+    if (rsa_verify_signature(&amp;rsa, (unsigned char *)modified, strlen(modified),
+                            signature) != 0) {
+        printf(&quot;As expected, modified message fails verification\n&quot;);
+    }
+
+cleanup:
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>=== RSA Digital Signature Demo ===
+Message: This is an important message that needs authentication.
+
+Generating 2048-bit RSA key pair...
+Key pair generated successfully
+
+Signing message (56 bytes)...
+Message hash: 3F 8A 2C 5D 9E 1B 4F 7A ...
+Signature generated successfully
+Signature (256 bytes): 8A 3F 2C 5D ...
+
+Verifying signature...
+✓ Signature verified successfully
+  Message is authentic and unmodified
+
+✓ Digital signature is valid
+
+--- Testing with modified message ---
+Verifying signature...
+✗ Signature verification failed: -0x4380
+As expected, modified message fails verification
+</code></pre>
+<h2 id="4">步骤4：混合加密方案</h2>
+<h3 id="41-rsa-aes">4.1 RSA + AES混合加密</h3>
+<p>实际应用中，通常使用RSA加密AES密钥，然后用AES加密数据：</p>
+<pre><code class="language-c">/**
+ * @brief  混合加密：RSA加密AES密钥
+ * @param  rsa: RSA上下文
+ * @param  aes_key: AES密钥（16字节）
+ * @param  encrypted_key: 加密后的密钥缓冲区
+ * @param  ctr_drbg: 随机数生成器
+ * @retval 0:成功, 其他:失败
+ */
+int hybrid_encrypt_key(mbedtls_rsa_context *rsa,
+                      const unsigned char *aes_key,
+                      unsigned char *encrypted_key,
+                      mbedtls_ctr_drbg_context *ctr_drbg)
+{
+    printf(&quot;Encrypting AES key with RSA...\n&quot;);
+
+    // 使用RSA公钥加密AES密钥
+    return rsa_public_encrypt(rsa, aes_key, 16, encrypted_key, ctr_drbg);
+}
+
+/**
+ * @brief  混合解密：RSA解密AES密钥
+ * @param  rsa: RSA上下文
+ * @param  encrypted_key: 加密的密钥
+ * @param  aes_key: 解密后的AES密钥缓冲区
+ * @param  key_len: 输出密钥长度
+ * @retval 0:成功, 其他:失败
+ */
+int hybrid_decrypt_key(mbedtls_rsa_context *rsa,
+                      const unsigned char *encrypted_key,
+                      unsigned char *aes_key, size_t *key_len)
+{
+    printf(&quot;Decrypting AES key with RSA...\n&quot;);
+
+    // 使用RSA私钥解密AES密钥
+    return rsa_private_decrypt(rsa, encrypted_key, aes_key, key_len);
+}
+</code></pre>
+<h3 id="42">4.2 完整混合加密示例</h3>
+<pre><code class="language-c">#include &quot;aes.h&quot;  // 假设已有AES实现
+
+/**
+ * @brief  混合加密完整示例
+ */
+void hybrid_encryption_example(void)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_rsa_context rsa;
+
+    // 大量数据（模拟）
+    const char *large_data = &quot;This is a large amount of data that needs to be &quot;
+                            &quot;encrypted efficiently. RSA alone would be too slow &quot;
+                            &quot;for this amount of data, so we use hybrid encryption.&quot;;
+    size_t data_len = strlen(large_data);
+
+    // AES密钥和IV
+    unsigned char aes_key[16];
+    unsigned char aes_iv[16];
+
+    // RSA加密的AES密钥
+    unsigned char encrypted_aes_key[256];
+
+    // AES加密的数据
+    unsigned char encrypted_data[256];
+    unsigned char decrypted_data[256];
+
+    printf(&quot;\n=== Hybrid Encryption Demo ===\n&quot;);
+    printf(&quot;Data to encrypt: %s\n&quot;, large_data);
+    printf(&quot;Data length: %zu bytes\n\n&quot;, data_len);
+
+    // 初始化
+    init_random_generator(&amp;entropy, &amp;ctr_drbg);
+    generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537);
+
+    // 1. 生成随机AES密钥和IV
+    mbedtls_ctr_drbg_random(&amp;ctr_drbg, aes_key, 16);
+    mbedtls_ctr_drbg_random(&amp;ctr_drbg, aes_iv, 16);
+
+    printf(&quot;Generated AES key: &quot;);
+    for (int i = 0; i &lt; 16; i++) {
+        printf(&quot;%02X &quot;, aes_key[i]);
+    }
+    printf(&quot;\n\n&quot;);
+
+    // 2. 使用RSA加密AES密钥
+    printf(&quot;Step 1: Encrypt AES key with RSA\n&quot;);
+    hybrid_encrypt_key(&amp;rsa, aes_key, encrypted_aes_key, &amp;ctr_drbg);
+    printf(&quot;\n&quot;);
+
+    // 3. 使用AES加密数据
+    printf(&quot;Step 2: Encrypt data with AES\n&quot;);
+    struct AES_ctx aes_ctx;
+    AES_init_ctx_iv(&amp;aes_ctx, aes_key, aes_iv);
+
+    // 准备数据（需要填充到16字节倍数）
+    size_t padded_len = ((data_len / 16) + 1) * 16;
+    memcpy(encrypted_data, large_data, data_len);
+    memset(encrypted_data + data_len, 0, padded_len - data_len);
+
+    AES_CBC_encrypt_buffer(&amp;aes_ctx, encrypted_data, padded_len);
+    printf(&quot;Data encrypted with AES (%zu bytes)\n\n&quot;, padded_len);
+
+    // --- 传输加密的AES密钥和加密的数据 ---
+
+    // 4. 使用RSA解密AES密钥
+    printf(&quot;Step 3: Decrypt AES key with RSA\n&quot;);
+    unsigned char decrypted_aes_key[16];
+    size_t key_len;
+    hybrid_decrypt_key(&amp;rsa, encrypted_aes_key, decrypted_aes_key, &amp;key_len);
+
+    // 验证密钥
+    if (memcmp(aes_key, decrypted_aes_key, 16) == 0) {
+        printf(&quot;✓ AES key decrypted correctly\n\n&quot;);
+    }
+
+    // 5. 使用解密的AES密钥解密数据
+    printf(&quot;Step 4: Decrypt data with AES\n&quot;);
+    AES_init_ctx_iv(&amp;aes_ctx, decrypted_aes_key, aes_iv);
+    memcpy(decrypted_data, encrypted_data, padded_len);
+    AES_CBC_decrypt_buffer(&amp;aes_ctx, decrypted_data, padded_len);
+
+    // 去除填充
+    decrypted_data[data_len] = '\0';
+
+    printf(&quot;Decrypted data: %s\n&quot;, decrypted_data);
+
+    // 验证
+    if (strcmp((char *)decrypted_data, large_data) == 0) {
+        printf(&quot;\n✓ Hybrid encryption/decryption successful!\n&quot;);
+    }
+
+    // 清理
+    mbedtls_rsa_free(&amp;rsa);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>=== Hybrid Encryption Demo ===
+Data to encrypt: This is a large amount of data...
+Data length: 152 bytes
+
+Generating 2048-bit RSA key pair...
+Key pair generated successfully
+Generated AES key: 3F 8A 2C 5D 9E 1B 4F 7A 6C 3E 8D 2F 5A 9C 1E 4B
+
+Step 1: Encrypt AES key with RSA
+Encrypting AES key with RSA...
+Encryption successful
+
+Step 2: Encrypt data with AES
+Data encrypted with AES (160 bytes)
+
+Step 3: Decrypt AES key with RSA
+Decrypting AES key with RSA...
+Decryption successful
+✓ AES key decrypted correctly
+
+Step 4: Decrypt data with AES
+Decrypted data: This is a large amount of data...
+
+✓ Hybrid encryption/decryption successful!
+</code></pre>
+<h3 id="43">4.3 混合加密的优势</h3>
+<pre><code class="language-c">/**
+ * @brief  性能对比：纯RSA vs 混合加密
+ */
+void performance_comparison(void)
+{
+    printf(&quot;\n=== Performance Comparison ===\n\n&quot;);
+
+    printf(&quot;Scenario: Encrypt 1KB of data\n\n&quot;);
+
+    printf(&quot;Pure RSA:\n&quot;);
+    printf(&quot;  - Need to split into ~245 byte chunks\n&quot;);
+    printf(&quot;  - Requires 5 RSA operations\n&quot;);
+    printf(&quot;  - Time: ~500ms (estimated)\n&quot;);
+    printf(&quot;  - Output size: 1280 bytes (5 × 256)\n\n&quot;);
+
+    printf(&quot;Hybrid (RSA + AES):\n&quot;);
+    printf(&quot;  - 1 RSA operation (encrypt AES key)\n&quot;);
+    printf(&quot;  - 1 AES operation (encrypt data)\n&quot;);
+    printf(&quot;  - Time: ~110ms (estimated)\n&quot;);
+    printf(&quot;  - Output size: 1280 bytes (256 + 1024)\n\n&quot;);
+
+    printf(&quot;Advantage: ~4.5x faster!\n&quot;);
+}
+</code></pre>
+<h2 id="5-">步骤5：实战项目 - 安全消息系统</h2>
+<h3 id="51">5.1 项目需求</h3>
+<p>实现一个安全的消息传输系统，具有以下功能：
+- 使用RSA进行身份认证
+- 使用混合加密保护消息内容
+- 支持数字签名验证消息完整性
+- LED指示通信状态</p>
+<h3 id="52">5.2 项目架构</h3>
+<pre><code class="language-c">/**
+ * @file   secure_messaging.h
+ * @brief  安全消息系统头文件
+ */
+#ifndef SECURE_MESSAGING_H
+#define SECURE_MESSAGING_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &quot;mbedtls/rsa.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+
+// 消息结构
+typedef struct {
+    uint8_t encrypted_aes_key[256];  // RSA加密的AES密钥
+    uint8_t aes_iv[16];              // AES初始化向量
+    uint8_t encrypted_data[512];     // AES加密的消息内容
+    size_t encrypted_data_len;       // 加密数据长度
+    uint8_t signature[256];          // 消息签名
+    uint32_t timestamp;              // 时间戳
+} secure_message_t;
+
+// 用户密钥对
+typedef struct {
+    mbedtls_rsa_context rsa;         // RSA上下文
+    char user_id[32];                // 用户ID
+} user_keypair_t;
+
+// 函数声明
+int secure_messaging_init(void);
+int create_user_keypair(user_keypair_t *user, const char *user_id);
+int send_secure_message(user_keypair_t *sender,
+                       mbedtls_rsa_context *receiver_public_key,
+                       const char *message,
+                       secure_message_t *output);
+int receive_secure_message(user_keypair_t *receiver,
+                          mbedtls_rsa_context *sender_public_key,
+                          const secure_message_t *input,
+                          char *message, size_t *message_len);
+
+#endif // SECURE_MESSAGING_H
+</code></pre>
+<h3 id="53">5.3 核心实现</h3>
+<pre><code class="language-c">/**
+ * @file   secure_messaging.c
+ * @brief  安全消息系统实现
+ */
+#include &quot;secure_messaging.h&quot;
+#include &quot;aes.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 全局随机数生成器
+static mbedtls_entropy_context entropy;
+static mbedtls_ctr_drbg_context ctr_drbg;
+
+/**
+ * @brief  初始化安全消息系统
+ * @retval 0:成功, -1:失败
+ */
+int secure_messaging_init(void)
+{
+    int ret;
+    const char *pers = &quot;secure_messaging&quot;;
+
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    ret = mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                                (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        printf(&quot;Failed to initialize: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    printf(&quot;Secure messaging system initialized\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  创建用户密钥对
+ * @param  user: 用户密钥对结构
+ * @param  user_id: 用户ID
+ * @retval 0:成功, -1:失败
+ */
+int create_user_keypair(user_keypair_t *user, const char *user_id)
+{
+    int ret;
+
+    strncpy(user-&gt;user_id, user_id, sizeof(user-&gt;user_id) - 1);
+
+    printf(&quot;Creating keypair for user: %s\n&quot;, user_id);
+
+    ret = generate_rsa_keypair(&amp;user-&gt;rsa, &amp;ctr_drbg, 2048, 65537);
+    if (ret != 0) {
+        return -1;
+    }
+
+    printf(&quot;Keypair created for %s\n&quot;, user_id);
+    return 0;
+}
+
+/**
+ * @brief  发送安全消息
+ * @param  sender: 发送者密钥对
+ * @param  receiver_public_key: 接收者公钥
+ * @param  message: 消息内容
+ * @param  output: 输出的安全消息
+ * @retval 0:成功, -1:失败
+ */
+int send_secure_message(user_keypair_t *sender,
+                       mbedtls_rsa_context *receiver_public_key,
+                       const char *message,
+                       secure_message_t *output)
+{
+    int ret;
+    uint8_t aes_key[16];
+    size_t message_len = strlen(message);
+
+    printf(&quot;\n--- Sending Secure Message ---\n&quot;);
+    printf(&quot;From: %s\n&quot;, sender-&gt;user_id);
+    printf(&quot;Message: %s\n&quot;, message);
+
+    // 1. 生成随机AES密钥和IV
+    mbedtls_ctr_drbg_random(&amp;ctr_drbg, aes_key, 16);
+    mbedtls_ctr_drbg_random(&amp;ctr_drbg, output-&gt;aes_iv, 16);
+
+    // 2. 使用接收者公钥加密AES密钥
+    ret = rsa_public_encrypt(receiver_public_key, aes_key, 16,
+                            output-&gt;encrypted_aes_key, &amp;ctr_drbg);
+    if (ret != 0) {
+        return -1;
+    }
+
+    // 3. 使用AES加密消息
+    struct AES_ctx aes_ctx;
+    AES_init_ctx_iv(&amp;aes_ctx, aes_key, output-&gt;aes_iv);
+
+    // 填充到16字节倍数
+    size_t padded_len = ((message_len / 16) + 1) * 16;
+    memcpy(output-&gt;encrypted_data, message, message_len);
+    memset(output-&gt;encrypted_data + message_len, 0, padded_len - message_len);
+
+    AES_CBC_encrypt_buffer(&amp;aes_ctx, output-&gt;encrypted_data, padded_len);
+    output-&gt;encrypted_data_len = padded_len;
+
+    // 4. 添加时间戳
+    output-&gt;timestamp = HAL_GetTick();
+
+    // 5. 使用发送者私钥签名整个消息
+    unsigned char hash[32];
+    mbedtls_sha256(output-&gt;encrypted_data, padded_len, hash, 0);
+
+    ret = mbedtls_rsa_pkcs1_sign(&amp;sender-&gt;rsa, mbedtls_ctr_drbg_random,
+                                &amp;ctr_drbg, MBEDTLS_RSA_PRIVATE,
+                                MBEDTLS_MD_SHA256, 32, hash,
+                                output-&gt;signature);
+    if (ret != 0) {
+        printf(&quot;Signing failed: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    printf(&quot;Message encrypted and signed\n&quot;);
+    printf(&quot;Encrypted data size: %zu bytes\n&quot;, output-&gt;encrypted_data_len);
+
+    // 清除AES密钥
+    memset(aes_key, 0, sizeof(aes_key));
+
+    return 0;
+}
+
+/**
+ * @brief  接收安全消息
+ * @param  receiver: 接收者密钥对
+ * @param  sender_public_key: 发送者公钥
+ * @param  input: 接收到的安全消息
+ * @param  message: 输出的消息内容
+ * @param  message_len: 输出的消息长度
+ * @retval 0:成功, -1:失败
+ */
+int receive_secure_message(user_keypair_t *receiver,
+                          mbedtls_rsa_context *sender_public_key,
+                          const secure_message_t *input,
+                          char *message, size_t *message_len)
+{
+    int ret;
+    uint8_t aes_key[16];
+    size_t key_len;
+
+    printf(&quot;\n--- Receiving Secure Message ---\n&quot;);
+    printf(&quot;To: %s\n&quot;, receiver-&gt;user_id);
+
+    // 1. 验证签名
+    unsigned char hash[32];
+    mbedtls_sha256(input-&gt;encrypted_data, input-&gt;encrypted_data_len, hash, 0);
+
+    ret = mbedtls_rsa_pkcs1_verify(sender_public_key, NULL, NULL,
+                                  MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256,
+                                  32, hash, input-&gt;signature);
+    if (ret != 0) {
+        printf(&quot;✗ Signature verification failed: -0x%04x\n&quot;, -ret);
+        printf(&quot;Message may be tampered or from untrusted source\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;✓ Signature verified - message is authentic\n&quot;);
+
+    // 2. 使用接收者私钥解密AES密钥
+    ret = rsa_private_decrypt(&amp;receiver-&gt;rsa, input-&gt;encrypted_aes_key,
+                             aes_key, &amp;key_len);
+    if (ret != 0) {
+        return -1;
+    }
+
+    // 3. 使用AES密钥解密消息
+    struct AES_ctx aes_ctx;
+    AES_init_ctx_iv(&amp;aes_ctx, aes_key, (uint8_t *)input-&gt;aes_iv);
+
+    memcpy(message, input-&gt;encrypted_data, input-&gt;encrypted_data_len);
+    AES_CBC_decrypt_buffer(&amp;aes_ctx, (uint8_t *)message,
+                          input-&gt;encrypted_data_len);
+
+    // 查找实际消息长度（去除填充）
+    *message_len = strlen(message);
+
+    printf(&quot;Message decrypted: %s\n&quot;, message);
+    printf(&quot;Timestamp: %lu ms\n&quot;, input-&gt;timestamp);
+
+    // 清除AES密钥
+    memset(aes_key, 0, sizeof(aes_key));
+
+    return 0;
+}
+</code></pre>
+<h3 id="54">5.4 主程序</h3>
+<pre><code class="language-c">/**
+ * @file   main.c
+ * @brief  安全消息系统主程序
+ */
+#include &quot;main.h&quot;
+#include &quot;secure_messaging.h&quot;
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+
+    printf(&quot;\n=== Secure Messaging System ===\n&quot;);
+
+    // 初始化安全消息系统
+    if (secure_messaging_init() != 0) {
+        printf(&quot;Failed to initialize system\n&quot;);
+        Error_Handler();
+    }
+
+    // 创建两个用户
+    user_keypair_t alice, bob;
+
+    printf(&quot;\n--- Creating Users ---\n&quot;);
+    create_user_keypair(&amp;alice, &quot;Alice&quot;);
+    create_user_keypair(&amp;bob, &quot;Bob&quot;);
+
+    // Alice发送消息给Bob
+    secure_message_t message1;
+    const char *text1 = &quot;Hello Bob! This is a secret message from Alice.&quot;;
+
+    if (send_secure_message(&amp;alice, &amp;bob.rsa, text1, &amp;message1) != 0) {
+        printf(&quot;Failed to send message\n&quot;);
+        Error_Handler();
+    }
+
+    // Bob接收并验证消息
+    char received1[256];
+    size_t received1_len;
+
+    if (receive_secure_message(&amp;bob, &amp;alice.rsa, &amp;message1,
+                               received1, &amp;received1_len) != 0) {
+        printf(&quot;Failed to receive message\n&quot;);
+        Error_Handler();
+    }
+
+    // 验证消息内容
+    if (strcmp(received1, text1) == 0) {
+        printf(&quot;\n✓ Message transmission successful!\n&quot;);
+        HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, GPIO_PIN_SET);
+    }
+
+    // Bob回复Alice
+    printf(&quot;\n\n&quot;);
+    secure_message_t message2;
+    const char *text2 = &quot;Hi Alice! Message received. Thanks!&quot;;
+
+    send_secure_message(&amp;bob, &amp;alice.rsa, text2, &amp;message2);
+
+    char received2[256];
+    size_t received2_len;
+
+    receive_secure_message(&amp;alice, &amp;bob.rsa, &amp;message2,
+                          received2, &amp;received2_len);
+
+    if (strcmp(received2, text2) == 0) {
+        printf(&quot;\n✓ Reply received successfully!\n&quot;);
+    }
+
+    // 测试：篡改消息
+    printf(&quot;\n\n--- Testing Message Tampering ---\n&quot;);
+    secure_message_t tampered = message1;
+    tampered.encrypted_data[0] ^= 0xFF;  // 修改一个字节
+
+    char tampered_msg[256];
+    size_t tampered_len;
+
+    if (receive_secure_message(&amp;bob, &amp;alice.rsa, &amp;tampered,
+                               tampered_msg, &amp;tampered_len) != 0) {
+        printf(&quot;✓ Tampered message correctly rejected\n&quot;);
+        HAL_GPIO_WritePin(LED_RED_GPIO_Port, LED_RED_Pin, GPIO_PIN_SET);
+    }
+
+    printf(&quot;\n=== Demo Complete ===\n&quot;);
+
+    // 清理
+    mbedtls_rsa_free(&amp;alice.rsa);
+    mbedtls_rsa_free(&amp;bob.rsa);
+
+    while (1) {
+        // 主循环
+        HAL_Delay(1000);
+    }
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>=== Secure Messaging System ===
+Secure messaging system initialized
+
+--- Creating Users ---
+Creating keypair for user: Alice
+Generating 2048-bit RSA key pair...
+Key pair generated successfully
+Keypair created for Alice
+Creating keypair for user: Bob
+Generating 2048-bit RSA key pair...
+Key pair generated successfully
+Keypair created for Bob
+
+--- Sending Secure Message ---
+From: Alice
+Message: Hello Bob! This is a secret message from Alice.
+Encrypting AES key with RSA...
+Encryption successful
+Message encrypted and signed
+Encrypted data size: 64 bytes
+
+--- Receiving Secure Message ---
+To: Bob
+✓ Signature verified - message is authentic
+Decrypting AES key with RSA...
+Decryption successful
+Message decrypted: Hello Bob! This is a secret message from Alice.
+Timestamp: 12345 ms
+
+✓ Message transmission successful!
+
+--- Sending Secure Message ---
+From: Bob
+Message: Hi Alice! Message received. Thanks!
+...
+
+--- Testing Message Tampering ---
+--- Receiving Secure Message ---
+To: Bob
+✗ Signature verification failed: -0x4380
+Message may be tampered or from untrusted source
+✓ Tampered message correctly rejected
+
+=== Demo Complete ===
+</code></pre>
+<h2 id="6">步骤6：密钥管理</h2>
+<h3 id="61">6.1 密钥存储</h3>
+<pre><code class="language-c">/**
+ * @brief  将RSA密钥保存到Flash
+ * @param  rsa: RSA上下文
+ * @param  address: Flash地址
+ * @retval 0:成功, -1:失败
+ */
+int save_rsa_key_to_flash(mbedtls_rsa_context *rsa, uint32_t address)
+{
+    HAL_StatusTypeDef status;
+    unsigned char key_buffer[2048];
+    int ret;
+
+    // 导出密钥到DER格式
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&amp;pk);
+    mbedtls_pk_setup(&amp;pk, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA));
+
+    mbedtls_rsa_context *rsa_ctx = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_copy(rsa_ctx, rsa);
+
+    ret = mbedtls_pk_write_key_der(&amp;pk, key_buffer, sizeof(key_buffer));
+    mbedtls_pk_free(&amp;pk);
+
+    if (ret &lt; 0) {
+        printf(&quot;Failed to export key: -0x%04x\n&quot;, -ret);
+        return -1;
+    }
+
+    size_t key_len = ret;
+
+    // 解锁Flash
+    HAL_FLASH_Unlock();
+
+    // 擦除扇区
+    FLASH_EraseInitTypeDef erase_init;
+    uint32_t sector_error;
+
+    erase_init.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase_init.Sector = FLASH_SECTOR_11;
+    erase_init.NbSectors = 1;
+    erase_init.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    status = HAL_FLASHEx_Erase(&amp;erase_init, &amp;sector_error);
+    if (status != HAL_OK) {
+        HAL_FLASH_Lock();
+        return -1;
+    }
+
+    // 写入密钥长度
+    HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, address, key_len);
+
+    // 写入密钥数据
+    for (size_t i = 0; i &lt; key_len; i++) {
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, address + 4 + i,
+                         key_buffer[sizeof(key_buffer) - key_len + i]);
+    }
+
+    HAL_FLASH_Lock();
+
+    printf(&quot;RSA key saved to Flash at 0x%08lX\n&quot;, address);
+    return 0;
+}
+
+/**
+ * @brief  从Flash加载RSA密钥
+ * @param  rsa: RSA上下文
+ * @param  address: Flash地址
+ * @retval 0:成功, -1:失败
+ */
+int load_rsa_key_from_flash(mbedtls_rsa_context *rsa, uint32_t address)
+{
+    int ret;
+
+    // 读取密钥长度
+    uint32_t key_len = *(uint32_t *)address;
+
+    if (key_len == 0 || key_len &gt; 2048) {
+        printf(&quot;Invalid key length: %lu\n&quot;, key_len);
+        return -1;
+    }
+
+    // 读取密钥数据
+    unsigned char *key_data = (unsigned char *)(address + 4);
+
+    // 解析密钥
+    mbedtls_pk_context pk;
+    mbedtls_pk_init(&amp;pk);
+
+    ret = mbedtls_pk_parse_key(&amp;pk, key_data, key_len, NULL, 0);
+    if (ret != 0) {
+        printf(&quot;Failed to parse key: -0x%04x\n&quot;, -ret);
+        mbedtls_pk_free(&amp;pk);
+        return -1;
+    }
+
+    // 复制到RSA上下文
+    mbedtls_rsa_context *rsa_ctx = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_copy(rsa, rsa_ctx);
+
+    mbedtls_pk_free(&amp;pk);
+
+    printf(&quot;RSA key loaded from Flash\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="62">6.2 密钥导入导出</h3>
+<pre><code class="language-c">/**
+ * @brief  从PEM字符串导入公钥
+ * @param  rsa: RSA上下文
+ * @param  pem_str: PEM格式的公钥字符串
+ * @retval 0:成功, -1:失败
+ */
+int import_public_key_from_pem(mbedtls_rsa_context *rsa, const char *pem_str)
+{
+    int ret;
+    mbedtls_pk_context pk;
+
+    mbedtls_pk_init(&amp;pk);
+
+    ret = mbedtls_pk_parse_public_key(&amp;pk,
+                                     (const unsigned char *)pem_str,
+                                     strlen(pem_str) + 1);
+    if (ret != 0) {
+        printf(&quot;Failed to parse public key: -0x%04x\n&quot;, -ret);
+        mbedtls_pk_free(&amp;pk);
+        return -1;
+    }
+
+    // 复制到RSA上下文
+    mbedtls_rsa_context *rsa_ctx = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_copy(rsa, rsa_ctx);
+
+    mbedtls_pk_free(&amp;pk);
+
+    printf(&quot;Public key imported successfully\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  密钥交换示例
+ */
+void key_exchange_example(void)
+{
+    // 模拟：Alice和Bob交换公钥
+
+    // Alice生成密钥对并导出公钥
+    user_keypair_t alice;
+    create_user_keypair(&amp;alice, &quot;Alice&quot;);
+
+    char alice_public_key[1024];
+    export_public_key(&amp;alice.rsa, alice_public_key, sizeof(alice_public_key));
+
+    // Bob生成密钥对并导出公钥
+    user_keypair_t bob;
+    create_user_keypair(&amp;bob, &quot;Bob&quot;);
+
+    char bob_public_key[1024];
+    export_public_key(&amp;bob.rsa, bob_public_key, sizeof(bob_public_key));
+
+    // Alice导入Bob的公钥
+    mbedtls_rsa_context bob_pub;
+    mbedtls_rsa_init(&amp;bob_pub, MBEDTLS_RSA_PKCS_V15, 0);
+    import_public_key_from_pem(&amp;bob_pub, bob_public_key);
+
+    // Bob导入Alice的公钥
+    mbedtls_rsa_context alice_pub;
+    mbedtls_rsa_init(&amp;alice_pub, MBEDTLS_RSA_PKCS_V15, 0);
+    import_public_key_from_pem(&amp;alice_pub, alice_public_key);
+
+    printf(&quot;✓ Public keys exchanged successfully\n&quot;);
+    printf(&quot;Alice and Bob can now communicate securely\n&quot;);
+
+    // 清理
+    mbedtls_rsa_free(&amp;alice.rsa);
+    mbedtls_rsa_free(&amp;bob.rsa);
+    mbedtls_rsa_free(&amp;bob_pub);
+    mbedtls_rsa_free(&amp;alice_pub);
+}
+</code></pre>
+<h2 id="_7">故障排除</h2>
+<h3 id="1">问题1：密钥生成太慢</h3>
+<p><strong>可能原因</strong>：
+- MCU性能不足
+- 密钥长度太大
+- 随机数生成慢</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 使用较短的密钥（仅用于测试）
+generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 1024, 65537);  // 1024位更快
+
+// 2. 预生成密钥并存储
+void pregenerate_keys(void)
+{
+    // 在工厂或首次启动时生成
+    // 然后保存到Flash
+}
+
+// 3. 使用硬件随机数生成器
+#ifdef HAL_RNG_MODULE_ENABLED
+void use_hardware_rng(void)
+{
+    // 配置使用硬件RNG
+    // 可以显著加快密钥生成
+}
+#endif
+
+// 4. 显示进度
+void generate_with_progress(void)
+{
+    printf(&quot;Generating key&quot;);
+    for (int i = 0; i &lt; 10; i++) {
+        printf(&quot;.&quot;);
+        HAL_Delay(100);
+    }
+    printf(&quot;\n&quot;);
+}
+</code></pre>
+<h3 id="2">问题2：加密数据太大</h3>
+<p><strong>可能原因</strong>：
+- 数据超过RSA密钥长度限制
+- 没有使用混合加密</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 检查数据大小
+void check_data_size(size_t data_len, mbedtls_rsa_context *rsa)
+{
+    size_t max_len = mbedtls_rsa_get_len(rsa) - 11;
+
+    if (data_len &gt; max_len) {
+        printf(&quot;Error: Data too large (%zu bytes)\n&quot;, data_len);
+        printf(&quot;Maximum: %zu bytes\n&quot;, max_len);
+        printf(&quot;Solution: Use hybrid encryption (RSA + AES)\n&quot;);
+    }
+}
+
+// 自动选择加密方式
+int smart_encrypt(const unsigned char *data, size_t data_len,
+                 mbedtls_rsa_context *rsa, unsigned char *output)
+{
+    size_t max_len = mbedtls_rsa_get_len(rsa) - 11;
+
+    if (data_len &lt;= max_len) {
+        // 直接使用RSA
+        return rsa_public_encrypt(rsa, data, data_len, output, &amp;ctr_drbg);
+    } else {
+        // 使用混合加密
+        printf(&quot;Data too large, using hybrid encryption\n&quot;);
+        // 实现混合加密逻辑
+        return 0;
+    }
+}
+</code></pre>
+<h3 id="3_1">问题3：签名验证失败</h3>
+<p><strong>可能原因</strong>：
+- 使用了错误的公钥
+- 消息被篡改
+- 哈希算法不匹配</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 详细的验证过程
+int verify_with_details(mbedtls_rsa_context *rsa,
+                       const unsigned char *message, size_t message_len,
+                       const unsigned char *signature)
+{
+    int ret;
+    unsigned char hash[32];
+
+    // 1. 计算消息哈希
+    mbedtls_sha256(message, message_len, hash, 0);
+
+    printf(&quot;Message hash: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X &quot;, hash[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 2. 验证签名
+    ret = mbedtls_rsa_pkcs1_verify(rsa, NULL, NULL,
+                                  MBEDTLS_RSA_PUBLIC, MBEDTLS_MD_SHA256,
+                                  32, hash, signature);
+
+    if (ret != 0) {
+        printf(&quot;Verification failed: -0x%04x\n&quot;, -ret);
+
+        // 诊断
+        if (ret == MBEDTLS_ERR_RSA_VERIFY_FAILED) {
+            printf(&quot;Possible causes:\n&quot;);
+            printf(&quot;  - Wrong public key\n&quot;);
+            printf(&quot;  - Message was modified\n&quot;);
+            printf(&quot;  - Signature was corrupted\n&quot;);
+        }
+
+        return ret;
+    }
+
+    printf(&quot;✓ Signature valid\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="4_1">问题4：内存不足</h3>
+<p><strong>可能原因</strong>：
+- RSA操作需要大量内存
+- 栈空间不足
+- 堆空间不足</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 增加栈大小
+// 在启动文件中修改：
+// Stack_Size      EQU     0x2000  ; 增加到8KB
+
+// 2. 使用静态缓冲区
+static unsigned char static_buffer[2048];
+
+void use_static_buffer(void)
+{
+    // 使用静态缓冲区而不是栈
+}
+
+// 3. 分步处理
+void process_in_steps(void)
+{
+    // 生成密钥
+    generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537);
+
+    // 释放不需要的资源
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+
+    // 然后进行加密操作
+}
+
+// 4. 检查可用内存
+void check_memory(void)
+{
+    extern uint8_t _end;
+    extern uint8_t _estack;
+    uint32_t stack_size = (uint32_t)&amp;_estack - (uint32_t)&amp;_end;
+
+    printf(&quot;Available stack: %lu bytes\n&quot;, stack_size);
+
+    if (stack_size &lt; 8192) {
+        printf(&quot;Warning: Low stack space for RSA operations\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="5">问题5：性能优化</h3>
+<p><strong>可能原因</strong>：
+- 频繁的密钥生成
+- 不必要的加密操作
+- 没有使用硬件加速</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 缓存密钥对
+static mbedtls_rsa_context cached_rsa;
+static int key_cached = 0;
+
+mbedtls_rsa_context* get_cached_key(void)
+{
+    if (!key_cached) {
+        generate_rsa_keypair(&amp;cached_rsa, &amp;ctr_drbg, 2048, 65537);
+        key_cached = 1;
+    }
+    return &amp;cached_rsa;
+}
+
+// 2. 批量处理
+void batch_encrypt(const unsigned char **messages, int count)
+{
+    // 一次性初始化
+    mbedtls_rsa_context rsa;
+    generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537);
+
+    // 批量加密
+    for (int i = 0; i &lt; count; i++) {
+        // 加密每条消息
+    }
+
+    // 清理
+    mbedtls_rsa_free(&amp;rsa);
+}
+
+// 3. 使用硬件加速（如果可用）
+#ifdef MBEDTLS_HARDWARE_ACCELERATION
+void enable_hardware_acceleration(void)
+{
+    // 配置硬件加速
+    // STM32F4系列部分型号支持
+}
+#endif
+
+// 4. 性能测试
+void performance_test(void)
+{
+    uint32_t start, end;
+
+    // 测试密钥生成
+    start = HAL_GetTick();
+    generate_rsa_keypair(&amp;rsa, &amp;ctr_drbg, 2048, 65537);
+    end = HAL_GetTick();
+    printf(&quot;Key generation: %lu ms\n&quot;, end - start);
+
+    // 测试加密
+    start = HAL_GetTick();
+    rsa_public_encrypt(&amp;rsa, data, data_len, ciphertext, &amp;ctr_drbg);
+    end = HAL_GetTick();
+    printf(&quot;Encryption: %lu ms\n&quot;, end - start);
+
+    // 测试解密
+    start = HAL_GetTick();
+    rsa_private_decrypt(&amp;rsa, ciphertext, plaintext, &amp;plaintext_len);
+    end = HAL_GetTick();
+    printf(&quot;Decryption: %lu ms\n&quot;, end - start);
+}
+</code></pre>
+<h2 id="_8">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ RSA非对称加密的基本原理和数学基础</li>
+<li>✅ 公钥和私钥的概念及其应用</li>
+<li>✅ 如何生成和管理RSA密钥对</li>
+<li>✅ RSA加密和解密的实现方法</li>
+<li>✅ 数字签名的原理和实现</li>
+<li>✅ 混合加密方案（RSA + AES）</li>
+<li>✅ 完整的安全消息传输系统</li>
+<li>✅ 密钥存储和交换机制</li>
+</ul>
+<p><strong>关键要点</strong>：</p>
+<ol>
+<li>
+<p><strong>RSA特点</strong>
+   - 非对称加密，公钥加密私钥解密
+   - 计算量大，速度慢
+   - 适合小数据和密钥交换
+   - 可用于数字签名</p>
+</li>
+<li>
+<p><strong>密钥管理</strong>
+   - 私钥必须严格保密
+   - 公钥可以公开分发
+   - 定期更新密钥对
+   - 安全存储在Flash中</p>
+</li>
+<li>
+<p><strong>混合加密</strong>
+   - RSA加密AES密钥
+   - AES加密实际数据
+   - 结合两者优势
+   - 适合大数据传输</p>
+</li>
+<li>
+<p><strong>数字签名</strong>
+   - 验证身份和完整性
+   - 私钥签名，公钥验证
+   - 防止消息篡改
+   - 不可否认性</p>
+</li>
+</ol>
+<h2 id="_9">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现RSA-OAEP填充模式（更安全）</li>
+<li><strong>挑战2</strong>：添加证书链验证功能</li>
+<li><strong>挑战3</strong>：实现密钥协商协议（如Diffie-Hellman）</li>
+<li><strong>挑战4</strong>：添加密钥过期和自动更新机制</li>
+<li><strong>挑战5</strong>：实现完整的PKI（公钥基础设施）系统</li>
+</ol>
+<h2 id="_10">完整代码</h2>
+<p>完整的项目代码可以在这里下载：
+- GitHub仓库：<a href="https://github.com/embedded-platform/rsa-demo">RSA-Encryption-Demo</a>
+- 包含所有示例代码和测试用例</p>
+<h2 id="_11">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="03-hash-algorithms.html">哈希算法与消息摘要</a> - 学习数据完整性验证</li>
+<li><a href="../intermediate/01-digital-signature.html">数字签名技术详解</a> - 深入学习签名</li>
+<li><a href="../intermediate/02-secure-boot-verification.html">安全启动与固件验证</a> - 学习系统安全</li>
+<li><a href="../intermediate/03-key-management.html">密钥管理与安全存储</a> - 学习密钥管理</li>
+</ul>
+<h2 id="_12">参考资料</h2>
+<ol>
+<li>
+<p><strong>官方文档</strong>
+   - RSA Laboratories: RSA标准
+   - mbedTLS文档
+   - PKCS#1标准</p>
+</li>
+<li>
+<p><strong>推荐书籍</strong>
+   - 《应用密码学》- Bruce Schneier
+   - 《密码工程》- Niels Ferguson
+   - 《公钥密码学》- Douglas Stinson</p>
+</li>
+<li>
+<p><strong>在线资源</strong>
+   - <a href="https://www.devglan.com/online-tools/rsa-encryption-decryption">RSA在线工具</a>
+   - <a href="https://www.coursera.org/learn/crypto">密码学课程</a>
+   - <a href="https://csrc.nist.gov/">NIST密码学标准</a></p>
+</li>
+<li>
+<p><strong>相关标准</strong>
+   - PKCS#1: RSA加密标准
+   - X.509: 数字证书标准
+   - RFC 8017: PKCS#1 v2.2</p>
+</li>
+</ol>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！</p>
+<p><strong>版本历史</strong>：
+- v1.0 (2024-01-15): 初始版本发布</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

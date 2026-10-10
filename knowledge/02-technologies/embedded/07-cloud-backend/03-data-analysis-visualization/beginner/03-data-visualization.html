@@ -1,0 +1,1990 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>数据可视化入门：Grafana看板搭建实践 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/">07-cloud-backend</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/03-data-analysis-visualization/">03-data-analysis-visualization</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/03-data-analysis-visualization/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#iot">典型 IoT 数据可视化架构</a></li>
+<li><a href="#_3">时序数据核心概念</a><ul>
+<li><a href="#cardinality">基数（Cardinality）</a></li>
+<li><a href="#retention-policy">数据保留策略（Retention Policy）</a></li>
+<li><a href="#downsampling">降采样（Downsampling）</a></li>
+</ul>
+</li>
+<li><a href="#grafana_1">Grafana 架构详解</a></li>
+</ul>
+</li>
+<li><a href="#_4">核心内容</a><ul>
+<li><a href="#grafana_2">安装 Grafana</a></li>
+<li><a href="#influxdb">配置 InfluxDB 数据源</a></li>
+<li><a href="#_5">写入测试数据</a></li>
+<li><a href="#_6">创建监控看板</a><ul>
+<li><a href="#dashboard">新建 Dashboard</a></li>
+<li><a href="#_7">添加温度折线图</a></li>
+<li><a href="#gauge">添加湿度仪表盘（Gauge）</a></li>
+<li><a href="#_8">添加多设备对比图</a></li>
+<li><a href="#stat">添加统计卡片（Stat）</a></li>
+</ul>
+</li>
+<li><a href="#_9">配置告警规则</a></li>
+<li><a href="#telegraf-mqtt">使用 Telegraf 自动采集 MQTT 数据</a></li>
+<li><a href="#prometheus-promql">Prometheus 数据源与 PromQL</a><ul>
+<li><a href="#prometheus">添加 Prometheus 数据源</a></li>
+<li><a href="#promql">PromQL 基础语法</a></li>
+</ul>
+</li>
+<li><a href="#grafana-alerting-v2">Grafana 统一告警（Alerting v2）</a><ul>
+<li><a href="#_10">告警架构</a></li>
+<li><a href="#_11">创建告警规则</a></li>
+<li><a href="#_12">通知策略配置</a></li>
+<li><a href="#webhook">配置 Webhook 联系点（企业微信机器人）</a></li>
+<li><a href="#silences">告警静默（Silences）</a></li>
+</ul>
+</li>
+<li><a href="#dashboard-gitops">Dashboard 预配置（GitOps 方式）</a><ul>
+<li><a href="#_13">数据源预配置</a></li>
+<li><a href="#dashboard_1">Dashboard 预配置</a></li>
+</ul>
+</li>
+<li><a href="#_14">看板美化技巧</a></li>
+</ul>
+</li>
+<li><a href="#_15">深入原理</a><ul>
+<li><a href="#influxdb-2x-tasks-flux">InfluxDB 2.x Tasks：定时 Flux 脚本</a><ul>
+<li><a href="#task">Task 基本结构</a></li>
+<li><a href="#_16">多统计量降采样</a></li>
+<li><a href="#cli-tasks">通过 CLI 管理 Tasks</a></li>
+<li><a href="#task_1">数据过期检测 Task</a></li>
+</ul>
+</li>
+<li><a href="#grafana_3">Grafana 插件开发基础</a><ul>
+<li><a href="#_17">插件目录结构</a></li>
+<li><a href="#pluginjson">plugin.json 元数据</a></li>
+<li><a href="#panel">最简 Panel 插件实现</a></li>
+<li><a href="#_18">本地开发与调试</a></li>
+</ul>
+</li>
+<li><a href="#flux">Flux 高级查询技巧</a><ul>
+<li><a href="#join">联表查询（Join）</a></li>
+<li><a href="#_19">异常检测</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#iot_1">完整项目：生产级 IoT 监控栈</a><ul>
+<li><a href="#_20">系统架构</a></li>
+<li><a href="#_21">项目文件结构</a></li>
+<li><a href="#docker-composeyml">docker-compose.yml（完整版）</a></li>
+<li><a href="#_22">环境变量文件</a></li>
+<li><a href="#mosquitto">Mosquitto 配置</a></li>
+<li><a href="#telegraf">Telegraf 完整配置</a></li>
+<li><a href="#_23">初始化脚本</a></li>
+<li><a href="#_24">测试数据发送脚本</a></li>
+<li><a href="#_25">部署与验证步骤</a></li>
+<li><a href="#_26">告警规则配置（完整示例）</a></li>
+</ul>
+</li>
+<li><a href="#_27">性能调优</a><ul>
+<li><a href="#influxdb_1">InfluxDB 查询优化</a></li>
+<li><a href="#grafana_4">Grafana 看板性能优化</a></li>
+</ul>
+</li>
+<li><a href="#_28">常见问题与调试</a></li>
+<li><a href="#_29">常见问题与调试</a><ul>
+<li><a href="#_30">数据源连接错误</a><ul>
+<li><a href="#1grafana-influxdb">问题1：Grafana 无法连接 InfluxDB</a></li>
+<li><a href="#2telegraf-mqtt-broker">问题2：Telegraf 无法连接 MQTT Broker</a></li>
+</ul>
+</li>
+<li><a href="#_31">高基数问题</a></li>
+<li><a href="#_32">查询缓慢</a></li>
+<li><a href="#alert-flapping">告警抖动（Alert Flapping）</a></li>
+<li><a href="#grafana_5">Grafana 面板常见问题</a><ul>
+<li><a href="#no-data">问题：面板显示 "No data"</a></li>
+<li><a href="#_33">问题：时间序列图表时区错误</a></li>
+<li><a href="#_34">问题：变量下拉列表为空</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_35">测试与验证</a><ul>
+<li><a href="#_36">验证数据流完整性</a></li>
+<li><a href="#_37">自动化验证脚本</a></li>
+</ul>
+</li>
+<li><a href="#_38">延伸阅读</a></li>
+<li><a href="#_39">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="grafana">数据可视化入门：Grafana看板搭建实践</h1>
+<h2 id="_1">概述</h2>
+<p>Grafana 是目前最流行的开源数据可视化平台，广泛用于 IoT 传感器数据监控、服务器性能监控和业务指标展示。它支持 InfluxDB、Prometheus、MySQL 等数十种数据源，通过拖拽即可构建专业的实时监控看板。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>在本地或服务器上安装并配置 Grafana</li>
+<li>连接 InfluxDB 时序数据库作为数据源</li>
+<li>创建温湿度、气压等传感器数据的实时监控面板</li>
+<li>配置告警规则，在数据异常时发送通知</li>
+<li>将看板嵌入到 Web 页面或分享给团队</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="iot">典型 IoT 数据可视化架构</h3>
+<pre><code>传感器设备
+    │ MQTT上报
+    ▼
+MQTT Broker（Mosquitto/EMQX）
+    │ 订阅消息
+    ▼
+数据写入服务（Telegraf / 自定义脚本）
+    │ 写入
+    ▼
+时序数据库（InfluxDB）
+    │ 查询
+    ▼
+Grafana 看板
+    │ 展示
+    ▼
+浏览器 / 大屏
+</code></pre>
+<p><strong>各组件职责</strong>：
+- <strong>Telegraf</strong>：InfluxDB 官方数据采集代理，支持直接订阅 MQTT 并写入 InfluxDB，无需编写代码
+- <strong>InfluxDB</strong>：专为时序数据优化的数据库，高效存储和查询带时间戳的传感器数据
+- <strong>Grafana</strong>：纯展示层，从数据库查询数据并渲染图表</p>
+<h3 id="_3">时序数据核心概念</h3>
+<p>理解时序数据（Time-Series Data）的特性是构建高效监控系统的基础。</p>
+<h4 id="cardinality">基数（Cardinality）</h4>
+<p><strong>基数</strong>是指数据库中唯一时间序列（Series）的数量。在 InfluxDB 中，一条时间序列由 measurement + 所有 tag 的组合唯一确定。</p>
+<pre><code>measurement: environment
+tags: device_id=node_001, location=room_a
+→ 这是一条独立的时间序列
+
+measurement: environment
+tags: device_id=node_002, location=room_b
+→ 这是另一条独立的时间序列
+</code></pre>
+<p><strong>高基数问题（High Cardinality）</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    基数爆炸示例                           │
+├─────────────────────────────────────────────────────────┤
+│ 错误做法：将用户ID作为tag                                  │
+│   tags: user_id=10001, user_id=10002, ...               │
+│   → 100万用户 = 100万条时间序列 → 内存耗尽                 │
+├─────────────────────────────────────────────────────────┤
+│ 正确做法：将高基数字段作为field而非tag                      │
+│   tags: device_type=sensor                              │
+│   fields: user_id=&quot;10001&quot;, value=25.3                   │
+│   → 基数保持可控                                          │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>基数控制原则</strong>：
+- Tag 应使用低基数字段（设备类型、地区、状态等枚举值）
+- 高基数标识符（用户ID、订单号、UUID）应放入 field
+- 单个 bucket 的时间序列数量建议控制在 100 万以内</p>
+<h4 id="retention-policy">数据保留策略（Retention Policy）</h4>
+<p>时序数据随时间增长会占用大量存储空间。<strong>保留策略（Retention Policy，RP）</strong>定义数据的存活时间，过期数据自动删除。</p>
+<p><strong>InfluxDB 2.x 保留策略配置</strong>：</p>
+<pre><code class="language-bash"># 创建 bucket 时设置保留时间（30天）
+influx bucket create \
+  --name sensor-data \
+  --org iot-org \
+  --retention 720h   # 720小时 = 30天
+
+# 修改现有 bucket 的保留时间
+influx bucket update \
+  --name sensor-data \
+  --retention 2160h  # 90天
+</code></pre>
+<p><strong>多级保留策略设计</strong>（生产环境推荐）：</p>
+<pre><code>原始数据 bucket（raw-data）：保留 7 天，每秒一条
+    │ Flux Task 每小时聚合
+    ▼
+小时聚合 bucket（hourly-data）：保留 90 天，每小时一条
+    │ Flux Task 每天聚合
+    ▼
+日聚合 bucket（daily-data）：保留 3 年，每天一条
+</code></pre>
+<p>这种分层存储策略在保留历史趋势的同时大幅降低存储成本。</p>
+<h4 id="downsampling">降采样（Downsampling）</h4>
+<p><strong>降采样</strong>是将高频原始数据聚合为低频摘要数据的过程，是解决存储增长和查询性能问题的核心手段。</p>
+<pre><code>原始数据（每5秒）：25.1, 25.3, 25.0, 24.9, 25.2, 25.4, ...
+                              ↓ 降采样（每分钟取均值）
+分钟数据：25.15, 25.17, ...
+                              ↓ 降采样（每小时取均值/最大/最小）
+小时数据：{mean: 25.2, max: 26.1, min: 24.3}
+</code></pre>
+<p><strong>降采样的收益</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>时间跨度</th>
+<th>原始数据点数</th>
+<th>降采样后（1分钟）</th>
+<th>存储节省</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1天</td>
+<td>17,280</td>
+<td>1,440</td>
+<td>91.7%</td>
+</tr>
+<tr>
+<td>1周</td>
+<td>120,960</td>
+<td>10,080</td>
+<td>91.7%</td>
+</tr>
+<tr>
+<td>1年</td>
+<td>6,307,200</td>
+<td>525,600</td>
+<td>91.7%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grafana_1">Grafana 架构详解</h3>
+<p>Grafana 采用前后端分离架构，理解其内部结构有助于进行高级配置和二次开发。</p>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    Grafana 架构                           │
+├─────────────────────────────────────────────────────────┤
+│  浏览器（Frontend）                                       │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  React 应用                                       │   │
+│  │  ├── Dashboard 渲染引擎                            │   │
+│  │  ├── Panel 插件系统（图表库：Echarts/D3.js）        │   │
+│  │  ├── 变量插值引擎                                   │   │
+│  │  └── 告警状态展示                                   │   │
+│  └──────────────────────────────────────────────────┘   │
+│                         │ HTTP/WebSocket                 │
+├─────────────────────────────────────────────────────────┤
+│  Grafana Server（Backend - Go语言）                       │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │  HTTP API 层                                      │   │
+│  │  ├── Dashboard CRUD API                           │   │
+│  │  ├── 数据源代理（避免跨域，保护凭证）                 │   │
+│  │  ├── 告警引擎（Alertmanager 兼容）                  │   │
+│  │  └── 用户/权限管理                                  │   │
+│  │                                                   │   │
+│  │  插件系统                                          │   │
+│  │  ├── 数据源插件（InfluxDB/Prometheus/MySQL/...）    │   │
+│  │  ├── Panel 插件（图表类型）                         │   │
+│  │  └── App 插件（完整应用）                           │   │
+│  └──────────────────────────────────────────────────┘   │
+│                         │                               │
+├─────────────────────────────────────────────────────────┤
+│  内置 SQLite / 外部 MySQL / PostgreSQL                    │
+│  （存储 Dashboard 配置、用户、告警规则等元数据）             │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>关键设计特点</strong>：</p>
+<ol>
+<li><strong>数据源代理</strong>：前端查询不直接访问数据库，而是通过 Grafana 后端代理，保护数据库凭证不暴露给浏览器</li>
+<li><strong>插件化架构</strong>：所有图表类型和数据源都是插件，可热加载，无需重启</li>
+<li><strong>元数据存储</strong>：Dashboard JSON、用户配置、告警规则存储在关系型数据库中（默认 SQLite，生产环境推荐 PostgreSQL）</li>
+<li><strong>无状态设计</strong>：Grafana 本身不存储时序数据，只存储配置元数据，便于水平扩展</li>
+</ol>
+<p><strong>Grafana 目录结构</strong>（Linux 安装）：</p>
+<pre><code class="language-bash">/etc/grafana/
+├── grafana.ini          # 主配置文件
+└── provisioning/        # 预配置目录（GitOps）
+    ├── datasources/     # 数据源配置 YAML
+    ├── dashboards/      # Dashboard 配置 YAML
+    └── alerting/        # 告警规则配置 YAML
+
+/var/lib/grafana/
+├── grafana.db           # SQLite 元数据库
+└── plugins/             # 已安装插件目录
+
+/var/log/grafana/
+└── grafana.log          # 日志文件
+</code></pre>
+<h2 id="_4">核心内容</h2>
+<h3 id="grafana_2">安装 Grafana</h3>
+<p><strong>Docker 安装（推荐，最简单）</strong>：</p>
+<pre><code class="language-bash"># 拉取并启动 Grafana
+docker run -d \
+  --name grafana \
+  -p 3000:3000 \
+  -v grafana-storage:/var/lib/grafana \
+  grafana/grafana-oss:latest
+
+# 访问：http://localhost:3000
+# 默认账号：admin / admin（首次登录会要求修改密码）
+</code></pre>
+<p><strong>配合 InfluxDB 的完整 docker-compose</strong>：</p>
+<pre><code class="language-yaml"># docker-compose.yml
+version: '3'
+services:
+  influxdb:
+    image: influxdb:2.7
+    ports:
+      - &quot;8086:8086&quot;
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=password123
+      - DOCKER_INFLUXDB_INIT_ORG=iot-org
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensor-data
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=my-super-secret-token
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports:
+      - &quot;3000:3000&quot;
+    volumes:
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - influxdb
+
+volumes:
+  influxdb-data:
+  grafana-data:
+</code></pre>
+<pre><code class="language-bash">docker-compose up -d
+</code></pre>
+<p><strong>Linux 直接安装</strong>：</p>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt install -y apt-transport-https software-properties-common
+wget -q -O - https://packages.grafana.com/gpg.key | sudo apt-key add -
+echo &quot;deb https://packages.grafana.com/oss/deb stable main&quot; | sudo tee /etc/apt/sources.list.d/grafana.list
+sudo apt update &amp;&amp; sudo apt install grafana
+sudo systemctl enable --now grafana-server
+</code></pre>
+<h3 id="influxdb">配置 InfluxDB 数据源</h3>
+<ol>
+<li>登录 Grafana（<code>http://localhost:3000</code>）</li>
+<li>左侧菜单 → <strong>Connections</strong> → <strong>Data sources</strong> → <strong>Add data source</strong></li>
+<li>选择 <strong>InfluxDB</strong></li>
+<li>配置参数：</li>
+</ol>
+<pre><code>Query Language: Flux（InfluxDB 2.x 推荐）
+URL: http://influxdb:8086
+Organization: iot-org
+Token: my-super-secret-token
+Default Bucket: sensor-data
+</code></pre>
+<ol start="5">
+<li>点击 <strong>Save &amp; test</strong>，显示绿色 "Data source is working" 即成功</li>
+</ol>
+<h3 id="_5">写入测试数据</h3>
+<p>用 Python 脚本模拟传感器数据写入 InfluxDB：</p>
+<pre><code class="language-python">from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
+import random
+import time
+
+INFLUXDB_URL   = &quot;http://localhost:8086&quot;
+INFLUXDB_TOKEN = &quot;my-super-secret-token&quot;
+INFLUXDB_ORG   = &quot;iot-org&quot;
+INFLUXDB_BUCKET = &quot;sensor-data&quot;
+
+client = InfluxDBClient(url=INFLUXDB_URL, token=INFLUXDB_TOKEN, org=INFLUXDB_ORG)
+write_api = client.write_api(write_options=SYNCHRONOUS)
+
+print(&quot;Writing sensor data to InfluxDB...&quot;)
+while True:
+    point = (
+        Point(&quot;environment&quot;)           # measurement名称
+        .tag(&quot;device_id&quot;, &quot;node_001&quot;)  # 标签（用于过滤和分组）
+        .tag(&quot;location&quot;, &quot;room_a&quot;)
+        .field(&quot;temperature&quot;, round(20.0 + random.uniform(-2, 5), 1))
+        .field(&quot;humidity&quot;,    round(55.0 + random.uniform(-10, 10), 1))
+        .field(&quot;pressure&quot;,    round(1013.0 + random.uniform(-5, 5), 1))
+    )
+    write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+    print(f&quot;Written: {point.to_line_protocol()}&quot;)
+    time.sleep(5)
+</code></pre>
+<pre><code class="language-bash">pip install influxdb-client
+python write_sensor_data.py
+</code></pre>
+<h3 id="_6">创建监控看板</h3>
+<h4 id="dashboard">新建 Dashboard</h4>
+<ol>
+<li>左侧菜单 → <strong>Dashboards</strong> → <strong>New</strong> → <strong>New dashboard</strong></li>
+<li>点击 <strong>Add visualization</strong></li>
+</ol>
+<h4 id="_7">添加温度折线图</h4>
+<p>在 Panel 编辑器中：</p>
+<p><strong>Query（Flux 语法）</strong>：</p>
+<pre><code class="language-flux">from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)                          // 查询最近1小时
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; filter(fn: (r) =&gt; r.device_id == &quot;node_001&quot;)
+  |&gt; aggregateWindow(every: 1m, fn: mean)       // 每分钟取平均值
+  |&gt; yield(name: &quot;temperature&quot;)
+</code></pre>
+<p><strong>Panel 配置</strong>：
+- Visualization：<strong>Time series</strong>（折线图）
+- Title：<code>室内温度</code>
+- Unit：<code>Celsius (°C)</code>（在 Standard options → Unit 中设置）
+- Min/Max：0 / 50
+- Thresholds：添加阈值线，如 28°C 显示橙色警告，35°C 显示红色</p>
+<h4 id="gauge">添加湿度仪表盘（Gauge）</h4>
+<pre><code class="language-flux">from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -5m)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;humidity&quot;)
+  |&gt; last()
+</code></pre>
+<ul>
+<li>Visualization：<strong>Gauge</strong></li>
+<li>Unit：<code>Humidity (%H)</code></li>
+<li>Min：0，Max：100</li>
+<li>Thresholds：60（绿）→ 80（黄）→ 90（红）</li>
+</ul>
+<h4 id="_8">添加多设备对比图</h4>
+<pre><code class="language-flux">from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -6h)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean)
+  |&gt; group(columns: [&quot;device_id&quot;])   // 按设备分组，每个设备一条线
+</code></pre>
+<ul>
+<li>Visualization：<strong>Time series</strong></li>
+<li>Legend：显示 <code>device_id</code> 标签</li>
+</ul>
+<h4 id="stat">添加统计卡片（Stat）</h4>
+<p>显示当前温度的最新值：</p>
+<pre><code class="language-flux">from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1m)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; last()
+</code></pre>
+<ul>
+<li>Visualization：<strong>Stat</strong></li>
+<li>Color mode：<strong>Background</strong>（根据阈值变色背景）</li>
+</ul>
+<h3 id="_9">配置告警规则</h3>
+<p>Grafana 支持在数据超出阈值时发送告警通知。</p>
+<p><strong>创建告警规则</strong>：</p>
+<ol>
+<li>在 Panel 编辑器 → <strong>Alert</strong> 标签页</li>
+<li>点击 <strong>Create alert rule from this panel</strong></li>
+<li>配置条件：</li>
+</ol>
+<pre><code>条件：temperature 的 last() 值 &gt; 30
+评估间隔：每 1 分钟检查一次
+持续时间：超过 5 分钟才触发（避免瞬间抖动误报）
+</code></pre>
+<p><strong>配置通知渠道</strong>（以钉钉 Webhook 为例）：</p>
+<ol>
+<li>左侧菜单 → <strong>Alerting</strong> → <strong>Contact points</strong> → <strong>Add contact point</strong></li>
+<li>类型选择 <strong>DingDing</strong>，填入 Webhook URL</li>
+<li>在告警规则中关联此通知渠道</li>
+</ol>
+<p><strong>常用通知渠道</strong>：Email、钉钉、企业微信、Slack、PagerDuty、Telegram</p>
+<h3 id="telegraf-mqtt">使用 Telegraf 自动采集 MQTT 数据</h3>
+<p>Telegraf 可以直接订阅 MQTT 并写入 InfluxDB，无需编写代码：</p>
+<pre><code class="language-toml"># telegraf.conf
+
+# 输出到 InfluxDB 2.x
+[[outputs.influxdb_v2]]
+  urls = [&quot;http://influxdb:8086&quot;]
+  token = &quot;my-super-secret-token&quot;
+  organization = &quot;iot-org&quot;
+  bucket = &quot;sensor-data&quot;
+
+# 从 MQTT 订阅数据
+[[inputs.mqtt_consumer]]
+  servers = [&quot;tcp://mosquitto:1883&quot;]
+  topics  = [&quot;iot/sensor/+/data&quot;]
+  qos     = 0
+  data_format = &quot;json&quot;
+
+  # JSON 字段映射
+  json_string_fields = [&quot;device_id&quot;, &quot;location&quot;]
+  tag_keys = [&quot;device_id&quot;, &quot;location&quot;]
+</code></pre>
+<pre><code class="language-bash"># 启动 Telegraf
+docker run -d \
+  --name telegraf \
+  -v $(pwd)/telegraf.conf:/etc/telegraf/telegraf.conf \
+  telegraf:latest
+</code></pre>
+<h3 id="prometheus-promql">Prometheus 数据源与 PromQL</h3>
+<p>Prometheus 是云原生监控的事实标准，与 Grafana 深度集成。在嵌入式/IoT 场景中，Prometheus 常用于监控边缘网关、容器化服务的运行状态。</p>
+<h4 id="prometheus">添加 Prometheus 数据源</h4>
+<pre><code class="language-bash"># 启动 Prometheus（docker-compose 片段）
+prometheus:
+  image: prom/prometheus:latest
+  ports:
+    - &quot;9090:9090&quot;
+  volumes:
+    - ./prometheus.yml:/etc/prometheus/prometheus.yml
+</code></pre>
+<pre><code class="language-yaml"># prometheus.yml - 抓取配置
+global:
+  scrape_interval: 15s      # 默认抓取间隔
+
+scrape_configs:
+  - job_name: 'iot-gateway'
+    static_configs:
+      - targets: ['gateway:8080']   # 被监控服务的 /metrics 端点
+
+  - job_name: 'node-exporter'       # 主机系统指标
+    static_configs:
+      - targets: ['node-exporter:9100']
+</code></pre>
+<p>在 Grafana 中添加 Prometheus 数据源：
+- URL：<code>http://prometheus:9090</code>
+- 无需认证（内网环境）</p>
+<h4 id="promql">PromQL 基础语法</h4>
+<p>PromQL（Prometheus Query Language）是即时查询语言，与 Flux 的流式处理风格不同，PromQL 更接近函数式表达式。</p>
+<p><strong>即时向量查询（Instant Vector）</strong>：</p>
+<pre><code class="language-promql"># 查询当前所有设备的温度值
+iot_temperature_celsius
+
+# 按标签过滤
+iot_temperature_celsius{device_id=&quot;node_001&quot;, location=&quot;room_a&quot;}
+
+# 正则匹配
+iot_temperature_celsius{location=~&quot;room_.*&quot;}
+</code></pre>
+<p><strong>范围向量查询（Range Vector）</strong>：</p>
+<pre><code class="language-promql"># 过去5分钟的温度样本
+iot_temperature_celsius[5m]
+
+# 计算5分钟内的平均值
+avg_over_time(iot_temperature_celsius[5m])
+
+# 计算每秒变化率（适用于计数器类型指标）
+rate(http_requests_total[5m])
+</code></pre>
+<p><strong>聚合操作</strong>：</p>
+<pre><code class="language-promql"># 按 location 分组求平均温度
+avg by (location) (iot_temperature_celsius)
+
+# 所有设备中的最高温度
+max(iot_temperature_celsius)
+
+# 统计在线设备数量（up 指标为1表示在线）
+count(up{job=&quot;iot-gateway&quot;} == 1)
+</code></pre>
+<p><strong>常用函数</strong>：</p>
+<pre><code class="language-promql"># 预测4小时后的磁盘使用量（线性预测）
+predict_linear(node_filesystem_free_bytes[1h], 4 * 3600)
+
+# 计算百分位数（P95响应时间）
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+
+# 变化量（适用于温度突变检测）
+delta(iot_temperature_celsius[10m])
+</code></pre>
+<p><strong>InfluxDB vs Prometheus 对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>InfluxDB 2.x (Flux)</th>
+<th>Prometheus (PromQL)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据模型</td>
+<td>measurement + tags + fields</td>
+<td>metric_name + labels</td>
+</tr>
+<tr>
+<td>采集方式</td>
+<td>Push（主动推送）</td>
+<td>Pull（主动拉取）</td>
+</tr>
+<tr>
+<td>查询语言</td>
+<td>Flux（管道式）</td>
+<td>PromQL（函数式）</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>IoT传感器、高写入量</td>
+<td>微服务监控、云原生</td>
+</tr>
+<tr>
+<td>长期存储</td>
+<td>内置（含降采样）</td>
+<td>需外部方案（Thanos/Cortex）</td>
+</tr>
+<tr>
+<td>告警</td>
+<td>内置</td>
+<td>需 Alertmanager</td>
+</tr>
+</tbody>
+</table>
+<h3 id="grafana-alerting-v2">Grafana 统一告警（Alerting v2）</h3>
+<p>Grafana 9.x 引入了统一告警系统（Unified Alerting），取代了旧版的 Panel-level 告警，提供更强大的告警管理能力。</p>
+<h4 id="_10">告警架构</h4>
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                  Grafana 统一告警架构                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  告警规则（Alert Rules）                                  │
+│  ├── 评估组（Evaluation Group）：共享评估间隔              │
+│  └── 告警规则：查询 + 条件 + 标签                          │
+│                    │ 触发                               │
+│                    ▼                                    │
+│  告警实例（Alert Instances）                              │
+│  ├── Pending（等待持续时间）                              │
+│  ├── Firing（已触发）                                    │
+│  └── Resolved（已恢复）                                  │
+│                    │                                    │
+│  通知策略（Notification Policies）                        │
+│  ├── 路由规则（基于标签匹配）                              │
+│  └── 分组、静默、抑制                                     │
+│                    │                                    │
+│  联系点（Contact Points）                                 │
+│  ├── Email                                              │
+│  ├── DingDing / 企业微信 / Slack                         │
+│  └── Webhook（自定义）                                   │
+└─────────────────────────────────────────────────────────┘
+</code></pre>
+<h4 id="_11">创建告警规则</h4>
+<p><strong>通过 UI 创建</strong>：</p>
+<ol>
+<li>左侧菜单 → <strong>Alerting</strong> → <strong>Alert rules</strong> → <strong>New alert rule</strong></li>
+<li>配置查询（支持多数据源混合查询）：</li>
+</ol>
+<pre><code class="language-flux"># 查询A：获取温度数据
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -5m)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; mean()
+</code></pre>
+<ol start="3">
+<li>配置条件表达式：</li>
+</ol>
+<pre><code>条件：WHEN last() OF query(A) IS ABOVE 30
+</code></pre>
+<ol start="4">
+<li>
+<p>设置评估行为：
+   - <strong>Evaluate every</strong>：<code>1m</code>（每分钟评估一次）
+   - <strong>For</strong>：<code>5m</code>（持续5分钟才触发，避免抖动）</p>
+</li>
+<li>
+<p>添加标签（用于通知路由）：</p>
+</li>
+</ol>
+<pre><code class="language-yaml">labels:
+  severity: warning
+  team: iot-ops
+  location: room_a
+</code></pre>
+<h4 id="_12">通知策略配置</h4>
+<pre><code class="language-yaml"># 通知策略树（Notification Policy Tree）
+# 根策略：所有告警默认发送到 ops-team
+route:
+  receiver: ops-team
+  group_by: [alertname, location]
+  group_wait: 30s        # 等待30秒收集同组告警
+  group_interval: 5m     # 同组告警最少间隔5分钟
+  repeat_interval: 4h    # 持续告警每4小时重复通知
+
+  # 子路由：严重告警额外发送到 on-call
+  routes:
+    - matchers:
+        - severity = critical
+      receiver: on-call-pagerduty
+      continue: true     # 继续匹配父路由
+</code></pre>
+<h4 id="webhook">配置 Webhook 联系点（企业微信机器人）</h4>
+<pre><code class="language-json">// 企业微信机器人 Webhook 消息格式
+{
+  &quot;msgtype&quot;: &quot;markdown&quot;,
+  &quot;markdown&quot;: {
+    &quot;content&quot;: &quot;## 🚨 IoT 告警通知\n**告警名称**：{{ .CommonLabels.alertname }}\n**严重程度**：{{ .CommonLabels.severity }}\n**位置**：{{ .CommonLabels.location }}\n**当前值**：{{ .CommonAnnotations.value }}\n**触发时间**：{{ .StartsAt }}&quot;
+  }
+}
+</code></pre>
+<p>在 Grafana 中配置：
+- Contact point type：<strong>Webhook</strong>
+- URL：企业微信机器人 Webhook 地址
+- HTTP Method：POST</p>
+<h4 id="silences">告警静默（Silences）</h4>
+<p>在维护窗口期间临时屏蔽告警：</p>
+<pre><code>Alerting → Silences → Add silence
+匹配条件：location=&quot;room_a&quot;
+持续时间：2026-03-10 02:00 ~ 2026-03-10 04:00
+注释：夜间维护窗口
+</code></pre>
+<h3 id="dashboard-gitops">Dashboard 预配置（GitOps 方式）</h3>
+<p>将 Dashboard 配置纳入版本控制，实现基础设施即代码（Infrastructure as Code）。</p>
+<h4 id="_13">数据源预配置</h4>
+<pre><code class="language-yaml"># /etc/grafana/provisioning/datasources/influxdb.yaml
+apiVersion: 1
+
+datasources:
+  - name: InfluxDB-IoT
+    type: influxdb
+    access: proxy
+    url: http://influxdb:8086
+    jsonData:
+      version: Flux
+      organization: iot-org
+      defaultBucket: sensor-data
+      tlsSkipVerify: true
+    secureJsonData:
+      token: ${INFLUXDB_TOKEN}    # 从环境变量读取，不硬编码
+    isDefault: true
+    editable: false               # 禁止 UI 修改，保持配置一致性
+
+  - name: Prometheus-IoT
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    jsonData:
+      timeInterval: &quot;15s&quot;
+    editable: false
+</code></pre>
+<h4 id="dashboard_1">Dashboard 预配置</h4>
+<pre><code class="language-yaml"># /etc/grafana/provisioning/dashboards/iot-dashboards.yaml
+apiVersion: 1
+
+providers:
+  - name: IoT Dashboards
+    orgId: 1
+    folder: IoT监控
+    type: file
+    disableDeletion: true         # 防止通过 UI 删除
+    updateIntervalSeconds: 30     # 每30秒检查文件变更
+    allowUiUpdates: false         # 禁止 UI 修改（只读）
+    options:
+      path: /etc/grafana/dashboards   # Dashboard JSON 文件目录
+</code></pre>
+<pre><code class="language-json">// /etc/grafana/dashboards/environment-monitor.json
+// （Dashboard JSON 导出格式，通过 UI 的 Share → Export 获取）
+{
+  &quot;__inputs&quot;: [
+    {
+      &quot;name&quot;: &quot;DS_INFLUXDB&quot;,
+      &quot;label&quot;: &quot;InfluxDB&quot;,
+      &quot;type&quot;: &quot;datasource&quot;,
+      &quot;pluginId&quot;: &quot;influxdb&quot;
+    }
+  ],
+  &quot;title&quot;: &quot;IoT 环境监控&quot;,
+  &quot;uid&quot;: &quot;iot-env-monitor-v1&quot;,
+  &quot;version&quot;: 1,
+  &quot;panels&quot;: [
+    {
+      &quot;type&quot;: &quot;timeseries&quot;,
+      &quot;title&quot;: &quot;温度趋势&quot;,
+      &quot;datasource&quot;: &quot;${DS_INFLUXDB}&quot;,
+      &quot;targets&quot;: [
+        {
+          &quot;query&quot;: &quot;from(bucket: \&quot;sensor-data\&quot;) |&gt; range(start: v.timeRangeStart) |&gt; filter(fn: (r) =&gt; r._field == \&quot;temperature\&quot;)&quot;
+        }
+      ]
+    }
+  ]
+}
+</code></pre>
+<p><strong>GitOps 工作流</strong>：</p>
+<pre><code>开发者修改 Dashboard JSON
+    │ git commit &amp; push
+    ▼
+CI/CD Pipeline
+    │ 验证 JSON 格式
+    ▼
+部署到服务器
+    │ 更新 /etc/grafana/dashboards/
+    ▼
+Grafana 自动热加载（无需重启）
+</code></pre>
+<h3 id="_14">看板美化技巧</h3>
+<p><strong>布局建议</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│  当前温度 [Stat]  当前湿度 [Stat]  当前气压 [Stat] │  ← 顶部状态栏
+├─────────────────────────────────────────────────┤
+│                                                 │
+│         温度趋势（24小时）[Time series]           │  ← 主图
+│                                                 │
+├──────────────────────┬──────────────────────────┤
+│  湿度仪表 [Gauge]    │  各设备温度对比 [Bar chart]│  ← 底部详情
+└──────────────────────┴──────────────────────────┘
+</code></pre>
+<p><strong>变量（Variables）</strong>：让看板支持动态筛选设备：</p>
+<ol>
+<li>Dashboard Settings → Variables → Add variable</li>
+<li>类型：<strong>Query</strong>，名称：<code>device_id</code></li>
+<li>Query：</li>
+</ol>
+<pre><code class="language-flux">import &quot;influxdata/influxdb/schema&quot;
+schema.tagValues(bucket: &quot;sensor-data&quot;, tag: &quot;device_id&quot;)
+</code></pre>
+<ol start="4">
+<li>在 Panel 的 Flux 查询中使用 <code>r.device_id == "${device_id}"</code></li>
+</ol>
+<p><strong>时间范围快捷键</strong>：看板右上角可设置自动刷新间隔（如每 10 秒刷新），适合实时监控大屏。</p>
+<h2 id="_15">深入原理</h2>
+<h3 id="influxdb-2x-tasks-flux">InfluxDB 2.x Tasks：定时 Flux 脚本</h3>
+<p>InfluxDB Tasks 是内置的定时任务系统，可以定期执行 Flux 脚本，实现自动化降采样、数据转换和告警检查。</p>
+<h4 id="task">Task 基本结构</h4>
+<pre><code class="language-flux">// Task 元数据（必须在脚本顶部）
+option task = {
+  name: &quot;downsample-temperature-1h&quot;,
+  every: 1h,          // 执行间隔
+  offset: 5m,         // 延迟偏移（等待数据写入完成）
+}
+
+// 降采样逻辑：将原始数据聚合为1小时粒度
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -task.every)          // 只处理上一个周期的数据
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot; or r._field == &quot;humidity&quot;)
+  |&gt; aggregateWindow(
+      every: 1h,
+      fn: (tables=&lt;-, column) =&gt; tables
+        |&gt; mean()                        // 计算均值
+  )
+  |&gt; to(bucket: &quot;sensor-data-hourly&quot;)   // 写入目标 bucket
+</code></pre>
+<h4 id="_16">多统计量降采样</h4>
+<p>生产环境中，降采样不仅需要均值，还需要保留最大值、最小值和标准差：</p>
+<pre><code class="language-flux">option task = {
+  name: &quot;downsample-multi-stats&quot;,
+  every: 1h,
+  offset: 5m,
+}
+
+// 定义时间范围
+timeRange = {start: -task.every, stop: now()}
+
+// 计算均值
+meanData = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: timeRange.start, stop: timeRange.stop)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; aggregateWindow(every: 1h, fn: mean)
+  |&gt; map(fn: (r) =&gt; ({r with _field: r._field + &quot;_mean&quot;}))
+
+// 计算最大值
+maxData = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: timeRange.start, stop: timeRange.stop)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; aggregateWindow(every: 1h, fn: max)
+  |&gt; map(fn: (r) =&gt; ({r with _field: r._field + &quot;_max&quot;}))
+
+// 计算最小值
+minData = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: timeRange.start, stop: timeRange.stop)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; aggregateWindow(every: 1h, fn: min)
+  |&gt; map(fn: (r) =&gt; ({r with _field: r._field + &quot;_min&quot;}))
+
+// 合并并写入
+union(tables: [meanData, maxData, minData])
+  |&gt; to(bucket: &quot;sensor-data-hourly&quot;)
+</code></pre>
+<h4 id="cli-tasks">通过 CLI 管理 Tasks</h4>
+<pre><code class="language-bash"># 创建 Task
+influx task create --file downsample.flux --org iot-org
+
+# 列出所有 Tasks
+influx task list --org iot-org
+
+# 查看 Task 运行历史
+influx task run list --task-id &lt;task-id&gt;
+
+# 手动触发 Task（调试用）
+influx task run retry --task-id &lt;task-id&gt; --run-id &lt;run-id&gt;
+
+# 查看 Task 日志
+influx task log list --task-id &lt;task-id&gt;
+</code></pre>
+<h4 id="task_1">数据过期检测 Task</h4>
+<pre><code class="language-flux">// 检测长时间未上报的设备（超过10分钟无数据）
+option task = {
+  name: &quot;detect-offline-devices&quot;,
+  every: 5m,
+}
+
+import &quot;influxdata/influxdb/monitor&quot;
+import &quot;slack&quot;
+
+// 查询每个设备最后一次上报时间
+lastSeen = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -15m)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+  |&gt; last()
+  |&gt; map(fn: (r) =&gt; ({
+      device_id: r.device_id,
+      last_seen: r._time,
+      minutes_ago: float(v: int(v: now()) - int(v: r._time)) / 60000000000.0
+  }))
+
+// 过滤出超过10分钟未上报的设备
+offlineDevices = lastSeen
+  |&gt; filter(fn: (r) =&gt; r.minutes_ago &gt; 10.0)
+
+// 写入告警 bucket
+offlineDevices
+  |&gt; map(fn: (r) =&gt; ({
+      _time: now(),
+      _measurement: &quot;device_alerts&quot;,
+      _field: &quot;offline_minutes&quot;,
+      _value: r.minutes_ago,
+      device_id: r.device_id
+  }))
+  |&gt; to(bucket: &quot;alerts&quot;)
+</code></pre>
+<h3 id="grafana_3">Grafana 插件开发基础</h3>
+<p>Grafana 插件系统允许开发自定义 Panel（图表类型）、数据源和 App。以下介绍 Panel 插件的基本结构。</p>
+<h4 id="_17">插件目录结构</h4>
+<pre><code>my-panel-plugin/
+├── src/
+│   ├── module.ts          # 插件入口，注册 Panel
+│   ├── panel.tsx          # React 组件，渲染图表
+│   ├── types.ts           # 选项类型定义
+│   └── editor.tsx         # 配置面板（可选项编辑器）
+├── dist/                  # 构建输出
+├── plugin.json            # 插件元数据
+└── package.json
+</code></pre>
+<h4 id="pluginjson">plugin.json 元数据</h4>
+<pre><code class="language-json">{
+  &quot;type&quot;: &quot;panel&quot;,
+  &quot;name&quot;: &quot;IoT Gauge Panel&quot;,
+  &quot;id&quot;: &quot;mycompany-iot-gauge-panel&quot;,
+  &quot;info&quot;: {
+    &quot;description&quot;: &quot;Custom gauge for IoT sensor data&quot;,
+    &quot;author&quot;: { &quot;name&quot;: &quot;IoT Team&quot; },
+    &quot;version&quot;: &quot;1.0.0&quot;,
+    &quot;updated&quot;: &quot;2026-03-10&quot;
+  },
+  &quot;dependencies&quot;: {
+    &quot;grafanaVersion&quot;: &quot;9.0.0&quot;,
+    &quot;plugins&quot;: []
+  }
+}
+</code></pre>
+<h4 id="panel">最简 Panel 插件实现</h4>
+<pre><code class="language-typescript">// src/module.ts
+import { PanelPlugin } from '@grafana/data';
+import { SimplePanel } from './panel';
+import { PanelOptions } from './types';
+
+export const plugin = new PanelPlugin&lt;PanelOptions&gt;(SimplePanel)
+  .setPanelOptions(builder =&gt; {
+    builder
+      .addNumberInput({
+        path: 'warningThreshold',
+        name: '警告阈值',
+        defaultValue: 30,
+      })
+      .addColorPicker({
+        path: 'warningColor',
+        name: '警告颜色',
+        defaultValue: 'orange',
+      });
+  });
+</code></pre>
+<pre><code class="language-typescript">// src/panel.tsx
+import React from 'react';
+import { PanelProps } from '@grafana/data';
+import { PanelOptions } from './types';
+
+export const SimplePanel: React.FC&lt;PanelProps&lt;PanelOptions&gt;&gt; = ({
+  data,
+  width,
+  height,
+  options,
+}) =&gt; {
+  // 从 data.series 中提取最新值
+  const lastValue = data.series[0]?.fields[1]?.values.get(
+    data.series[0].length - 1
+  ) ?? 0;
+
+  const isWarning = lastValue &gt; options.warningThreshold;
+
+  return (
+    &lt;div style={{
+      width,
+      height,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '48px',
+      color: isWarning ? options.warningColor : 'green',
+    }}&gt;
+      {lastValue.toFixed(1)}°C
+    &lt;/div&gt;
+  );
+};
+</code></pre>
+<h4 id="_18">本地开发与调试</h4>
+<pre><code class="language-bash"># 安装 Grafana 插件开发工具
+npm install -g @grafana/create-plugin
+
+# 创建新插件
+npx @grafana/create-plugin@latest
+
+# 启动开发服务器（热重载）
+npm run dev
+
+# 将插件目录挂载到 Grafana
+docker run -d \
+  -p 3000:3000 \
+  -v $(pwd)/dist:/var/lib/grafana/plugins/my-panel-plugin \
+  -e GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=mycompany-iot-gauge-panel \
+  grafana/grafana-oss:latest
+</code></pre>
+<h3 id="flux">Flux 高级查询技巧</h3>
+<h4 id="join">联表查询（Join）</h4>
+<p>将两个不同 measurement 的数据关联分析：</p>
+<pre><code class="language-flux">// 计算温度与湿度的相关性
+temperature = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean)
+  |&gt; rename(columns: {_value: &quot;temperature&quot;})
+
+humidity = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;humidity&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean)
+  |&gt; rename(columns: {_value: &quot;humidity&quot;})
+
+join(
+  tables: {temp: temperature, hum: humidity},
+  on: [&quot;_time&quot;, &quot;device_id&quot;]
+)
+|&gt; map(fn: (r) =&gt; ({
+    _time: r._time,
+    device_id: r.device_id,
+    // 计算热指数（Heat Index 简化公式）
+    heat_index: r.temperature + 0.33 * (r.humidity / 100.0 * 6.105 * math.exp(x: 17.27 * r.temperature / (237.7 + r.temperature))) - 4.0
+}))
+</code></pre>
+<h4 id="_19">异常检测</h4>
+<pre><code class="language-flux">import &quot;math&quot;
+
+// 使用3σ原则检测温度异常
+data = from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+
+// 计算均值和标准差
+stats = data
+  |&gt; reduce(
+      identity: {count: 0.0, sum: 0.0, sumSq: 0.0},
+      fn: (r, accumulator) =&gt; ({
+          count: accumulator.count + 1.0,
+          sum: accumulator.sum + r._value,
+          sumSq: accumulator.sumSq + r._value * r._value,
+      })
+  )
+  |&gt; map(fn: (r) =&gt; ({
+      mean: r.sum / r.count,
+      stddev: math.sqrt(x: r.sumSq / r.count - (r.sum / r.count) * (r.sum / r.count))
+  }))
+
+// 标记超出3σ范围的异常点
+// （实际使用时需要将 stats 结果参数化传入）
+data
+  |&gt; map(fn: (r) =&gt; ({r with
+      is_anomaly: r._value &gt; 25.0 + 3.0 * 2.0 or r._value &lt; 25.0 - 3.0 * 2.0
+  }))
+  |&gt; filter(fn: (r) =&gt; r.is_anomaly)
+</code></pre>
+<h2 id="iot_1">完整项目：生产级 IoT 监控栈</h2>
+<p>本项目构建一套完整的生产级 IoT 数据监控系统，包含数据采集、存储、可视化、告警和自动降采样全链路。</p>
+<h3 id="_20">系统架构</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                    完整 IoT 监控栈架构                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  IoT 设备层                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                      │
+│  │ ESP32    │  │ STM32    │  │ 树莓派   │                      │
+│  │ 温湿度   │  │ 电机状态 │  │ 网关     │                      │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘                      │
+│       │ MQTT (TLS)  │             │                             │
+│       └─────────────┴─────────────┘                             │
+│                         │                                       │
+│  消息层                  ▼                                       │
+│  ┌──────────────────────────────────────┐                       │
+│  │  Mosquitto MQTT Broker               │                       │
+│  │  端口：1883（明文）/ 8883（TLS）       │                       │
+│  └──────────────────┬───────────────────┘                       │
+│                     │ 订阅 iot/#                                 │
+│  采集层             ▼                                            │
+│  ┌──────────────────────────────────────┐                       │
+│  │  Telegraf 数据采集代理                │                       │
+│  │  输入：MQTT Consumer                 │                       │
+│  │  输出：InfluxDB v2                   │                       │
+│  └──────────────────┬───────────────────┘                       │
+│                     │ Line Protocol                             │
+│  存储层             ▼                                            │
+│  ┌──────────────────────────────────────┐                       │
+│  │  InfluxDB 2.7                        │                       │
+│  │  ├── sensor-data（原始，7天）          │                       │
+│  │  ├── sensor-hourly（小时聚合，90天）   │                       │
+│  │  └── alerts（告警记录，30天）          │                       │
+│  │  Tasks：自动降采样                    │                       │
+│  └──────────────────┬───────────────────┘                       │
+│                     │ Flux 查询                                  │
+│  展示层             ▼                                            │
+│  ┌──────────────────────────────────────┐                       │
+│  │  Grafana 10.x                        │                       │
+│  │  ├── 实时监控看板                     │                       │
+│  │  ├── 历史趋势分析                     │                       │
+│  │  └── 统一告警 → 企业微信/钉钉         │                       │
+│  └──────────────────────────────────────┘                       │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="_21">项目文件结构</h3>
+<pre><code>iot-monitoring/
+├── docker-compose.yml          # 主编排文件
+├── .env                        # 环境变量（不提交到 git）
+├── mosquitto/
+│   ├── config/
+│   │   └── mosquitto.conf      # Broker 配置
+│   └── data/                   # 持久化数据
+├── telegraf/
+│   └── telegraf.conf           # 采集配置
+├── influxdb/
+│   └── tasks/
+│       └── downsample.flux     # 降采样 Task
+├── grafana/
+│   ├── provisioning/
+│   │   ├── datasources/
+│   │   │   └── influxdb.yaml
+│   │   └── dashboards/
+│   │       ├── dashboards.yaml
+│   │       └── iot-monitor.json
+│   └── grafana.ini
+└── scripts/
+    ├── init-influxdb.sh        # 初始化脚本
+    └── test-mqtt.py            # 测试数据发送脚本
+</code></pre>
+<h3 id="docker-composeyml">docker-compose.yml（完整版）</h3>
+<pre><code class="language-yaml"># docker-compose.yml
+version: '3.8'
+
+services:
+  # ─── MQTT Broker ───────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - &quot;1883:1883&quot;
+      - &quot;9001:9001&quot;    # WebSocket 端口（浏览器客户端用）
+    volumes:
+      - ./mosquitto/config/mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    networks:
+      - iot-net
+
+  # ─── 数据采集代理 ────────────────────────────────────────────
+  telegraf:
+    image: telegraf:1.29
+    container_name: telegraf
+    restart: unless-stopped
+    volumes:
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+    environment:
+      - INFLUXDB_TOKEN=${INFLUXDB_TOKEN}
+    depends_on:
+      - mosquitto
+      - influxdb
+    networks:
+      - iot-net
+
+  # ─── 时序数据库 ──────────────────────────────────────────────
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    restart: unless-stopped
+    ports:
+      - &quot;8086:8086&quot;
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=${INFLUXDB_USERNAME}
+      - DOCKER_INFLUXDB_INIT_PASSWORD=${INFLUXDB_PASSWORD}
+      - DOCKER_INFLUXDB_INIT_ORG=${INFLUXDB_ORG}
+      - DOCKER_INFLUXDB_INIT_BUCKET=sensor-data
+      - DOCKER_INFLUXDB_INIT_RETENTION=168h    # 7天
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=${INFLUXDB_TOKEN}
+    networks:
+      - iot-net
+
+  # ─── 可视化平台 ──────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana-oss:10.2.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - &quot;3000:3000&quot;
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/grafana.ini:/etc/grafana/grafana.ini:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=${SMTP_HOST}
+      - GF_SMTP_USER=${SMTP_USER}
+      - GF_SMTP_PASSWORD=${SMTP_PASSWORD}
+    depends_on:
+      - influxdb
+    networks:
+      - iot-net
+
+networks:
+  iot-net:
+    driver: bridge
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:
+</code></pre>
+<h3 id="_22">环境变量文件</h3>
+<pre><code class="language-bash"># .env（不提交到 git，加入 .gitignore）
+INFLUXDB_USERNAME=admin
+INFLUXDB_PASSWORD=StrongPassword123!
+INFLUXDB_ORG=iot-org
+INFLUXDB_TOKEN=my-super-secret-influxdb-token-change-this
+
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=GrafanaAdmin123!
+
+SMTP_HOST=smtp.example.com:587
+SMTP_USER=alerts@example.com
+SMTP_PASSWORD=smtp-password
+</code></pre>
+<h3 id="mosquitto">Mosquitto 配置</h3>
+<pre><code class="language-conf"># mosquitto/config/mosquitto.conf
+listener 1883
+listener 9001
+protocol websockets
+
+# 允许匿名连接（生产环境应启用认证）
+allow_anonymous true
+
+# 持久化配置
+persistence true
+persistence_location /mosquitto/data/
+
+# 日志
+log_dest file /mosquitto/log/mosquitto.log
+log_type error
+log_type warning
+log_type information
+
+# 消息大小限制
+message_size_limit 65536
+
+# 连接保活
+keepalive_interval 60
+</code></pre>
+<h3 id="telegraf">Telegraf 完整配置</h3>
+<pre><code class="language-toml"># telegraf/telegraf.conf
+
+# ─── 全局配置 ────────────────────────────────────────────────
+[global_tags]
+  environment = &quot;production&quot;
+
+[agent]
+  interval = &quot;10s&quot;
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = &quot;0s&quot;
+  flush_interval = &quot;10s&quot;
+  flush_jitter = &quot;0s&quot;
+  precision = &quot;&quot;
+  hostname = &quot;telegraf-agent&quot;
+  omit_hostname = false
+
+# ─── 输出：InfluxDB 2.x ──────────────────────────────────────
+[[outputs.influxdb_v2]]
+  urls = [&quot;http://influxdb:8086&quot;]
+  token = &quot;${INFLUXDB_TOKEN}&quot;
+  organization = &quot;iot-org&quot;
+  bucket = &quot;sensor-data&quot;
+  timeout = &quot;5s&quot;
+  # 写入失败时重试
+  retry_buffer_limit = 10000
+
+# ─── 输入：MQTT Consumer ─────────────────────────────────────
+[[inputs.mqtt_consumer]]
+  servers = [&quot;tcp://mosquitto:1883&quot;]
+
+  # 订阅主题列表
+  topics = [
+    &quot;iot/sensor/+/environment&quot;,    # 环境传感器
+    &quot;iot/sensor/+/power&quot;,          # 电源监控
+    &quot;iot/device/+/status&quot;,         # 设备状态
+  ]
+
+  qos = 1
+  connection_timeout = &quot;30s&quot;
+
+  # 数据格式：JSON
+  data_format = &quot;json&quot;
+  json_time_key = &quot;timestamp&quot;
+  json_time_format = &quot;unix&quot;
+
+  # 从主题路径提取标签
+  # 主题格式：iot/sensor/{device_id}/environment
+  topic_tag = &quot;topic&quot;
+
+  # 标签字段
+  tag_keys = [&quot;device_id&quot;, &quot;location&quot;, &quot;firmware_version&quot;]
+
+# ─── 输入：系统指标（监控 Telegraf 自身）────────────────────────
+[[inputs.internal]]
+  collect_memstats = false
+</code></pre>
+<h3 id="_23">初始化脚本</h3>
+<pre><code class="language-bash">#!/bin/bash
+# scripts/init-influxdb.sh
+# 在 InfluxDB 启动后创建额外的 bucket 和 Task
+
+set -e
+
+INFLUX_URL=&quot;http://localhost:8086&quot;
+TOKEN=&quot;${INFLUXDB_TOKEN}&quot;
+ORG=&quot;iot-org&quot;
+
+echo &quot;等待 InfluxDB 启动...&quot;
+until curl -sf &quot;${INFLUX_URL}/health&quot; &gt; /dev/null; do
+  sleep 2
+done
+echo &quot;InfluxDB 已就绪&quot;
+
+# 创建小时聚合 bucket（保留90天）
+echo &quot;创建 sensor-hourly bucket...&quot;
+influx bucket create \
+  --name sensor-hourly \
+  --org &quot;${ORG}&quot; \
+  --retention 2160h \
+  --host &quot;${INFLUX_URL}&quot; \
+  --token &quot;${TOKEN}&quot; 2&gt;/dev/null || echo &quot;bucket 已存在，跳过&quot;
+
+# 创建告警 bucket（保留30天）
+echo &quot;创建 alerts bucket...&quot;
+influx bucket create \
+  --name alerts \
+  --org &quot;${ORG}&quot; \
+  --retention 720h \
+  --host &quot;${INFLUX_URL}&quot; \
+  --token &quot;${TOKEN}&quot; 2&gt;/dev/null || echo &quot;bucket 已存在，跳过&quot;
+
+# 创建降采样 Task
+echo &quot;创建降采样 Task...&quot;
+influx task create \
+  --file /influxdb/tasks/downsample.flux \
+  --org &quot;${ORG}&quot; \
+  --host &quot;${INFLUX_URL}&quot; \
+  --token &quot;${TOKEN}&quot; 2&gt;/dev/null || echo &quot;Task 已存在，跳过&quot;
+
+echo &quot;初始化完成！&quot;
+</code></pre>
+<h3 id="_24">测试数据发送脚本</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+# scripts/test-mqtt.py
+# 模拟多个 IoT 设备发送传感器数据
+
+import json
+import time
+import random
+import paho.mqtt.client as mqtt
+
+BROKER_HOST = &quot;localhost&quot;
+BROKER_PORT = 1883
+
+# 模拟设备配置
+DEVICES = [
+    {&quot;device_id&quot;: &quot;node_001&quot;, &quot;location&quot;: &quot;room_a&quot;, &quot;firmware_version&quot;: &quot;v2.1.0&quot;},
+    {&quot;device_id&quot;: &quot;node_002&quot;, &quot;location&quot;: &quot;room_b&quot;, &quot;firmware_version&quot;: &quot;v2.1.0&quot;},
+    {&quot;device_id&quot;: &quot;node_003&quot;, &quot;location&quot;: &quot;outdoor&quot;, &quot;firmware_version&quot;: &quot;v2.0.5&quot;},
+    {&quot;device_id&quot;: &quot;node_004&quot;, &quot;location&quot;: &quot;server_room&quot;, &quot;firmware_version&quot;: &quot;v2.1.0&quot;},
+    {&quot;device_id&quot;: &quot;node_005&quot;, &quot;location&quot;: &quot;warehouse&quot;, &quot;firmware_version&quot;: &quot;v1.9.2&quot;},
+]
+
+def generate_sensor_data(device: dict) -&gt; dict:
+    &quot;&quot;&quot;生成模拟传感器数据&quot;&quot;&quot;
+    base_temp = {
+        &quot;room_a&quot;: 22.0, &quot;room_b&quot;: 23.5,
+        &quot;outdoor&quot;: 15.0, &quot;server_room&quot;: 18.0, &quot;warehouse&quot;: 20.0
+    }.get(device[&quot;location&quot;], 20.0)
+
+    return {
+        &quot;device_id&quot;: device[&quot;device_id&quot;],
+        &quot;location&quot;: device[&quot;location&quot;],
+        &quot;firmware_version&quot;: device[&quot;firmware_version&quot;],
+        &quot;timestamp&quot;: int(time.time()),
+        &quot;temperature&quot;: round(base_temp + random.gauss(0, 1.5), 2),
+        &quot;humidity&quot;: round(55.0 + random.gauss(0, 8), 2),
+        &quot;pressure&quot;: round(1013.25 + random.gauss(0, 3), 2),
+        &quot;battery_voltage&quot;: round(3.7 + random.uniform(-0.3, 0.1), 3),
+        &quot;rssi&quot;: random.randint(-90, -40),
+    }
+
+def main():
+    client = mqtt.Client(client_id=&quot;test-publisher&quot;)
+    client.connect(BROKER_HOST, BROKER_PORT, keepalive=60)
+    client.loop_start()
+
+    print(f&quot;开始向 {BROKER_HOST}:{BROKER_PORT} 发送测试数据...&quot;)
+    print(&quot;按 Ctrl+C 停止\n&quot;)
+
+    try:
+        while True:
+            for device in DEVICES:
+                data = generate_sensor_data(device)
+                topic = f&quot;iot/sensor/{device['device_id']}/environment&quot;
+                payload = json.dumps(data)
+
+                result = client.publish(topic, payload, qos=1)
+                if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                    print(f&quot;✓ {topic}: T={data['temperature']}°C H={data['humidity']}%&quot;)
+                else:
+                    print(f&quot;✗ 发送失败: {topic}&quot;)
+
+            print(f&quot;--- 批次完成，等待10秒 ---&quot;)
+            time.sleep(10)
+
+    except KeyboardInterrupt:
+        print(&quot;\n停止发送&quot;)
+    finally:
+        client.loop_stop()
+        client.disconnect()
+
+if __name__ == &quot;__main__&quot;:
+    main()
+</code></pre>
+<h3 id="_25">部署与验证步骤</h3>
+<pre><code class="language-bash"># 1. 克隆项目并配置环境变量
+cp .env.example .env
+# 编辑 .env，修改所有密码
+
+# 2. 启动所有服务
+docker-compose up -d
+
+# 3. 等待服务就绪（约30秒）
+docker-compose ps
+
+# 4. 初始化 InfluxDB（创建额外 bucket 和 Task）
+bash scripts/init-influxdb.sh
+
+# 5. 发送测试数据
+pip install paho-mqtt
+python scripts/test-mqtt.py &amp;
+
+# 6. 验证数据写入
+curl -s &quot;http://localhost:8086/api/v2/query&quot; \
+  -H &quot;Authorization: Token ${INFLUXDB_TOKEN}&quot; \
+  -H &quot;Content-Type: application/vnd.flux&quot; \
+  -d 'from(bucket:&quot;sensor-data&quot;) |&gt; range(start:-5m) |&gt; count()'
+
+# 7. 访问 Grafana
+# http://localhost:3000
+# 用户名/密码：见 .env 文件
+
+# 8. 查看服务日志
+docker-compose logs -f telegraf    # 检查数据采集
+docker-compose logs -f influxdb    # 检查数据库
+docker-compose logs -f grafana     # 检查可视化平台
+</code></pre>
+<h3 id="_26">告警规则配置（完整示例）</h3>
+<pre><code class="language-yaml"># grafana/provisioning/alerting/rules.yaml
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: IoT 传感器告警
+    folder: IoT告警
+    interval: 1m    # 评估间隔
+    rules:
+      # 高温告警
+      - uid: temp-high-alert
+        title: 温度过高告警
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: influxdb-iot
+            model:
+              query: |
+                from(bucket: &quot;sensor-data&quot;)
+                  |&gt; range(start: -5m)
+                  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+                  |&gt; mean()
+          - refId: C
+            datasourceUid: &quot;-100&quot;
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [30]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+        noDataState: NoData
+        execErrState: Error
+        for: 5m    # 持续5分钟才触发
+        labels:
+          severity: warning
+          team: iot-ops
+        annotations:
+          summary: &quot;设备 {{ $labels.device_id }} 温度过高&quot;
+          description: &quot;当前温度 {{ $values.A }}°C，超过阈值 30°C&quot;
+
+      # 设备离线告警
+      - uid: device-offline-alert
+        title: 设备离线告警
+        condition: C
+        data:
+          - refId: A
+            datasourceUid: influxdb-iot
+            model:
+              query: |
+                from(bucket: &quot;sensor-data&quot;)
+                  |&gt; range(start: -15m)
+                  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)
+                  |&gt; last()
+                  |&gt; count()
+          - refId: C
+            datasourceUid: &quot;-100&quot;
+            model:
+              type: classic_conditions
+              conditions:
+                - evaluator:
+                    params: [5]    # 期望至少5个设备在线
+                    type: lt
+                  operator:
+                    type: and
+                  query:
+                    params: [A]
+                  reducer:
+                    type: last
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: &quot;在线设备数量不足&quot;
+          description: &quot;当前在线设备 {{ $values.A }} 台，低于预期 5 台&quot;
+</code></pre>
+<h2 id="_27">性能调优</h2>
+<h3 id="influxdb_1">InfluxDB 查询优化</h3>
+<pre><code class="language-flux">// ❌ 低效查询：扫描全量数据后过滤
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -30d)
+  |&gt; filter(fn: (r) =&gt; r.device_id == &quot;node_001&quot;)
+
+// ✅ 高效查询：先缩小时间范围，再过滤标签
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)                              // 先限制时间范围
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot;)  // 再过滤 measurement
+  |&gt; filter(fn: (r) =&gt; r.device_id == &quot;node_001&quot;)   // 最后过滤标签
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)   // 字段过滤放最后
+</code></pre>
+<p><strong>查询优化原则</strong>：
+1. 时间范围越小越好，避免 <code>range(start: -30d)</code> 这类大范围查询
+2. <code>filter</code> 中优先过滤 measurement 和 tag（有索引），再过滤 field（无索引）
+3. 对历史数据查询使用降采样后的 bucket（<code>sensor-hourly</code>）而非原始 bucket
+4. 使用 <code>aggregateWindow</code> 而非 <code>window</code> + <code>mean()</code>，前者性能更好</p>
+<h3 id="grafana_4">Grafana 看板性能优化</h3>
+<pre><code>优化策略：
+1. 合理设置刷新间隔
+   - 实时监控：5-10秒
+   - 历史分析：手动刷新或30分钟
+   - 避免所有 Panel 同时刷新（使用 staggered refresh）
+
+2. 使用模板变量减少查询数量
+   - 用变量 $device_id 替代为每个设备创建独立 Panel
+   - 一个 Panel + 变量 = N 个设备的数据
+
+3. 启用查询缓存（Grafana Enterprise）
+   - 相同查询在缓存有效期内直接返回缓存结果
+
+4. 合理使用 aggregateWindow
+   - 时间范围1小时：every: 1m
+   - 时间范围24小时：every: 10m
+   - 时间范围7天：every: 1h
+</code></pre>
+<h2 id="_28">常见问题与调试</h2>
+<h2 id="_29">常见问题与调试</h2>
+<h3 id="_30">数据源连接错误</h3>
+<h4 id="1grafana-influxdb">问题1：Grafana 无法连接 InfluxDB</h4>
+<p><strong>症状</strong>：数据源测试显示 "connection refused" 或 "timeout"</p>
+<p><strong>排查步骤</strong>：</p>
+<pre><code class="language-bash"># 1. 检查 InfluxDB 容器是否运行
+docker ps | grep influxdb
+
+# 2. 检查端口是否监听
+docker exec influxdb netstat -tlnp | grep 8086
+
+# 3. 从 Grafana 容器内测试连通性
+docker exec grafana curl -v http://influxdb:8086/health
+
+# 4. 检查 Token 是否有效
+curl -H &quot;Authorization: Token ${INFLUXDB_TOKEN}&quot; \
+  http://localhost:8086/api/v2/buckets?org=iot-org
+</code></pre>
+<p><strong>常见原因与解决方案</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>错误信息</th>
+<th>原因</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>connection refused</code></td>
+<td>InfluxDB 未启动或端口错误</td>
+<td>检查容器状态，确认端口映射</td>
+</tr>
+<tr>
+<td><code>unauthorized</code></td>
+<td>Token 无效或过期</td>
+<td>重新生成 Token，更新 Grafana 配置</td>
+</tr>
+<tr>
+<td><code>organization not found</code></td>
+<td>Org 名称拼写错误</td>
+<td>检查 InfluxDB 中实际的 Org 名称</td>
+</tr>
+<tr>
+<td><code>bucket not found</code></td>
+<td>Bucket 不存在</td>
+<td>在 InfluxDB UI 中创建对应 Bucket</td>
+</tr>
+<tr>
+<td><code>i/o timeout</code></td>
+<td>网络不通或防火墙</td>
+<td>检查 Docker 网络配置，确认同一 network</td>
+</tr>
+</tbody>
+</table>
+<h4 id="2telegraf-mqtt-broker">问题2：Telegraf 无法连接 MQTT Broker</h4>
+<pre><code class="language-bash"># 查看 Telegraf 日志
+docker logs telegraf --tail 50
+
+# 常见错误：
+# E! [inputs.mqtt_consumer] Error connecting to broker: dial tcp: connection refused
+# → Mosquitto 未启动，或 depends_on 未生效
+
+# 手动测试 MQTT 连接
+docker exec telegraf mosquitto_sub -h mosquitto -t &quot;test/#&quot; -v
+</code></pre>
+<p><strong>Telegraf 调试模式</strong>：</p>
+<pre><code class="language-toml"># 在 telegraf.conf 中临时开启调试
+[agent]
+  debug = true
+  quiet = false
+</code></pre>
+<h3 id="_31">高基数问题</h3>
+<p><strong>症状</strong>：InfluxDB 内存持续增长，查询变慢，出现 OOM</p>
+<p><strong>诊断</strong>：</p>
+<pre><code class="language-bash"># 查看各 measurement 的 series 数量
+influx query '
+import &quot;influxdata/influxdb/schema&quot;
+schema.measurementTagValues(bucket: &quot;sensor-data&quot;, measurement: &quot;environment&quot;, tag: &quot;device_id&quot;)
+  |&gt; count()
+' --org iot-org --token ${INFLUXDB_TOKEN}
+
+# 查看总 series 数量
+influx query '
+import &quot;influxdata/influxdb/schema&quot;
+schema.measurements(bucket: &quot;sensor-data&quot;)
+' --org iot-org --token ${INFLUXDB_TOKEN}
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-flux">// 1. 找出高基数 tag，将其改为 field
+// 错误：将 session_id 作为 tag（每次会话都不同）
+// 修改前的写入代码（伪代码）：
+// Point(&quot;requests&quot;).tag(&quot;session_id&quot;, uuid).field(&quot;latency&quot;, 100)
+
+// 修改后：session_id 改为 field
+// Point(&quot;requests&quot;).tag(&quot;endpoint&quot;, &quot;/api/data&quot;).field(&quot;session_id&quot;, uuid).field(&quot;latency&quot;, 100)
+
+// 2. 删除高基数 measurement（谨慎操作）
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: 0)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;bad-high-cardinality-measurement&quot;)
+  |&gt; drop()
+  // 注意：实际删除需要使用 DELETE API，Flux 不能直接删除数据
+</code></pre>
+<pre><code class="language-bash"># 使用 InfluxDB DELETE API 删除特定数据
+curl -X POST &quot;http://localhost:8086/api/v2/delete?org=iot-org&amp;bucket=sensor-data&quot; \
+  -H &quot;Authorization: Token ${INFLUXDB_TOKEN}&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{
+    &quot;start&quot;: &quot;2026-01-01T00:00:00Z&quot;,
+    &quot;stop&quot;: &quot;2026-03-01T00:00:00Z&quot;,
+    &quot;predicate&quot;: &quot;_measurement=\&quot;bad-measurement\&quot;&quot;
+  }'
+</code></pre>
+<h3 id="_32">查询缓慢</h3>
+<p><strong>症状</strong>：Grafana 面板加载超时，InfluxDB CPU 飙升</p>
+<p><strong>诊断</strong>：</p>
+<pre><code class="language-bash"># 查看 InfluxDB 慢查询日志
+docker logs influxdb 2&gt;&amp;1 | grep &quot;query duration&quot;
+
+# 在 InfluxDB UI 中使用 Data Explorer 分析查询性能
+# 点击 &quot;Script Editor&quot; → 执行查询 → 查看执行时间
+</code></pre>
+<p><strong>优化策略</strong>：</p>
+<pre><code class="language-flux">// 策略1：使用 pushdown 过滤（让过滤在存储层执行）
+// ✅ 好：measurement 和 tag 过滤会被 pushdown
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)
+  |&gt; filter(fn: (r) =&gt; r._measurement == &quot;environment&quot; and r.device_id == &quot;node_001&quot;)
+
+// ❌ 差：自定义函数无法 pushdown
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1h)
+  |&gt; filter(fn: (r) =&gt; strings.hasPrefix(v: r.device_id, prefix: &quot;node_&quot;))
+
+// 策略2：对长时间范围查询使用聚合 bucket
+// 查询7天数据时，使用小时聚合 bucket
+from(bucket: &quot;sensor-hourly&quot;)   // 而非 sensor-data
+  |&gt; range(start: -7d)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature_mean&quot;)
+
+// 策略3：限制返回数据点数量
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean)   // 每5分钟一个点，而非每秒
+  |&gt; limit(n: 1000)                          // 最多返回1000个点
+</code></pre>
+<h3 id="alert-flapping">告警抖动（Alert Flapping）</h3>
+<p><strong>症状</strong>：告警频繁在 Firing 和 Resolved 之间切换，产生大量噪音通知</p>
+<p><strong>原因分析</strong>：</p>
+<pre><code>时间线：
+t=0:  温度 = 29.8°C  → 正常
+t=1:  温度 = 30.2°C  → 触发告警 (Firing)
+t=2:  温度 = 29.9°C  → 恢复 (Resolved)
+t=3:  温度 = 30.1°C  → 再次触发 (Firing)
+→ 每分钟发送通知，运维人员被淹没
+</code></pre>
+<p><strong>解决方案1：增加 <code>For</code> 持续时间</strong></p>
+<pre><code class="language-yaml"># 告警规则配置
+for: 10m    # 连续10分钟超阈值才触发，而非立即触发
+</code></pre>
+<p><strong>解决方案2：添加滞回（Hysteresis）</strong></p>
+<pre><code class="language-flux">// 使用不同的触发和恢复阈值
+// 触发条件：温度 &gt; 30°C
+// 恢复条件：温度 &lt; 28°C（而非 &lt; 30°C）
+// 在 Grafana 中通过两个条件实现：
+// Condition A: last(temperature) &gt; 30  → Firing
+// Condition B: last(temperature) &lt; 28  → Resolved
+</code></pre>
+<p><strong>解决方案3：使用 Grafana 静默（Silences）</strong></p>
+<pre><code>在已知会产生抖动的时间段（如设备启动期间）：
+Alerting → Silences → Add silence
+Duration: 30 minutes
+Matchers: device_id = node_001
+</code></pre>
+<p><strong>解决方案4：告警分组与抑制</strong></p>
+<pre><code class="language-yaml"># 通知策略：相同 location 的告警合并为一条通知
+route:
+  group_by: [location]
+  group_wait: 2m       # 等待2分钟收集同组告警
+  group_interval: 10m  # 同组告警最少间隔10分钟通知
+  repeat_interval: 6h  # 持续告警每6小时重复一次
+</code></pre>
+<h3 id="grafana_5">Grafana 面板常见问题</h3>
+<h4 id="no-data">问题：面板显示 "No data"</h4>
+<pre><code>排查顺序：
+1. 检查时间范围：右上角时间选择器是否覆盖有数据的时间段
+2. 检查数据源：Panel → Edit → 数据源是否正确选择
+3. 执行查询：点击 &quot;Run query&quot; 查看原始返回数据
+4. 检查 Flux 语法：在 InfluxDB Data Explorer 中单独测试查询
+5. 检查 bucket 名称：大小写敏感，&quot;Sensor-Data&quot; ≠ &quot;sensor-data&quot;
+</code></pre>
+<h4 id="_33">问题：时间序列图表时区错误</h4>
+<pre><code class="language-bash"># Grafana 配置文件中设置时区
+# /etc/grafana/grafana.ini
+[date_formats]
+default_timezone = Asia/Shanghai
+
+# 或在 Dashboard Settings → Time zones 中设置
+</code></pre>
+<h4 id="_34">问题：变量下拉列表为空</h4>
+<pre><code class="language-flux">// 检查变量查询是否正确
+// 正确的设备列表查询：
+import &quot;influxdata/influxdb/schema&quot;
+schema.tagValues(
+  bucket: &quot;sensor-data&quot;,
+  tag: &quot;device_id&quot;,
+  start: -7d    // 必须指定时间范围
+)
+</code></pre>
+<h2 id="_35">测试与验证</h2>
+<h3 id="_36">验证数据流完整性</h3>
+<pre><code class="language-bash"># 1. 发送测试消息
+mosquitto_pub -h localhost -p 1883 \
+  -t &quot;iot/sensor/test_device/environment&quot; \
+  -m '{&quot;device_id&quot;:&quot;test_device&quot;,&quot;location&quot;:&quot;test&quot;,&quot;timestamp&quot;:'&quot;$(date +%s)&quot;',&quot;temperature&quot;:25.5,&quot;humidity&quot;:60.0}'
+
+# 2. 验证 Telegraf 接收到消息（查看日志）
+docker logs telegraf --tail 10
+
+# 3. 验证数据写入 InfluxDB
+curl -s &quot;http://localhost:8086/api/v2/query?org=iot-org&quot; \
+  -H &quot;Authorization: Token ${INFLUXDB_TOKEN}&quot; \
+  -H &quot;Content-Type: application/vnd.flux&quot; \
+  -d 'from(bucket:&quot;sensor-data&quot;) |&gt; range(start:-1m) |&gt; filter(fn:(r) =&gt; r.device_id == &quot;test_device&quot;)'
+
+# 4. 验证 Grafana 可以查询到数据
+# 在 Grafana UI 中：Explore → 选择 InfluxDB 数据源 → 执行查询
+</code></pre>
+<h3 id="_37">自动化验证脚本</h3>
+<pre><code class="language-python">#!/usr/bin/env python3
+# scripts/verify-stack.py
+&quot;&quot;&quot;验证整个监控栈的数据流完整性&quot;&quot;&quot;
+
+import json
+import time
+import requests
+import paho.mqtt.client as mqtt
+
+INFLUXDB_URL = &quot;http://localhost:8086&quot;
+INFLUXDB_TOKEN = &quot;my-super-secret-influxdb-token-change-this&quot;
+INFLUXDB_ORG = &quot;iot-org&quot;
+GRAFANA_URL = &quot;http://localhost:3000&quot;
+
+def test_influxdb_health():
+    &quot;&quot;&quot;测试 InfluxDB 健康状态&quot;&quot;&quot;
+    resp = requests.get(f&quot;{INFLUXDB_URL}/health&quot;, timeout=5)
+    assert resp.status_code == 200, f&quot;InfluxDB 不健康: {resp.text}&quot;
+    print(&quot;✓ InfluxDB 健康检查通过&quot;)
+
+def test_grafana_health():
+    &quot;&quot;&quot;测试 Grafana 健康状态&quot;&quot;&quot;
+    resp = requests.get(f&quot;{GRAFANA_URL}/api/health&quot;, timeout=5)
+    assert resp.status_code == 200, f&quot;Grafana 不健康: {resp.text}&quot;
+    print(&quot;✓ Grafana 健康检查通过&quot;)
+
+def test_data_pipeline():
+    &quot;&quot;&quot;测试完整数据管道：MQTT → Telegraf → InfluxDB&quot;&quot;&quot;
+    test_device_id = f&quot;verify_test_{int(time.time())}&quot;
+    test_value = 99.9
+
+    # 发送测试数据
+    client = mqtt.Client()
+    client.connect(&quot;localhost&quot;, 1883)
+    payload = json.dumps({
+        &quot;device_id&quot;: test_device_id,
+        &quot;location&quot;: &quot;test&quot;,
+        &quot;timestamp&quot;: int(time.time()),
+        &quot;temperature&quot;: test_value,
+        &quot;humidity&quot;: 50.0,
+    })
+    client.publish(f&quot;iot/sensor/{test_device_id}/environment&quot;, payload, qos=1)
+    client.disconnect()
+    print(f&quot;✓ 测试数据已发送 (device_id={test_device_id})&quot;)
+
+    # 等待数据写入
+    time.sleep(15)
+
+    # 查询验证
+    query = f'''
+from(bucket: &quot;sensor-data&quot;)
+  |&gt; range(start: -1m)
+  |&gt; filter(fn: (r) =&gt; r.device_id == &quot;{test_device_id}&quot;)
+  |&gt; filter(fn: (r) =&gt; r._field == &quot;temperature&quot;)
+  |&gt; last()
+'''
+    resp = requests.post(
+        f&quot;{INFLUXDB_URL}/api/v2/query?org={INFLUXDB_ORG}&quot;,
+        headers={
+            &quot;Authorization&quot;: f&quot;Token {INFLUXDB_TOKEN}&quot;,
+            &quot;Content-Type&quot;: &quot;application/vnd.flux&quot;,
+        },
+        data=query,
+        timeout=10,
+    )
+    assert resp.status_code == 200, f&quot;查询失败: {resp.text}&quot;
+    assert str(test_value) in resp.text, f&quot;未找到测试数据，响应: {resp.text}&quot;
+    print(f&quot;✓ 数据管道验证通过 (temperature={test_value}°C 已写入 InfluxDB)&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    print(&quot;=== IoT 监控栈验证 ===\n&quot;)
+    test_influxdb_health()
+    test_grafana_health()
+    test_data_pipeline()
+    print(&quot;\n✅ 所有验证通过！&quot;)
+</code></pre>
+<h2 id="_38">延伸阅读</h2>
+<ul>
+<li><a href="01-time-series-db.html">时序数据库入门</a> - InfluxDB 深入使用，包含 Flux 语言完整教程</li>
+<li><a href="02-data-analysis-tools.html">数据分析工具</a> - Python 数据分析与 Pandas 时序处理</li>
+<li><a href="../../../06-communication-networking/01-wireless-communication/intermediate/03-mqtt-protocol.html">MQTT协议详解</a> - MQTT 数据上报协议深入解析</li>
+<li><a href="../../../06-communication-networking/03-iot-cloud-integration/index.html">IoT 云端集成</a> - AWS IoT Core、阿里云 IoT 平台集成</li>
+</ul>
+<h2 id="_39">参考资料</h2>
+<ol>
+<li><a href="https://grafana.com/docs/">Grafana 官方文档</a> - 完整的 Grafana 配置和使用指南</li>
+<li><a href="https://docs.influxdata.com/flux/">InfluxDB Flux 查询语言参考</a> - Flux 函数完整参考</li>
+<li><a href="https://docs.influxdata.com/telegraf/v1/plugins/">Telegraf 插件文档</a> - 所有输入/输出插件配置</li>
+<li><a href="https://prometheus.io/docs/">Prometheus 官方文档</a> - PromQL 语法和最佳实践</li>
+<li><a href="https://grafana.com/docs/grafana/latest/alerting/">Grafana Alerting 文档</a> - 统一告警系统配置</li>
+<li><a href="https://docs.influxdata.com/influxdb/v2/write-data/best-practices/schema-design/">InfluxDB 高基数最佳实践</a> - Schema 设计指南</li>
+<li><a href="https://grafana.com/docs/grafana/latest/dashboards/build-dashboards/best-practices/">Grafana Dashboard 最佳实践</a> - 看板设计规范</li>
+<li><a href="https://mosquitto.org/documentation/">Eclipse Mosquitto 文档</a> - MQTT Broker 配置参考</li>
+<li>《数据可视化》- 陈为 - 数据可视化理论基础</li>
+<li>Edward Tufte - "The Visual Display of Quantitative Information" - 信息可视化经典著作</li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

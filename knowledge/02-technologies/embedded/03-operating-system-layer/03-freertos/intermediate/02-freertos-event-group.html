@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>FreeRTOS事件标志组实战：实现高效的多任务同步 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/">03-freertos</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#freertos_1">FreeRTOS事件标志组深入理解</a><ul>
+<li><a href="#_7">事件标志组的内部结构</a></li>
+<li><a href="#vs">事件标志组 vs 其他同步机制</a></li>
+<li><a href="#_8">工作原理</a></li>
+</ul>
+</li>
+<li><a href="#_9">基本操作</a><ul>
+<li><a href="#_10">创建和删除事件标志组</a></li>
+<li><a href="#_11">定义事件位</a></li>
+<li><a href="#_12">设置事件位</a></li>
+<li><a href="#_13">等待事件位</a></li>
+<li><a href="#_14">清除事件位</a></li>
+<li><a href="#_15">获取事件位状态</a></li>
+</ul>
+</li>
+<li><a href="#_16">实际应用场景</a><ul>
+<li><a href="#1">场景1：系统启动同步</a></li>
+<li><a href="#2">场景2：多传感器数据采集同步</a></li>
+<li><a href="#3or">场景3：多输入源事件处理（OR模式）</a></li>
+<li><a href="#4">场景4：任务同步点</a></li>
+</ul>
+</li>
+<li><a href="#_17">高级技巧和最佳实践</a><ul>
+<li><a href="#1_1">技巧1：使用事件位组合</a></li>
+<li><a href="#2_1">技巧2：事件位状态机</a></li>
+<li><a href="#3">技巧3：超时重试机制</a></li>
+<li><a href="#4_1">技巧4：事件位计数器</a></li>
+<li><a href="#5">技巧5：事件位优先级</a></li>
+</ul>
+</li>
+<li><a href="#_18">常见问题和解决方案</a><ul>
+<li><a href="#1_2">问题1：事件位不够用</a></li>
+<li><a href="#2_2">问题2：事件位被意外清除</a></li>
+<li><a href="#3_1">问题3：等待超时但事件已发生</a></li>
+<li><a href="#4_2">问题4：从中断设置事件失败</a></li>
+<li><a href="#5_1">问题5：多任务竞争条件</a></li>
+</ul>
+</li>
+<li><a href="#_19">性能优化和调试</a><ul>
+<li><a href="#_20">性能优化建议</a></li>
+<li><a href="#_21">调试技巧</a></li>
+</ul>
+</li>
+<li><a href="#_22">完整示例项目</a><ul>
+<li><a href="#_23">项目：智能家居控制系统</a></li>
+</ul>
+</li>
+<li><a href="#_24">总结</a><ul>
+<li><a href="#_25">核心要点</a></li>
+<li><a href="#vs_1">事件标志组 vs 其他机制</a></li>
+<li><a href="#_26">学习检查清单</a></li>
+</ul>
+</li>
+<li><a href="#_27">进阶挑战</a><ul>
+<li><a href="#1_3">挑战1：实现事件组管理器</a></li>
+<li><a href="#2_3">挑战2：实现复杂状态机</a></li>
+<li><a href="#3_2">挑战3：实现事件优先级队列</a></li>
+<li><a href="#4_3">挑战4：实现分布式事件系统</a></li>
+</ul>
+</li>
+<li><a href="#_28">延伸阅读</a><ul>
+<li><a href="#_29">相关教程</a></li>
+<li><a href="#_30">官方文档</a></li>
+<li><a href="#_31">推荐书籍</a></li>
+<li><a href="#_32">测试环境</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="freertos">FreeRTOS事件标志组实战：实现高效的多任务同步</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 深入理解FreeRTOS事件标志组的工作原理和应用场景</li>
+<li>[ ] 掌握事件组的创建、删除和管理方法</li>
+<li>[ ] 熟练使用位操作设置和清除事件标志</li>
+<li>[ ] 理解AND和OR等待模式的区别和应用</li>
+<li>[ ] 掌握从任务和中断中操作事件组的方法</li>
+<li>[ ] 能够使用事件组实现复杂的多任务同步</li>
+<li>[ ] 解决事件组使用中的常见问题和陷阱</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 熟悉FreeRTOS的基本概念和任务管理
+- 了解RTOS事件标志组的基础知识
+- 理解位操作和位掩码的概念
+- 掌握FreeRTOS的基本API使用</p>
+<p><strong>技能要求</strong>：
+- 能够创建和管理FreeRTOS任务
+- 会使用队列和信号量等同步机制
+- 了解任务调度和优先级机制
+- 掌握基本的调试方法</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>STM32F4 Discovery或类似</td>
+<td>-</td>
+</tr>
+<tr>
+<td>ST-Link调试器</td>
+<td>1</td>
+<td>通常开发板自带</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>1</td>
+<td>用于连接开发板</td>
+<td>-</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>3-4个</td>
+<td>用于演示事件效果（可选）</td>
+<td>-</td>
+</tr>
+<tr>
+<td>按键</td>
+<td>2-3个</td>
+<td>用于触发事件（可选）</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE v1.10+ 或 Keil MDK v5.30+</li>
+<li><strong>FreeRTOS版本</strong>：V10.3.1+（通过CubeMX自动集成）</li>
+<li><strong>HAL库版本</strong>：根据芯片型号选择对应版本</li>
+<li><strong>辅助工具</strong>：串口调试助手（用于查看输出）</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<p>在FreeRTOSConfig.h中确保以下配置：</p>
+<pre><code class="language-c">// 启用事件标志组功能
+#define configUSE_16_BIT_TICKS              0
+
+// 时钟节拍频率（1ms）
+#define configTICK_RATE_HZ                  1000
+
+// 启用任务通知（可选，用于对比）
+#define configUSE_TASK_NOTIFICATIONS        1
+
+// 堆内存大小（确保足够）
+#define configTOTAL_HEAP_SIZE               ((size_t)(15 * 1024))
+</code></pre>
+<h2 id="freertos_1">FreeRTOS事件标志组深入理解</h2>
+<h3 id="_7">事件标志组的内部结构</h3>
+<p>FreeRTOS事件标志组使用一个整数来存储多个事件位：</p>
+<pre><code>事件标志组（EventBits_t）：
+位23 位22 ... 位2  位1  位0
+ 0    1   ...  1    0    1
+
+- 可用位：位0-23（24位）
+- 保留位：位24-31（系统使用）
+- 每个位独立表示一个事件状态
+</code></pre>
+<p><strong>数据类型定义</strong>：</p>
+<pre><code class="language-c">// FreeRTOS事件标志组类型
+typedef TickType_t EventBits_t;
+
+// 在32位系统上
+// EventBits_t = uint32_t
+// 可用24位（0x00FFFFFF）
+</code></pre>
+<h3 id="vs">事件标志组 vs 其他同步机制</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>事件标志组</th>
+<th>信号量</th>
+<th>队列</th>
+<th>任务通知</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>事件数量</strong></td>
+<td>24个</td>
+<td>1个</td>
+<td>多个消息</td>
+<td>1个值</td>
+</tr>
+<tr>
+<td><strong>等待条件</strong></td>
+<td>AND/OR组合</td>
+<td>单一</td>
+<td>单一</td>
+<td>单一</td>
+</tr>
+<tr>
+<td><strong>内存占用</strong></td>
+<td>中等</td>
+<td>小</td>
+<td>大</td>
+<td>最小</td>
+</tr>
+<tr>
+<td><strong>速度</strong></td>
+<td>快</td>
+<td>快</td>
+<td>中</td>
+<td>最快</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>多条件同步</td>
+<td>简单通知</td>
+<td>数据传递</td>
+<td>简单通知</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 需要等待多个事件的组合 → 事件标志组
+- 简单的事件通知 → 任务通知或信号量
+- 需要传递数据 → 队列
+- 多个任务等待同一事件 → 事件标志组或信号量</p>
+<h3 id="_8">工作原理</h3>
+<pre><code>[任务A] ─────┐
+             │
+[任务B] ─────┼──→ 设置事件位 ──→ [事件标志组]
+             │                      ↓
+[中断] ──────┘                   检查等待条件
+                                    ↓
+                              唤醒等待的任务
+                                    ↓
+                              [任务C] [任务D]
+</code></pre>
+<p><strong>关键特性</strong>：
+- 多个任务可以同时等待同一个事件标志组
+- 支持AND模式（所有事件）和OR模式（任一事件）
+- 事件位可以自动清除或手动清除
+- 支持从中断中设置事件位</p>
+<h2 id="_9">基本操作</h2>
+<h3 id="_10">创建和删除事件标志组</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+
+// 声明事件标志组句柄
+EventGroupHandle_t system_events;
+
+// 创建事件标志组
+void Create_Event_Group(void) {
+    // 动态创建事件标志组
+    system_events = xEventGroupCreate();
+
+    if(system_events != NULL) {
+        printf(&quot;Event group created successfully\n&quot;);
+    } else {
+        printf(&quot;Failed to create event group\n&quot;);
+    }
+}
+
+// 删除事件标志组
+void Delete_Event_Group(void) {
+    if(system_events != NULL) {
+        vEventGroupDelete(system_events);
+        system_events = NULL;
+        printf(&quot;Event group deleted\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>静态创建方式</strong>（需要启用configSUPPORT_STATIC_ALLOCATION）：</p>
+<pre><code class="language-c">// 静态分配内存
+StaticEventGroup_t event_group_buffer;
+
+// 静态创建事件标志组
+EventGroupHandle_t static_events = xEventGroupCreateStatic(&amp;event_group_buffer);
+</code></pre>
+<h3 id="_11">定义事件位</h3>
+<pre><code class="language-c">// 使用位移操作定义事件位
+#define EVENT_BIT_0     (1 &lt;&lt; 0)    // 0x01
+#define EVENT_BIT_1     (1 &lt;&lt; 1)    // 0x02
+#define EVENT_BIT_2     (1 &lt;&lt; 2)    // 0x04
+#define EVENT_BIT_3     (1 &lt;&lt; 3)    // 0x08
+
+// 实际应用中的事件定义
+#define SENSOR_DATA_READY       (1 &lt;&lt; 0)    // 传感器数据就绪
+#define NETWORK_CONNECTED       (1 &lt;&lt; 1)    // 网络连接成功
+#define STORAGE_AVAILABLE       (1 &lt;&lt; 2)    // 存储空间充足
+#define BATTERY_OK              (1 &lt;&lt; 3)    // 电池电量正常
+#define USER_INPUT_RECEIVED     (1 &lt;&lt; 4)    // 用户输入接收
+#define CALIBRATION_DONE        (1 &lt;&lt; 5)    // 校准完成
+
+// 组合多个事件
+#define ALL_INIT_EVENTS         (SENSOR_DATA_READY | \
+                                 NETWORK_CONNECTED | \
+                                 STORAGE_AVAILABLE)
+
+#define SYSTEM_READY            (ALL_INIT_EVENTS | BATTERY_OK)
+</code></pre>
+<h3 id="_12">设置事件位</h3>
+<pre><code class="language-c">// 在任务中设置事件位
+void Task_Set_Events(void *param) {
+    while(1) {
+        // 模拟传感器数据就绪
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // 设置单个事件位
+        EventBits_t bits = xEventGroupSetBits(
+            system_events,
+            SENSOR_DATA_READY
+        );
+
+        printf(&quot;[Task] Set SENSOR_DATA_READY, current bits: 0x%02X\n&quot;, bits);
+
+        // 设置多个事件位
+        bits = xEventGroupSetBits(
+            system_events,
+            NETWORK_CONNECTED | STORAGE_AVAILABLE
+        );
+
+        printf(&quot;[Task] Set multiple bits, current bits: 0x%02X\n&quot;, bits);
+    }
+}
+</code></pre>
+<p><strong>从中断中设置事件位</strong>：</p>
+<pre><code class="language-c">// 中断服务函数
+void EXTI0_IRQHandler(void) {
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET) {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+        // 从中断中设置事件位
+        xEventGroupSetBitsFromISR(
+            system_events,
+            USER_INPUT_RECEIVED,
+            &amp;xHigherPriorityTaskWoken
+        );
+
+        // 如果需要任务切换，触发PendSV
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<p><strong>注意事项</strong>：
+- <code>xEventGroupSetBits()</code> 返回设置后的事件位值
+- <code>xEventGroupSetBitsFromISR()</code> 不能在中断中阻塞
+- 设置事件位会唤醒所有等待该事件的任务</p>
+<h3 id="_13">等待事件位</h3>
+<pre><code class="language-c">// 等待事件位（AND模式）
+void Task_Wait_All_Events(void *param) {
+    printf(&quot;[WaitAll] Waiting for all initialization events...\n&quot;);
+
+    // 等待所有初始化事件完成
+    EventBits_t bits = xEventGroupWaitBits(
+        system_events,
+        ALL_INIT_EVENTS,        // 等待这些位
+        pdTRUE,                 // 等待成功后清除这些位
+        pdTRUE,                 // AND模式：所有位都必须为1
+        portMAX_DELAY           // 永久等待
+    );
+
+    printf(&quot;[WaitAll] All events occurred! bits=0x%02X\n&quot;, bits);
+
+    // 继续执行后续操作
+    while(1) {
+        printf(&quot;[WaitAll] System running...\n&quot;);
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+// 等待事件位（OR模式）
+void Task_Wait_Any_Event(void *param) {
+    while(1) {
+        printf(&quot;[WaitAny] Waiting for any input event...\n&quot;);
+
+        // 等待任意一个输入事件
+        EventBits_t bits = xEventGroupWaitBits(
+            system_events,
+            USER_INPUT_RECEIVED | NETWORK_CONNECTED,  // 等待这些位
+            pdTRUE,             // 等待成功后清除这些位
+            pdFALSE,            // OR模式：任一位为1即可
+            portMAX_DELAY       // 永久等待
+        );
+
+        // 检查是哪个事件发生了
+        if(bits &amp; USER_INPUT_RECEIVED) {
+            printf(&quot;[WaitAny] User input received\n&quot;);
+        }
+
+        if(bits &amp; NETWORK_CONNECTED) {
+            printf(&quot;[WaitAny] Network connected\n&quot;);
+        }
+    }
+}
+
+// 带超时的等待
+void Task_Wait_With_Timeout(void *param) {
+    while(1) {
+        printf(&quot;[Timeout] Waiting for events (5s timeout)...\n&quot;);
+
+        // 等待事件，最多等待5秒
+        EventBits_t bits = xEventGroupWaitBits(
+            system_events,
+            SENSOR_DATA_READY,
+            pdTRUE,
+            pdTRUE,
+            pdMS_TO_TICKS(5000)  // 5秒超时
+        );
+
+        // 检查是否超时
+        if(bits &amp; SENSOR_DATA_READY) {
+            printf(&quot;[Timeout] Event occurred within timeout\n&quot;);
+        } else {
+            printf(&quot;[Timeout] Timeout! No event occurred\n&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<p><strong>xEventGroupWaitBits参数说明</strong>：</p>
+<pre><code class="language-c">EventBits_t xEventGroupWaitBits(
+    EventGroupHandle_t xEventGroup,     // 事件标志组句柄
+    const EventBits_t uxBitsToWaitFor,  // 要等待的位掩码
+    const BaseType_t xClearOnExit,      // 成功后是否清除位
+    const BaseType_t xWaitForAllBits,   // AND(pdTRUE)或OR(pdFALSE)
+    TickType_t xTicksToWait             // 等待时间（ticks）
+);
+</code></pre>
+<p><strong>返回值</strong>：
+- 返回等待成功时的事件位值
+- 如果超时，返回超时时的事件位值
+- 如果xClearOnExit=pdTRUE，返回清除前的值</p>
+<h3 id="_14">清除事件位</h3>
+<pre><code class="language-c">// 清除事件位
+void Clear_Event_Bits_Example(void) {
+    // 清除单个事件位
+    EventBits_t bits = xEventGroupClearBits(
+        system_events,
+        SENSOR_DATA_READY
+    );
+    printf(&quot;Cleared SENSOR_DATA_READY, remaining bits: 0x%02X\n&quot;, bits);
+
+    // 清除多个事件位
+    bits = xEventGroupClearBits(
+        system_events,
+        NETWORK_CONNECTED | STORAGE_AVAILABLE
+    );
+    printf(&quot;Cleared multiple bits, remaining bits: 0x%02X\n&quot;, bits);
+
+    // 清除所有事件位
+    bits = xEventGroupClearBits(
+        system_events,
+        0x00FFFFFF  // 清除所有24位
+    );
+    printf(&quot;Cleared all bits, remaining bits: 0x%02X\n&quot;, bits);
+}
+
+// 从中断中清除事件位
+void UART_IRQHandler(void) {
+    if(__HAL_UART_GET_FLAG(&amp;huart2, UART_FLAG_RXNE)) {
+        // 读取数据
+        uint8_t data = (uint8_t)(huart2.Instance-&gt;DR &amp; 0xFF);
+
+        // 从中断中清除事件位
+        xEventGroupClearBitsFromISR(
+            system_events,
+            USER_INPUT_RECEIVED
+        );
+    }
+}
+</code></pre>
+<h3 id="_15">获取事件位状态</h3>
+<pre><code class="language-c">// 获取当前事件位状态
+void Check_Event_Status(void) {
+    // 获取当前事件位
+    EventBits_t current_bits = xEventGroupGetBits(system_events);
+
+    printf(&quot;Current event bits: 0x%02X\n&quot;, current_bits);
+
+    // 检查特定事件是否设置
+    if(current_bits &amp; SENSOR_DATA_READY) {
+        printf(&quot;  - Sensor data is ready\n&quot;);
+    }
+
+    if(current_bits &amp; NETWORK_CONNECTED) {
+        printf(&quot;  - Network is connected\n&quot;);
+    }
+
+    if(current_bits &amp; STORAGE_AVAILABLE) {
+        printf(&quot;  - Storage is available\n&quot;);
+    }
+
+    // 检查多个事件是否都设置
+    if((current_bits &amp; ALL_INIT_EVENTS) == ALL_INIT_EVENTS) {
+        printf(&quot;  - All initialization events are set\n&quot;);
+    }
+}
+
+// 从中断中获取事件位状态
+void TIM2_IRQHandler(void) {
+    if(__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+        // 从中断中获取事件位
+        EventBits_t bits = xEventGroupGetBitsFromISR(system_events);
+
+        // 根据事件位状态执行操作
+        if(bits &amp; SENSOR_DATA_READY) {
+            // 处理传感器数据
+        }
+    }
+}
+</code></pre>
+<h2 id="_16">实际应用场景</h2>
+<h3 id="1">场景1：系统启动同步</h3>
+<p>等待多个子系统初始化完成后再启动主应用：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+
+// 定义初始化事件
+#define INIT_HARDWARE       (1 &lt;&lt; 0)
+#define INIT_NETWORK        (1 &lt;&lt; 1)
+#define INIT_FILESYSTEM     (1 &lt;&lt; 2)
+#define INIT_SENSORS        (1 &lt;&lt; 3)
+#define INIT_DISPLAY        (1 &lt;&lt; 4)
+
+#define ALL_INIT_COMPLETE   (INIT_HARDWARE | INIT_NETWORK | \
+                             INIT_FILESYSTEM | INIT_SENSORS | \
+                             INIT_DISPLAY)
+
+// 事件标志组句柄
+EventGroupHandle_t startup_events;
+
+// 硬件初始化任务
+void Hardware_Init_Task(void *param) {
+    printf(&quot;[Hardware] Initializing...\n&quot;);
+
+    // 模拟硬件初始化
+    HAL_GPIO_Init();
+    HAL_UART_Init();
+    vTaskDelay(pdMS_TO_TICKS(300));
+
+    // 设置初始化完成事件
+    xEventGroupSetBits(startup_events, INIT_HARDWARE);
+    printf(&quot;[Hardware] Initialization complete\n&quot;);
+
+    vTaskDelete(NULL);
+}
+
+// 网络初始化任务
+void Network_Init_Task(void *param) {
+    printf(&quot;[Network] Initializing...\n&quot;);
+
+    // 模拟网络初始化
+    vTaskDelay(pdMS_TO_TICKS(800));
+
+    xEventGroupSetBits(startup_events, INIT_NETWORK);
+    printf(&quot;[Network] Initialization complete\n&quot;);
+
+    vTaskDelete(NULL);
+}
+
+// 文件系统初始化任务
+void Filesystem_Init_Task(void *param) {
+    printf(&quot;[Filesystem] Initializing...\n&quot;);
+
+    // 模拟文件系统初始化
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    xEventGroupSetBits(startup_events, INIT_FILESYSTEM);
+    printf(&quot;[Filesystem] Initialization complete\n&quot;);
+
+    vTaskDelete(NULL);
+}
+
+// 传感器初始化任务
+void Sensors_Init_Task(void *param) {
+    printf(&quot;[Sensors] Initializing...\n&quot;);
+
+    // 模拟传感器初始化
+    vTaskDelay(pdMS_TO_TICKS(400));
+
+    xEventGroupSetBits(startup_events, INIT_SENSORS);
+    printf(&quot;[Sensors] Initialization complete\n&quot;);
+
+    vTaskDelete(NULL);
+}
+
+// 显示初始化任务
+void Display_Init_Task(void *param) {
+    printf(&quot;[Display] Initializing...\n&quot;);
+
+    // 模拟显示初始化
+    vTaskDelay(pdMS_TO_TICKS(600));
+
+    xEventGroupSetBits(startup_events, INIT_DISPLAY);
+    printf(&quot;[Display] Initialization complete\n&quot;);
+
+    vTaskDelete(NULL);
+}
+
+// 主应用任务
+void Main_Application_Task(void *param) {
+    printf(&quot;[MainApp] Waiting for all subsystems to initialize...\n&quot;);
+
+    // 等待所有初始化完成（AND模式）
+    EventBits_t bits = xEventGroupWaitBits(
+        startup_events,
+        ALL_INIT_COMPLETE,  // 等待所有初始化事件
+        pdFALSE,            // 不清除事件位（其他任务可能也需要检查）
+        pdTRUE,             // AND模式：所有事件都必须完成
+        portMAX_DELAY       // 永久等待
+    );
+
+    printf(&quot;[MainApp] All subsystems initialized! (bits=0x%02X)\n&quot;, bits);
+    printf(&quot;[MainApp] Starting main application...\n&quot;);
+
+    while(1) {
+        // 主应用逻辑
+        printf(&quot;[MainApp] Running...\n&quot;);
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
+
+// 系统启动函数
+void System_Startup(void) {
+    // 创建事件标志组
+    startup_events = xEventGroupCreate();
+
+    if(startup_events != NULL) {
+        // 创建初始化任务
+        xTaskCreate(Hardware_Init_Task, &quot;HW_Init&quot;, 256, NULL, 3, NULL);
+        xTaskCreate(Network_Init_Task, &quot;Net_Init&quot;, 256, NULL, 3, NULL);
+        xTaskCreate(Filesystem_Init_Task, &quot;FS_Init&quot;, 256, NULL, 3, NULL);
+        xTaskCreate(Sensors_Init_Task, &quot;Sensor_Init&quot;, 256, NULL, 3, NULL);
+        xTaskCreate(Display_Init_Task, &quot;Display_Init&quot;, 256, NULL, 3, NULL);
+
+        // 创建主应用任务（优先级较低，等待初始化完成）
+        xTaskCreate(Main_Application_Task, &quot;MainApp&quot;, 512, NULL, 2, NULL);
+    }
+}
+</code></pre>
+<p><strong>运行结果</strong>：</p>
+<pre><code>[MainApp] Waiting for all subsystems to initialize...
+[Hardware] Initializing...
+[Network] Initializing...
+[Filesystem] Initializing...
+[Sensors] Initializing...
+[Display] Initializing...
+[Hardware] Initialization complete
+[Sensors] Initialization complete
+[Filesystem] Initialization complete
+[Display] Initialization complete
+[Network] Initialization complete
+[MainApp] All subsystems initialized! (bits=0x1F)
+[MainApp] Starting main application...
+[MainApp] Running...
+</code></pre>
+<h3 id="2">场景2：多传感器数据采集同步</h3>
+<p>等待所有传感器数据就绪后进行数据处理：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+
+// 定义传感器事件
+#define TEMP_SENSOR_READY       (1 &lt;&lt; 0)
+#define HUMIDITY_SENSOR_READY   (1 &lt;&lt; 1)
+#define PRESSURE_SENSOR_READY   (1 &lt;&lt; 2)
+#define LIGHT_SENSOR_READY      (1 &lt;&lt; 3)
+
+#define ALL_SENSORS_READY       (TEMP_SENSOR_READY | \
+                                 HUMIDITY_SENSOR_READY | \
+                                 PRESSURE_SENSOR_READY | \
+                                 LIGHT_SENSOR_READY)
+
+// 事件标志组
+EventGroupHandle_t sensor_events;
+
+// 传感器数据结构
+typedef struct {
+    float temperature;
+    float humidity;
+    float pressure;
+    float light;
+    uint32_t timestamp;
+} SensorData_t;
+
+SensorData_t sensor_data;
+
+// 温度传感器任务
+void Temperature_Sensor_Task(void *param) {
+    while(1) {
+        // 读取温度传感器（模拟）
+        vTaskDelay(pdMS_TO_TICKS(950));
+        sensor_data.temperature = 25.5f + (rand() % 100) / 10.0f;
+
+        printf(&quot;[Temp] Data ready: %.1f°C\n&quot;, sensor_data.temperature);
+
+        // 设置事件位
+        xEventGroupSetBits(sensor_events, TEMP_SENSOR_READY);
+    }
+}
+
+// 湿度传感器任务
+void Humidity_Sensor_Task(void *param) {
+    while(1) {
+        // 读取湿度传感器（模拟）
+        vTaskDelay(pdMS_TO_TICKS(1050));
+        sensor_data.humidity = 60.0f + (rand() % 200) / 10.0f;
+
+        printf(&quot;[Humidity] Data ready: %.1f%%\n&quot;, sensor_data.humidity);
+
+        // 设置事件位
+        xEventGroupSetBits(sensor_events, HUMIDITY_SENSOR_READY);
+    }
+}
+
+// 气压传感器任务
+void Pressure_Sensor_Task(void *param) {
+    while(1) {
+        // 读取气压传感器（模拟）
+        vTaskDelay(pdMS_TO_TICKS(900));
+        sensor_data.pressure = 1013.25f + (rand() % 100) / 10.0f;
+
+        printf(&quot;[Pressure] Data ready: %.2f hPa\n&quot;, sensor_data.pressure);
+
+        // 设置事件位
+        xEventGroupSetBits(sensor_events, PRESSURE_SENSOR_READY);
+    }
+}
+
+// 光照传感器任务
+void Light_Sensor_Task(void *param) {
+    while(1) {
+        // 读取光照传感器（模拟）
+        vTaskDelay(pdMS_TO_TICKS(1100));
+        sensor_data.light = 500.0f + (rand() % 1000);
+
+        printf(&quot;[Light] Data ready: %.0f lux\n&quot;, sensor_data.light);
+
+        // 设置事件位
+        xEventGroupSetBits(sensor_events, LIGHT_SENSOR_READY);
+    }
+}
+
+// 数据处理任务
+void Data_Process_Task(void *param) {
+    uint32_t sample_count = 0;
+
+    while(1) {
+        printf(&quot;\n[Process] Waiting for all sensor data (sample #%lu)...\n&quot;, 
+               ++sample_count);
+
+        // 等待所有传感器数据就绪
+        EventBits_t bits = xEventGroupWaitBits(
+            sensor_events,
+            ALL_SENSORS_READY,  // 等待所有传感器
+            pdTRUE,             // 等待成功后清除事件位
+            pdTRUE,             // AND模式：所有传感器都必须就绪
+            portMAX_DELAY       // 永久等待
+        );
+
+        // 所有数据就绪，记录时间戳
+        sensor_data.timestamp = xTaskGetTickCount();
+
+        // 处理数据
+        printf(&quot;[Process] All data ready! Processing...\n&quot;);
+        printf(&quot;[Process] Temperature: %.1f°C\n&quot;, sensor_data.temperature);
+        printf(&quot;[Process] Humidity: %.1f%%\n&quot;, sensor_data.humidity);
+        printf(&quot;[Process] Pressure: %.2f hPa\n&quot;, sensor_data.pressure);
+        printf(&quot;[Process] Light: %.0f lux\n&quot;, sensor_data.light);
+        printf(&quot;[Process] Timestamp: %lu ms\n&quot;, sensor_data.timestamp);
+
+        // 计算舒适度指数（示例）
+        float comfort_index = (sensor_data.temperature * 0.4f + 
+                               sensor_data.humidity * 0.3f + 
+                               sensor_data.light / 10.0f * 0.3f);
+        printf(&quot;[Process] Comfort Index: %.1f\n&quot;, comfort_index);
+
+        // 数据存储或上传
+        // SaveToFlash(&amp;sensor_data);
+        // UploadToCloud(&amp;sensor_data);
+
+        printf(&quot;[Process] Processing complete\n\n&quot;);
+    }
+}
+
+// 初始化传感器系统
+void Sensor_System_Init(void) {
+    // 创建事件标志组
+    sensor_events = xEventGroupCreate();
+
+    if(sensor_events != NULL) {
+        // 创建传感器任务
+        xTaskCreate(Temperature_Sensor_Task, &quot;Temp&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Humidity_Sensor_Task, &quot;Humidity&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Pressure_Sensor_Task, &quot;Pressure&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Light_Sensor_Task, &quot;Light&quot;, 256, NULL, 2, NULL);
+
+        // 创建数据处理任务
+        xTaskCreate(Data_Process_Task, &quot;Process&quot;, 512, NULL, 3, NULL);
+
+        printf(&quot;Sensor system initialized\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="3or">场景3：多输入源事件处理（OR模式）</h3>
+<p>等待任意一个输入事件发生并处理：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+
+// 定义输入事件
+#define BUTTON_PRESSED      (1 &lt;&lt; 0)
+#define UART_DATA_RX        (1 &lt;&lt; 1)
+#define TIMER_EXPIRED       (1 &lt;&lt; 2)
+#define NETWORK_DATA_RX     (1 &lt;&lt; 3)
+#define USB_CONNECTED       (1 &lt;&lt; 4)
+
+#define ANY_INPUT_EVENT     (BUTTON_PRESSED | UART_DATA_RX | \
+                             TIMER_EXPIRED | NETWORK_DATA_RX | \
+                             USB_CONNECTED)
+
+// 事件标志组
+EventGroupHandle_t input_events;
+
+// 按键任务
+void Button_Task(void *param) {
+    while(1) {
+        // 模拟按键检测
+        vTaskDelay(pdMS_TO_TICKS(3000));
+
+        printf(&quot;[Button] Button pressed!\n&quot;);
+        xEventGroupSetBits(input_events, BUTTON_PRESSED);
+    }
+}
+
+// UART接收任务
+void UART_Task(void *param) {
+    while(1) {
+        // 模拟UART数据接收
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        printf(&quot;[UART] Data received!\n&quot;);
+        xEventGroupSetBits(input_events, UART_DATA_RX);
+    }
+}
+
+// 定时器任务
+void Timer_Task(void *param) {
+    while(1) {
+        // 模拟定时器超时
+        vTaskDelay(pdMS_TO_TICKS(7000));
+
+        printf(&quot;[Timer] Timer expired!\n&quot;);
+        xEventGroupSetBits(input_events, TIMER_EXPIRED);
+    }
+}
+
+// 网络接收任务
+void Network_Task(void *param) {
+    while(1) {
+        // 模拟网络数据接收
+        vTaskDelay(pdMS_TO_TICKS(4000));
+
+        printf(&quot;[Network] Data received!\n&quot;);
+        xEventGroupSetBits(input_events, NETWORK_DATA_RX);
+    }
+}
+
+// USB检测任务
+void USB_Task(void *param) {
+    while(1) {
+        // 模拟USB连接检测
+        vTaskDelay(pdMS_TO_TICKS(10000));
+
+        printf(&quot;[USB] USB connected!\n&quot;);
+        xEventGroupSetBits(input_events, USB_CONNECTED);
+    }
+}
+
+// 事件处理任务
+void Event_Handler_Task(void *param) {
+    uint32_t event_count = 0;
+
+    while(1) {
+        printf(&quot;\n[Handler] Waiting for any input event (#%lu)...\n&quot;, 
+               ++event_count);
+
+        // 等待任意一个事件发生（OR模式）
+        EventBits_t bits = xEventGroupWaitBits(
+            input_events,
+            ANY_INPUT_EVENT,    // 等待任意输入事件
+            pdTRUE,             // 等待成功后清除事件位
+            pdFALSE,            // OR模式：任一事件发生即可
+            portMAX_DELAY       // 永久等待
+        );
+
+        printf(&quot;[Handler] Event occurred! bits=0x%02X\n&quot;, bits);
+
+        // 检查并处理具体的事件
+        if(bits &amp; BUTTON_PRESSED) {
+            printf(&quot;[Handler] Handling button press event\n&quot;);
+            // 处理按键事件
+            HandleButtonPress();
+        }
+
+        if(bits &amp; UART_DATA_RX) {
+            printf(&quot;[Handler] Handling UART data event\n&quot;);
+            // 处理UART数据
+            HandleUARTData();
+        }
+
+        if(bits &amp; TIMER_EXPIRED) {
+            printf(&quot;[Handler] Handling timer event\n&quot;);
+            // 处理定时器事件
+            HandleTimerExpired();
+        }
+
+        if(bits &amp; NETWORK_DATA_RX) {
+            printf(&quot;[Handler] Handling network data event\n&quot;);
+            // 处理网络数据
+            HandleNetworkData();
+        }
+
+        if(bits &amp; USB_CONNECTED) {
+            printf(&quot;[Handler] Handling USB connection event\n&quot;);
+            // 处理USB连接
+            HandleUSBConnection();
+        }
+
+        printf(&quot;[Handler] Event handled\n\n&quot;);
+    }
+}
+
+// 事件处理函数（示例）
+void HandleButtonPress(void) {
+    printf(&quot;  -&gt; Button action executed\n&quot;);
+}
+
+void HandleUARTData(void) {
+    printf(&quot;  -&gt; UART data processed\n&quot;);
+}
+
+void HandleTimerExpired(void) {
+    printf(&quot;  -&gt; Timer action executed\n&quot;);
+}
+
+void HandleNetworkData(void) {
+    printf(&quot;  -&gt; Network data processed\n&quot;);
+}
+
+void HandleUSBConnection(void) {
+    printf(&quot;  -&gt; USB device enumerated\n&quot;);
+}
+
+// 初始化输入系统
+void Input_System_Init(void) {
+    // 创建事件标志组
+    input_events = xEventGroupCreate();
+
+    if(input_events != NULL) {
+        // 创建输入任务
+        xTaskCreate(Button_Task, &quot;Button&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(UART_Task, &quot;UART&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Timer_Task, &quot;Timer&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Network_Task, &quot;Network&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(USB_Task, &quot;USB&quot;, 256, NULL, 2, NULL);
+
+        // 创建事件处理任务
+        xTaskCreate(Event_Handler_Task, &quot;Handler&quot;, 512, NULL, 3, NULL);
+
+        printf(&quot;Input system initialized\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="4">场景4：任务同步点</h3>
+<p>实现多个任务在特定点同步：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+
+// 定义同步事件
+#define TASK1_READY     (1 &lt;&lt; 0)
+#define TASK2_READY     (1 &lt;&lt; 1)
+#define TASK3_READY     (1 &lt;&lt; 2)
+
+#define ALL_TASKS_READY (TASK1_READY | TASK2_READY | TASK3_READY)
+
+// 事件标志组
+EventGroupHandle_t sync_events;
+
+// 任务1
+void Sync_Task1(void *param) {
+    uint32_t cycle = 0;
+
+    while(1) {
+        cycle++;
+        printf(&quot;[Task1] Cycle %lu: Working...\n&quot;, cycle);
+
+        // 执行任务1的工作
+        vTaskDelay(pdMS_TO_TICKS(100 + rand() % 200));
+
+        printf(&quot;[Task1] Cycle %lu: Work done, waiting at sync point\n&quot;, cycle);
+
+        // 设置自己的就绪标志
+        xEventGroupSetBits(sync_events, TASK1_READY);
+
+        // 等待所有任务到达同步点
+        xEventGroupWaitBits(
+            sync_events,
+            ALL_TASKS_READY,
+            pdTRUE,         // 清除所有标志，准备下一轮
+            pdTRUE,         // AND模式：等待所有任务
+            portMAX_DELAY
+        );
+
+        printf(&quot;[Task1] Cycle %lu: All tasks synchronized, continuing\n&quot;, cycle);
+    }
+}
+
+// 任务2
+void Sync_Task2(void *param) {
+    uint32_t cycle = 0;
+
+    while(1) {
+        cycle++;
+        printf(&quot;[Task2] Cycle %lu: Working...\n&quot;, cycle);
+
+        // 执行任务2的工作
+        vTaskDelay(pdMS_TO_TICKS(150 + rand() % 200));
+
+        printf(&quot;[Task2] Cycle %lu: Work done, waiting at sync point\n&quot;, cycle);
+
+        // 设置自己的就绪标志
+        xEventGroupSetBits(sync_events, TASK2_READY);
+
+        // 等待所有任务到达同步点
+        xEventGroupWaitBits(
+            sync_events,
+            ALL_TASKS_READY,
+            pdTRUE,
+            pdTRUE,
+            portMAX_DELAY
+        );
+
+        printf(&quot;[Task2] Cycle %lu: All tasks synchronized, continuing\n&quot;, cycle);
+    }
+}
+
+// 任务3
+void Sync_Task3(void *param) {
+    uint32_t cycle = 0;
+
+    while(1) {
+        cycle++;
+        printf(&quot;[Task3] Cycle %lu: Working...\n&quot;, cycle);
+
+        // 执行任务3的工作
+        vTaskDelay(pdMS_TO_TICKS(200 + rand() % 200));
+
+        printf(&quot;[Task3] Cycle %lu: Work done, waiting at sync point\n&quot;, cycle);
+
+        // 设置自己的就绪标志
+        xEventGroupSetBits(sync_events, TASK3_READY);
+
+        // 等待所有任务到达同步点
+        xEventGroupWaitBits(
+            sync_events,
+            ALL_TASKS_READY,
+            pdTRUE,
+            pdTRUE,
+            portMAX_DELAY
+        );
+
+        printf(&quot;[Task3] Cycle %lu: All tasks synchronized, continuing\n&quot;, cycle);
+    }
+}
+
+// 初始化同步系统
+void Sync_System_Init(void) {
+    // 创建事件标志组
+    sync_events = xEventGroupCreate();
+
+    if(sync_events != NULL) {
+        // 创建同步任务
+        xTaskCreate(Sync_Task1, &quot;SyncTask1&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Sync_Task2, &quot;SyncTask2&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(Sync_Task3, &quot;SyncTask3&quot;, 256, NULL, 2, NULL);
+
+        printf(&quot;Sync system initialized\n&quot;);
+    }
+}
+</code></pre>
+<h2 id="_17">高级技巧和最佳实践</h2>
+<h3 id="1_1">技巧1：使用事件位组合</h3>
+<pre><code class="language-c">// 定义基本事件
+#define EVENT_SENSOR_1      (1 &lt;&lt; 0)
+#define EVENT_SENSOR_2      (1 &lt;&lt; 1)
+#define EVENT_SENSOR_3      (1 &lt;&lt; 2)
+#define EVENT_NETWORK       (1 &lt;&lt; 3)
+#define EVENT_STORAGE       (1 &lt;&lt; 4)
+
+// 定义组合事件
+#define ALL_SENSORS         (EVENT_SENSOR_1 | EVENT_SENSOR_2 | EVENT_SENSOR_3)
+#define SYSTEM_READY        (ALL_SENSORS | EVENT_NETWORK | EVENT_STORAGE)
+#define MINIMAL_READY       (EVENT_SENSOR_1 | EVENT_NETWORK)
+
+// 使用组合事件
+void Wait_For_System_Ready(void) {
+    // 等待完整系统就绪
+    xEventGroupWaitBits(events, SYSTEM_READY, pdFALSE, pdTRUE, portMAX_DELAY);
+}
+
+void Wait_For_Minimal_Ready(void) {
+    // 等待最小系统就绪
+    xEventGroupWaitBits(events, MINIMAL_READY, pdFALSE, pdTRUE, portMAX_DELAY);
+}
+</code></pre>
+<h3 id="2_1">技巧2：事件位状态机</h3>
+<pre><code class="language-c">// 定义状态事件
+#define STATE_IDLE          (1 &lt;&lt; 0)
+#define STATE_RUNNING       (1 &lt;&lt; 1)
+#define STATE_PAUSED        (1 &lt;&lt; 2)
+#define STATE_ERROR         (1 &lt;&lt; 3)
+
+// 状态转换函数
+void Change_State(EventGroupHandle_t events, EventBits_t new_state) {
+    // 清除所有状态位
+    xEventGroupClearBits(events, 
+                         STATE_IDLE | STATE_RUNNING | 
+                         STATE_PAUSED | STATE_ERROR);
+
+    // 设置新状态
+    xEventGroupSetBits(events, new_state);
+
+    printf(&quot;State changed to: 0x%02X\n&quot;, new_state);
+}
+
+// 获取当前状态
+EventBits_t Get_Current_State(EventGroupHandle_t events) {
+    EventBits_t bits = xEventGroupGetBits(events);
+    return bits &amp; (STATE_IDLE | STATE_RUNNING | STATE_PAUSED | STATE_ERROR);
+}
+
+// 状态检查
+bool Is_In_State(EventGroupHandle_t events, EventBits_t state) {
+    EventBits_t current = xEventGroupGetBits(events);
+    return (current &amp; state) != 0;
+}
+</code></pre>
+<h3 id="3">技巧3：超时重试机制</h3>
+<pre><code class="language-c">// 带重试的事件等待
+bool Wait_Event_With_Retry(EventGroupHandle_t events, 
+                           EventBits_t bits_to_wait,
+                           uint32_t timeout_ms,
+                           uint32_t max_retries) {
+    uint32_t retry_count = 0;
+
+    while(retry_count &lt; max_retries) {
+        printf(&quot;Waiting for events (attempt %lu/%lu)...\n&quot;, 
+               retry_count + 1, max_retries);
+
+        EventBits_t result = xEventGroupWaitBits(
+            events,
+            bits_to_wait,
+            pdTRUE,
+            pdTRUE,
+            pdMS_TO_TICKS(timeout_ms)
+        );
+
+        // 检查是否成功
+        if((result &amp; bits_to_wait) == bits_to_wait) {
+            printf(&quot;Events occurred successfully\n&quot;);
+            return true;
+        }
+
+        // 超时，重试
+        retry_count++;
+        printf(&quot;Timeout, retrying...\n&quot;);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    printf(&quot;Failed after %lu retries\n&quot;, max_retries);
+    return false;
+}
+</code></pre>
+<h3 id="4_1">技巧4：事件位计数器</h3>
+<pre><code class="language-c">// 使用多个位实现计数器
+#define COUNTER_BIT_0       (1 &lt;&lt; 0)
+#define COUNTER_BIT_1       (1 &lt;&lt; 1)
+#define COUNTER_BIT_2       (1 &lt;&lt; 2)
+#define COUNTER_MASK        (COUNTER_BIT_0 | COUNTER_BIT_1 | COUNTER_BIT_2)
+
+// 增加计数器
+void Increment_Counter(EventGroupHandle_t events) {
+    EventBits_t current = xEventGroupGetBits(events);
+    uint32_t counter = (current &amp; COUNTER_MASK);
+
+    counter = (counter + 1) &amp; 0x07;  // 0-7循环
+
+    // 清除旧值，设置新值
+    xEventGroupClearBits(events, COUNTER_MASK);
+    xEventGroupSetBits(events, counter);
+
+    printf(&quot;Counter: %lu\n&quot;, counter);
+}
+
+// 读取计数器
+uint32_t Read_Counter(EventGroupHandle_t events) {
+    EventBits_t bits = xEventGroupGetBits(events);
+    return (bits &amp; COUNTER_MASK);
+}
+</code></pre>
+<h3 id="5">技巧5：事件位优先级</h3>
+<pre><code class="language-c">// 定义优先级事件
+#define EVENT_CRITICAL      (1 &lt;&lt; 0)    // 最高优先级
+#define EVENT_HIGH          (1 &lt;&lt; 1)
+#define EVENT_NORMAL        (1 &lt;&lt; 2)
+#define EVENT_LOW           (1 &lt;&lt; 3)    // 最低优先级
+
+// 按优先级处理事件
+void Process_Events_By_Priority(EventGroupHandle_t events) {
+    EventBits_t bits = xEventGroupGetBits(events);
+
+    // 按优先级顺序检查和处理
+    if(bits &amp; EVENT_CRITICAL) {
+        printf(&quot;Processing CRITICAL event\n&quot;);
+        xEventGroupClearBits(events, EVENT_CRITICAL);
+        Handle_Critical_Event();
+        return;
+    }
+
+    if(bits &amp; EVENT_HIGH) {
+        printf(&quot;Processing HIGH priority event\n&quot;);
+        xEventGroupClearBits(events, EVENT_HIGH);
+        Handle_High_Event();
+        return;
+    }
+
+    if(bits &amp; EVENT_NORMAL) {
+        printf(&quot;Processing NORMAL priority event\n&quot;);
+        xEventGroupClearBits(events, EVENT_NORMAL);
+        Handle_Normal_Event();
+        return;
+    }
+
+    if(bits &amp; EVENT_LOW) {
+        printf(&quot;Processing LOW priority event\n&quot;);
+        xEventGroupClearBits(events, EVENT_LOW);
+        Handle_Low_Event();
+        return;
+    }
+}
+</code></pre>
+<h2 id="_18">常见问题和解决方案</h2>
+<h3 id="1_2">问题1：事件位不够用</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 需要超过24个事件
+#define EVENT_25    (1 &lt;&lt; 24)  // ❌ 超出范围
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<p><strong>方案1：使用多个事件标志组</strong></p>
+<pre><code class="language-c">// 创建多个事件标志组
+EventGroupHandle_t events_group1;  // 事件0-23
+EventGroupHandle_t events_group2;  // 事件24-47
+
+// 初始化
+events_group1 = xEventGroupCreate();
+events_group2 = xEventGroupCreate();
+
+// 使用
+xEventGroupSetBits(events_group1, EVENT_0);
+xEventGroupSetBits(events_group2, EVENT_25);
+</code></pre>
+<p><strong>方案2：重新设计事件结构</strong></p>
+<pre><code class="language-c">// 使用组合事件减少位数
+#define SENSOR_TYPE_MASK    (0x07)  // 位0-2：传感器类型
+#define SENSOR_STATUS_MASK  (0x18)  // 位3-4：传感器状态
+#define NETWORK_STATUS_MASK (0xE0)  // 位5-7：网络状态
+
+// 设置组合事件
+void Set_Sensor_Event(uint8_t type, uint8_t status) {
+    EventBits_t bits = (type &amp; 0x07) | ((status &amp; 0x03) &lt;&lt; 3);
+    xEventGroupSetBits(events, bits);
+}
+</code></pre>
+<p><strong>方案3：使用队列传递复杂事件</strong></p>
+<pre><code class="language-c">// 对于复杂事件，使用队列
+typedef struct {
+    uint32_t event_id;
+    uint32_t event_data;
+    uint32_t timestamp;
+} ComplexEvent_t;
+
+QueueHandle_t event_queue;
+
+// 发送复杂事件
+void Send_Complex_Event(uint32_t id, uint32_t data) {
+    ComplexEvent_t event = {
+        .event_id = id,
+        .event_data = data,
+        .timestamp = xTaskGetTickCount()
+    };
+    xQueueSend(event_queue, &amp;event, 0);
+}
+</code></pre>
+<h3 id="2_2">问题2：事件位被意外清除</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 任务A设置事件
+xEventGroupSetBits(events, EVENT_A);
+
+// 任务B等待并清除
+xEventGroupWaitBits(events, EVENT_A, pdTRUE, pdTRUE, portMAX_DELAY);
+
+// 任务C再次检查时，事件已被清除
+EventBits_t bits = xEventGroupGetBits(events);
+if(bits &amp; EVENT_A) {  // ❌ 条件不成立
+    // 不会执行
+}
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<p><strong>方案1：不自动清除事件位</strong></p>
+<pre><code class="language-c">// 等待但不清除
+xEventGroupWaitBits(events, EVENT_A, pdFALSE, pdTRUE, portMAX_DELAY);
+
+// 所有任务处理完后，手动清除
+xEventGroupClearBits(events, EVENT_A);
+</code></pre>
+<p><strong>方案2：使用引用计数</strong></p>
+<pre><code class="language-c">// 事件引用计数
+typedef struct {
+    EventGroupHandle_t events;
+    uint8_t ref_count[24];  // 每个位的引用计数
+} EventGroupWithRef_t;
+
+// 等待事件（增加引用）
+void Wait_Event_With_Ref(EventGroupWithRef_t *eg, EventBits_t bits) {
+    xEventGroupWaitBits(eg-&gt;events, bits, pdFALSE, pdTRUE, portMAX_DELAY);
+
+    // 增加引用计数
+    for(int i = 0; i &lt; 24; i++) {
+        if(bits &amp; (1 &lt;&lt; i)) {
+            eg-&gt;ref_count[i]++;
+        }
+    }
+}
+
+// 释放事件（减少引用）
+void Release_Event_With_Ref(EventGroupWithRef_t *eg, EventBits_t bits) {
+    for(int i = 0; i &lt; 24; i++) {
+        if(bits &amp; (1 &lt;&lt; i)) {
+            if(eg-&gt;ref_count[i] &gt; 0) {
+                eg-&gt;ref_count[i]--;
+
+                // 引用计数为0时清除事件位
+                if(eg-&gt;ref_count[i] == 0) {
+                    xEventGroupClearBits(eg-&gt;events, (1 &lt;&lt; i));
+                }
+            }
+        }
+    }
+}
+</code></pre>
+<h3 id="3_1">问题3：等待超时但事件已发生</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 任务A在等待前，事件已经被设置
+xEventGroupSetBits(events, EVENT_A);  // 事件已设置
+
+// 任务B稍后才开始等待
+vTaskDelay(pdMS_TO_TICKS(100));
+EventBits_t bits = xEventGroupWaitBits(
+    events, EVENT_A, pdTRUE, pdTRUE, 
+    pdMS_TO_TICKS(50)  // 50ms超时
+);
+// 立即返回，因为事件已经设置
+</code></pre>
+<p><strong>这不是问题，而是特性</strong>：
+- 事件标志组会保持事件位状态
+- 即使事件在等待前发生，等待也会立即成功
+- 这与信号量不同（信号量会被消耗）</p>
+<p><strong>如果需要"新鲜"事件</strong>：</p>
+<pre><code class="language-c">// 清除旧事件，只等待新事件
+xEventGroupClearBits(events, EVENT_A);
+
+// 现在等待新的事件
+EventBits_t bits = xEventGroupWaitBits(
+    events, EVENT_A, pdTRUE, pdTRUE, portMAX_DELAY
+);
+</code></pre>
+<h3 id="4_2">问题4：从中断设置事件失败</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">void EXTI_IRQHandler(void) {
+    // ❌ 错误：在中断中使用任务版本API
+    xEventGroupSetBits(events, EVENT_A);  // 可能失败
+}
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">void EXTI_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // ✅ 正确：使用FromISR版本
+    xEventGroupSetBitsFromISR(
+        events,
+        EVENT_A,
+        &amp;xHigherPriorityTaskWoken
+    );
+
+    // 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<p><strong>注意事项</strong>：
+- 必须使用FromISR版本的API
+- 必须传递xHigherPriorityTaskWoken参数
+- 必须在中断结束时调用portYIELD_FROM_ISR</p>
+<h3 id="5_1">问题5：多任务竞争条件</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 任务A
+EventBits_t bits = xEventGroupGetBits(events);
+if(bits &amp; EVENT_A) {
+    // 在这里，任务B可能清除了EVENT_A
+    xEventGroupClearBits(events, EVENT_A);  // 可能清除了不存在的位
+}
+
+// 任务B
+xEventGroupClearBits(events, EVENT_A);  // 同时清除
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<p><strong>方案1：使用原子操作</strong></p>
+<pre><code class="language-c">// 使用WaitBits原子地检查和清除
+EventBits_t bits = xEventGroupWaitBits(
+    events,
+    EVENT_A,
+    pdTRUE,     // 原子地清除
+    pdTRUE,
+    0           // 不等待，立即返回
+);
+
+if(bits &amp; EVENT_A) {
+    // 事件已被原子地清除
+    ProcessEvent();
+}
+</code></pre>
+<p><strong>方案2：使用互斥量保护</strong></p>
+<pre><code class="language-c">SemaphoreHandle_t event_mutex;
+
+// 任务A
+xSemaphoreTake(event_mutex, portMAX_DELAY);
+EventBits_t bits = xEventGroupGetBits(events);
+if(bits &amp; EVENT_A) {
+    xEventGroupClearBits(events, EVENT_A);
+    ProcessEvent();
+}
+xSemaphoreGive(event_mutex);
+</code></pre>
+<h2 id="_19">性能优化和调试</h2>
+<h3 id="_20">性能优化建议</h3>
+<p><strong>1. 减少不必要的等待</strong>：</p>
+<pre><code class="language-c">// ❌ 不好：频繁轮询
+while(1) {
+    EventBits_t bits = xEventGroupWaitBits(events, EVENT_A, 
+                                           pdFALSE, pdTRUE, 
+                                           pdMS_TO_TICKS(10));
+    if(bits &amp; EVENT_A) {
+        ProcessEvent();
+    }
+}
+
+// ✅ 更好：阻塞等待
+while(1) {
+    xEventGroupWaitBits(events, EVENT_A, pdTRUE, pdTRUE, portMAX_DELAY);
+    ProcessEvent();
+}
+</code></pre>
+<p><strong>2. 合理使用清除标志</strong>：</p>
+<pre><code class="language-c">// 如果多个任务需要同一事件，不要自动清除
+xEventGroupWaitBits(events, EVENT_A, pdFALSE, pdTRUE, portMAX_DELAY);
+
+// 最后一个任务手动清除
+xEventGroupClearBits(events, EVENT_A);
+</code></pre>
+<p><strong>3. 避免过度使用事件组</strong>：</p>
+<pre><code class="language-c">// ❌ 不好：简单通知使用事件组
+xEventGroupSetBits(events, SIMPLE_EVENT);
+
+// ✅ 更好：使用任务通知（更快，更省内存）
+xTaskNotifyGive(task_handle);
+</code></pre>
+<h3 id="_21">调试技巧</h3>
+<p><strong>1. 事件位状态监控</strong>：</p>
+<pre><code class="language-c">// 监控任务
+void Event_Monitor_Task(void *param) {
+    while(1) {
+        EventBits_t bits = xEventGroupGetBits(system_events);
+
+        printf(&quot;\n=== Event Status ===\n&quot;);
+        printf(&quot;Current bits: 0x%06X\n&quot;, bits);
+
+        // 显示每个事件的状态
+        for(int i = 0; i &lt; 24; i++) {
+            if(bits &amp; (1 &lt;&lt; i)) {
+                printf(&quot;  Bit %d: SET\n&quot;, i);
+            }
+        }
+        printf(&quot;===================\n\n&quot;);
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
+</code></pre>
+<p><strong>2. 事件历史记录</strong>：</p>
+<pre><code class="language-c">// 事件历史记录
+#define EVENT_HISTORY_SIZE 100
+
+typedef struct {
+    EventBits_t bits;
+    uint32_t timestamp;
+    const char *source;
+} EventHistory_t;
+
+EventHistory_t event_history[EVENT_HISTORY_SIZE];
+uint32_t history_index = 0;
+
+// 记录事件
+void Log_Event(EventBits_t bits, const char *source) {
+    event_history[history_index].bits = bits;
+    event_history[history_index].timestamp = xTaskGetTickCount();
+    event_history[history_index].source = source;
+
+    history_index = (history_index + 1) % EVENT_HISTORY_SIZE;
+}
+
+// 打印历史
+void Print_Event_History(void) {
+    printf(&quot;\n=== Event History ===\n&quot;);
+    for(int i = 0; i &lt; EVENT_HISTORY_SIZE; i++) {
+        uint32_t idx = (history_index + i) % EVENT_HISTORY_SIZE;
+        if(event_history[idx].timestamp &gt; 0) {
+            printf(&quot;[%lu] %s: 0x%06X\n&quot;,
+                   event_history[idx].timestamp,
+                   event_history[idx].source,
+                   event_history[idx].bits);
+        }
+    }
+    printf(&quot;====================\n\n&quot;);
+}
+</code></pre>
+<p><strong>3. 断言检查</strong>：</p>
+<pre><code class="language-c">// 使用断言检查事件组状态
+void Check_Event_Group_State(EventGroupHandle_t events, 
+                             EventBits_t expected_bits) {
+    EventBits_t current_bits = xEventGroupGetBits(events);
+
+    configASSERT((current_bits &amp; expected_bits) == expected_bits);
+}
+
+// 使用示例
+Check_Event_Group_State(system_events, INIT_HARDWARE | INIT_NETWORK);
+</code></pre>
+<h2 id="_22">完整示例项目</h2>
+<h3 id="_23">项目：智能家居控制系统</h3>
+<p>实现一个使用事件标志组的智能家居控制系统：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;event_groups.h&quot;
+#include &quot;queue.h&quot;
+
+// 系统事件定义
+#define EVENT_MOTION_DETECTED       (1 &lt;&lt; 0)
+#define EVENT_DOOR_OPENED           (1 &lt;&lt; 1)
+#define EVENT_WINDOW_OPENED         (1 &lt;&lt; 2)
+#define EVENT_TEMP_HIGH             (1 &lt;&lt; 3)
+#define EVENT_TEMP_LOW              (1 &lt;&lt; 4)
+#define EVENT_LIGHT_LOW             (1 &lt;&lt; 5)
+#define EVENT_SMOKE_DETECTED        (1 &lt;&lt; 6)
+#define EVENT_WATER_LEAK            (1 &lt;&lt; 7)
+#define EVENT_USER_HOME             (1 &lt;&lt; 8)
+#define EVENT_USER_AWAY             (1 &lt;&lt; 9)
+#define EVENT_NIGHT_MODE            (1 &lt;&lt; 10)
+#define EVENT_DAY_MODE              (1 &lt;&lt; 11)
+
+// 报警事件
+#define ALARM_EVENTS                (EVENT_SMOKE_DETECTED | EVENT_WATER_LEAK)
+
+// 安防事件
+#define SECURITY_EVENTS             (EVENT_MOTION_DETECTED | \
+                                     EVENT_DOOR_OPENED | \
+                                     EVENT_WINDOW_OPENED)
+
+// 舒适度事件
+#define COMFORT_EVENTS              (EVENT_TEMP_HIGH | EVENT_TEMP_LOW | \
+                                     EVENT_LIGHT_LOW)
+
+// 事件标志组
+EventGroupHandle_t home_events;
+
+// 系统状态
+typedef enum {
+    MODE_HOME,
+    MODE_AWAY,
+    MODE_NIGHT,
+    MODE_VACATION
+} SystemMode_t;
+
+SystemMode_t current_mode = MODE_HOME;
+
+// 传感器监控任务
+void Sensor_Monitor_Task(void *param) {
+    while(1) {
+        // 模拟传感器读取
+        float temperature = 22.0f + (rand() % 100) / 10.0f;
+        float light_level = 300.0f + (rand() % 500);
+        bool motion = (rand() % 100) &lt; 10;  // 10%概率检测到运动
+        bool door_open = (rand() % 100) &lt; 5;  // 5%概率门打开
+
+        // 温度检查
+        if(temperature &gt; 28.0f) {
+            xEventGroupSetBits(home_events, EVENT_TEMP_HIGH);
+            printf(&quot;[Sensor] High temperature: %.1f°C\n&quot;, temperature);
+        } else if(temperature &lt; 18.0f) {
+            xEventGroupSetBits(home_events, EVENT_TEMP_LOW);
+            printf(&quot;[Sensor] Low temperature: %.1f°C\n&quot;, temperature);
+        }
+
+        // 光照检查
+        if(light_level &lt; 200.0f) {
+            xEventGroupSetBits(home_events, EVENT_LIGHT_LOW);
+            printf(&quot;[Sensor] Low light: %.0f lux\n&quot;, light_level);
+        }
+
+        // 运动检测
+        if(motion) {
+            xEventGroupSetBits(home_events, EVENT_MOTION_DETECTED);
+            printf(&quot;[Sensor] Motion detected\n&quot;);
+        }
+
+        // 门状态
+        if(door_open) {
+            xEventGroupSetBits(home_events, EVENT_DOOR_OPENED);
+            printf(&quot;[Sensor] Door opened\n&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+// 安防监控任务
+void Security_Task(void *param) {
+    while(1) {
+        // 等待安防事件（OR模式）
+        EventBits_t bits = xEventGroupWaitBits(
+            home_events,
+            SECURITY_EVENTS,
+            pdTRUE,         // 清除事件
+            pdFALSE,        // OR模式：任一事件
+            portMAX_DELAY
+        );
+
+        printf(&quot;\n[Security] Security event detected! bits=0x%03X\n&quot;, bits);
+
+        // 根据模式处理
+        if(current_mode == MODE_AWAY || current_mode == MODE_VACATION) {
+            // 离家模式：触发报警
+            if(bits &amp; EVENT_MOTION_DETECTED) {
+                printf(&quot;[Security] ALARM! Motion detected while away\n&quot;);
+                TriggerAlarm();
+                SendNotification(&quot;Motion detected at home&quot;);
+            }
+
+            if(bits &amp; EVENT_DOOR_OPENED) {
+                printf(&quot;[Security] ALARM! Door opened while away\n&quot;);
+                TriggerAlarm();
+                SendNotification(&quot;Door opened at home&quot;);
+            }
+
+            if(bits &amp; EVENT_WINDOW_OPENED) {
+                printf(&quot;[Security] ALARM! Window opened while away\n&quot;);
+                TriggerAlarm();
+                SendNotification(&quot;Window opened at home&quot;);
+            }
+        } else {
+            // 在家模式：只记录
+            printf(&quot;[Security] Event logged (home mode)\n&quot;);
+        }
+    }
+}
+
+// 舒适度控制任务
+void Comfort_Task(void *param) {
+    while(1) {
+        // 等待舒适度事件（OR模式）
+        EventBits_t bits = xEventGroupWaitBits(
+            home_events,
+            COMFORT_EVENTS,
+            pdTRUE,
+            pdFALSE,
+            portMAX_DELAY
+        );
+
+        printf(&quot;\n[Comfort] Comfort event detected! bits=0x%03X\n&quot;, bits);
+
+        // 温度控制
+        if(bits &amp; EVENT_TEMP_HIGH) {
+            printf(&quot;[Comfort] Turning on air conditioning\n&quot;);
+            TurnOnAC();
+        }
+
+        if(bits &amp; EVENT_TEMP_LOW) {
+            printf(&quot;[Comfort] Turning on heating\n&quot;);
+            TurnOnHeating();
+        }
+
+        // 照明控制
+        if(bits &amp; EVENT_LIGHT_LOW) {
+            // 根据模式决定是否开灯
+            EventBits_t mode_bits = xEventGroupGetBits(home_events);
+
+            if(mode_bits &amp; EVENT_USER_HOME) {
+                printf(&quot;[Comfort] Turning on lights\n&quot;);
+                TurnOnLights();
+            } else {
+                printf(&quot;[Comfort] Low light detected, but user is away\n&quot;);
+            }
+        }
+    }
+}
+
+// 紧急报警任务
+void Emergency_Task(void *param) {
+    while(1) {
+        // 等待紧急事件（OR模式，高优先级）
+        EventBits_t bits = xEventGroupWaitBits(
+            home_events,
+            ALARM_EVENTS,
+            pdTRUE,
+            pdFALSE,
+            portMAX_DELAY
+        );
+
+        printf(&quot;\n[EMERGENCY] Critical event! bits=0x%03X\n&quot;, bits);
+
+        // 烟雾报警
+        if(bits &amp; EVENT_SMOKE_DETECTED) {
+            printf(&quot;[EMERGENCY] FIRE ALARM! Smoke detected\n&quot;);
+            TriggerFireAlarm();
+            CallFireDepartment();
+            SendNotification(&quot;FIRE ALARM - Smoke detected&quot;);
+        }
+
+        // 漏水报警
+        if(bits &amp; EVENT_WATER_LEAK) {
+            printf(&quot;[EMERGENCY] WATER LEAK! Shutting off water\n&quot;);
+            ShutOffWater();
+            SendNotification(&quot;Water leak detected&quot;);
+        }
+    }
+}
+
+// 模式控制任务
+void Mode_Control_Task(void *param) {
+    while(1) {
+        // 等待模式切换事件
+        EventBits_t bits = xEventGroupWaitBits(
+            home_events,
+            EVENT_USER_HOME | EVENT_USER_AWAY | 
+            EVENT_NIGHT_MODE | EVENT_DAY_MODE,
+            pdTRUE,
+            pdFALSE,
+            portMAX_DELAY
+        );
+
+        printf(&quot;\n[Mode] Mode change event! bits=0x%03X\n&quot;, bits);
+
+        // 用户回家
+        if(bits &amp; EVENT_USER_HOME) {
+            current_mode = MODE_HOME;
+            printf(&quot;[Mode] Switched to HOME mode\n&quot;);
+            DisableAlarm();
+            TurnOnWelcomeLights();
+        }
+
+        // 用户离开
+        if(bits &amp; EVENT_USER_AWAY) {
+            current_mode = MODE_AWAY;
+            printf(&quot;[Mode] Switched to AWAY mode\n&quot;);
+            EnableAlarm();
+            TurnOffAllLights();
+            AdjustTemperature(20.0f);
+        }
+
+        // 夜间模式
+        if(bits &amp; EVENT_NIGHT_MODE) {
+            current_mode = MODE_NIGHT;
+            printf(&quot;[Mode] Switched to NIGHT mode\n&quot;);
+            DimLights();
+            EnableNightSecurity();
+        }
+
+        // 白天模式
+        if(bits &amp; EVENT_DAY_MODE) {
+            current_mode = MODE_HOME;
+            printf(&quot;[Mode] Switched to DAY mode\n&quot;);
+            RestoreNormalLighting();
+        }
+    }
+}
+
+// 控制函数（示例实现）
+void TriggerAlarm(void) {
+    printf(&quot;  -&gt; Alarm triggered!\n&quot;);
+}
+
+void SendNotification(const char *message) {
+    printf(&quot;  -&gt; Notification: %s\n&quot;, message);
+}
+
+void TurnOnAC(void) {
+    printf(&quot;  -&gt; Air conditioning ON\n&quot;);
+}
+
+void TurnOnHeating(void) {
+    printf(&quot;  -&gt; Heating ON\n&quot;);
+}
+
+void TurnOnLights(void) {
+    printf(&quot;  -&gt; Lights ON\n&quot;);
+}
+
+void TriggerFireAlarm(void) {
+    printf(&quot;  -&gt; FIRE ALARM ACTIVATED!\n&quot;);
+}
+
+void CallFireDepartment(void) {
+    printf(&quot;  -&gt; Calling fire department...\n&quot;);
+}
+
+void ShutOffWater(void) {
+    printf(&quot;  -&gt; Water main shut off\n&quot;);
+}
+
+void DisableAlarm(void) {
+    printf(&quot;  -&gt; Security alarm disabled\n&quot;);
+}
+
+void TurnOnWelcomeLights(void) {
+    printf(&quot;  -&gt; Welcome lights ON\n&quot;);
+}
+
+void EnableAlarm(void) {
+    printf(&quot;  -&gt; Security alarm enabled\n&quot;);
+}
+
+void TurnOffAllLights(void) {
+    printf(&quot;  -&gt; All lights OFF\n&quot;);
+}
+
+void AdjustTemperature(float temp) {
+    printf(&quot;  -&gt; Temperature set to %.1f°C\n&quot;, temp);
+}
+
+void DimLights(void) {
+    printf(&quot;  -&gt; Lights dimmed\n&quot;);
+}
+
+void EnableNightSecurity(void) {
+    printf(&quot;  -&gt; Night security enabled\n&quot;);
+}
+
+void RestoreNormalLighting(void) {
+    printf(&quot;  -&gt; Normal lighting restored\n&quot;);
+}
+
+// 系统初始化
+void Smart_Home_System_Init(void) {
+    // 创建事件标志组
+    home_events = xEventGroupCreate();
+
+    if(home_events != NULL) {
+        // 设置初始模式
+        xEventGroupSetBits(home_events, EVENT_USER_HOME | EVENT_DAY_MODE);
+
+        // 创建任务（优先级从高到低）
+        xTaskCreate(Emergency_Task, &quot;Emergency&quot;, 512, NULL, 5, NULL);
+        xTaskCreate(Security_Task, &quot;Security&quot;, 512, NULL, 4, NULL);
+        xTaskCreate(Comfort_Task, &quot;Comfort&quot;, 512, NULL, 3, NULL);
+        xTaskCreate(Mode_Control_Task, &quot;ModeCtrl&quot;, 512, NULL, 3, NULL);
+        xTaskCreate(Sensor_Monitor_Task, &quot;Sensors&quot;, 512, NULL, 2, NULL);
+
+        printf(&quot;Smart home system initialized\n&quot;);
+        printf(&quot;Current mode: HOME\n\n&quot;);
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART2_UART_Init();
+
+    // 初始化智能家居系统
+    Smart_Home_System_Init();
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<h2 id="_24">总结</h2>
+<h3 id="_25">核心要点</h3>
+<ol>
+<li>
+<p><strong>事件标志组概念</strong>
+   - 使用位标志表示多个事件状态
+   - 24位可用（位0-23）
+   - 支持AND和OR等待模式
+   - 事件状态持久保存</p>
+</li>
+<li>
+<p><strong>基本操作</strong>
+   - <code>xEventGroupCreate()</code>：创建事件标志组
+   - <code>xEventGroupSetBits()</code>：设置事件位
+   - <code>xEventGroupWaitBits()</code>：等待事件位
+   - <code>xEventGroupClearBits()</code>：清除事件位
+   - <code>xEventGroupGetBits()</code>：获取事件位状态</p>
+</li>
+<li>
+<p><strong>等待模式</strong>
+   - AND模式（pdTRUE）：等待所有指定事件都发生
+   - OR模式（pdFALSE）：等待任意一个事件发生
+   - 支持超时机制
+   - 可选择是否自动清除事件位</p>
+</li>
+<li>
+<p><strong>中断支持</strong>
+   - <code>xEventGroupSetBitsFromISR()</code>：从中断设置事件位
+   - <code>xEventGroupGetBitsFromISR()</code>：从中断获取事件位
+   - <code>xEventGroupClearBitsFromISR()</code>：从中断清除事件位
+   - 必须使用FromISR版本的API</p>
+</li>
+<li>
+<p><strong>典型应用</strong>
+   - 系统初始化同步
+   - 多传感器数据采集
+   - 多输入源事件处理
+   - 任务同步点
+   - 状态机实现</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>
+   - 使用描述性的事件位名称
+   - 根据场景选择AND/OR模式
+   - 合理设置超时时间
+   - 注意事件位清除时机
+   - 避免竞争条件</p>
+</li>
+</ol>
+<h3 id="vs_1">事件标志组 vs 其他机制</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>事件标志组</th>
+<th>信号量</th>
+<th>队列</th>
+<th>任务通知</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>事件数量</strong></td>
+<td>24个</td>
+<td>1个</td>
+<td>多个消息</td>
+<td>1个值</td>
+</tr>
+<tr>
+<td><strong>等待条件</strong></td>
+<td>AND/OR组合</td>
+<td>单一</td>
+<td>单一</td>
+<td>单一</td>
+</tr>
+<tr>
+<td><strong>内存占用</strong></td>
+<td>中等</td>
+<td>小</td>
+<td>大</td>
+<td>最小</td>
+</tr>
+<tr>
+<td><strong>速度</strong></td>
+<td>快</td>
+<td>快</td>
+<td>中</td>
+<td>最快</td>
+</tr>
+<tr>
+<td><strong>多任务等待</strong></td>
+<td>支持</td>
+<td>支持</td>
+<td>不支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td><strong>数据传递</strong></td>
+<td>不支持</td>
+<td>不支持</td>
+<td>支持</td>
+<td>有限支持</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_26">学习检查清单</h3>
+<p>完成本教程后，你应该能够：</p>
+<ul>
+<li>[ ] 理解FreeRTOS事件标志组的工作原理和内部结构</li>
+<li>[ ] 掌握事件组的创建、删除和管理方法</li>
+<li>[ ] 熟练使用位操作定义和组合事件</li>
+<li>[ ] 理解AND和OR等待模式的区别和应用场景</li>
+<li>[ ] 能够从任务和中断中正确操作事件组</li>
+<li>[ ] 掌握事件位的设置、清除和查询方法</li>
+<li>[ ] 能够使用事件组实现复杂的多任务同步</li>
+<li>[ ] 解决事件组使用中的常见问题</li>
+<li>[ ] 在实际项目中合理选择同步机制</li>
+</ul>
+<h2 id="_27">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<h3 id="1_3">挑战1：实现事件组管理器</h3>
+<p>创建一个事件组管理器，提供以下功能：
+- 事件组池管理（创建、分配、释放）
+- 事件历史记录和回放
+- 事件统计（触发次数、等待时间）
+- 事件依赖关系管理</p>
+<p><strong>提示</strong>：使用结构体封装事件组和元数据</p>
+<h3 id="2_3">挑战2：实现复杂状态机</h3>
+<p>使用事件标志组实现一个复杂的状态机：
+- 支持多个状态（使用不同的位组合）
+- 支持状态转换条件检查
+- 支持状态进入/退出回调
+- 支持状态历史记录</p>
+<p><strong>提示</strong>：使用位组合表示状态，使用事件触发状态转换</p>
+<h3 id="3_2">挑战3：实现事件优先级队列</h3>
+<p>基于事件标志组实现一个优先级事件队列：
+- 支持多个优先级级别
+- 高优先级事件优先处理
+- 支持事件超时
+- 支持事件取消</p>
+<p><strong>提示</strong>：使用不同的位表示不同优先级</p>
+<h3 id="4_3">挑战4：实现分布式事件系统</h3>
+<p>实现一个跨任务的分布式事件系统：
+- 支持事件订阅和发布
+- 支持事件过滤
+- 支持事件广播
+- 支持事件持久化</p>
+<p><strong>提示</strong>：结合事件组和队列实现</p>
+<h2 id="_28">延伸阅读</h2>
+<h3 id="_29">相关教程</h3>
+<ul>
+<li><a href="../beginner/01-freertos-quickstart.html">FreeRTOS快速入门</a> - 了解FreeRTOS基础</li>
+<li><a href="../beginner/02-freertos-tasks.html">FreeRTOS任务管理</a> - 深入理解任务机制</li>
+<li><a href="../beginner/03-freertos-queue.html">FreeRTOS队列通信</a> - 学习任务间通信</li>
+<li><a href="01-freertos-timer.html">FreeRTOS软件定时器</a> - 学习定时器应用</li>
+<li><a href="03-freertos-notification.html">FreeRTOS任务通知</a> - 学习轻量级通信</li>
+<li><a href="../../02-rtos-fundamentals/beginner/07-event-group.html">RTOS事件标志组基础</a> - 理论基础</li>
+</ul>
+<h3 id="_30">官方文档</h3>
+<ul>
+<li><a href="https://www.freertos.org/event-groups-API.html">FreeRTOS Event Groups</a></li>
+<li><a href="https://www.freertos.org/a00106.html">FreeRTOS API Reference</a></li>
+<li><a href="https://www.freertos.org/a00110.html">FreeRTOS Configuration</a></li>
+</ul>
+<h3 id="_31">推荐书籍</h3>
+<ul>
+<li><strong>《Mastering the FreeRTOS Real Time Kernel》</strong></li>
+<li>FreeRTOS作者编写</li>
+<li>详细讲解事件标志组实现</li>
+<li>
+<p>免费下载：https://www.freertos.org/Documentation/RTOS_book.html</p>
+</li>
+<li>
+<p><strong>《FreeRTOS Reference Manual》</strong></p>
+</li>
+<li>完整的API参考手册</li>
+<li>包含所有事件组API详细说明</li>
+</ul>
+<h3 id="_32">测试环境</h3>
+<p><strong>本教程测试环境</strong>：
+- 开发板：STM32F407 Discovery
+- IDE：STM32CubeIDE v1.10.1
+- HAL库版本：v1.27.1
+- FreeRTOS版本：V10.3.1
+- 编译器：GCC ARM 10.3</p>
+<hr />
+<p><strong>反馈与支持</strong>：</p>
+<p>如果你在学习过程中遇到问题：
+- 💬 在评论区留言讨论
+- 📧 发送邮件到：support@embedded-platform.com
+- 🐛 报告问题：<a href="https://github.com/your-repo/issues">GitHub Issues</a></p>
+<p><strong>贡献代码</strong>：
+欢迎提交改进建议和示例代码！</p>
+<hr />
+<p><strong>版权声明</strong>：本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+<p><strong>最后更新</strong>：2024-01-15<br />
+<strong>文档版本</strong>：1.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

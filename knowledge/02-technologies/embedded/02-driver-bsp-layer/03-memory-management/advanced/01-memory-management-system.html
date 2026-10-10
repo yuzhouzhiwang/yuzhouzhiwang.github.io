@@ -1,0 +1,1528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>高效内存管理系统设计 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/">03-memory-management</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">项目概述</a><ul>
+<li><a href="#_3">项目特点</a></li>
+<li><a href="#_4">应用场景</a></li>
+</ul>
+</li>
+<li><a href="#_5">学习目标</a><ul>
+<li><a href="#_6">知识目标</a></li>
+<li><a href="#_7">技能目标</a></li>
+<li><a href="#_8">项目交付物</a></li>
+</ul>
+</li>
+<li><a href="#_9">前置要求</a><ul>
+<li><a href="#_10">知识要求</a></li>
+<li><a href="#_11">技能要求</a></li>
+<li><a href="#_12">开发环境</a></li>
+</ul>
+</li>
+<li><a href="#_13">系统架构设计</a><ul>
+<li><a href="#_14">整体架构</a></li>
+<li><a href="#_15">核心组件</a></li>
+<li><a href="#_16">数据结构设计</a><ul>
+<li><a href="#_17">内存块头部</a></li>
+<li><a href="#_18">内存池结构</a></li>
+<li><a href="#_19">内存管理器结构</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_20">核心功能实现</a><ul>
+<li><a href="#1">1. 内存池管理</a><ul>
+<li><a href="#11">1.1 内存池初始化</a></li>
+<li><a href="#12">1.2 多级内存池管理</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 内存分配器实现</a><ul>
+<li><a href="#21">2.1 核心分配函数</a></li>
+<li><a href="#22">2.2 扩展分配函数</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 统计和监控</a><ul>
+<li><a href="#31">3.1 统计信息收集</a></li>
+<li><a href="#32">3.2 实时监控</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 内存泄漏检测</a><ul>
+<li><a href="#41">4.1 泄漏检测实现</a></li>
+</ul>
+</li>
+<li><a href="#5">5. 碎片整理</a><ul>
+<li><a href="#51">5.1 碎片分析</a></li>
+<li><a href="#52">5.2 碎片整理策略</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 性能优化</a><ul>
+<li><a href="#61">6.1 快速分配路径</a></li>
+<li><a href="#62">6.2 缓存优化</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_21">完整示例程序</a><ul>
+<li><a href="#_22">主程序</a></li>
+</ul>
+</li>
+<li><a href="#_23">编译和运行</a><ul>
+<li><a href="#makefile">Makefile</a></li>
+<li><a href="#_24">编译命令</a></li>
+</ul>
+</li>
+<li><a href="#_25">测试和验证</a><ul>
+<li><a href="#_26">单元测试</a></li>
+<li><a href="#_27">性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_28">项目扩展</a><ul>
+<li><a href="#_29">扩展功能建议</a></li>
+</ul>
+</li>
+<li><a href="#_30">总结</a></li>
+<li><a href="#_31">延伸阅读</a></li>
+<li><a href="#_32">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">高效内存管理系统设计</h1>
+<h2 id="_2">项目概述</h2>
+<p>本项目将带你从零开始设计并实现一个企业级的嵌入式内存管理系统。该系统集成了多级内存池、智能碎片整理、实时统计监控、内存泄漏检测和性能优化等高级特性，适用于资源受限的嵌入式环境。</p>
+<p>完成本项目后，你将能够：</p>
+<ul>
+<li>设计可扩展的内存管理架构</li>
+<li>实现高效的多级内存池系统</li>
+<li>开发智能碎片整理算法</li>
+<li>构建实时监控和统计系统</li>
+<li>实现内存泄漏检测机制</li>
+<li>优化内存分配性能</li>
+<li>处理并发访问和线程安全问题</li>
+</ul>
+<h3 id="_3">项目特点</h3>
+<ul>
+<li><strong>企业级设计</strong>：参考Linux内核和RTOS的内存管理实现</li>
+<li><strong>高性能</strong>：O(1)时间复杂度的内存分配</li>
+<li><strong>可靠性</strong>：完善的错误检测和恢复机制</li>
+<li><strong>可观测性</strong>：详细的统计信息和调试支持</li>
+<li><strong>可移植性</strong>：支持多种嵌入式平台</li>
+</ul>
+<h3 id="_4">应用场景</h3>
+<ul>
+<li>实时操作系统（RTOS）</li>
+<li>工业控制系统</li>
+<li>物联网设备</li>
+<li>汽车电子系统</li>
+<li>医疗设备</li>
+<li>航空航天系统</li>
+</ul>
+<h2 id="_5">学习目标</h2>
+<h3 id="_6">知识目标</h3>
+<ul>
+<li>理解企业级内存管理系统的架构设计</li>
+<li>掌握多级内存池的设计原理</li>
+<li>了解碎片整理算法的实现</li>
+<li>学习性能优化的方法和技巧</li>
+</ul>
+<h3 id="_7">技能目标</h3>
+<ul>
+<li>能够设计可扩展的系统架构</li>
+<li>能够实现高效的数据结构和算法</li>
+<li>能够进行性能分析和优化</li>
+<li>能够编写可维护的系统级代码</li>
+</ul>
+<h3 id="_8">项目交付物</h3>
+<ol>
+<li>完整的内存管理系统源代码</li>
+<li>详细的设计文档</li>
+<li>单元测试和集成测试</li>
+<li>性能测试报告</li>
+<li>使用手册和API文档</li>
+</ol>
+<h2 id="_9">前置要求</h2>
+<h3 id="_10">知识要求</h3>
+<ul>
+<li>熟练掌握C语言编程</li>
+<li>理解内存管理基础概念</li>
+<li>了解数据结构和算法</li>
+<li>熟悉嵌入式系统开发</li>
+</ul>
+<h3 id="_11">技能要求</h3>
+<ul>
+<li>能够设计和实现复杂的数据结构</li>
+<li>能够进行性能分析和优化</li>
+<li>能够编写单元测试</li>
+<li>熟悉调试工具的使用</li>
+</ul>
+<h3 id="_12">开发环境</h3>
+<ul>
+<li>GCC编译器（或其他C编译器）</li>
+<li>Make构建工具</li>
+<li>调试器（GDB或其他）</li>
+<li>性能分析工具（可选）</li>
+</ul>
+<h2 id="_13">系统架构设计</h2>
+<h3 id="_14">整体架构</h3>
+<p>我们的内存管理系统采用分层架构设计：</p>
+<pre><code>┌─────────────────────────────────────────┐
+│         应用层 API                       │
+│  (malloc, free, calloc, realloc)        │
+├─────────────────────────────────────────┤
+│         内存管理器核心                   │
+│  - 分配策略                              │
+│  - 碎片整理                              │
+│  - 统计监控                              │
+├─────────────────────────────────────────┤
+│         多级内存池                       │
+│  Pool-32  Pool-64  Pool-128  Pool-256   │
+├─────────────────────────────────────────┤
+│         底层内存管理                     │
+│  - 堆管理                                │
+│  - 内存对齐                              │
+│  - 边界检查                              │
+└─────────────────────────────────────────┘
+</code></pre>
+<h3 id="_15">核心组件</h3>
+<ol>
+<li><strong>内存池管理器</strong>：管理多个不同大小的内存池</li>
+<li><strong>分配器</strong>：实现快速的内存分配和释放</li>
+<li><strong>统计模块</strong>：收集和报告内存使用情况</li>
+<li><strong>调试模块</strong>：检测内存泄漏和越界访问</li>
+<li><strong>碎片整理器</strong>：定期整理内存碎片</li>
+</ol>
+<h3 id="_16">数据结构设计</h3>
+<h4 id="_17">内存块头部</h4>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+
+// 内存块头部（用于调试和追踪）
+typedef struct mem_block_header {
+    uint32_t magic;              // 魔数，用于检测损坏
+    size_t size;                 // 块大小（不包含头部）
+    struct mem_block_header* next;  // 下一个块
+    struct mem_block_header* prev;  // 上一个块
+    uint32_t alloc_id;           // 分配ID
+    const char* file;            // 分配文件名
+    int line;                    // 分配行号
+    uint32_t timestamp;          // 分配时间戳
+} mem_block_header_t;
+
+#define MEM_BLOCK_MAGIC 0xDEADBEEF
+#define HEADER_SIZE sizeof(mem_block_header_t)
+</code></pre>
+<h4 id="_18">内存池结构</h4>
+<pre><code class="language-c">// 内存池配置
+typedef struct {
+    size_t block_size;           // 块大小
+    size_t block_count;          // 块数量
+    size_t alignment;            // 对齐要求
+} pool_config_t;
+
+// 内存池统计
+typedef struct {
+    uint32_t total_allocs;       // 总分配次数
+    uint32_t total_frees;        // 总释放次数
+    uint32_t current_usage;      // 当前使用量
+    uint32_t peak_usage;         // 峰值使用量
+    uint32_t failed_allocs;      // 失败的分配
+    uint64_t total_bytes_allocated;  // 总分配字节数
+} pool_stats_t;
+
+// 内存池结构
+typedef struct memory_pool {
+    pool_config_t config;        // 配置
+    uint8_t* memory;             // 内存区域
+    void* free_list;             // 空闲链表
+    uint32_t free_count;         // 空闲块数量
+    pool_stats_t stats;          // 统计信息
+    struct memory_pool* next;    // 下一个池
+} memory_pool_t;
+</code></pre>
+<h4 id="_19">内存管理器结构</h4>
+<pre><code class="language-c">// 内存管理器配置
+typedef struct {
+    size_t total_heap_size;      // 总堆大小
+    size_t min_block_size;       // 最小块大小
+    size_t max_block_size;       // 最大块大小
+    uint32_t enable_debug;       // 启用调试
+    uint32_t enable_stats;       // 启用统计
+    uint32_t enable_defrag;      // 启用碎片整理
+} mem_mgr_config_t;
+
+// 内存管理器
+typedef struct {
+    mem_mgr_config_t config;     // 配置
+    memory_pool_t* pools;        // 内存池链表
+    uint32_t pool_count;         // 池数量
+    uint8_t* heap_start;         // 堆起始地址
+    uint8_t* heap_end;           // 堆结束地址
+    mem_block_header_t* alloc_list;  // 已分配块链表
+    uint32_t next_alloc_id;      // 下一个分配ID
+    pool_stats_t global_stats;   // 全局统计
+} mem_manager_t;
+</code></pre>
+<h2 id="_20">核心功能实现</h2>
+<h3 id="1">1. 内存池管理</h3>
+<h4 id="11">1.1 内存池初始化</h4>
+<pre><code class="language-c">#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 初始化内存池
+int pool_init(
+    memory_pool_t* pool,
+    uint8_t* memory,
+    const pool_config_t* config
+) {
+    if (pool == NULL || memory == NULL || config == NULL) {
+        return -1;
+    }
+
+    // 复制配置
+    pool-&gt;config = *config;
+    pool-&gt;memory = memory;
+    pool-&gt;free_count = config-&gt;block_count;
+    pool-&gt;next = NULL;
+
+    // 清空统计
+    memset(&amp;pool-&gt;stats, 0, sizeof(pool_stats_t));
+
+    // 构建空闲链表
+    pool-&gt;free_list = NULL;
+    for (int i = config-&gt;block_count - 1; i &gt;= 0; i--) {
+        void** block = (void**)&amp;memory[i * config-&gt;block_size];
+        *block = pool-&gt;free_list;
+        pool-&gt;free_list = block;
+    }
+
+    return 0;
+}
+
+// 从内存池分配
+void* pool_alloc(memory_pool_t* pool) {
+    if (pool == NULL || pool-&gt;free_list == NULL) {
+        if (pool != NULL) {
+            pool-&gt;stats.failed_allocs++;
+        }
+        return NULL;
+    }
+
+    // 从空闲链表取出第一个块
+    void* block = pool-&gt;free_list;
+    pool-&gt;free_list = *(void**)block;
+    pool-&gt;free_count--;
+
+    // 更新统计
+    pool-&gt;stats.total_allocs++;
+    pool-&gt;stats.current_usage++;
+    pool-&gt;stats.total_bytes_allocated += pool-&gt;config.block_size;
+
+    if (pool-&gt;stats.current_usage &gt; pool-&gt;stats.peak_usage) {
+        pool-&gt;stats.peak_usage = pool-&gt;stats.current_usage;
+    }
+
+    // 清零内存
+    memset(block, 0, pool-&gt;config.block_size);
+
+    return block;
+}
+
+// 释放到内存池
+void pool_free(memory_pool_t* pool, void* ptr) {
+    if (pool == NULL || ptr == NULL) {
+        return;
+    }
+
+    // 验证指针是否属于这个池
+    uintptr_t pool_start = (uintptr_t)pool-&gt;memory;
+    uintptr_t pool_end = pool_start + 
+        (pool-&gt;config.block_size * pool-&gt;config.block_count);
+    uintptr_t ptr_addr = (uintptr_t)ptr;
+
+    if (ptr_addr &lt; pool_start || ptr_addr &gt;= pool_end) {
+        // 指针不属于这个池
+        return;
+    }
+
+    // 检查对齐
+    if ((ptr_addr - pool_start) % pool-&gt;config.block_size != 0) {
+        // 指针未对齐到块边界
+        return;
+    }
+
+    // 加入空闲链表
+    *(void**)ptr = pool-&gt;free_list;
+    pool-&gt;free_list = ptr;
+    pool-&gt;free_count++;
+
+    // 更新统计
+    pool-&gt;stats.total_frees++;
+    pool-&gt;stats.current_usage--;
+}
+
+// 获取内存池使用率
+float pool_get_usage_percent(const memory_pool_t* pool) {
+    if (pool == NULL || pool-&gt;config.block_count == 0) {
+        return 0.0f;
+    }
+
+    uint32_t used = pool-&gt;config.block_count - pool-&gt;free_count;
+    return (float)used * 100.0f / pool-&gt;config.block_count;
+}
+</code></pre>
+<h4 id="12">1.2 多级内存池管理</h4>
+<pre><code class="language-c">// 预定义的内存池大小
+static const size_t POOL_SIZES[] = {
+    32, 64, 128, 256, 512, 1024, 2048, 4096
+};
+
+#define NUM_POOLS (sizeof(POOL_SIZES) / sizeof(POOL_SIZES[0]))
+
+// 每个池的块数量
+static const size_t POOL_COUNTS[] = {
+    128, 64, 32, 16, 8, 4, 2, 1
+};
+
+// 创建多级内存池
+int create_multi_level_pools(
+    mem_manager_t* mgr,
+    uint8_t* heap,
+    size_t heap_size
+) {
+    if (mgr == NULL || heap == NULL) {
+        return -1;
+    }
+
+    uint8_t* current = heap;
+    size_t remaining = heap_size;
+    memory_pool_t* prev_pool = NULL;
+
+    mgr-&gt;pool_count = 0;
+    mgr-&gt;pools = NULL;
+
+    // 为每个大小创建内存池
+    for (size_t i = 0; i &lt; NUM_POOLS; i++) {
+        size_t pool_size = POOL_SIZES[i] * POOL_COUNTS[i];
+
+        if (remaining &lt; pool_size + sizeof(memory_pool_t)) {
+            break;  // 堆空间不足
+        }
+
+        // 分配池结构
+        memory_pool_t* pool = (memory_pool_t*)current;
+        current += sizeof(memory_pool_t);
+        remaining -= sizeof(memory_pool_t);
+
+        // 分配池内存
+        uint8_t* pool_memory = current;
+        current += pool_size;
+        remaining -= pool_size;
+
+        // 配置池
+        pool_config_t config = {
+            .block_size = POOL_SIZES[i],
+            .block_count = POOL_COUNTS[i],
+            .alignment = 8
+        };
+
+        // 初始化池
+        if (pool_init(pool, pool_memory, &amp;config) != 0) {
+            return -1;
+        }
+
+        // 链接到链表
+        if (prev_pool == NULL) {
+            mgr-&gt;pools = pool;
+        } else {
+            prev_pool-&gt;next = pool;
+        }
+
+        prev_pool = pool;
+        mgr-&gt;pool_count++;
+    }
+
+    return 0;
+}
+
+// 查找合适的内存池
+static memory_pool_t* find_suitable_pool(
+    mem_manager_t* mgr,
+    size_t size
+) {
+    memory_pool_t* pool = mgr-&gt;pools;
+
+    while (pool != NULL) {
+        if (pool-&gt;config.block_size &gt;= size &amp;&amp; 
+            pool-&gt;free_count &gt; 0) {
+            return pool;
+        }
+        pool = pool-&gt;next;
+    }
+
+    return NULL;
+}
+</code></pre>
+<h3 id="2">2. 内存分配器实现</h3>
+<h4 id="21">2.1 核心分配函数</h4>
+<pre><code class="language-c">// 内存分配（带调试信息）
+void* mem_alloc_debug(
+    mem_manager_t* mgr,
+    size_t size,
+    const char* file,
+    int line
+) {
+    if (mgr == NULL || size == 0) {
+        return NULL;
+    }
+
+    // 加上头部大小
+    size_t total_size = size;
+    if (mgr-&gt;config.enable_debug) {
+        total_size += HEADER_SIZE;
+    }
+
+    // 查找合适的内存池
+    memory_pool_t* pool = find_suitable_pool(mgr, total_size);
+
+    if (pool == NULL) {
+        mgr-&gt;global_stats.failed_allocs++;
+        return NULL;
+    }
+
+    // 从池中分配
+    void* ptr = pool_alloc(pool);
+
+    if (ptr == NULL) {
+        return NULL;
+    }
+
+    // 如果启用调试，填充头部信息
+    if (mgr-&gt;config.enable_debug) {
+        mem_block_header_t* header = (mem_block_header_t*)ptr;
+        header-&gt;magic = MEM_BLOCK_MAGIC;
+        header-&gt;size = size;
+        header-&gt;alloc_id = mgr-&gt;next_alloc_id++;
+        header-&gt;file = file;
+        header-&gt;line = line;
+        header-&gt;timestamp = get_timestamp();
+
+        // 加入已分配链表
+        header-&gt;next = mgr-&gt;alloc_list;
+        header-&gt;prev = NULL;
+        if (mgr-&gt;alloc_list != NULL) {
+            mgr-&gt;alloc_list-&gt;prev = header;
+        }
+        mgr-&gt;alloc_list = header;
+
+        // 返回用户数据区域
+        ptr = (uint8_t*)ptr + HEADER_SIZE;
+    }
+
+    // 更新全局统计
+    mgr-&gt;global_stats.total_allocs++;
+    mgr-&gt;global_stats.current_usage++;
+    mgr-&gt;global_stats.total_bytes_allocated += size;
+
+    if (mgr-&gt;global_stats.current_usage &gt; mgr-&gt;global_stats.peak_usage) {
+        mgr-&gt;global_stats.peak_usage = mgr-&gt;global_stats.current_usage;
+    }
+
+    return ptr;
+}
+
+// 内存释放
+void mem_free_debug(
+    mem_manager_t* mgr,
+    void* ptr,
+    const char* file,
+    int line
+) {
+    if (mgr == NULL || ptr == NULL) {
+        return;
+    }
+
+    void* block_ptr = ptr;
+
+    // 如果启用调试，验证头部
+    if (mgr-&gt;config.enable_debug) {
+        block_ptr = (uint8_t*)ptr - HEADER_SIZE;
+        mem_block_header_t* header = (mem_block_header_t*)block_ptr;
+
+        // 检查魔数
+        if (header-&gt;magic != MEM_BLOCK_MAGIC) {
+            printf(&quot;ERROR: Invalid magic number at %p (freed from %s:%d)\n&quot;,
+                   ptr, file, line);
+            return;
+        }
+
+        // 从已分配链表移除
+        if (header-&gt;prev != NULL) {
+            header-&gt;prev-&gt;next = header-&gt;next;
+        } else {
+            mgr-&gt;alloc_list = header-&gt;next;
+        }
+
+        if (header-&gt;next != NULL) {
+            header-&gt;next-&gt;prev = header-&gt;prev;
+        }
+
+        // 清除魔数（防止重复释放）
+        header-&gt;magic = 0;
+    }
+
+    // 查找所属的内存池
+    memory_pool_t* pool = mgr-&gt;pools;
+    while (pool != NULL) {
+        uintptr_t pool_start = (uintptr_t)pool-&gt;memory;
+        uintptr_t pool_end = pool_start + 
+            (pool-&gt;config.block_size * pool-&gt;config.block_count);
+        uintptr_t ptr_addr = (uintptr_t)block_ptr;
+
+        if (ptr_addr &gt;= pool_start &amp;&amp; ptr_addr &lt; pool_end) {
+            // 找到所属池
+            pool_free(pool, block_ptr);
+
+            // 更新全局统计
+            mgr-&gt;global_stats.total_frees++;
+            mgr-&gt;global_stats.current_usage--;
+
+            return;
+        }
+
+        pool = pool-&gt;next;
+    }
+
+    printf(&quot;ERROR: Pointer %p does not belong to any pool (freed from %s:%d)\n&quot;,
+           ptr, file, line);
+}
+
+// 便捷宏定义
+#define mem_alloc(mgr, size) \
+    mem_alloc_debug(mgr, size, __FILE__, __LINE__)
+
+#define mem_free(mgr, ptr) \
+    mem_free_debug(mgr, ptr, __FILE__, __LINE__)
+</code></pre>
+<h4 id="22">2.2 扩展分配函数</h4>
+<pre><code class="language-c">// calloc实现（分配并清零）
+void* mem_calloc(mem_manager_t* mgr, size_t num, size_t size) {
+    size_t total_size = num * size;
+
+    // 检查溢出
+    if (num != 0 &amp;&amp; total_size / num != size) {
+        return NULL;
+    }
+
+    void* ptr = mem_alloc(mgr, total_size);
+
+    if (ptr != NULL) {
+        memset(ptr, 0, total_size);
+    }
+
+    return ptr;
+}
+
+// realloc实现（重新分配大小）
+void* mem_realloc(mem_manager_t* mgr, void* ptr, size_t new_size) {
+    if (ptr == NULL) {
+        return mem_alloc(mgr, new_size);
+    }
+
+    if (new_size == 0) {
+        mem_free(mgr, ptr);
+        return NULL;
+    }
+
+    // 获取原始大小
+    size_t old_size = 0;
+    if (mgr-&gt;config.enable_debug) {
+        mem_block_header_t* header = 
+            (mem_block_header_t*)((uint8_t*)ptr - HEADER_SIZE);
+        old_size = header-&gt;size;
+    }
+
+    // 如果新大小小于等于原大小，直接返回
+    if (new_size &lt;= old_size) {
+        return ptr;
+    }
+
+    // 分配新内存
+    void* new_ptr = mem_alloc(mgr, new_size);
+
+    if (new_ptr == NULL) {
+        return NULL;
+    }
+
+    // 复制数据
+    memcpy(new_ptr, ptr, old_size);
+
+    // 释放旧内存
+    mem_free(mgr, ptr);
+
+    return new_ptr;
+}
+</code></pre>
+<h3 id="3">3. 统计和监控</h3>
+<h4 id="31">3.1 统计信息收集</h4>
+<pre><code class="language-c">// 获取内存池详细统计
+void pool_get_stats(
+    const memory_pool_t* pool,
+    pool_stats_t* stats
+) {
+    if (pool == NULL || stats == NULL) {
+        return;
+    }
+
+    *stats = pool-&gt;stats;
+}
+
+// 获取全局统计
+void mem_get_global_stats(
+    const mem_manager_t* mgr,
+    pool_stats_t* stats
+) {
+    if (mgr == NULL || stats == NULL) {
+        return;
+    }
+
+    *stats = mgr-&gt;global_stats;
+}
+
+// 打印内存池统计
+void pool_print_stats(const memory_pool_t* pool) {
+    if (pool == NULL) {
+        return;
+    }
+
+    printf(&quot;Pool Statistics (Block Size: %zu bytes)\n&quot;, 
+           pool-&gt;config.block_size);
+    printf(&quot;  Total blocks:      %zu\n&quot;, pool-&gt;config.block_count);
+    printf(&quot;  Free blocks:       %u\n&quot;, pool-&gt;free_count);
+    printf(&quot;  Used blocks:       %u\n&quot;, 
+           pool-&gt;config.block_count - pool-&gt;free_count);
+    printf(&quot;  Total allocations: %u\n&quot;, pool-&gt;stats.total_allocs);
+    printf(&quot;  Total frees:       %u\n&quot;, pool-&gt;stats.total_frees);
+    printf(&quot;  Failed allocs:     %u\n&quot;, pool-&gt;stats.failed_allocs);
+    printf(&quot;  Current usage:     %u blocks\n&quot;, pool-&gt;stats.current_usage);
+    printf(&quot;  Peak usage:        %u blocks\n&quot;, pool-&gt;stats.peak_usage);
+    printf(&quot;  Utilization:       %.1f%%\n&quot;, pool_get_usage_percent(pool));
+    printf(&quot;  Total bytes:       %llu\n&quot;, 
+           pool-&gt;stats.total_bytes_allocated);
+}
+
+// 打印所有内存池统计
+void mem_print_all_stats(const mem_manager_t* mgr) {
+    if (mgr == NULL) {
+        return;
+    }
+
+    printf(&quot;\n========================================\n&quot;);
+    printf(&quot;Memory Manager Statistics\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    printf(&quot;Global Statistics:\n&quot;);
+    printf(&quot;  Total allocations: %u\n&quot;, mgr-&gt;global_stats.total_allocs);
+    printf(&quot;  Total frees:       %u\n&quot;, mgr-&gt;global_stats.total_frees);
+    printf(&quot;  Failed allocs:     %u\n&quot;, mgr-&gt;global_stats.failed_allocs);
+    printf(&quot;  Current usage:     %u blocks\n&quot;, 
+           mgr-&gt;global_stats.current_usage);
+    printf(&quot;  Peak usage:        %u blocks\n&quot;, 
+           mgr-&gt;global_stats.peak_usage);
+    printf(&quot;  Total bytes:       %llu\n\n&quot;, 
+           mgr-&gt;global_stats.total_bytes_allocated);
+
+    printf(&quot;Individual Pool Statistics:\n&quot;);
+    printf(&quot;----------------------------------------\n&quot;);
+
+    memory_pool_t* pool = mgr-&gt;pools;
+    int pool_num = 0;
+
+    while (pool != NULL) {
+        printf(&quot;\nPool #%d:\n&quot;, pool_num++);
+        pool_print_stats(pool);
+        pool = pool-&gt;next;
+    }
+
+    printf(&quot;\n========================================\n\n&quot;);
+}
+</code></pre>
+<h4 id="32">3.2 实时监控</h4>
+<pre><code class="language-c">// 监控配置
+typedef struct {
+    uint32_t enable;             // 启用监控
+    uint32_t interval_ms;        // 监控间隔（毫秒）
+    float warning_threshold;     // 警告阈值（百分比）
+    float critical_threshold;    // 严重阈值（百分比）
+} monitor_config_t;
+
+// 监控状态
+typedef struct {
+    uint32_t warnings;           // 警告次数
+    uint32_t criticals;          // 严重次数
+    uint32_t last_check_time;    // 上次检查时间
+} monitor_state_t;
+
+// 内存监控器
+typedef struct {
+    monitor_config_t config;
+    monitor_state_t state;
+    mem_manager_t* mgr;
+} memory_monitor_t;
+
+// 初始化监控器
+void monitor_init(
+    memory_monitor_t* monitor,
+    mem_manager_t* mgr,
+    const monitor_config_t* config
+) {
+    if (monitor == NULL || mgr == NULL || config == NULL) {
+        return;
+    }
+
+    monitor-&gt;config = *config;
+    monitor-&gt;mgr = mgr;
+    memset(&amp;monitor-&gt;state, 0, sizeof(monitor_state_t));
+}
+
+// 检查内存使用情况
+void monitor_check(memory_monitor_t* monitor) {
+    if (monitor == NULL || !monitor-&gt;config.enable) {
+        return;
+    }
+
+    uint32_t current_time = get_timestamp();
+
+    // 检查是否到达监控间隔
+    if (current_time - monitor-&gt;state.last_check_time &lt; 
+        monitor-&gt;config.interval_ms) {
+        return;
+    }
+
+    monitor-&gt;state.last_check_time = current_time;
+
+    // 检查每个内存池
+    memory_pool_t* pool = monitor-&gt;mgr-&gt;pools;
+
+    while (pool != NULL) {
+        float usage = pool_get_usage_percent(pool);
+
+        if (usage &gt;= monitor-&gt;config.critical_threshold) {
+            printf(&quot;CRITICAL: Pool (size %zu) usage %.1f%% &gt;= %.1f%%\n&quot;,
+                   pool-&gt;config.block_size, usage, 
+                   monitor-&gt;config.critical_threshold);
+            monitor-&gt;state.criticals++;
+        } else if (usage &gt;= monitor-&gt;config.warning_threshold) {
+            printf(&quot;WARNING: Pool (size %zu) usage %.1f%% &gt;= %.1f%%\n&quot;,
+                   pool-&gt;config.block_size, usage, 
+                   monitor-&gt;config.warning_threshold);
+            monitor-&gt;state.warnings++;
+        }
+
+        pool = pool-&gt;next;
+    }
+}
+
+// 定期监控任务（在主循环或定时器中调用）
+void monitor_task(memory_monitor_t* monitor) {
+    monitor_check(monitor);
+}
+</code></pre>
+<h3 id="4">4. 内存泄漏检测</h3>
+<h4 id="41">4.1 泄漏检测实现</h4>
+<pre><code class="language-c">// 检查内存泄漏
+void mem_check_leaks(const mem_manager_t* mgr) {
+    if (mgr == NULL || !mgr-&gt;config.enable_debug) {
+        printf(&quot;Memory leak detection is disabled\n&quot;);
+        return;
+    }
+
+    if (mgr-&gt;alloc_list == NULL) {
+        printf(&quot;No memory leaks detected!\n&quot;);
+        return;
+    }
+
+    printf(&quot;\n========================================\n&quot;);
+    printf(&quot;Memory Leak Report\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    uint32_t leak_count = 0;
+    size_t total_leaked = 0;
+
+    mem_block_header_t* header = mgr-&gt;alloc_list;
+
+    while (header != NULL) {
+        leak_count++;
+        total_leaked += header-&gt;size;
+
+        printf(&quot;Leak #%u:\n&quot;, leak_count);
+        printf(&quot;  Address:    %p\n&quot;, 
+               (uint8_t*)header + HEADER_SIZE);
+        printf(&quot;  Size:       %zu bytes\n&quot;, header-&gt;size);
+        printf(&quot;  Alloc ID:   %u\n&quot;, header-&gt;alloc_id);
+        printf(&quot;  Allocated:  %s:%d\n&quot;, header-&gt;file, header-&gt;line);
+        printf(&quot;  Timestamp:  %u\n\n&quot;, header-&gt;timestamp);
+
+        header = header-&gt;next;
+    }
+
+    printf(&quot;Summary:\n&quot;);
+    printf(&quot;  Total leaks:  %u\n&quot;, leak_count);
+    printf(&quot;  Total bytes:  %zu\n&quot;, total_leaked);
+    printf(&quot;\n========================================\n\n&quot;);
+}
+
+// 打印所有已分配的内存块
+void mem_print_allocations(const mem_manager_t* mgr) {
+    if (mgr == NULL || !mgr-&gt;config.enable_debug) {
+        return;
+    }
+
+    printf(&quot;\n========================================\n&quot;);
+    printf(&quot;Current Allocations\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    uint32_t count = 0;
+    mem_block_header_t* header = mgr-&gt;alloc_list;
+
+    while (header != NULL) {
+        count++;
+
+        printf(&quot;Allocation #%u:\n&quot;, count);
+        printf(&quot;  Address:    %p\n&quot;, 
+               (uint8_t*)header + HEADER_SIZE);
+        printf(&quot;  Size:       %zu bytes\n&quot;, header-&gt;size);
+        printf(&quot;  Alloc ID:   %u\n&quot;, header-&gt;alloc_id);
+        printf(&quot;  Location:   %s:%d\n&quot;, header-&gt;file, header-&gt;line);
+        printf(&quot;  Timestamp:  %u\n\n&quot;, header-&gt;timestamp);
+
+        header = header-&gt;next;
+    }
+
+    printf(&quot;Total allocations: %u\n&quot;, count);
+    printf(&quot;\n========================================\n\n&quot;);
+}
+</code></pre>
+<h3 id="5">5. 碎片整理</h3>
+<h4 id="51">5.1 碎片分析</h4>
+<pre><code class="language-c">// 碎片统计
+typedef struct {
+    uint32_t total_fragments;    // 总碎片数
+    size_t largest_fragment;     // 最大碎片大小
+    size_t smallest_fragment;    // 最小碎片大小
+    float fragmentation_ratio;   // 碎片率
+} fragmentation_stats_t;
+
+// 分析内存碎片
+void analyze_fragmentation(
+    const mem_manager_t* mgr,
+    fragmentation_stats_t* stats
+) {
+    if (mgr == NULL || stats == NULL) {
+        return;
+    }
+
+    memset(stats, 0, sizeof(fragmentation_stats_t));
+    stats-&gt;smallest_fragment = SIZE_MAX;
+
+    // 遍历所有内存池
+    memory_pool_t* pool = mgr-&gt;pools;
+
+    while (pool != NULL) {
+        // 计算碎片
+        uint32_t free_blocks = pool-&gt;free_count;
+
+        if (free_blocks &gt; 0) {
+            stats-&gt;total_fragments += free_blocks;
+
+            size_t fragment_size = pool-&gt;config.block_size;
+
+            if (fragment_size &gt; stats-&gt;largest_fragment) {
+                stats-&gt;largest_fragment = fragment_size;
+            }
+
+            if (fragment_size &lt; stats-&gt;smallest_fragment) {
+                stats-&gt;smallest_fragment = fragment_size;
+            }
+        }
+
+        pool = pool-&gt;next;
+    }
+
+    // 计算碎片率
+    if (mgr-&gt;global_stats.total_allocs &gt; 0) {
+        stats-&gt;fragmentation_ratio = 
+            (float)stats-&gt;total_fragments / 
+            mgr-&gt;global_stats.total_allocs;
+    }
+}
+
+// 打印碎片统计
+void print_fragmentation_stats(const fragmentation_stats_t* stats) {
+    if (stats == NULL) {
+        return;
+    }
+
+    printf(&quot;\nFragmentation Statistics:\n&quot;);
+    printf(&quot;  Total fragments:    %u\n&quot;, stats-&gt;total_fragments);
+    printf(&quot;  Largest fragment:   %zu bytes\n&quot;, stats-&gt;largest_fragment);
+    printf(&quot;  Smallest fragment:  %zu bytes\n&quot;, stats-&gt;smallest_fragment);
+    printf(&quot;  Fragmentation ratio: %.2f%%\n&quot;, 
+           stats-&gt;fragmentation_ratio * 100);
+}
+</code></pre>
+<h4 id="52">5.2 碎片整理策略</h4>
+<pre><code class="language-c">// 碎片整理配置
+typedef struct {
+    uint32_t enable;             // 启用碎片整理
+    float trigger_threshold;     // 触发阈值
+    uint32_t max_iterations;     // 最大迭代次数
+} defrag_config_t;
+
+// 执行碎片整理（简化版本）
+int defragment_memory(
+    mem_manager_t* mgr,
+    const defrag_config_t* config
+) {
+    if (mgr == NULL || config == NULL || !config-&gt;enable) {
+        return -1;
+    }
+
+    // 分析当前碎片情况
+    fragmentation_stats_t stats;
+    analyze_fragmentation(mgr, &amp;stats);
+
+    // 检查是否需要整理
+    if (stats.fragmentation_ratio &lt; config-&gt;trigger_threshold) {
+        return 0;  // 不需要整理
+    }
+
+    printf(&quot;Starting defragmentation (ratio: %.2f%%)...\n&quot;,
+           stats.fragmentation_ratio * 100);
+
+    // 注意：实际的碎片整理需要移动已分配的内存块
+    // 这在嵌入式系统中通常很困难，因为需要更新所有指针
+    // 这里我们只演示概念
+
+    // 对于内存池系统，碎片整理主要是合并相邻的空闲块
+    // 但由于我们使用固定大小的块，实际上不存在外部碎片
+
+    printf(&quot;Defragmentation completed\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="6">6. 性能优化</h3>
+<h4 id="61">6.1 快速分配路径</h4>
+<pre><code class="language-c">// 快速分配（无调试信息）
+static inline void* mem_alloc_fast(
+    mem_manager_t* mgr,
+    size_t size
+) {
+    // 查找合适的池
+    memory_pool_t* pool = mgr-&gt;pools;
+
+    while (pool != NULL) {
+        if (pool-&gt;config.block_size &gt;= size &amp;&amp; 
+            pool-&gt;free_count &gt; 0) {
+            // 快速分配
+            void* block = pool-&gt;free_list;
+            pool-&gt;free_list = *(void**)block;
+            pool-&gt;free_count--;
+
+            return block;
+        }
+        pool = pool-&gt;next;
+    }
+
+    return NULL;
+}
+
+// 快速释放（无调试信息）
+static inline void mem_free_fast(
+    mem_manager_t* mgr,
+    void* ptr
+) {
+    // 查找所属池
+    memory_pool_t* pool = mgr-&gt;pools;
+
+    while (pool != NULL) {
+        uintptr_t pool_start = (uintptr_t)pool-&gt;memory;
+        uintptr_t pool_end = pool_start + 
+            (pool-&gt;config.block_size * pool-&gt;config.block_count);
+        uintptr_t ptr_addr = (uintptr_t)ptr;
+
+        if (ptr_addr &gt;= pool_start &amp;&amp; ptr_addr &lt; pool_end) {
+            *(void**)ptr = pool-&gt;free_list;
+            pool-&gt;free_list = ptr;
+            pool-&gt;free_count++;
+            return;
+        }
+
+        pool = pool-&gt;next;
+    }
+}
+</code></pre>
+<h4 id="62">6.2 缓存优化</h4>
+<pre><code class="language-c">// 最近使用的池缓存
+typedef struct {
+    memory_pool_t* last_alloc_pool;
+    memory_pool_t* last_free_pool;
+} pool_cache_t;
+
+// 带缓存的分配
+void* mem_alloc_cached(
+    mem_manager_t* mgr,
+    size_t size,
+    pool_cache_t* cache
+) {
+    // 先尝试上次使用的池
+    if (cache-&gt;last_alloc_pool != NULL &amp;&amp;
+        cache-&gt;last_alloc_pool-&gt;config.block_size &gt;= size &amp;&amp;
+        cache-&gt;last_alloc_pool-&gt;free_count &gt; 0) {
+
+        void* ptr = pool_alloc(cache-&gt;last_alloc_pool);
+        if (ptr != NULL) {
+            return ptr;
+        }
+    }
+
+    // 查找合适的池
+    memory_pool_t* pool = find_suitable_pool(mgr, size);
+
+    if (pool != NULL) {
+        cache-&gt;last_alloc_pool = pool;
+        return pool_alloc(pool);
+    }
+
+    return NULL;
+}
+</code></pre>
+<h2 id="_21">完整示例程序</h2>
+<h3 id="_22">主程序</h3>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+// 获取时间戳（毫秒）
+uint32_t get_timestamp(void) {
+    return (uint32_t)(clock() * 1000 / CLOCKS_PER_SEC);
+}
+
+// 测试程序
+int main(void) {
+    printf(&quot;========================================\n&quot;);
+    printf(&quot;Advanced Memory Management System Test\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    // 1. 分配堆内存
+    #define HEAP_SIZE (256 * 1024)  // 256KB
+    static uint8_t heap[HEAP_SIZE];
+
+    // 2. 创建内存管理器
+    mem_manager_t mgr;
+    memset(&amp;mgr, 0, sizeof(mgr));
+
+    mgr.config.total_heap_size = HEAP_SIZE;
+    mgr.config.min_block_size = 32;
+    mgr.config.max_block_size = 4096;
+    mgr.config.enable_debug = 1;
+    mgr.config.enable_stats = 1;
+    mgr.config.enable_defrag = 1;
+
+    mgr.heap_start = heap;
+    mgr.heap_end = heap + HEAP_SIZE;
+
+    // 3. 创建多级内存池
+    printf(&quot;Creating multi-level memory pools...\n&quot;);
+    if (create_multi_level_pools(&amp;mgr, heap, HEAP_SIZE) != 0) {
+        printf(&quot;Failed to create memory pools\n&quot;);
+        return 1;
+    }
+    printf(&quot;Created %u memory pools\n\n&quot;, mgr.pool_count);
+
+    // 4. 测试内存分配
+    printf(&quot;Test 1: Basic allocation and deallocation\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    void* ptr1 = mem_alloc(&amp;mgr, 50);
+    void* ptr2 = mem_alloc(&amp;mgr, 100);
+    void* ptr3 = mem_alloc(&amp;mgr, 200);
+
+    printf(&quot;Allocated 3 blocks:\n&quot;);
+    printf(&quot;  ptr1 = %p (50 bytes)\n&quot;, ptr1);
+    printf(&quot;  ptr2 = %p (100 bytes)\n&quot;, ptr2);
+    printf(&quot;  ptr3 = %p (200 bytes)\n\n&quot;, ptr3);
+
+    // 使用内存
+    if (ptr1 != NULL) {
+        strcpy((char*)ptr1, &quot;Hello, Memory Manager!&quot;);
+        printf(&quot;Written to ptr1: %s\n\n&quot;, (char*)ptr1);
+    }
+
+    // 5. 打印统计信息
+    printf(&quot;Test 2: Statistics\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+    mem_print_all_stats(&amp;mgr);
+
+    // 6. 测试内存泄漏检测
+    printf(&quot;Test 3: Memory leak detection\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    // 故意不释放ptr3，制造内存泄漏
+    mem_free(&amp;mgr, ptr1);
+    mem_free(&amp;mgr, ptr2);
+
+    mem_check_leaks(&amp;mgr);
+
+    // 7. 测试大量分配
+    printf(&quot;Test 4: Stress test\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    #define NUM_ALLOCS 100
+    void* ptrs[NUM_ALLOCS];
+
+    printf(&quot;Allocating %d blocks...\n&quot;, NUM_ALLOCS);
+
+    for (int i = 0; i &lt; NUM_ALLOCS; i++) {
+        size_t size = 32 + (i % 8) * 32;  // 32-256字节
+        ptrs[i] = mem_alloc(&amp;mgr, size);
+
+        if (ptrs[i] == NULL) {
+            printf(&quot;Allocation failed at iteration %d\n&quot;, i);
+            break;
+        }
+    }
+
+    printf(&quot;Allocated %d blocks successfully\n\n&quot;, NUM_ALLOCS);
+
+    // 打印统计
+    mem_print_all_stats(&amp;mgr);
+
+    // 8. 测试监控
+    printf(&quot;Test 5: Memory monitoring\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    memory_monitor_t monitor;
+    monitor_config_t monitor_config = {
+        .enable = 1,
+        .interval_ms = 100,
+        .warning_threshold = 70.0f,
+        .critical_threshold = 90.0f
+    };
+
+    monitor_init(&amp;monitor, &amp;mgr, &amp;monitor_config);
+    monitor_check(&amp;monitor);
+
+    printf(&quot;\n&quot;);
+
+    // 9. 测试碎片分析
+    printf(&quot;Test 6: Fragmentation analysis\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    fragmentation_stats_t frag_stats;
+    analyze_fragmentation(&amp;mgr, &amp;frag_stats);
+    print_fragmentation_stats(&amp;frag_stats);
+
+    printf(&quot;\n&quot;);
+
+    // 10. 清理
+    printf(&quot;Test 7: Cleanup\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+
+    printf(&quot;Freeing all allocated blocks...\n&quot;);
+    for (int i = 0; i &lt; NUM_ALLOCS; i++) {
+        if (ptrs[i] != NULL) {
+            mem_free(&amp;mgr, ptrs[i]);
+        }
+    }
+
+    // 释放之前泄漏的内存
+    mem_free(&amp;mgr, ptr3);
+
+    printf(&quot;Cleanup completed\n\n&quot;);
+
+    // 最终统计
+    printf(&quot;Final Statistics:\n&quot;);
+    printf(&quot;------------------------------------------\n&quot;);
+    mem_print_all_stats(&amp;mgr);
+
+    // 最终泄漏检查
+    mem_check_leaks(&amp;mgr);
+
+    printf(&quot;========================================\n&quot;);
+    printf(&quot;All tests completed successfully!\n&quot;);
+    printf(&quot;========================================\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h2 id="_23">编译和运行</h2>
+<h3 id="makefile">Makefile</h3>
+<pre><code class="language-makefile"># Makefile for Memory Management System
+
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -std=c11
+TARGET = mem_mgr_test
+
+SRCS = mem_mgr_test.c
+OBJS = $(SRCS:.c=.o)
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+    $(CC) $(CFLAGS) -o $@ $^
+
+%.o: %.c
+    $(CC) $(CFLAGS) -c $&lt; -o $@
+
+clean:
+    rm -f $(OBJS) $(TARGET)
+
+run: $(TARGET)
+    ./$(TARGET)
+
+.PHONY: all clean run
+</code></pre>
+<h3 id="_24">编译命令</h3>
+<pre><code class="language-bash"># 编译
+make
+
+# 运行
+make run
+
+# 或直接运行
+./mem_mgr_test
+</code></pre>
+<h2 id="_25">测试和验证</h2>
+<h3 id="_26">单元测试</h3>
+<pre><code class="language-c">// 单元测试框架（简化版）
+typedef struct {
+    const char* name;
+    int (*test_func)(void);
+} test_case_t;
+
+int test_pool_init(void) {
+    uint8_t memory[1024];
+    memory_pool_t pool;
+    pool_config_t config = {
+        .block_size = 64,
+        .block_count = 16,
+        .alignment = 8
+    };
+
+    int result = pool_init(&amp;pool, memory, &amp;config);
+
+    if (result != 0) {
+        printf(&quot;FAIL: pool_init returned %d\n&quot;, result);
+        return 0;
+    }
+
+    if (pool.free_count != 16) {
+        printf(&quot;FAIL: free_count = %u, expected 16\n&quot;, pool.free_count);
+        return 0;
+    }
+
+    printf(&quot;PASS: pool_init\n&quot;);
+    return 1;
+}
+
+int test_pool_alloc_free(void) {
+    uint8_t memory[1024];
+    memory_pool_t pool;
+    pool_config_t config = {
+        .block_size = 64,
+        .block_count = 16,
+        .alignment = 8
+    };
+
+    pool_init(&amp;pool, memory, &amp;config);
+
+    // 分配
+    void* ptr = pool_alloc(&amp;pool);
+
+    if (ptr == NULL) {
+        printf(&quot;FAIL: pool_alloc returned NULL\n&quot;);
+        return 0;
+    }
+
+    if (pool.free_count != 15) {
+        printf(&quot;FAIL: free_count = %u after alloc, expected 15\n&quot;, 
+               pool.free_count);
+        return 0;
+    }
+
+    // 释放
+    pool_free(&amp;pool, ptr);
+
+    if (pool.free_count != 16) {
+        printf(&quot;FAIL: free_count = %u after free, expected 16\n&quot;, 
+               pool.free_count);
+        return 0;
+    }
+
+    printf(&quot;PASS: pool_alloc_free\n&quot;);
+    return 1;
+}
+
+// 运行所有测试
+void run_unit_tests(void) {
+    test_case_t tests[] = {
+        {&quot;pool_init&quot;, test_pool_init},
+        {&quot;pool_alloc_free&quot;, test_pool_alloc_free},
+        // 添加更多测试...
+    };
+
+    int num_tests = sizeof(tests) / sizeof(tests[0]);
+    int passed = 0;
+
+    printf(&quot;\nRunning Unit Tests:\n&quot;);
+    printf(&quot;==================\n&quot;);
+
+    for (int i = 0; i &lt; num_tests; i++) {
+        printf(&quot;Test %d: %s... &quot;, i + 1, tests[i].name);
+        if (tests[i].test_func()) {
+            passed++;
+        }
+    }
+
+    printf(&quot;\nResults: %d/%d tests passed\n\n&quot;, passed, num_tests);
+}
+</code></pre>
+<h3 id="_27">性能测试</h3>
+<pre><code class="language-c">// 性能测试
+void performance_test(mem_manager_t* mgr) {
+    printf(&quot;\nPerformance Test:\n&quot;);
+    printf(&quot;=================\n&quot;);
+
+    #define PERF_ITERATIONS 10000
+
+    // 测试分配性能
+    uint32_t start_time = get_timestamp();
+
+    for (int i = 0; i &lt; PERF_ITERATIONS; i++) {
+        void* ptr = mem_alloc_fast(mgr, 64);
+        if (ptr != NULL) {
+            mem_free_fast(mgr, ptr);
+        }
+    }
+
+    uint32_t end_time = get_timestamp();
+    uint32_t elapsed = end_time - start_time;
+
+    printf(&quot;Allocations: %d\n&quot;, PERF_ITERATIONS);
+    printf(&quot;Time: %u ms\n&quot;, elapsed);
+    printf(&quot;Avg time per alloc: %.3f us\n&quot;, 
+           (float)elapsed * 1000 / PERF_ITERATIONS);
+    printf(&quot;Throughput: %.0f allocs/sec\n\n&quot;, 
+           (float)PERF_ITERATIONS * 1000 / elapsed);
+}
+</code></pre>
+<h2 id="_28">项目扩展</h2>
+<h3 id="_29">扩展功能建议</h3>
+<ol>
+<li>
+<p><strong>线程安全</strong>
+   - 添加互斥锁保护
+   - 实现无锁内存池
+   - 支持多核系统</p>
+</li>
+<li>
+<p><strong>高级特性</strong>
+   - 实现slab分配器
+   - 支持NUMA架构
+   - 添加内存压缩功能</p>
+</li>
+<li>
+<p><strong>调试增强</strong>
+   - 边界检查（guard bytes）
+   - 使用后检测（use-after-free）
+   - 双重释放检测</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 实现per-CPU缓存
+   - 批量分配/释放
+   - 预取优化</p>
+</li>
+<li>
+<p><strong>可视化</strong>
+   - 内存使用图表
+   - 实时监控界面
+   - 性能分析报告</p>
+</li>
+</ol>
+<h2 id="_30">总结</h2>
+<p>本项目实现了一个功能完整的嵌入式内存管理系统，包括：</p>
+<ul>
+<li>多级内存池管理</li>
+<li>高效的分配和释放</li>
+<li>详细的统计和监控</li>
+<li>内存泄漏检测</li>
+<li>碎片分析和整理</li>
+<li>性能优化</li>
+</ul>
+<p>通过完成这个项目，你已经掌握了：</p>
+<ul>
+<li>系统架构设计能力</li>
+<li>数据结构和算法实现</li>
+<li>性能分析和优化技巧</li>
+<li>调试和测试方法</li>
+</ul>
+<p>这些技能可以应用到其他嵌入式系统开发中，帮助你构建更可靠、更高效的系统。</p>
+<h2 id="_31">延伸阅读</h2>
+<ul>
+<li>Linux内核内存管理源码</li>
+<li>FreeRTOS内存管理实现</li>
+<li>"The Art of Memory Management"</li>
+<li>"Embedded Systems Architecture"</li>
+</ul>
+<h2 id="_32">参考资料</h2>
+<ol>
+<li>Linux Kernel Memory Management Documentation</li>
+<li>FreeRTOS Memory Management</li>
+<li>"Dynamic Memory Allocation in Embedded Systems"</li>
+<li>ARM Cortex-M Memory Management Guide</li>
+<li>"Embedded Systems Architecture" by Tammy Noergaard</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>实现线程安全的内存池</li>
+<li>添加内存使用的可视化功能</li>
+<li>实现基于优先级的内存分配</li>
+<li>优化内存池的查找算法</li>
+<li>实现内存使用的历史记录功能</li>
+</ol>
+<p><strong>下一步</strong>：建议学习操作系统的内存管理实现，深入理解虚拟内存和页表管理。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

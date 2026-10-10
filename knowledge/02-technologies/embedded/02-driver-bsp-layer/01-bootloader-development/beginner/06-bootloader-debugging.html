@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>Bootloader调试技巧与常见问题 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/01-bootloader-development/">01-bootloader-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/01-bootloader-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">准备工作</a><ul>
+<li><a href="#_3">硬件要求</a></li>
+<li><a href="#_4">软件要求</a></li>
+<li><a href="#_5">调试环境搭建</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#_7">方法一: 串口日志调试</a><ul>
+<li><a href="#11">1.1 基本原理</a></li>
+<li><a href="#12">1.2 实现完善的日志系统</a></li>
+</ul>
+</li>
+<li><a href="#led">方法二: LED状态指示</a><ul>
+<li><a href="#21">2.1 基本原理</a></li>
+<li><a href="#22-led">2.2 实现LED指示系统</a></li>
+</ul>
+</li>
+<li><a href="#_8">方法三: 调试器断点调试</a><ul>
+<li><a href="#31">3.1 基本原理</a></li>
+<li><a href="#32">3.2 关键调试点</a></li>
+<li><a href="#33">3.3 调试技巧</a></li>
+</ul>
+</li>
+<li><a href="#_9">方法四: 内存转储分析</a><ul>
+<li><a href="#41">4.1 基本原理</a></li>
+<li><a href="#42">4.2 实现内存转储功能</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_10">常见问题与解决方案</a><ul>
+<li><a href="#1">问题1: 跳转到应用程序失败</a></li>
+<li><a href="#2-flash">问题2: Flash擦除或写入失败</a></li>
+<li><a href="#3">问题3: 串口无输出</a></li>
+<li><a href="#4">问题4: 看门狗复位</a></li>
+<li><a href="#5">问题5: 固件下载超时</a></li>
+</ul>
+</li>
+<li><a href="#_11">实践示例</a><ul>
+<li><a href="#1-bootloader">示例1: 完整的调试Bootloader</a></li>
+<li><a href="#2">示例2: 调试命令行接口</a></li>
+</ul>
+</li>
+<li><a href="#_12">深入理解</a><ul>
+<li><a href="#_13">调试流程图</a></li>
+<li><a href="#_14">调试优先级</a></li>
+<li><a href="#_15">调试工具对比</a></li>
+</ul>
+</li>
+<li><a href="#_16">常见问题</a><ul>
+<li><a href="#q1">Q1: 如何在没有调试器的情况下调试?</a></li>
+<li><a href="#q2">Q2: 如何调试启动代码?</a></li>
+<li><a href="#q3">Q3: 如何记录历史日志?</a></li>
+<li><a href="#q4-bootloader">Q4: 如何测试Bootloader的可靠性?</a></li>
+<li><a href="#q5">Q5: 如何优化调试输出的性能?</a></li>
+</ul>
+</li>
+<li><a href="#_17">总结</a></li>
+<li><a href="#_18">延伸阅读</a></li>
+<li><a href="#_19">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="bootloader">Bootloader调试技巧与常见问题</h1>
+<h2 id="_1">概述</h2>
+<p>Bootloader作为嵌入式系统启动的第一个程序,其稳定性和可靠性至关重要。然而,在开发过程中,我们经常会遇到各种问题:启动失败、跳转异常、固件更新失败等。掌握有效的调试方法和故障排查技巧,能够大大提高开发效率,快速定位和解决问题。</p>
+<p>完成本教程后,你将能够:</p>
+<ul>
+<li>掌握多种Bootloader调试方法和工具</li>
+<li>学会使用串口日志进行问题诊断</li>
+<li>理解常见的启动失败原因及解决方案</li>
+<li>实现完善的错误指示和日志系统</li>
+<li>使用调试器进行深度调试</li>
+<li>建立系统化的调试流程</li>
+</ul>
+<h2 id="_2">准备工作</h2>
+<h3 id="_3">硬件要求</h3>
+<ul>
+<li><strong>开发板</strong>: STM32F4系列或其他ARM Cortex-M开发板</li>
+<li><strong>调试器</strong>: ST-Link V2、J-Link或DAP-Link</li>
+<li><strong>串口工具</strong>: USB转TTL模块</li>
+<li><strong>LED指示灯</strong>: 用于状态指示</li>
+<li><strong>逻辑分析仪</strong>: (可选)用于信号分析</li>
+</ul>
+<h3 id="_4">软件要求</h3>
+<ul>
+<li><strong>开发环境</strong>: Keil MDK、IAR或STM32CubeIDE</li>
+<li><strong>串口助手</strong>: SecureCRT、Xshell或PuTTY</li>
+<li><strong>调试工具</strong>: OpenOCD、GDB或IDE内置调试器</li>
+<li><strong>日志分析工具</strong>: 文本编辑器或专用日志分析软件</li>
+</ul>
+<h3 id="_5">调试环境搭建</h3>
+<p><strong>硬件连接</strong>:</p>
+<pre><code>开发板连接:
+
+1. 调试器连接:
+   ST-Link    开发板
+   SWDIO  -&gt;  SWDIO
+   SWCLK  -&gt;  SWCLK
+   GND    -&gt;  GND
+   3.3V   -&gt;  3.3V (可选)
+
+2. 串口连接:
+   USB-TTL    开发板
+   TX     -&gt;  RX (PA10)
+   RX     -&gt;  TX (PA9)
+   GND    -&gt;  GND
+
+3. LED指示:
+   LED1   -&gt;  PD12 (状态指示)
+   LED2   -&gt;  PD13 (错误指示)
+   LED3   -&gt;  PD14 (调试指示)
+</code></pre>
+<h2 id="_6">核心内容</h2>
+<h3 id="_7">方法一: 串口日志调试</h3>
+<h4 id="11">1.1 基本原理</h4>
+<p>串口日志是Bootloader调试最常用、最有效的方法。通过串口输出关键信息,可以实时了解程序运行状态。</p>
+<p><strong>优点</strong>:
+- 实现简单,成本低
+- 不影响程序时序
+- 可以记录历史信息
+- 适合现场调试</p>
+<p><strong>缺点</strong>:
+- 需要额外的串口资源
+- 输出会占用一定时间
+- 波特率限制信息量</p>
+<h4 id="12">1.2 实现完善的日志系统</h4>
+<p><strong>日志级别定义</strong>:</p>
+<pre><code class="language-c">/* debug_log.h */
+#ifndef __DEBUG_LOG_H
+#define __DEBUG_LOG_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+
+/* 日志级别 */
+typedef enum {
+    LOG_LEVEL_NONE = 0,     /* 不输出 */
+    LOG_LEVEL_ERROR,        /* 错误 */
+    LOG_LEVEL_WARN,         /* 警告 */
+    LOG_LEVEL_INFO,         /* 信息 */
+    LOG_LEVEL_DEBUG,        /* 调试 */
+    LOG_LEVEL_VERBOSE       /* 详细 */
+} LogLevel;
+
+/* 当前日志级别 */
+#ifndef LOG_LEVEL
+#define LOG_LEVEL   LOG_LEVEL_DEBUG
+#endif
+
+/* 日志输出宏 */
+#define LOG_ERROR(fmt, ...)   do { \
+    if (LOG_LEVEL &gt;= LOG_LEVEL_ERROR) { \
+        printf(&quot;[ERROR] %s:%d &quot; fmt &quot;\r\n&quot;, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_WARN(fmt, ...)    do { \
+    if (LOG_LEVEL &gt;= LOG_LEVEL_WARN) { \
+        printf(&quot;[WARN]  %s:%d &quot; fmt &quot;\r\n&quot;, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_INFO(fmt, ...)    do { \
+    if (LOG_LEVEL &gt;= LOG_LEVEL_INFO) { \
+        printf(&quot;[INFO]  &quot; fmt &quot;\r\n&quot;, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_DEBUG(fmt, ...)   do { \
+    if (LOG_LEVEL &gt;= LOG_LEVEL_DEBUG) { \
+        printf(&quot;[DEBUG] %s:%d &quot; fmt &quot;\r\n&quot;, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+#define LOG_VERBOSE(fmt, ...) do { \
+    if (LOG_LEVEL &gt;= LOG_LEVEL_VERBOSE) { \
+        printf(&quot;[VERB]  %s:%d &quot; fmt &quot;\r\n&quot;, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+    } \
+} while(0)
+
+/* 十六进制数据打印 */
+void LOG_HEX(const char *title, const uint8_t *data, uint32_t len);
+
+/* 系统状态打印 */
+void LOG_SystemInfo(void);
+
+#endif /* __DEBUG_LOG_H */
+</code></pre>
+<p><strong>日志系统实现</strong>:</p>
+<pre><code class="language-c">/* debug_log.c */
+#include &quot;debug_log.h&quot;
+#include &quot;uart.h&quot;
+#include &lt;string.h&gt;
+
+/* 打印十六进制数据 */
+void LOG_HEX(const char *title, const uint8_t *data, uint32_t len)
+{
+    if (LOG_LEVEL &lt; LOG_LEVEL_DEBUG) {
+        return;
+    }
+
+    printf(&quot;[HEX]   %s (%d bytes):\r\n&quot;, title, len);
+
+    for (uint32_t i = 0; i &lt; len; i++) {
+        printf(&quot;%02X &quot;, data[i]);
+
+        if ((i + 1) % 16 == 0) {
+            printf(&quot;\r\n&quot;);
+        }
+    }
+
+    if (len % 16 != 0) {
+        printf(&quot;\r\n&quot;);
+    }
+}
+
+/* 打印系统信息 */
+void LOG_SystemInfo(void)
+{
+    printf(&quot;\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;  System Information\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;Build Date: %s %s\r\n&quot;, __DATE__, __TIME__);
+    printf(&quot;Compiler:   %s\r\n&quot;, __VERSION__);
+    printf(&quot;CPU:        %d MHz\r\n&quot;, SystemCoreClock / 1000000);
+
+    /* 打印复位原因 */
+    uint32_t rcc_csr = RCC-&gt;CSR;
+    printf(&quot;Reset:      &quot;);
+    if (rcc_csr &amp; RCC_CSR_PORRSTF)    printf(&quot;POR &quot;);
+    if (rcc_csr &amp; RCC_CSR_PINRSTF)    printf(&quot;PIN &quot;);
+    if (rcc_csr &amp; RCC_CSR_SFTRSTF)    printf(&quot;SW &quot;);
+    if (rcc_csr &amp; RCC_CSR_IWDGRSTF)   printf(&quot;IWDG &quot;);
+    if (rcc_csr &amp; RCC_CSR_WWDGRSTF)   printf(&quot;WWDG &quot;);
+    if (rcc_csr &amp; RCC_CSR_LPWRRSTF)   printf(&quot;LPWR &quot;);
+    printf(&quot;\r\n&quot;);
+
+    /* 清除复位标志 */
+    RCC-&gt;CSR |= RCC_CSR_RMVF;
+
+    printf(&quot;========================================\r\n\r\n&quot;);
+}
+</code></pre>
+<p><strong>使用示例</strong>:</p>
+<pre><code class="language-c">/* bootloader_main.c */
+#include &quot;debug_log.h&quot;
+
+int main(void)
+{
+    SystemInit();
+    UART_Init();
+
+    /* 打印系统信息 */
+    LOG_SystemInfo();
+
+    LOG_INFO(&quot;Bootloader starting...&quot;);
+    LOG_DEBUG(&quot;Flash size: %d KB&quot;, FLASH_SIZE);
+    LOG_DEBUG(&quot;RAM size: %d KB&quot;, RAM_SIZE);
+
+    /* 检查应用程序 */
+    uint32_t app_sp = *(__IO uint32_t*)APP_START_ADDR;
+    LOG_DEBUG(&quot;App stack pointer: 0x%08X&quot;, app_sp);
+
+    if ((app_sp &amp; 0x2FFE0000) == 0x20000000) {
+        LOG_INFO(&quot;Application valid&quot;);
+    } else {
+        LOG_ERROR(&quot;Application invalid! SP=0x%08X&quot;, app_sp);
+        while(1);
+    }
+
+    /* 跳转到应用程序 */
+    LOG_INFO(&quot;Jumping to application at 0x%08X&quot;, APP_START_ADDR);
+    JumpToApplication(APP_START_ADDR);
+
+    /* 不应该执行到这里 */
+    LOG_ERROR(&quot;Jump failed!&quot;);
+    while(1);
+}
+</code></pre>
+<h3 id="led">方法二: LED状态指示</h3>
+<h4 id="21">2.1 基本原理</h4>
+<p>使用LED的不同闪烁模式表示不同的状态和错误,这是最直观的调试方法,特别适合没有串口的情况。</p>
+<p><strong>LED指示方案</strong>:</p>
+<pre><code>LED状态定义:
+
+1. 正常启动:
+   - LED快速闪烁3次 → 进入应用程序
+
+2. 升级模式:
+   - LED慢速闪烁(500ms) → 等待固件
+
+3. 错误状态:
+   - LED常亮 → 应用程序无效
+   - LED快速闪烁(100ms) → Flash操作失败
+   - LED闪烁N次后暂停 → 错误代码N
+
+4. 调试模式:
+   - LED1: 主状态指示
+   - LED2: 错误指示
+   - LED3: 通信指示
+</code></pre>
+<h4 id="22-led">2.2 实现LED指示系统</h4>
+<pre><code class="language-c">/* led_debug.h */
+#ifndef __LED_DEBUG_H
+#define __LED_DEBUG_H
+
+#include &quot;stm32f4xx.h&quot;
+
+/* LED定义 */
+#define LED1_GPIO       GPIOD
+#define LED1_PIN        GPIO_PIN_12
+#define LED1_RCC        RCC_AHB1ENR_GPIODEN
+
+#define LED2_GPIO       GPIOD
+#define LED2_PIN        GPIO_PIN_13
+#define LED2_RCC        RCC_AHB1ENR_GPIODEN
+
+#define LED3_GPIO       GPIOD
+#define LED3_PIN        GPIO_PIN_14
+#define LED3_RCC        RCC_AHB1ENR_GPIODEN
+
+/* LED操作宏 */
+#define LED1_ON()       HAL_GPIO_WritePin(LED1_GPIO, LED1_PIN, GPIO_PIN_SET)
+#define LED1_OFF()      HAL_GPIO_WritePin(LED1_GPIO, LED1_PIN, GPIO_PIN_RESET)
+#define LED1_TOGGLE()   HAL_GPIO_TogglePin(LED1_GPIO, LED1_PIN)
+
+#define LED2_ON()       HAL_GPIO_WritePin(LED2_GPIO, LED2_PIN, GPIO_PIN_SET)
+#define LED2_OFF()      HAL_GPIO_WritePin(LED2_GPIO, LED2_PIN, GPIO_PIN_RESET)
+#define LED2_TOGGLE()   HAL_GPIO_TogglePin(LED2_GPIO, LED2_PIN)
+
+#define LED3_ON()       HAL_GPIO_WritePin(LED3_GPIO, LED3_PIN, GPIO_PIN_SET)
+#define LED3_OFF()      HAL_GPIO_WritePin(LED3_GPIO, LED3_PIN, GPIO_PIN_RESET)
+#define LED3_TOGGLE()   HAL_GPIO_TogglePin(LED3_GPIO, LED3_PIN)
+
+/* 错误代码 */
+typedef enum {
+    LED_ERROR_NONE = 0,
+    LED_ERROR_APP_INVALID,      /* 应用程序无效 */
+    LED_ERROR_FLASH_ERASE,      /* Flash擦除失败 */
+    LED_ERROR_FLASH_WRITE,      /* Flash写入失败 */
+    LED_ERROR_CRC_FAIL,         /* CRC校验失败 */
+    LED_ERROR_TIMEOUT,          /* 超时 */
+    LED_ERROR_COMM_FAIL,        /* 通信失败 */
+    LED_ERROR_UNKNOWN           /* 未知错误 */
+} LEDErrorCode;
+
+/* 函数声明 */
+void LED_Init(void);
+void LED_Blink(uint8_t led, uint32_t times, uint32_t delay_ms);
+void LED_ShowError(LEDErrorCode error);
+void LED_ShowProgress(uint8_t percent);
+
+#endif /* __LED_DEBUG_H */
+</code></pre>
+<pre><code class="language-c">/* led_debug.c */
+#include &quot;led_debug.h&quot;
+
+/* 延时函数 */
+static void LED_Delay(uint32_t ms)
+{
+    for (volatile uint32_t i = 0; i &lt; ms * 4000; i++);
+}
+
+/* 初始化LED */
+void LED_Init(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    /* 使能时钟 */
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    /* 配置GPIO */
+    GPIO_InitStruct.Pin = LED1_PIN | LED2_PIN | LED3_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOD, &amp;GPIO_InitStruct);
+
+    /* 关闭所有LED */
+    LED1_OFF();
+    LED2_OFF();
+    LED3_OFF();
+}
+
+/* LED闪烁 */
+void LED_Blink(uint8_t led, uint32_t times, uint32_t delay_ms)
+{
+    for (uint32_t i = 0; i &lt; times; i++) {
+        switch (led) {
+            case 1: LED1_ON(); break;
+            case 2: LED2_ON(); break;
+            case 3: LED3_ON(); break;
+        }
+        LED_Delay(delay_ms);
+
+        switch (led) {
+            case 1: LED1_OFF(); break;
+            case 2: LED2_OFF(); break;
+            case 3: LED3_OFF(); break;
+        }
+        LED_Delay(delay_ms);
+    }
+}
+
+/* 显示错误代码 */
+void LED_ShowError(LEDErrorCode error)
+{
+    /* LED2常亮表示错误 */
+    LED2_ON();
+    LED_Delay(1000);
+    LED2_OFF();
+    LED_Delay(500);
+
+    /* 闪烁次数表示错误代码 */
+    LED_Blink(2, error, 200);
+
+    LED_Delay(2000);
+}
+
+/* 显示进度 */
+void LED_ShowProgress(uint8_t percent)
+{
+    /* LED3闪烁表示进度 */
+    if (percent % 10 == 0) {
+        LED3_TOGGLE();
+    }
+}
+</code></pre>
+<p><strong>使用示例</strong>:</p>
+<pre><code class="language-c">/* bootloader_main.c */
+#include &quot;led_debug.h&quot;
+
+int main(void)
+{
+    SystemInit();
+    LED_Init();
+
+    /* 启动指示: LED1快速闪烁3次 */
+    LED_Blink(1, 3, 100);
+
+    /* 检查应用程序 */
+    uint32_t app_sp = *(__IO uint32_t*)APP_START_ADDR;
+    if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+        /* 应用程序无效 */
+        LED_ShowError(LED_ERROR_APP_INVALID);
+        while(1) {
+            LED_Blink(2, 1, 500);  /* LED2慢速闪烁 */
+        }
+    }
+
+    /* 跳转到应用程序 */
+    LED1_ON();  /* LED1常亮表示即将跳转 */
+    HAL_Delay(100);
+    LED1_OFF();
+
+    JumpToApplication(APP_START_ADDR);
+
+    /* 跳转失败 */
+    LED_ShowError(LED_ERROR_UNKNOWN);
+    while(1);
+}
+</code></pre>
+<h3 id="_8">方法三: 调试器断点调试</h3>
+<h4 id="31">3.1 基本原理</h4>
+<p>使用JTAG/SWD调试器进行单步调试,可以查看寄存器、内存、变量等详细信息,是深度调试的最佳方法。</p>
+<p><strong>调试器功能</strong>:
+- 单步执行
+- 断点设置
+- 变量查看
+- 内存查看
+- 寄存器查看
+- 调用栈分析</p>
+<h4 id="32">3.2 关键调试点</h4>
+<p><strong>1. 启动代码调试</strong>:</p>
+<pre><code class="language-c">/* startup_stm32f4xx.s */
+Reset_Handler:
+    /* 设置断点1: 复位向量 */
+    ldr   sp, =_estack          /* 设置栈指针 */
+
+    /* 设置断点2: 数据段初始化前 */
+    bl    SystemInit            /* 系统初始化 */
+
+    /* 设置断点3: 跳转到main前 */
+    bl    main                  /* 跳转到main */
+</code></pre>
+<p><strong>2. 跳转函数调试</strong>:</p>
+<pre><code class="language-c">void JumpToApplication(uint32_t app_addr)
+{
+    /* 断点1: 检查栈指针 */
+    uint32_t app_sp = *(__IO uint32_t*)app_addr;
+    uint32_t app_entry = *(__IO uint32_t*)(app_addr + 4);
+
+    /* 断点2: 检查地址有效性 */
+    if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+        return;  /* 无效地址 */
+    }
+
+    /* 断点3: 关闭中断前 */
+    __disable_irq();
+
+    /* 断点4: 设置VTOR前 */
+    SCB-&gt;VTOR = app_addr;
+
+    /* 断点5: 设置栈指针前 */
+    __set_MSP(app_sp);
+
+    /* 断点6: 跳转前 */
+    void (*app_reset_handler)(void) = (void*)app_entry;
+    app_reset_handler();  /* 这里不会返回 */
+}
+</code></pre>
+<p><strong>3. Flash操作调试</strong>:</p>
+<pre><code class="language-c">uint8_t Flash_WriteWord(uint32_t addr, uint32_t data)
+{
+    /* 断点1: 检查地址 */
+    if (addr &lt; FLASH_BASE || addr &gt;= FLASH_END) {
+        return 1;  /* 地址无效 */
+    }
+
+    /* 断点2: 等待Flash就绪 */
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    /* 断点3: 配置编程操作 */
+    FLASH-&gt;CR |= FLASH_CR_PG;
+
+    /* 断点4: 写入数据 */
+    *(__IO uint32_t*)addr = data;
+
+    /* 断点5: 等待完成 */
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    /* 断点6: 检查错误 */
+    if (FLASH-&gt;SR &amp; FLASH_SR_PGSERR) {
+        return 2;  /* 编程错误 */
+    }
+
+    return 0;
+}
+</code></pre>
+<h4 id="33">3.3 调试技巧</h4>
+<p><strong>查看关键寄存器</strong>:</p>
+<pre><code>调试时需要关注的寄存器:
+
+1. 栈指针 (SP/MSP):
+   - 检查是否指向有效RAM区域
+   - 检查是否栈溢出
+
+2. 程序计数器 (PC):
+   - 检查当前执行位置
+   - 检查是否跳转到无效地址
+
+3. 中断向量表偏移 (SCB-&gt;VTOR):
+   - 检查是否正确设置
+   - 应用程序应该是0x08008000
+
+4. Flash控制寄存器 (FLASH-&gt;CR, FLASH-&gt;SR):
+   - 检查Flash操作状态
+   - 检查错误标志
+
+5. 复位控制寄存器 (RCC-&gt;CSR):
+   - 检查复位原因
+   - 帮助诊断启动问题
+</code></pre>
+<h3 id="_9">方法四: 内存转储分析</h3>
+<h4 id="41">4.1 基本原理</h4>
+<p>将Flash或RAM的内容读取出来进行分析,可以检查固件是否正确烧写、数据是否正确存储等。</p>
+<p><strong>内存转储方法</strong>:
+1. 使用调试器读取内存
+2. 使用ST-LINK Utility读取Flash
+3. 通过串口输出内存内容
+4. 使用OpenOCD命令行工具</p>
+<h4 id="42">4.2 实现内存转储功能</h4>
+<pre><code class="language-c">/* memory_dump.h */
+#ifndef __MEMORY_DUMP_H
+#define __MEMORY_DUMP_H
+
+#include &lt;stdint.h&gt;
+
+void MemDump_Flash(uint32_t addr, uint32_t len);
+void MemDump_RAM(uint32_t addr, uint32_t len);
+void MemDump_Registers(void);
+
+#endif /* __MEMORY_DUMP_H */
+</code></pre>
+<pre><code class="language-c">/* memory_dump.c */
+#include &quot;memory_dump.h&quot;
+#include &lt;stdio.h&gt;
+
+/* 转储Flash内容 */
+void MemDump_Flash(uint32_t addr, uint32_t len)
+{
+    printf(&quot;\r\n=== Flash Dump: 0x%08X (%d bytes) ===\r\n&quot;, addr, len);
+
+    uint8_t *ptr = (uint8_t*)addr;
+
+    for (uint32_t i = 0; i &lt; len; i += 16) {
+        printf(&quot;%08X: &quot;, addr + i);
+
+        /* 打印十六进制 */
+        for (uint32_t j = 0; j &lt; 16 &amp;&amp; (i + j) &lt; len; j++) {
+            printf(&quot;%02X &quot;, ptr[i + j]);
+        }
+
+        /* 对齐 */
+        for (uint32_t j = (len - i) &lt; 16 ? (len - i) : 16; j &lt; 16; j++) {
+            printf(&quot;   &quot;);
+        }
+
+        printf(&quot; | &quot;);
+
+        /* 打印ASCII */
+        for (uint32_t j = 0; j &lt; 16 &amp;&amp; (i + j) &lt; len; j++) {
+            uint8_t c = ptr[i + j];
+            printf(&quot;%c&quot;, (c &gt;= 32 &amp;&amp; c &lt;= 126) ? c : '.');
+        }
+
+        printf(&quot;\r\n&quot;);
+    }
+
+    printf(&quot;\r\n&quot;);
+}
+
+/* 转储RAM内容 */
+void MemDump_RAM(uint32_t addr, uint32_t len)
+{
+    printf(&quot;\r\n=== RAM Dump: 0x%08X (%d bytes) ===\r\n&quot;, addr, len);
+    MemDump_Flash(addr, len);  /* 实现相同 */
+}
+
+/* 转储关键寄存器 */
+void MemDump_Registers(void)
+{
+    printf(&quot;\r\n=== Register Dump ===\r\n&quot;);
+    printf(&quot;SP (MSP):    0x%08X\r\n&quot;, __get_MSP());
+    printf(&quot;PC:          0x%08X\r\n&quot;, __get_PC());
+    printf(&quot;LR:          0x%08X\r\n&quot;, __get_LR());
+    printf(&quot;PRIMASK:     0x%08X\r\n&quot;, __get_PRIMASK());
+    printf(&quot;CONTROL:     0x%08X\r\n&quot;, __get_CONTROL());
+    printf(&quot;SCB-&gt;VTOR:   0x%08X\r\n&quot;, SCB-&gt;VTOR);
+    printf(&quot;RCC-&gt;CSR:    0x%08X\r\n&quot;, RCC-&gt;CSR);
+    printf(&quot;FLASH-&gt;SR:   0x%08X\r\n&quot;, FLASH-&gt;SR);
+    printf(&quot;FLASH-&gt;CR:   0x%08X\r\n&quot;, FLASH-&gt;CR);
+    printf(&quot;\r\n&quot;);
+}
+</code></pre>
+<p><strong>使用示例</strong>:</p>
+<pre><code class="language-c">/* 调试应用程序区域 */
+void DebugApplication(void)
+{
+    printf(&quot;Checking application...\r\n&quot;);
+
+    /* 转储应用程序起始部分 */
+    MemDump_Flash(APP_START_ADDR, 256);
+
+    /* 检查向量表 */
+    uint32_t app_sp = *(__IO uint32_t*)APP_START_ADDR;
+    uint32_t app_entry = *(__IO uint32_t*)(APP_START_ADDR + 4);
+
+    printf(&quot;Stack Pointer: 0x%08X\r\n&quot;, app_sp);
+    printf(&quot;Reset Vector:  0x%08X\r\n&quot;, app_entry);
+
+    /* 验证地址 */
+    if ((app_sp &amp; 0x2FFE0000) == 0x20000000) {
+        printf(&quot;Stack pointer valid (RAM)\r\n&quot;);
+    } else {
+        printf(&quot;ERROR: Invalid stack pointer!\r\n&quot;);
+    }
+
+    if (app_entry &gt;= APP_START_ADDR &amp;&amp; app_entry &lt; (APP_START_ADDR + APP_SIZE)) {
+        printf(&quot;Reset vector valid (Flash)\r\n&quot;);
+    } else {
+        printf(&quot;ERROR: Invalid reset vector!\r\n&quot;);
+    }
+}
+</code></pre>
+<h2 id="_10">常见问题与解决方案</h2>
+<h3 id="1">问题1: 跳转到应用程序失败</h3>
+<p><strong>现象</strong>:
+- Bootloader执行跳转后,程序没有响应
+- LED不亮,串口无输出
+- 调试器显示PC跳转到无效地址</p>
+<p><strong>可能原因</strong>:</p>
+<ol>
+<li><strong>应用程序地址错误</strong></li>
+</ol>
+<pre><code class="language-c">/* 检查应用程序起始地址 */
+#define APP_START_ADDR  0x08008000  /* 确保与链接脚本一致 */
+
+/* 验证地址 */
+uint32_t app_sp = *(__IO uint32_t*)APP_START_ADDR;
+if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+    LOG_ERROR(&quot;Invalid app address: SP=0x%08X&quot;, app_sp);
+}
+</code></pre>
+<ol start="2">
+<li><strong>中断向量表未重定位</strong></li>
+</ol>
+<pre><code class="language-c">/* 在跳转前必须设置VTOR */
+SCB-&gt;VTOR = APP_START_ADDR;
+
+/* 在应用程序的SystemInit()中也要设置 */
+void SystemInit(void)
+{
+    SCB-&gt;VTOR = 0x08008000;  /* 应用程序地址 */
+    /* ... 其他初始化 ... */
+}
+</code></pre>
+<ol start="3">
+<li><strong>链接脚本配置错误</strong></li>
+</ol>
+<pre><code class="language-ld">/* 应用程序链接脚本 */
+MEMORY
+{
+    /* 起始地址必须与APP_START_ADDR一致 */
+    FLASH (rx) : ORIGIN = 0x08008000, LENGTH = 480K
+    RAM (rwx)  : ORIGIN = 0x20000000, LENGTH = 128K
+}
+</code></pre>
+<ol start="4">
+<li><strong>栈指针未正确设置</strong></li>
+</ol>
+<pre><code class="language-c">/* 跳转前必须设置栈指针 */
+uint32_t app_sp = *(__IO uint32_t*)APP_START_ADDR;
+__set_MSP(app_sp);
+
+/* 检查栈指针是否在RAM范围内 */
+if (app_sp &lt; 0x20000000 || app_sp &gt; 0x20020000) {
+    LOG_ERROR(&quot;Invalid stack pointer: 0x%08X&quot;, app_sp);
+}
+</code></pre>
+<p><strong>解决步骤</strong>:</p>
+<pre><code class="language-c">/* 完整的跳转函数,带详细检查 */
+void JumpToApplication(uint32_t app_addr)
+{
+    LOG_INFO(&quot;Attempting to jump to 0x%08X&quot;, app_addr);
+
+    /* 1. 读取栈指针和复位向量 */
+    uint32_t app_sp = *(__IO uint32_t*)app_addr;
+    uint32_t app_entry = *(__IO uint32_t*)(app_addr + 4);
+
+    LOG_DEBUG(&quot;Stack Pointer: 0x%08X&quot;, app_sp);
+    LOG_DEBUG(&quot;Reset Vector:  0x%08X&quot;, app_entry);
+
+    /* 2. 验证栈指针 */
+    if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+        LOG_ERROR(&quot;Invalid stack pointer!&quot;);
+        LED_ShowError(LED_ERROR_APP_INVALID);
+        return;
+    }
+
+    /* 3. 验证复位向量 */
+    if (app_entry &lt; app_addr || app_entry &gt;= (app_addr + 0x80000)) {
+        LOG_ERROR(&quot;Invalid reset vector!&quot;);
+        LED_ShowError(LED_ERROR_APP_INVALID);
+        return;
+    }
+
+    /* 4. 关闭所有中断 */
+    __disable_irq();
+
+    /* 5. 关闭SysTick */
+    SysTick-&gt;CTRL = 0;
+    SysTick-&gt;LOAD = 0;
+    SysTick-&gt;VAL = 0;
+
+    /* 6. 关闭所有外设(可选) */
+    /* HAL_DeInit(); */
+
+    /* 7. 设置中断向量表 */
+    SCB-&gt;VTOR = app_addr;
+
+    /* 8. 设置栈指针 */
+    __set_MSP(app_sp);
+
+    /* 9. 跳转 */
+    LOG_INFO(&quot;Jumping now...&quot;);
+    HAL_Delay(10);  /* 等待串口输出 */
+
+    void (*app_reset_handler)(void) = (void*)app_entry;
+    app_reset_handler();
+
+    /* 不应该执行到这里 */
+    LOG_ERROR(&quot;Jump failed!&quot;);
+    LED_ShowError(LED_ERROR_UNKNOWN);
+}
+</code></pre>
+<h3 id="2-flash">问题2: Flash擦除或写入失败</h3>
+<p><strong>现象</strong>:
+- Flash操作返回错误
+- 写入的数据读取不正确
+- 程序卡在Flash操作中</p>
+<p><strong>可能原因</strong>:</p>
+<ol>
+<li><strong>Flash未解锁</strong></li>
+</ol>
+<pre><code class="language-c">/* 操作Flash前必须解锁 */
+void Flash_Unlock(void)
+{
+    if (FLASH-&gt;CR &amp; FLASH_CR_LOCK) {
+        FLASH-&gt;KEYR = 0x45670123;
+        FLASH-&gt;KEYR = 0xCDEF89AB;
+    }
+}
+
+/* 操作完成后锁定 */
+void Flash_Lock(void)
+{
+    FLASH-&gt;CR |= FLASH_CR_LOCK;
+}
+</code></pre>
+<ol start="2">
+<li><strong>Flash忙状态未检查</strong></li>
+</ol>
+<pre><code class="language-c">/* 等待Flash操作完成 */
+uint8_t Flash_WaitReady(uint32_t timeout)
+{
+    uint32_t start = HAL_GetTick();
+
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY) {
+        if ((HAL_GetTick() - start) &gt; timeout) {
+            LOG_ERROR(&quot;Flash timeout!&quot;);
+            return 1;
+        }
+    }
+
+    /* 检查错误标志 */
+    if (FLASH-&gt;SR &amp; (FLASH_SR_PGSERR | FLASH_SR_PGPERR | FLASH_SR_PGAERR)) {
+        LOG_ERROR(&quot;Flash error: SR=0x%08X&quot;, FLASH-&gt;SR);
+        /* 清除错误标志 */
+        FLASH-&gt;SR = FLASH_SR_PGSERR | FLASH_SR_PGPERR | FLASH_SR_PGAERR;
+        return 2;
+    }
+
+    return 0;
+}
+</code></pre>
+<ol start="3">
+<li><strong>扇区号错误</strong></li>
+</ol>
+<pre><code class="language-c">/* 获取正确的扇区号 */
+uint8_t Flash_GetSector(uint32_t addr)
+{
+    uint8_t sector = 0;
+
+    if (addr &lt; 0x08004000) {
+        sector = 0;
+    } else if (addr &lt; 0x08008000) {
+        sector = 1;
+    } else if (addr &lt; 0x0800C000) {
+        sector = 2;
+    } else if (addr &lt; 0x08010000) {
+        sector = 3;
+    } else if (addr &lt; 0x08020000) {
+        sector = 4;
+    } else if (addr &lt; 0x08040000) {
+        sector = 5;
+    } else if (addr &lt; 0x08060000) {
+        sector = 6;
+    } else if (addr &lt; 0x08080000) {
+        sector = 7;
+    } else if (addr &lt; 0x080A0000) {
+        sector = 8;
+    } else if (addr &lt; 0x080C0000) {
+        sector = 9;
+    } else if (addr &lt; 0x080E0000) {
+        sector = 10;
+    } else {
+        sector = 11;
+    }
+
+    LOG_DEBUG(&quot;Address 0x%08X -&gt; Sector %d&quot;, addr, sector);
+    return sector;
+}
+</code></pre>
+<ol start="4">
+<li><strong>写入地址未对齐</strong></li>
+</ol>
+<pre><code class="language-c">/* Flash写入必须字对齐 */
+uint8_t Flash_WriteBuffer(uint32_t addr, uint8_t *buf, uint32_t len)
+{
+    /* 检查地址对齐 */
+    if (addr % 4 != 0) {
+        LOG_ERROR(&quot;Address not aligned: 0x%08X&quot;, addr);
+        return 1;
+    }
+
+    /* 检查长度对齐 */
+    if (len % 4 != 0) {
+        LOG_WARN(&quot;Length not aligned, padding: %d&quot;, len);
+        len = (len + 3) &amp; ~3;  /* 向上对齐到4字节 */
+    }
+
+    /* 写入数据 */
+    for (uint32_t i = 0; i &lt; len; i += 4) {
+        uint32_t word = buf[i] | (buf[i+1] &lt;&lt; 8) | 
+                        (buf[i+2] &lt;&lt; 16) | (buf[i+3] &lt;&lt; 24);
+
+        if (Flash_WriteWord(addr + i, word) != 0) {
+            LOG_ERROR(&quot;Write failed at 0x%08X&quot;, addr + i);
+            return 2;
+        }
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>调试Flash操作</strong>:</p>
+<pre><code class="language-c">/* 带详细日志的Flash擦除 */
+uint8_t Flash_EraseSectorDebug(uint8_t sector)
+{
+    LOG_INFO(&quot;Erasing sector %d...&quot;, sector);
+
+    /* 解锁 */
+    Flash_Unlock();
+
+    /* 等待就绪 */
+    if (Flash_WaitReady(5000) != 0) {
+        LOG_ERROR(&quot;Flash not ready&quot;);
+        Flash_Lock();
+        return 1;
+    }
+
+    /* 配置擦除 */
+    FLASH-&gt;CR &amp;= ~FLASH_CR_PSIZE;
+    FLASH-&gt;CR |= FLASH_CR_PSIZE_1;  /* 32位 */
+    FLASH-&gt;CR &amp;= ~FLASH_CR_SNB;
+    FLASH-&gt;CR |= (sector &lt;&lt; FLASH_CR_SNB_Pos);
+    FLASH-&gt;CR |= FLASH_CR_SER;
+
+    LOG_DEBUG(&quot;FLASH-&gt;CR = 0x%08X&quot;, FLASH-&gt;CR);
+
+    /* 开始擦除 */
+    FLASH-&gt;CR |= FLASH_CR_STRT;
+
+    /* 等待完成 */
+    uint8_t result = Flash_WaitReady(50000);
+
+    /* 清除标志 */
+    FLASH-&gt;CR &amp;= ~FLASH_CR_SER;
+    FLASH-&gt;CR &amp;= ~FLASH_CR_SNB;
+
+    /* 锁定 */
+    Flash_Lock();
+
+    if (result == 0) {
+        LOG_INFO(&quot;Sector %d erased successfully&quot;, sector);
+    } else {
+        LOG_ERROR(&quot;Sector %d erase failed: %d&quot;, sector, result);
+    }
+
+    return result;
+}
+</code></pre>
+<h3 id="3">问题3: 串口无输出</h3>
+<p><strong>现象</strong>:
+- 串口助手收不到数据
+- printf没有输出</p>
+<p><strong>可能原因</strong>:</p>
+<ol>
+<li><strong>串口未初始化</strong></li>
+</ol>
+<pre><code class="language-c">/* 确保串口正确初始化 */
+void UART_Init(void)
+{
+    /* 使能时钟 */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_USART1_CLK_ENABLE();
+
+    /* 配置GPIO */
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_9 | GPIO_PIN_10;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF7_USART1;
+    HAL_GPIO_Init(GPIOA, &amp;GPIO_InitStruct);
+
+    /* 配置UART */
+    huart1.Instance = USART1;
+    huart1.Init.BaudRate = 115200;
+    huart1.Init.WordLength = UART_WORDLENGTH_8B;
+    huart1.Init.StopBits = UART_STOPBITS_1;
+    huart1.Init.Parity = UART_PARITY_NONE;
+    huart1.Init.Mode = UART_MODE_TX_RX;
+    huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+
+    if (HAL_UART_Init(&amp;huart1) != HAL_OK) {
+        /* 初始化失败,LED指示 */
+        LED_ShowError(LED_ERROR_COMM_FAIL);
+    }
+}
+</code></pre>
+<ol start="2">
+<li><strong>printf重定向未实现</strong></li>
+</ol>
+<pre><code class="language-c">/* 重定向printf到UART */
+#ifdef __GNUC__
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t*)ptr, len, 1000);
+    return len;
+}
+#else
+int fputc(int ch, FILE *f)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t*)&amp;ch, 1, 1000);
+    return ch;
+}
+#endif
+</code></pre>
+<ol start="3">
+<li><strong>波特率不匹配</strong></li>
+</ol>
+<pre><code class="language-c">/* 计算正确的波特率 */
+/* BRR = PCLK / BaudRate */
+/* 例如: 84MHz / 115200 = 729 (0x2D9) */
+
+void UART_CheckBaudRate(void)
+{
+    uint32_t pclk = HAL_RCC_GetPCLK2Freq();
+    uint32_t brr = USART1-&gt;BRR;
+    uint32_t actual_baud = pclk / brr;
+
+    LOG_DEBUG(&quot;PCLK2: %d Hz&quot;, pclk);
+    LOG_DEBUG(&quot;BRR: 0x%04X (%d)&quot;, brr, brr);
+    LOG_DEBUG(&quot;Actual baud: %d&quot;, actual_baud);
+}
+</code></pre>
+<ol start="4">
+<li><strong>缓冲区问题</strong></li>
+</ol>
+<pre><code class="language-c">/* 使用无缓冲输出 */
+setvbuf(stdout, NULL, _IONBF, 0);
+
+/* 或者手动刷新 */
+printf(&quot;Hello\r\n&quot;);
+fflush(stdout);
+</code></pre>
+<h3 id="4">问题4: 看门狗复位</h3>
+<p><strong>现象</strong>:
+- 系统不断复位
+- 复位原因寄存器显示IWDG复位</p>
+<p><strong>解决方案</strong>:</p>
+<pre><code class="language-c">/* 检查复位原因 */
+void CheckResetReason(void)
+{
+    uint32_t rcc_csr = RCC-&gt;CSR;
+
+    if (rcc_csr &amp; RCC_CSR_IWDGRSTF) {
+        LOG_WARN(&quot;Watchdog reset detected!&quot;);
+
+        /* 清除标志 */
+        RCC-&gt;CSR |= RCC_CSR_RMVF;
+
+        /* 在Bootloader中禁用看门狗 */
+        /* 或者定期喂狗 */
+    }
+}
+
+/* 在Bootloader中喂狗 */
+void Bootloader_FeedWatchdog(void)
+{
+    if (IWDG-&gt;SR == 0) {  /* 看门狗已启动 */
+        IWDG-&gt;KR = 0xAAAA;  /* 喂狗 */
+    }
+}
+</code></pre>
+<h3 id="5">问题5: 固件下载超时</h3>
+<p><strong>现象</strong>:
+- 固件下载过程中断
+- 串口接收超时</p>
+<p><strong>解决方案</strong>:</p>
+<pre><code class="language-c">/* 实现超时重传机制 */
+uint8_t FirmwareDownload_WithRetry(void)
+{
+    uint8_t retry = 0;
+    const uint8_t MAX_RETRY = 3;
+
+    while (retry &lt; MAX_RETRY) {
+        LOG_INFO(&quot;Download attempt %d/%d&quot;, retry + 1, MAX_RETRY);
+
+        if (FirmwareDownload() == 0) {
+            LOG_INFO(&quot;Download successful&quot;);
+            return 0;
+        }
+
+        LOG_WARN(&quot;Download failed, retrying...&quot;);
+        retry++;
+        HAL_Delay(1000);
+    }
+
+    LOG_ERROR(&quot;Download failed after %d attempts&quot;, MAX_RETRY);
+    return 1;
+}
+
+/* 增加超时时间 */
+uint8_t UART_ReceiveByteTimeout(uint32_t timeout_ms)
+{
+    uint32_t start = HAL_GetTick();
+
+    while (!(USART1-&gt;SR &amp; USART_SR_RXNE)) {
+        if ((HAL_GetTick() - start) &gt; timeout_ms) {
+            LOG_WARN(&quot;UART receive timeout&quot;);
+            return 0xFF;
+        }
+
+        /* 喂狗 */
+        Bootloader_FeedWatchdog();
+    }
+
+    return (uint8_t)(USART1-&gt;DR &amp; 0xFF);
+}
+</code></pre>
+<h2 id="_11">实践示例</h2>
+<h3 id="1-bootloader">示例1: 完整的调试Bootloader</h3>
+<p>创建一个带完整调试功能的Bootloader:</p>
+<pre><code class="language-c">/* debug_bootloader.c */
+#include &quot;stm32f4xx_hal.h&quot;
+#include &quot;debug_log.h&quot;
+#include &quot;led_debug.h&quot;
+#include &quot;memory_dump.h&quot;
+
+#define APP_START_ADDR  0x08008000
+
+/* 跳转到应用程序 */
+void JumpToApplication(uint32_t app_addr)
+{
+    LOG_INFO(&quot;=== Jump to Application ===&quot;);
+
+    /* 读取向量表 */
+    uint32_t app_sp = *(__IO uint32_t*)app_addr;
+    uint32_t app_entry = *(__IO uint32_t*)(app_addr + 4);
+
+    LOG_DEBUG(&quot;App Address:   0x%08X&quot;, app_addr);
+    LOG_DEBUG(&quot;Stack Pointer: 0x%08X&quot;, app_sp);
+    LOG_DEBUG(&quot;Reset Vector:  0x%08X&quot;, app_entry);
+
+    /* 验证栈指针 */
+    if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+        LOG_ERROR(&quot;Invalid stack pointer!&quot;);
+        LOG_ERROR(&quot;Expected: 0x2000xxxx, Got: 0x%08X&quot;, app_sp);
+        LED_ShowError(LED_ERROR_APP_INVALID);
+        return;
+    }
+    LOG_INFO(&quot;Stack pointer valid&quot;);
+
+    /* 验证复位向量 */
+    if (app_entry &lt; app_addr || app_entry &gt;= (app_addr + 0x80000)) {
+        LOG_ERROR(&quot;Invalid reset vector!&quot;);
+        LOG_ERROR(&quot;Expected: 0x%08X-0x%08X, Got: 0x%08X&quot;, 
+                  app_addr, app_addr + 0x80000, app_entry);
+        LED_ShowError(LED_ERROR_APP_INVALID);
+        return;
+    }
+    LOG_INFO(&quot;Reset vector valid&quot;);
+
+    /* 转储应用程序起始部分 */
+    LOG_DEBUG(&quot;Application header:&quot;);
+    MemDump_Flash(app_addr, 64);
+
+    /* 关闭外设 */
+    LOG_DEBUG(&quot;Disabling peripherals...&quot;);
+    __disable_irq();
+    SysTick-&gt;CTRL = 0;
+    SysTick-&gt;LOAD = 0;
+    SysTick-&gt;VAL = 0;
+
+    /* 设置向量表 */
+    LOG_DEBUG(&quot;Setting VTOR to 0x%08X&quot;, app_addr);
+    SCB-&gt;VTOR = app_addr;
+
+    /* 设置栈指针 */
+    LOG_DEBUG(&quot;Setting MSP to 0x%08X&quot;, app_sp);
+    __set_MSP(app_sp);
+
+    /* LED指示即将跳转 */
+    LED1_ON();
+    HAL_Delay(100);
+    LED1_OFF();
+
+    /* 跳转 */
+    LOG_INFO(&quot;Jumping to 0x%08X...&quot;, app_entry);
+    LOG_INFO(&quot;=========================&quot;);
+    HAL_Delay(50);  /* 等待串口输出 */
+
+    void (*app_reset_handler)(void) = (void*)app_entry;
+    app_reset_handler();
+
+    /* 不应该执行到这里 */
+    LOG_ERROR(&quot;Jump failed!&quot;);
+    LED_ShowError(LED_ERROR_UNKNOWN);
+    while(1);
+}
+
+/* 检查应用程序 */
+uint8_t CheckApplication(uint32_t app_addr)
+{
+    LOG_INFO(&quot;=== Check Application ===&quot;);
+
+    /* 读取向量表 */
+    uint32_t app_sp = *(__IO uint32_t*)app_addr;
+    uint32_t app_entry = *(__IO uint32_t*)(app_addr + 4);
+
+    LOG_INFO(&quot;Address:       0x%08X&quot;, app_addr);
+    LOG_INFO(&quot;Stack Pointer: 0x%08X&quot;, app_sp);
+    LOG_INFO(&quot;Reset Vector:  0x%08X&quot;, app_entry);
+
+    /* 检查栈指针 */
+    if ((app_sp &amp; 0x2FFE0000) != 0x20000000) {
+        LOG_ERROR(&quot;Invalid stack pointer!&quot;);
+        return 0;
+    }
+
+    /* 检查复位向量 */
+    if (app_entry &lt; app_addr || app_entry &gt;= (app_addr + 0x80000)) {
+        LOG_ERROR(&quot;Invalid reset vector!&quot;);
+        return 0;
+    }
+
+    /* 检查Flash内容 */
+    uint32_t *flash_ptr = (uint32_t*)app_addr;
+    uint8_t all_ff = 1;
+    uint8_t all_00 = 1;
+
+    for (int i = 0; i &lt; 64; i++) {
+        if (flash_ptr[i] != 0xFFFFFFFF) all_ff = 0;
+        if (flash_ptr[i] != 0x00000000) all_00 = 0;
+    }
+
+    if (all_ff) {
+        LOG_WARN(&quot;Application area is empty (all 0xFF)&quot;);
+        return 0;
+    }
+
+    if (all_00) {
+        LOG_WARN(&quot;Application area is empty (all 0x00)&quot;);
+        return 0;
+    }
+
+    LOG_INFO(&quot;Application valid&quot;);
+    LOG_INFO(&quot;========================&quot;);
+    return 1;
+}
+
+int main(void)
+{
+    /* 系统初始化 */
+    HAL_Init();
+    SystemClock_Config();
+
+    /* 初始化调试功能 */
+    LED_Init();
+    UART_Init();
+
+    /* 启动指示 */
+    LED_Blink(1, 3, 100);
+
+    /* 打印系统信息 */
+    LOG_SystemInfo();
+
+    LOG_INFO(&quot;=== Bootloader Started ===&quot;);
+    LOG_INFO(&quot;Version: 1.0.0&quot;);
+    LOG_INFO(&quot;Build:   %s %s&quot;, __DATE__, __TIME__);
+    LOG_INFO(&quot;==========================&quot;);
+
+    /* 打印寄存器状态 */
+    MemDump_Registers();
+
+    /* 检查应用程序 */
+    if (!CheckApplication(APP_START_ADDR)) {
+        LOG_ERROR(&quot;Application check failed!&quot;);
+        LED_ShowError(LED_ERROR_APP_INVALID);
+
+        /* 进入升级模式 */
+        LOG_INFO(&quot;Entering upgrade mode...&quot;);
+        while(1) {
+            LED_Blink(2, 1, 500);
+            /* 等待固件下载 */
+        }
+    }
+
+    /* 跳转到应用程序 */
+    JumpToApplication(APP_START_ADDR);
+
+    /* 不应该执行到这里 */
+    while(1);
+}
+</code></pre>
+<h3 id="2">示例2: 调试命令行接口</h3>
+<p>实现一个简单的命令行接口用于调试:</p>
+<pre><code class="language-c">/* debug_cli.h */
+#ifndef __DEBUG_CLI_H
+#define __DEBUG_CLI_H
+
+#include &lt;stdint.h&gt;
+
+void CLI_Init(void);
+void CLI_Process(void);
+
+#endif /* __DEBUG_CLI_H */
+</code></pre>
+<pre><code class="language-c">/* debug_cli.c */
+#include &quot;debug_cli.h&quot;
+#include &quot;debug_log.h&quot;
+#include &quot;memory_dump.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+#define CMD_BUFFER_SIZE  128
+
+static char cmd_buffer[CMD_BUFFER_SIZE];
+static uint8_t cmd_index = 0;
+
+/* 初始化CLI */
+void CLI_Init(void)
+{
+    printf(&quot;\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;  Bootloader Debug CLI\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;Commands:\r\n&quot;);
+    printf(&quot;  help       - Show this help\r\n&quot;);
+    printf(&quot;  info       - Show system info\r\n&quot;);
+    printf(&quot;  check      - Check application\r\n&quot;);
+    printf(&quot;  dump &lt;addr&gt; &lt;len&gt; - Dump memory\r\n&quot;);
+    printf(&quot;  jump       - Jump to application\r\n&quot;);
+    printf(&quot;  reset      - System reset\r\n&quot;);
+    printf(&quot;  regs       - Show registers\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;\r\n&gt; &quot;);
+}
+
+/* 处理命令 */
+static void CLI_HandleCommand(char *cmd)
+{
+    if (strcmp(cmd, &quot;help&quot;) == 0) {
+        CLI_Init();
+
+    } else if (strcmp(cmd, &quot;info&quot;) == 0) {
+        LOG_SystemInfo();
+
+    } else if (strcmp(cmd, &quot;check&quot;) == 0) {
+        CheckApplication(APP_START_ADDR);
+
+    } else if (strncmp(cmd, &quot;dump &quot;, 5) == 0) {
+        uint32_t addr, len;
+        if (sscanf(cmd + 5, &quot;%x %d&quot;, &amp;addr, &amp;len) == 2) {
+            MemDump_Flash(addr, len);
+        } else {
+            printf(&quot;Usage: dump &lt;addr&gt; &lt;len&gt;\r\n&quot;);
+        }
+
+    } else if (strcmp(cmd, &quot;jump&quot;) == 0) {
+        JumpToApplication(APP_START_ADDR);
+
+    } else if (strcmp(cmd, &quot;reset&quot;) == 0) {
+        printf(&quot;Resetting...\r\n&quot;);
+        HAL_Delay(100);
+        NVIC_SystemReset();
+
+    } else if (strcmp(cmd, &quot;regs&quot;) == 0) {
+        MemDump_Registers();
+
+    } else if (strlen(cmd) &gt; 0) {
+        printf(&quot;Unknown command: %s\r\n&quot;, cmd);
+        printf(&quot;Type 'help' for available commands\r\n&quot;);
+    }
+
+    printf(&quot;\r\n&gt; &quot;);
+}
+
+/* 处理CLI输入 */
+void CLI_Process(void)
+{
+    /* 检查是否有数据 */
+    if (!(USART1-&gt;SR &amp; USART_SR_RXNE)) {
+        return;
+    }
+
+    /* 读取字符 */
+    char ch = USART1-&gt;DR &amp; 0xFF;
+
+    /* 回显 */
+    printf(&quot;%c&quot;, ch);
+
+    /* 处理字符 */
+    if (ch == '\r' || ch == '\n') {
+        printf(&quot;\r\n&quot;);
+
+        /* 处理命令 */
+        cmd_buffer[cmd_index] = '\0';
+        CLI_HandleCommand(cmd_buffer);
+
+        /* 清空缓冲区 */
+        cmd_index = 0;
+        memset(cmd_buffer, 0, CMD_BUFFER_SIZE);
+
+    } else if (ch == '\b' || ch == 0x7F) {
+        /* 退格 */
+        if (cmd_index &gt; 0) {
+            cmd_index--;
+            printf(&quot; \b&quot;);  /* 清除字符 */
+        }
+
+    } else if (cmd_index &lt; CMD_BUFFER_SIZE - 1) {
+        /* 添加到缓冲区 */
+        cmd_buffer[cmd_index++] = ch;
+    }
+}
+</code></pre>
+<p><strong>在主程序中使用</strong>:</p>
+<pre><code class="language-c">int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();
+
+    LED_Init();
+    UART_Init();
+
+    /* 初始化CLI */
+    CLI_Init();
+
+    /* 主循环 */
+    while(1) {
+        /* 处理CLI命令 */
+        CLI_Process();
+
+        /* LED闪烁表示运行 */
+        static uint32_t last_blink = 0;
+        if (HAL_GetTick() - last_blink &gt; 1000) {
+            LED3_TOGGLE();
+            last_blink = HAL_GetTick();
+        }
+    }
+}
+</code></pre>
+<h2 id="_12">深入理解</h2>
+<h3 id="_13">调试流程图</h3>
+<pre><code class="language-mermaid">graph TD
+    A[问题出现] --&gt; B{能否复现?}
+    B --&gt;|是| C[收集信息]
+    B --&gt;|否| D[增加日志]
+
+    C --&gt; E[查看串口日志]
+    C --&gt; F[查看LED指示]
+    C --&gt; G[使用调试器]
+
+    E --&gt; H{定位问题?}
+    F --&gt; H
+    G --&gt; H
+
+    H --&gt;|是| I[修复问题]
+    H --&gt;|否| J[增加断点]
+
+    J --&gt; K[单步调试]
+    K --&gt; L[查看变量]
+    L --&gt; M[查看内存]
+    M --&gt; H
+
+    I --&gt; N[验证修复]
+    N --&gt; O{问题解决?}
+    O --&gt;|是| P[完成]
+    O --&gt;|否| A
+
+    D --&gt; A
+</code></pre>
+<h3 id="_14">调试优先级</h3>
+<p>根据问题的严重程度和调试难度,建议按以下优先级进行:</p>
+<ol>
+<li>
+<p><strong>高优先级</strong> (影响启动):
+   - 跳转失败
+   - Flash操作失败
+   - 硬件故障</p>
+</li>
+<li>
+<p><strong>中优先级</strong> (影响功能):
+   - 固件下载失败
+   - 通信错误
+   - 校验失败</p>
+</li>
+<li>
+<p><strong>低优先级</strong> (不影响核心功能):
+   - 日志输出问题
+   - LED指示问题
+   - 性能优化</p>
+</li>
+</ol>
+<h3 id="_15">调试工具对比</h3>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>串口日志</td>
+<td>简单,实时</td>
+<td>速度慢,信息有限</td>
+<td>日常调试,现场问题</td>
+</tr>
+<tr>
+<td>LED指示</td>
+<td>直观,无需工具</td>
+<td>信息量小</td>
+<td>快速状态检查</td>
+</tr>
+<tr>
+<td>调试器</td>
+<td>功能强大,详细</td>
+<td>需要硬件连接</td>
+<td>深度调试,复杂问题</td>
+</tr>
+<tr>
+<td>内存转储</td>
+<td>完整信息</td>
+<td>需要分析</td>
+<td>数据验证,事后分析</td>
+</tr>
+<tr>
+<td>逻辑分析仪</td>
+<td>精确时序</td>
+<td>成本高</td>
+<td>硬件接口问题</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_16">常见问题</h2>
+<h3 id="q1">Q1: 如何在没有调试器的情况下调试?</h3>
+<p><strong>A</strong>: 使用串口日志和LED指示的组合:</p>
+<pre><code class="language-c">/* 关键位置添加日志 */
+LOG_DEBUG(&quot;Checkpoint 1&quot;);
+LED1_TOGGLE();
+
+/* 关键变量输出 */
+LOG_DEBUG(&quot;Variable x = %d&quot;, x);
+
+/* 错误时LED指示 */
+if (error) {
+    LED_ShowError(error_code);
+}
+</code></pre>
+<h3 id="q2">Q2: 如何调试启动代码?</h3>
+<p><strong>A</strong>: 启动代码调试比较困难,建议:</p>
+<ol>
+<li>使用调试器设置断点</li>
+<li>在启动代码中添加LED闪烁</li>
+<li>检查链接脚本配置</li>
+<li>验证栈指针设置</li>
+</ol>
+<h3 id="q3">Q3: 如何记录历史日志?</h3>
+<p><strong>A</strong>: 可以将日志保存到Flash或外部存储:</p>
+<pre><code class="language-c">/* 日志环形缓冲区 */
+#define LOG_BUFFER_SIZE  4096
+static char log_buffer[LOG_BUFFER_SIZE];
+static uint32_t log_index = 0;
+
+void LOG_Save(const char *msg)
+{
+    uint32_t len = strlen(msg);
+
+    for (uint32_t i = 0; i &lt; len; i++) {
+        log_buffer[log_index] = msg[i];
+        log_index = (log_index + 1) % LOG_BUFFER_SIZE;
+    }
+}
+
+/* 定期保存到Flash */
+void LOG_FlushToFlash(void)
+{
+    Flash_WriteBuffer(LOG_FLASH_ADDR, 
+                     (uint8_t*)log_buffer, 
+                     LOG_BUFFER_SIZE);
+}
+</code></pre>
+<h3 id="q4-bootloader">Q4: 如何测试Bootloader的可靠性?</h3>
+<p><strong>A</strong>: 进行压力测试和边界测试:</p>
+<pre><code class="language-c">/* 测试用例 */
+void Bootloader_Test(void)
+{
+    /* 1. 多次跳转测试 */
+    for (int i = 0; i &lt; 100; i++) {
+        JumpToApplication(APP_START_ADDR);
+    }
+
+    /* 2. Flash擦写测试 */
+    for (int i = 0; i &lt; 1000; i++) {
+        Flash_EraseSector(8);
+        Flash_WriteBuffer(0x08080000, test_data, 1024);
+    }
+
+    /* 3. 通信压力测试 */
+    for (int i = 0; i &lt; 10000; i++) {
+        UART_SendByte(0x55);
+        UART_ReceiveByte(1000);
+    }
+}
+</code></pre>
+<h3 id="q5">Q5: 如何优化调试输出的性能?</h3>
+<p><strong>A</strong>: 使用条件编译和日志级别:</p>
+<pre><code class="language-c">/* 发布版本关闭调试 */
+#ifdef DEBUG
+    #define LOG_LEVEL  LOG_LEVEL_DEBUG
+#else
+    #define LOG_LEVEL  LOG_LEVEL_ERROR
+#endif
+
+/* 关键路径减少日志 */
+void CriticalFunction(void)
+{
+    /* 只在调试时输出 */
+    #ifdef DEBUG
+    LOG_DEBUG(&quot;Entering critical function&quot;);
+    #endif
+
+    /* 关键代码 */
+
+    #ifdef DEBUG
+    LOG_DEBUG(&quot;Exiting critical function&quot;);
+    #endif
+}
+</code></pre>
+<h2 id="_17">总结</h2>
+<p>本教程全面介绍了Bootloader的调试方法和常见问题解决方案。让我们回顾核心要点:</p>
+<ul>
+<li><strong>调试方法</strong>: 串口日志、LED指示、调试器断点、内存转储等多种方法结合使用</li>
+<li><strong>日志系统</strong>: 实现分级日志系统,提供详细的运行信息</li>
+<li><strong>LED指示</strong>: 使用不同的闪烁模式表示不同状态和错误</li>
+<li><strong>常见问题</strong>: 跳转失败、Flash操作失败、串口无输出等问题的排查和解决</li>
+<li><strong>调试工具</strong>: 合理选择和使用各种调试工具</li>
+<li><strong>系统化流程</strong>: 建立系统化的调试流程,提高效率</li>
+</ul>
+<p>掌握这些调试技巧,能够大大提高Bootloader开发效率,快速定位和解决问题。在实际项目中,建议从一开始就建立完善的调试系统,而不是等到出现问题再添加。</p>
+<h2 id="_18">延伸阅读</h2>
+<p>推荐进一步学习的资源:</p>
+<ul>
+<li><a href="../intermediate/01-iap-implementation.html">IAP在线升级功能实现</a> - 实现固件更新功能</li>
+<li><a href="../intermediate/02-secure-boot.html">安全启动(Secure Boot)技术详解</a> - 提升系统安全性</li>
+<li><a href="../intermediate/03-firmware-encryption.html">固件加密与防护技术实战</a> - 固件保护技术</li>
+</ul>
+<p><strong>调试工具文档</strong>:
+- <a href="http://openocd.org/documentation/">OpenOCD用户手册</a> - 开源调试工具
+- <a href="https://sourceware.org/gdb/documentation/">GDB调试指南</a> - GNU调试器
+- <a href="https://www.st.com/en/development-tools/stsw-link004.html">ST-LINK Utility</a> - STM32烧录工具</p>
+<h2 id="_19">参考资料</h2>
+<ol>
+<li>ARM Cortex-M调试接口规范 - ARM Ltd.</li>
+<li>STM32F4xx参考手册 - STMicroelectronics</li>
+<li>嵌入式系统调试技术 - 行业最佳实践</li>
+<li>OpenOCD开发者指南 - 开源社区</li>
+<li>嵌入式软件调试与测试 - 专业书籍</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>:</p>
+<ol>
+<li>实现一个完整的日志系统,支持多级日志输出和日志保存。</li>
+<li>设计一套LED指示方案,能够表示至少8种不同的状态。</li>
+<li>编写一个内存转储函数,能够以十六进制和ASCII格式显示内存内容。</li>
+<li>实现一个简单的命令行接口,支持常用的调试命令。</li>
+<li>分析一个跳转失败的案例,找出原因并提出解决方案。</li>
+</ol>
+<p><strong>下一步</strong>: 建议学习 <a href="../intermediate/01-iap-implementation.html">IAP在线升级功能实现</a>,掌握固件更新的完整流程。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

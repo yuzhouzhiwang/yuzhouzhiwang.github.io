@@ -1,0 +1,1806 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>设备树(Device Tree)详解：硬件描述的标准语言 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/05-embedded-linux/">05-embedded-linux</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/05-embedded-linux/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">为什么需要设备树？</a><ul>
+<li><a href="#_3">传统方式的问题</a></li>
+<li><a href="#_4">设备树的优势</a></li>
+</ul>
+</li>
+<li><a href="#_5">设备树基本概念</a><ul>
+<li><a href="#_6">设备树的组成</a></li>
+<li><a href="#_7">设备树的层次结构</a></li>
+<li><a href="#_8">节点和属性</a></li>
+</ul>
+</li>
+<li><a href="#dts">DTS语法详解</a><ul>
+<li><a href="#_9">基本语法规则</a></li>
+<li><a href="#_10">标准属性</a></li>
+<li><a href="#dts_1">完整的DTS示例</a></li>
+</ul>
+</li>
+<li><a href="#_11">设备树编译</a><ul>
+<li><a href="#dtc">编译工具：DTC</a></li>
+<li><a href="#dtsdtb">编译DTS到DTB</a></li>
+<li><a href="#dtbdts">反编译DTB到DTS</a></li>
+<li><a href="#_12">编译选项详解</a></li>
+</ul>
+</li>
+<li><a href="#linux">设备树在Linux中的使用</a><ul>
+<li><a href="#_13">启动流程</a></li>
+<li><a href="#_14">在驱动中使用设备树</a></li>
+<li><a href="#of">常用OF函数</a></li>
+</ul>
+</li>
+<li><a href="#_15">设备树调试方法</a><ul>
+<li><a href="#_16">查看运行时设备树</a></li>
+<li><a href="#_17">调试技巧</a></li>
+<li><a href="#_18">常见错误排查</a></li>
+</ul>
+</li>
+<li><a href="#overlay">设备树Overlay</a><ul>
+<li><a href="#overlay_1">Overlay概念</a></li>
+<li><a href="#overlay_2">Overlay语法</a></li>
+<li><a href="#overlay_3">编译Overlay</a></li>
+<li><a href="#overlay_4">应用Overlay</a></li>
+</ul>
+</li>
+<li><a href="#_19">实战示例</a><ul>
+<li><a href="#1led">示例1：添加LED设备</a></li>
+<li><a href="#2i2c">示例2：添加I2C设备</a></li>
+<li><a href="#3spi">示例3：添加SPI设备</a></li>
+</ul>
+</li>
+<li><a href="#_20">最佳实践</a><ul>
+<li><a href="#1">1. 设备树组织</a></li>
+<li><a href="#2">2. 命名规范</a></li>
+<li><a href="#3">3. 文档化</a></li>
+<li><a href="#4">4. 版本控制</a></li>
+<li><a href="#5">5. 测试验证</a></li>
+</ul>
+</li>
+<li><a href="#_21">常见问题</a><ul>
+<li><a href="#q1-acpi">Q1: 设备树和ACPI有什么区别？</a></li>
+<li><a href="#q2">Q2: 为什么修改设备树后设备没有变化？</a></li>
+<li><a href="#q3">Q3: 如何在设备树中引用其他节点？</a></li>
+<li><a href="#q4">Q4: 设备树中的地址如何确定？</a></li>
+<li><a href="#q5">Q5: 如何调试设备树匹配问题？</a></li>
+<li><a href="#q6">Q6: 设备树可以在运行时修改吗？</a></li>
+</ul>
+</li>
+<li><a href="#_22">总结</a><ul>
+<li><a href="#_23">核心要点</a></li>
+<li><a href="#_24">学习建议</a></li>
+<li><a href="#_25">关键技能清单</a></li>
+</ul>
+</li>
+<li><a href="#_26">延伸阅读</a><ul>
+<li><a href="#_27">推荐学习路径</a></li>
+<li><a href="#_28">相关文档</a></li>
+<li><a href="#_29">实践项目建议</a></li>
+</ul>
+</li>
+<li><a href="#_30">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="device-tree">设备树(Device Tree)详解：硬件描述的标准语言</h1>
+<h2 id="_1">概述</h2>
+<p>设备树(Device Tree)是一种描述硬件资源的数据结构和语言，它将硬件配置信息从Linux内核代码中分离出来，使得同一个内核可以支持多种硬件平台。完成本文学习后，你将能够：</p>
+<ul>
+<li>[ ] 理解设备树的概念和作用</li>
+<li>[ ] 掌握DTS语法和基本结构</li>
+<li>[ ] 学会编译和反编译设备树</li>
+<li>[ ] 了解设备树在Linux驱动中的使用</li>
+<li>[ ] 掌握设备树的调试方法</li>
+<li>[ ] 能够编写简单的设备树节点</li>
+</ul>
+<h2 id="_2">为什么需要设备树？</h2>
+<h3 id="_3">传统方式的问题</h3>
+<p>在设备树出现之前，Linux内核使用板级文件(Board File)来描述硬件信息：</p>
+<pre><code class="language-c">// 传统的板级文件方式（arch/arm/mach-xxx/board-xxx.c）
+static struct resource led_resources[] = {
+    {
+        .start = 0x20200000,
+        .end   = 0x20200FFF,
+        .flags = IORESOURCE_MEM,
+    },
+};
+
+static struct platform_device led_device = {
+    .name = &quot;gpio-led&quot;,
+    .id   = -1,
+    .num_resources = ARRAY_SIZE(led_resources),
+    .resource = led_resources,
+};
+
+static void __init board_init(void) {
+    platform_device_register(&amp;led_device);
+}
+</code></pre>
+<p><strong>存在的问题</strong>：</p>
+<ol>
+<li><strong>代码耦合严重</strong>：硬件信息硬编码在内核中</li>
+<li><strong>维护困难</strong>：每个板子都需要单独的板级文件</li>
+<li><strong>内核膨胀</strong>：大量板级文件导致内核代码庞大</li>
+<li><strong>移植复杂</strong>：更换硬件需要修改和重新编译内核</li>
+<li><strong>灵活性差</strong>：无法动态适配不同硬件配置</li>
+</ol>
+<h3 id="_4">设备树的优势</h3>
+<p>设备树通过将硬件描述从内核代码中分离，带来了诸多优势：</p>
+<pre><code>┌─────────────────────────────────────────┐
+│         设备树源文件 (DTS)               │
+│    人类可读的硬件描述文本                 │
+└─────────────────────────────────────────┘
+                    ↓ 编译
+┌─────────────────────────────────────────┐
+│      设备树二进制文件 (DTB)              │
+│    机器可读的二进制格式                   │
+└─────────────────────────────────────────┘
+                    ↓ 加载
+┌─────────────────────────────────────────┐
+│         Linux内核                        │
+│    解析设备树，创建设备节点               │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>主要优势</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>优势</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码分离</td>
+<td>硬件描述与内核代码分离</td>
+</tr>
+<tr>
+<td>易于维护</td>
+<td>修改硬件配置无需重新编译内核</td>
+</tr>
+<tr>
+<td>内核精简</td>
+<td>移除大量板级文件代码</td>
+</tr>
+<tr>
+<td>灵活性高</td>
+<td>同一内核支持多种硬件配置</td>
+</tr>
+<tr>
+<td>标准化</td>
+<td>统一的硬件描述语言</td>
+</tr>
+<tr>
+<td>可移植性</td>
+<td>便于跨平台移植</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_5">设备树基本概念</h2>
+<h3 id="_6">设备树的组成</h3>
+<p>设备树由以下几个部分组成：</p>
+<pre><code>设备树文件系统
+├── DTS (Device Tree Source)      # 设备树源文件，人类可读
+├── DTSI (Device Tree Source Include) # 设备树头文件，可被包含
+├── DTB (Device Tree Blob)        # 设备树二进制文件，机器可读
+└── DTC (Device Tree Compiler)    # 设备树编译器
+</code></pre>
+<p><strong>文件类型说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>文件类型</th>
+<th>扩展名</th>
+<th>说明</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>设备树源文件</td>
+<td><code>.dts</code></td>
+<td>描述特定板子的硬件</td>
+<td><code>imx6ull-myboard.dts</code></td>
+</tr>
+<tr>
+<td>设备树包含文件</td>
+<td><code>.dtsi</code></td>
+<td>描述SoC通用硬件</td>
+<td><code>imx6ull.dtsi</code></td>
+</tr>
+<tr>
+<td>设备树二进制</td>
+<td><code>.dtb</code></td>
+<td>编译后的二进制文件</td>
+<td><code>imx6ull-myboard.dtb</code></td>
+</tr>
+<tr>
+<td>设备树头文件</td>
+<td><code>.h</code></td>
+<td>C语言头文件定义</td>
+<td><code>dt-bindings/gpio/gpio.h</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="_7">设备树的层次结构</h3>
+<p>设备树采用树形结构来描述硬件：</p>
+<pre><code>/ (根节点)
+├── chosen (启动参数)
+├── aliases (别名)
+├── memory (内存信息)
+├── cpus (CPU信息)
+│   ├── cpu@0
+│   └── cpu@1
+├── soc (片上系统)
+│   ├── uart1 (串口1)
+│   ├── i2c1 (I2C总线1)
+│   │   ├── sensor@48 (传感器设备)
+│   │   └── eeprom@50 (EEPROM设备)
+│   ├── spi1 (SPI总线1)
+│   └── gpio (GPIO控制器)
+└── leds (LED设备)
+    ├── led1
+    └── led2
+</code></pre>
+<h3 id="_8">节点和属性</h3>
+<p>设备树由节点(Node)和属性(Property)组成：</p>
+<p><strong>节点</strong>：表示一个设备或总线</p>
+<pre><code class="language-dts">node-name@unit-address {
+    // 属性
+};
+</code></pre>
+<p><strong>属性</strong>：描述节点的特性</p>
+<pre><code class="language-dts">property-name = &lt;value&gt;;
+property-name = &quot;string&quot;;
+property-name;  // 空属性（布尔值）
+</code></pre>
+<h2 id="dts">DTS语法详解</h2>
+<h3 id="_9">基本语法规则</h3>
+<p><strong>1. 节点定义</strong></p>
+<pre><code class="language-dts">// 基本节点
+node_name {
+    property1 = &lt;value&gt;;
+    property2 = &quot;string&quot;;
+};
+
+// 带地址的节点
+node_name@address {
+    reg = &lt;address size&gt;;
+};
+
+// 节点标签（用于引用）
+label: node_name@address {
+    // 属性
+};
+</code></pre>
+<p><strong>2. 属性类型</strong></p>
+<pre><code class="language-dts">// 空属性（布尔值）
+property-name;
+
+// 字符串
+string-property = &quot;hello&quot;;
+
+// 32位无符号整数
+int-property = &lt;123&gt;;
+
+// 64位整数（两个32位值）
+int64-property = &lt;0x12345678 0x9abcdef0&gt;;
+
+// 字符串列表
+string-list = &quot;string1&quot;, &quot;string2&quot;, &quot;string3&quot;;
+
+// 整数数组
+int-array = &lt;1 2 3 4 5&gt;;
+
+// 字节序列
+byte-sequence = [01 02 03 04];
+
+// 混合类型
+mixed-property = &quot;string&quot;, &lt;0x12345678&gt;, [01 02];
+
+// 引用其他节点
+phandle-property = &lt;&amp;label&gt;;
+</code></pre>
+<p><strong>3. 数值表示</strong></p>
+<pre><code class="language-dts">// 十进制
+decimal = &lt;123&gt;;
+
+// 十六进制
+hexadecimal = &lt;0x7B&gt;;
+
+// 二进制（不常用）
+binary = &lt;0b1111011&gt;;
+
+// 大数值（64位）
+large-value = &lt;0x0 0x100000000&gt;;  // 4GB
+</code></pre>
+<h3 id="_10">标准属性</h3>
+<p><strong>1. compatible属性</strong></p>
+<p>用于驱动匹配，最重要的属性：</p>
+<pre><code class="language-dts">compatible = &quot;manufacturer,model&quot;;
+
+// 示例
+compatible = &quot;fsl,imx6ull-uart&quot;, &quot;fsl,imx6q-uart&quot;;
+// 优先匹配 &quot;fsl,imx6ull-uart&quot;
+// 如果没有，则匹配 &quot;fsl,imx6q-uart&quot;
+</code></pre>
+<p><strong>2. reg属性</strong></p>
+<p>描述设备的地址和大小：</p>
+<pre><code class="language-dts">// 格式：reg = &lt;address size&gt;;
+reg = &lt;0x02020000 0x4000&gt;;  // 地址0x02020000，大小0x4000
+
+// 多个地址范围
+reg = &lt;0x02020000 0x4000&gt;,  // 第一个范围
+      &lt;0x02024000 0x4000&gt;;  // 第二个范围
+</code></pre>
+<p><strong>3. #address-cells和#size-cells</strong></p>
+<p>定义子节点地址的格式：</p>
+<pre><code class="language-dts">soc {
+    #address-cells = &lt;1&gt;;  // 地址用1个32位值表示
+    #size-cells = &lt;1&gt;;     // 大小用1个32位值表示
+
+    uart1: serial@02020000 {
+        reg = &lt;0x02020000 0x4000&gt;;  // 1个地址值，1个大小值
+    };
+};
+
+// 64位地址示例
+soc {
+    #address-cells = &lt;2&gt;;  // 地址用2个32位值表示（64位）
+    #size-cells = &lt;2&gt;;     // 大小用2个32位值表示（64位）
+
+    memory@80000000 {
+        reg = &lt;0x0 0x80000000 0x0 0x40000000&gt;;  // 1GB内存
+    };
+};
+</code></pre>
+<p><strong>4. status属性</strong></p>
+<p>表示设备状态：</p>
+<pre><code class="language-dts">status = &quot;okay&quot;;      // 设备可用
+status = &quot;disabled&quot;;  // 设备禁用
+status = &quot;fail&quot;;      // 设备故障
+status = &quot;fail-sss&quot;;  // 设备故障，sss是具体原因
+</code></pre>
+<p><strong>5. interrupts属性</strong></p>
+<p>描述中断信息：</p>
+<pre><code class="language-dts">interrupts = &lt;0 26 IRQ_TYPE_LEVEL_HIGH&gt;;
+// 参数1：中断类型（0=SPI, 1=PPI）
+// 参数2：中断号
+// 参数3：中断触发类型
+</code></pre>
+<h3 id="dts_1">完整的DTS示例</h3>
+<pre><code class="language-dts">/dts-v1/;  // 版本声明
+
+#include &quot;imx6ull.dtsi&quot;  // 包含SoC通用定义
+#include &lt;dt-bindings/gpio/gpio.h&gt;  // 包含GPIO定义
+
+/ {
+    model = &quot;MyBoard i.MX6ULL Board&quot;;
+    compatible = &quot;mycompany,imx6ull-myboard&quot;, &quot;fsl,imx6ull&quot;;
+
+    // 选择的启动参数
+    chosen {
+        bootargs = &quot;console=ttymxc0,115200 root=/dev/mmcblk1p2 rootwait rw&quot;;
+        stdout-path = &amp;uart1;
+    };
+
+    // 内存信息
+    memory@80000000 {
+        device_type = &quot;memory&quot;;
+        reg = &lt;0x80000000 0x20000000&gt;;  // 512MB
+    };
+
+    // 别名
+    aliases {
+        serial0 = &amp;uart1;
+        i2c0 = &amp;i2c1;
+        spi0 = &amp;ecspi1;
+    };
+
+    // 自定义LED设备
+    leds {
+        compatible = &quot;gpio-leds&quot;;
+        pinctrl-names = &quot;default&quot;;
+        pinctrl-0 = &lt;&amp;pinctrl_leds&gt;;
+
+        led1 {
+            label = &quot;sys-led&quot;;
+            gpios = &lt;&amp;gpio1 3 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;on&quot;;
+            linux,default-trigger = &quot;heartbeat&quot;;
+        };
+
+        led2 {
+            label = &quot;user-led&quot;;
+            gpios = &lt;&amp;gpio1 4 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;off&quot;;
+        };
+    };
+
+    // 自定义按键设备
+    gpio-keys {
+        compatible = &quot;gpio-keys&quot;;
+        pinctrl-names = &quot;default&quot;;
+        pinctrl-0 = &lt;&amp;pinctrl_keys&gt;;
+
+        key1 {
+            label = &quot;User Button&quot;;
+            gpios = &lt;&amp;gpio1 18 GPIO_ACTIVE_LOW&gt;;
+            linux,code = &lt;KEY_ENTER&gt;;
+            gpio-key,wakeup;
+        };
+    };
+};
+
+// 修改UART1配置
+&amp;uart1 {
+    pinctrl-names = &quot;default&quot;;
+    pinctrl-0 = &lt;&amp;pinctrl_uart1&gt;;
+    status = &quot;okay&quot;;
+};
+
+// 修改I2C1配置
+&amp;i2c1 {
+    clock-frequency = &lt;100000&gt;;
+    pinctrl-names = &quot;default&quot;;
+    pinctrl-0 = &lt;&amp;pinctrl_i2c1&gt;;
+    status = &quot;okay&quot;;
+
+    // I2C设备：温度传感器
+    temp_sensor: lm75@48 {
+        compatible = &quot;national,lm75&quot;;
+        reg = &lt;0x48&gt;;
+    };
+
+    // I2C设备：EEPROM
+    eeprom: at24c02@50 {
+        compatible = &quot;atmel,24c02&quot;;
+        reg = &lt;0x50&gt;;
+        pagesize = &lt;8&gt;;
+    };
+};
+
+// 修改SPI1配置
+&amp;ecspi1 {
+    fsl,spi-num-chipselects = &lt;1&gt;;
+    cs-gpios = &lt;&amp;gpio4 26 GPIO_ACTIVE_LOW&gt;;
+    pinctrl-names = &quot;default&quot;;
+    pinctrl-0 = &lt;&amp;pinctrl_ecspi1&gt;;
+    status = &quot;okay&quot;;
+
+    // SPI设备：Flash
+    flash: m25p80@0 {
+        compatible = &quot;jedec,spi-nor&quot;;
+        spi-max-frequency = &lt;20000000&gt;;
+        reg = &lt;0&gt;;
+    };
+};
+
+// GPIO引脚配置
+&amp;iomuxc {
+    pinctrl_uart1: uart1grp {
+        fsl,pins = &lt;
+            MX6UL_PAD_UART1_TX_DATA__UART1_DCE_TX 0x1b0b1
+            MX6UL_PAD_UART1_RX_DATA__UART1_DCE_RX 0x1b0b1
+        &gt;;
+    };
+
+    pinctrl_i2c1: i2c1grp {
+        fsl,pins = &lt;
+            MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+            MX6UL_PAD_UART4_RX_DATA__I2C1_SDA 0x4001b8b0
+        &gt;;
+    };
+
+    pinctrl_leds: ledsgrp {
+        fsl,pins = &lt;
+            MX6UL_PAD_GPIO1_IO03__GPIO1_IO03 0x17059
+            MX6UL_PAD_GPIO1_IO04__GPIO1_IO04 0x17059
+        &gt;;
+    };
+
+    pinctrl_keys: keysgrp {
+        fsl,pins = &lt;
+            MX6UL_PAD_UART1_CTS_B__GPIO1_IO18 0x80000000
+        &gt;;
+    };
+};
+</code></pre>
+<h2 id="_11">设备树编译</h2>
+<h3 id="dtc">编译工具：DTC</h3>
+<p><strong>设备树编译器(Device Tree Compiler, DTC)</strong>用于将DTS文件编译成DTB文件。</p>
+<p><strong>安装DTC</strong>：</p>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt install device-tree-compiler
+
+# 验证安装
+dtc --version
+# 输出：Version: DTC 1.6.0
+</code></pre>
+<h3 id="dtsdtb">编译DTS到DTB</h3>
+<p><strong>基本编译命令</strong>：</p>
+<pre><code class="language-bash"># 编译DTS为DTB
+dtc -I dts -O dtb -o output.dtb input.dts
+
+# 参数说明：
+# -I dts：输入格式为DTS
+# -O dtb：输出格式为DTB
+# -o output.dtb：输出文件名
+# input.dts：输入文件名
+</code></pre>
+<p><strong>包含头文件的编译</strong>：</p>
+<pre><code class="language-bash"># 使用C预处理器处理包含文件
+cpp -nostdinc -I include -undef -x assembler-with-cpp input.dts output.dts.tmp
+dtc -I dts -O dtb -o output.dtb output.dts.tmp
+rm output.dts.tmp
+
+# 或使用内核Makefile
+cd linux-5.15
+make ARCH=arm dtbs
+# 编译所有设备树文件
+</code></pre>
+<p><strong>在内核源码中编译</strong>：</p>
+<pre><code class="language-bash"># 编译特定的DTB
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- imx6ull-myboard.dtb
+
+# 编译所有DTB
+make ARCH=arm CROSS_COMPILE=arm-linux-gnueabihf- dtbs
+
+# 输出位置
+ls arch/arm/boot/dts/*.dtb
+</code></pre>
+<h3 id="dtbdts">反编译DTB到DTS</h3>
+<p><strong>反编译命令</strong>：</p>
+<pre><code class="language-bash"># 反编译DTB为DTS
+dtc -I dtb -O dts -o output.dts input.dtb
+
+# 参数说明：
+# -I dtb：输入格式为DTB
+# -O dts：输出格式为DTS
+# -o output.dts：输出文件名
+# input.dtb：输入文件名
+</code></pre>
+<p><strong>从运行系统中提取设备树</strong>：</p>
+<pre><code class="language-bash"># 方法1：从/proc读取
+dtc -I fs -O dts -o current.dts /proc/device-tree
+
+# 方法2：从/sys读取
+cat /sys/firmware/devicetree/base/model
+cat /sys/firmware/devicetree/base/compatible
+
+# 方法3：使用fdtdump
+fdtdump /boot/dtb/imx6ull-myboard.dtb
+</code></pre>
+<h3 id="_12">编译选项详解</h3>
+<p><strong>常用编译选项</strong>：</p>
+<pre><code class="language-bash"># 显示警告信息
+dtc -I dts -O dtb -W all -o output.dtb input.dts
+
+# 抑制特定警告
+dtc -I dts -O dtb -W no-unit_address_vs_reg -o output.dtb input.dts
+
+# 生成符号信息（用于overlay）
+dtc -I dts -O dtb -@ -o output.dtb input.dts
+
+# 指定输出版本
+dtc -I dts -O dtb -V 17 -o output.dtb input.dts
+
+# 详细输出
+dtc -I dts -O dtb -v -o output.dtb input.dts
+</code></pre>
+<p><strong>警告类型说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>警告类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>unit_address_vs_reg</code></td>
+<td>节点名地址与reg属性不匹配</td>
+</tr>
+<tr>
+<td><code>simple_bus_reg</code></td>
+<td>simple-bus节点包含reg属性</td>
+</tr>
+<tr>
+<td><code>avoid_default_addr_size</code></td>
+<td>使用默认的address-cells/size-cells</td>
+</tr>
+<tr>
+<td><code>obsolete_chosen_interrupt_controller</code></td>
+<td>过时的chosen中断控制器</td>
+</tr>
+</tbody>
+</table>
+<h2 id="linux">设备树在Linux中的使用</h2>
+<h3 id="_13">启动流程</h3>
+<p>设备树在Linux启动过程中的作用：</p>
+<pre><code>┌─────────────────────────────────────────┐
+│         Bootloader (U-Boot)             │
+│    加载内核和DTB到内存                    │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         内核启动                         │
+│    解析DTB，构建设备树数据结构            │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         平台设备注册                     │
+│    根据设备树创建platform_device         │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         驱动匹配                         │
+│    通过compatible属性匹配驱动            │
+└─────────────────────────────────────────┘
+                    ↓
+┌─────────────────────────────────────────┐
+│         设备初始化                       │
+│    驱动probe函数被调用                   │
+└─────────────────────────────────────────┘
+</code></pre>
+<h3 id="_14">在驱动中使用设备树</h3>
+<p><strong>1. 驱动匹配</strong></p>
+<pre><code class="language-c">// 定义设备树匹配表
+static const struct of_device_id mydev_of_match[] = {
+    { .compatible = &quot;mycompany,mydevice&quot; },
+    { .compatible = &quot;mycompany,mydevice-v2&quot; },
+    { /* sentinel */ }
+};
+MODULE_DEVICE_TABLE(of, mydev_of_match);
+
+// 平台驱动结构
+static struct platform_driver mydev_driver = {
+    .driver = {
+        .name = &quot;mydevice&quot;,
+        .of_match_table = mydev_of_match,
+    },
+    .probe = mydev_probe,
+    .remove = mydev_remove,
+};
+</code></pre>
+<p><strong>2. 读取属性</strong></p>
+<pre><code class="language-c">static int mydev_probe(struct platform_device *pdev)
+{
+    struct device_node *np = pdev-&gt;dev.of_node;
+    const char *string_val;
+    u32 int_val;
+    int ret;
+
+    // 读取字符串属性
+    ret = of_property_read_string(np, &quot;label&quot;, &amp;string_val);
+    if (ret == 0) {
+        dev_info(&amp;pdev-&gt;dev, &quot;Label: %s\n&quot;, string_val);
+    }
+
+    // 读取整数属性
+    ret = of_property_read_u32(np, &quot;clock-frequency&quot;, &amp;int_val);
+    if (ret == 0) {
+        dev_info(&amp;pdev-&gt;dev, &quot;Clock: %u Hz\n&quot;, int_val);
+    }
+
+    // 检查属性是否存在
+    if (of_property_read_bool(np, &quot;enable-dma&quot;)) {
+        dev_info(&amp;pdev-&gt;dev, &quot;DMA enabled\n&quot;);
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>3. 获取资源</strong></p>
+<pre><code class="language-c">static int mydev_probe(struct platform_device *pdev)
+{
+    struct resource *res;
+    void __iomem *base;
+    int irq;
+
+    // 获取内存资源
+    res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+    if (!res) {
+        dev_err(&amp;pdev-&gt;dev, &quot;Failed to get memory resource\n&quot;);
+        return -ENODEV;
+    }
+
+    // 映射内存
+    base = devm_ioremap_resource(&amp;pdev-&gt;dev, res);
+    if (IS_ERR(base)) {
+        return PTR_ERR(base);
+    }
+
+    // 获取中断号
+    irq = platform_get_irq(pdev, 0);
+    if (irq &lt; 0) {
+        dev_err(&amp;pdev-&gt;dev, &quot;Failed to get IRQ\n&quot;);
+        return irq;
+    }
+
+    dev_info(&amp;pdev-&gt;dev, &quot;Base: 0x%px, IRQ: %d\n&quot;, base, irq);
+
+    return 0;
+}
+</code></pre>
+<p><strong>4. 解析GPIO</strong></p>
+<pre><code class="language-c">#include &lt;linux/gpio/consumer.h&gt;
+
+static int mydev_probe(struct platform_device *pdev)
+{
+    struct gpio_desc *gpio;
+
+    // 获取GPIO描述符
+    gpio = devm_gpiod_get(&amp;pdev-&gt;dev, &quot;reset&quot;, GPIOD_OUT_LOW);
+    if (IS_ERR(gpio)) {
+        dev_err(&amp;pdev-&gt;dev, &quot;Failed to get reset GPIO\n&quot;);
+        return PTR_ERR(gpio);
+    }
+
+    // 设置GPIO值
+    gpiod_set_value(gpio, 1);  // 拉高
+    msleep(10);
+    gpiod_set_value(gpio, 0);  // 拉低
+
+    return 0;
+}
+</code></pre>
+<p><strong>5. 解析时钟</strong></p>
+<pre><code class="language-c">#include &lt;linux/clk.h&gt;
+
+static int mydev_probe(struct platform_device *pdev)
+{
+    struct clk *clk;
+    unsigned long rate;
+
+    // 获取时钟
+    clk = devm_clk_get(&amp;pdev-&gt;dev, &quot;ipg&quot;);
+    if (IS_ERR(clk)) {
+        dev_err(&amp;pdev-&gt;dev, &quot;Failed to get clock\n&quot;);
+        return PTR_ERR(clk);
+    }
+
+    // 使能时钟
+    clk_prepare_enable(clk);
+
+    // 获取时钟频率
+    rate = clk_get_rate(clk);
+    dev_info(&amp;pdev-&gt;dev, &quot;Clock rate: %lu Hz\n&quot;, rate);
+
+    return 0;
+}
+</code></pre>
+<h3 id="of">常用OF函数</h3>
+<p><strong>节点操作函数</strong>：</p>
+<pre><code class="language-c">// 通过路径查找节点
+struct device_node *of_find_node_by_path(const char *path);
+
+// 通过名称查找节点
+struct device_node *of_find_node_by_name(struct device_node *from, const char *name);
+
+// 通过compatible查找节点
+struct device_node *of_find_compatible_node(struct device_node *from,
+                                            const char *type,
+                                            const char *compatible);
+
+// 通过phandle查找节点
+struct device_node *of_find_node_by_phandle(phandle handle);
+
+// 获取父节点
+struct device_node *of_get_parent(const struct device_node *node);
+
+// 获取子节点
+struct device_node *of_get_next_child(const struct device_node *node,
+                                      struct device_node *prev);
+</code></pre>
+<p><strong>属性读取函数</strong>：</p>
+<pre><code class="language-c">// 读取字符串
+int of_property_read_string(const struct device_node *np,
+                            const char *propname,
+                            const char **out_string);
+
+// 读取u32整数
+int of_property_read_u32(const struct device_node *np,
+                         const char *propname,
+                         u32 *out_value);
+
+// 读取u32数组
+int of_property_read_u32_array(const struct device_node *np,
+                               const char *propname,
+                               u32 *out_values,
+                               size_t sz);
+
+// 读取u64整数
+int of_property_read_u64(const struct device_node *np,
+                         const char *propname,
+                         u64 *out_value);
+
+// 检查属性是否存在
+bool of_property_read_bool(const struct device_node *np,
+                          const char *propname);
+
+// 获取属性长度
+int of_property_count_elems_of_size(const struct device_node *np,
+                                    const char *propname,
+                                    int elem_size);
+</code></pre>
+<p><strong>资源获取函数</strong>：</p>
+<pre><code class="language-c">// 获取地址和大小
+int of_address_to_resource(struct device_node *dev,
+                          int index,
+                          struct resource *r);
+
+// 获取中断号
+int of_irq_get(struct device_node *dev, int index);
+
+// 解析phandle
+struct device_node *of_parse_phandle(const struct device_node *np,
+                                     const char *phandle_name,
+                                     int index);
+</code></pre>
+<h2 id="_15">设备树调试方法</h2>
+<h3 id="_16">查看运行时设备树</h3>
+<p><strong>1. 通过/proc查看</strong></p>
+<pre><code class="language-bash"># 查看设备树根节点
+ls /proc/device-tree/
+
+# 查看model信息
+cat /proc/device-tree/model
+
+# 查看compatible信息
+cat /proc/device-tree/compatible
+
+# 查看特定节点
+ls /proc/device-tree/soc/
+cat /proc/device-tree/soc/uart@02020000/status
+</code></pre>
+<p><strong>2. 通过/sys查看</strong></p>
+<pre><code class="language-bash"># 查看设备树基础信息
+ls /sys/firmware/devicetree/base/
+
+# 查看model
+cat /sys/firmware/devicetree/base/model
+
+# 查看所有compatible
+find /sys/firmware/devicetree/base -name compatible -exec cat {} \;
+</code></pre>
+<p><strong>3. 导出完整设备树</strong></p>
+<pre><code class="language-bash"># 方法1：使用dtc
+dtc -I fs -O dts -o /tmp/current.dts /proc/device-tree
+
+# 方法2：从内存导出
+cat /sys/firmware/fdt &gt; /tmp/current.dtb
+dtc -I dtb -O dts -o /tmp/current.dts /tmp/current.dtb
+
+# 查看导出的设备树
+less /tmp/current.dts
+</code></pre>
+<h3 id="_17">调试技巧</h3>
+<p><strong>1. 检查设备树是否加载</strong></p>
+<pre><code class="language-bash"># 查看内核启动日志
+dmesg | grep -i &quot;device tree&quot;
+dmesg | grep -i &quot;dtb&quot;
+
+# 输出示例：
+# [    0.000000] Machine model: MyBoard i.MX6ULL Board
+# [    0.000000] OF: fdt: Machine model: MyBoard i.MX6ULL Board
+</code></pre>
+<p><strong>2. 检查设备是否创建</strong></p>
+<pre><code class="language-bash"># 查看平台设备
+ls /sys/bus/platform/devices/
+
+# 查看特定设备
+ls /sys/bus/platform/devices/2020000.serial/
+
+# 查看设备的设备树节点
+cat /sys/bus/platform/devices/2020000.serial/of_node/compatible
+</code></pre>
+<p><strong>3. 检查驱动是否匹配</strong></p>
+<pre><code class="language-bash"># 查看已加载的驱动
+ls /sys/bus/platform/drivers/
+
+# 查看驱动绑定的设备
+ls /sys/bus/platform/drivers/imx-uart/
+
+# 查看设备的驱动
+readlink /sys/bus/platform/devices/2020000.serial/driver
+</code></pre>
+<p><strong>4. 使用内核调试选项</strong></p>
+<pre><code class="language-bash"># 在内核配置中启用
+Device Drivers  ---&gt;
+    Generic Driver Options  ---&gt;
+        [*] Driver Core verbose debug messages
+
+# 或在启动参数中添加
+console=ttyS0,115200 debug
+
+# 查看详细日志
+dmesg | grep &quot;of_platform&quot;
+dmesg | grep &quot;compatible&quot;
+</code></pre>
+<p><strong>5. 编写测试代码</strong></p>
+<pre><code class="language-c">// 测试设备树节点是否存在
+static int __init test_dt_init(void)
+{
+    struct device_node *np;
+
+    np = of_find_node_by_path(&quot;/leds/led1&quot;);
+    if (np) {
+        pr_info(&quot;Found LED1 node\n&quot;);
+        of_node_put(np);
+    } else {
+        pr_err(&quot;LED1 node not found\n&quot;);
+    }
+
+    return 0;
+}
+module_init(test_dt_init);
+</code></pre>
+<h3 id="_18">常见错误排查</h3>
+<p><strong>错误1：设备树未加载</strong></p>
+<pre><code class="language-bash">症状：
+- /proc/device-tree目录不存在
+- dmesg中没有设备树相关信息
+
+原因：
+- DTB文件未传递给内核
+- Bootloader配置错误
+
+解决方案：
+# 检查U-Boot配置
+printenv
+# 确保fdt_addr或fdt_file正确设置
+
+# 手动加载DTB
+fatload mmc 0:1 ${fdt_addr} imx6ull-myboard.dtb
+bootz ${kernel_addr} - ${fdt_addr}
+</code></pre>
+<p><strong>错误2：设备未创建</strong></p>
+<pre><code class="language-bash">症状：
+- /sys/bus/platform/devices/中没有对应设备
+
+原因：
+- compatible属性错误
+- status = &quot;disabled&quot;
+- 节点格式错误
+
+解决方案：
+# 检查设备树节点
+cat /proc/device-tree/soc/uart@02020000/compatible
+cat /proc/device-tree/soc/uart@02020000/status
+
+# 确保status为&quot;okay&quot;
+&amp;uart1 {
+    status = &quot;okay&quot;;
+};
+</code></pre>
+<p><strong>错误3：驱动未匹配</strong></p>
+<pre><code class="language-bash">症状：
+- 设备存在但没有驱动
+
+原因：
+- compatible字符串不匹配
+- 驱动未编译或加载
+
+解决方案：
+# 检查驱动的compatible
+grep -r &quot;mycompany,mydevice&quot; drivers/
+
+# 确保驱动已加载
+lsmod | grep mydriver
+modprobe mydriver
+
+# 检查驱动匹配表
+cat /sys/bus/platform/drivers/mydriver/uevent
+</code></pre>
+<p><strong>错误4：属性读取失败</strong></p>
+<pre><code class="language-bash">症状：
+- of_property_read_xxx返回错误
+
+原因：
+- 属性名称错误
+- 属性类型不匹配
+- 属性不存在
+
+解决方案：
+# 检查属性是否存在
+ls /proc/device-tree/path/to/node/
+
+# 查看属性值
+hexdump -C /proc/device-tree/path/to/node/property-name
+
+# 确保属性格式正确
+property-name = &lt;0x12345678&gt;;  // u32
+property-name = &quot;string&quot;;      // string
+</code></pre>
+<h2 id="overlay">设备树Overlay</h2>
+<h3 id="overlay_1">Overlay概念</h3>
+<p>设备树Overlay允许在运行时动态修改设备树，无需重新编译和加载整个DTB。</p>
+<p><strong>应用场景</strong>：
+- 动态添加/移除设备
+- 支持可插拔硬件
+- 开发板扩展模块
+- 运行时配置修改</p>
+<h3 id="overlay_2">Overlay语法</h3>
+<pre><code class="language-dts">/dts-v1/;
+/plugin/;  // 声明为overlay
+
+/ {
+    compatible = &quot;mycompany,imx6ull-myboard&quot;;
+
+    fragment@0 {
+        target = &lt;&amp;i2c1&gt;;  // 目标节点
+        __overlay__ {
+            // 要添加或修改的内容
+            sensor@48 {
+                compatible = &quot;ti,tmp102&quot;;
+                reg = &lt;0x48&gt;;
+            };
+        };
+    };
+
+    fragment@1 {
+        target-path = &quot;/&quot;;  // 使用路径指定目标
+        __overlay__ {
+            new_device {
+                compatible = &quot;mycompany,newdev&quot;;
+                status = &quot;okay&quot;;
+            };
+        };
+    };
+};
+</code></pre>
+<h3 id="overlay_3">编译Overlay</h3>
+<pre><code class="language-bash"># 编译overlay（需要符号支持）
+dtc -@ -I dts -O dtb -o overlay.dtbo overlay.dts
+
+# 基础DTB也需要符号支持
+dtc -@ -I dts -O dtb -o base.dtb base.dts
+</code></pre>
+<h3 id="overlay_4">应用Overlay</h3>
+<p><strong>方法1：使用configfs</strong></p>
+<pre><code class="language-bash"># 挂载configfs
+mount -t configfs none /sys/kernel/config
+
+# 创建overlay目录
+mkdir /sys/kernel/config/device-tree/overlays/my_overlay
+
+# 应用overlay
+cat overlay.dtbo &gt; /sys/kernel/config/device-tree/overlays/my_overlay/dtbo
+
+# 检查状态
+cat /sys/kernel/config/device-tree/overlays/my_overlay/status
+
+# 移除overlay
+rmdir /sys/kernel/config/device-tree/overlays/my_overlay
+</code></pre>
+<p><strong>方法2：使用U-Boot</strong></p>
+<pre><code class="language-bash"># 在U-Boot中加载overlay
+fatload mmc 0:1 ${fdt_addr} base.dtb
+fatload mmc 0:1 ${overlay_addr} overlay.dtbo
+fdt addr ${fdt_addr}
+fdt resize 8192
+fdt apply ${overlay_addr}
+bootz ${kernel_addr} - ${fdt_addr}
+</code></pre>
+<h2 id="_19">实战示例</h2>
+<h3 id="1led">示例1：添加LED设备</h3>
+<p><strong>设备树配置</strong>：</p>
+<pre><code class="language-dts">/ {
+    leds {
+        compatible = &quot;gpio-leds&quot;;
+        pinctrl-names = &quot;default&quot;;
+        pinctrl-0 = &lt;&amp;pinctrl_leds&gt;;
+
+        led_red {
+            label = &quot;red&quot;;
+            gpios = &lt;&amp;gpio1 3 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;off&quot;;
+        };
+
+        led_green {
+            label = &quot;green&quot;;
+            gpios = &lt;&amp;gpio1 4 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;off&quot;;
+            linux,default-trigger = &quot;heartbeat&quot;;
+        };
+    };
+};
+
+&amp;iomuxc {
+    pinctrl_leds: ledsgrp {
+        fsl,pins = &lt;
+            MX6UL_PAD_GPIO1_IO03__GPIO1_IO03 0x17059
+            MX6UL_PAD_GPIO1_IO04__GPIO1_IO04 0x17059
+        &gt;;
+    };
+};
+</code></pre>
+<p><strong>测试LED</strong>：</p>
+<pre><code class="language-bash"># 查看LED设备
+ls /sys/class/leds/
+
+# 控制LED
+echo 1 &gt; /sys/class/leds/red/brightness
+echo 0 &gt; /sys/class/leds/red/brightness
+
+# 设置触发器
+echo timer &gt; /sys/class/leds/green/trigger
+echo 100 &gt; /sys/class/leds/green/delay_on
+echo 100 &gt; /sys/class/leds/green/delay_off
+</code></pre>
+<h3 id="2i2c">示例2：添加I2C设备</h3>
+<p><strong>设备树配置</strong>：</p>
+<pre><code class="language-dts">&amp;i2c1 {
+    clock-frequency = &lt;100000&gt;;
+    pinctrl-names = &quot;default&quot;;
+    pinctrl-0 = &lt;&amp;pinctrl_i2c1&gt;;
+    status = &quot;okay&quot;;
+
+    // 温度传感器
+    temp_sensor: lm75@48 {
+        compatible = &quot;national,lm75&quot;;
+        reg = &lt;0x48&gt;;
+    };
+
+    // RTC
+    rtc: ds1307@68 {
+        compatible = &quot;dallas,ds1307&quot;;
+        reg = &lt;0x68&gt;;
+    };
+
+    // EEPROM
+    eeprom: at24c256@50 {
+        compatible = &quot;atmel,24c256&quot;;
+        reg = &lt;0x50&gt;;
+        pagesize = &lt;64&gt;;
+    };
+};
+
+&amp;iomuxc {
+    pinctrl_i2c1: i2c1grp {
+        fsl,pins = &lt;
+            MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+            MX6UL_PAD_UART4_RX_DATA__I2C1_SDA 0x4001b8b0
+        &gt;;
+    };
+};
+</code></pre>
+<p><strong>测试I2C设备</strong>：</p>
+<pre><code class="language-bash"># 扫描I2C总线
+i2cdetect -y 1
+
+# 读取温度传感器
+cat /sys/class/hwmon/hwmon0/temp1_input
+
+# 读取RTC时间
+hwclock -r
+
+# 读写EEPROM
+echo &quot;Hello&quot; &gt; /sys/bus/i2c/devices/1-0050/eeprom
+hexdump -C /sys/bus/i2c/devices/1-0050/eeprom | head
+</code></pre>
+<h3 id="3spi">示例3：添加SPI设备</h3>
+<p><strong>设备树配置</strong>：</p>
+<pre><code class="language-dts">&amp;ecspi1 {
+    fsl,spi-num-chipselects = &lt;2&gt;;
+    cs-gpios = &lt;&amp;gpio4 26 GPIO_ACTIVE_LOW&gt;,
+               &lt;&amp;gpio4 27 GPIO_ACTIVE_LOW&gt;;
+    pinctrl-names = &quot;default&quot;;
+    pinctrl-0 = &lt;&amp;pinctrl_ecspi1&gt;;
+    status = &quot;okay&quot;;
+
+    // SPI Flash
+    flash: m25p80@0 {
+        compatible = &quot;jedec,spi-nor&quot;;
+        spi-max-frequency = &lt;20000000&gt;;
+        reg = &lt;0&gt;;
+
+        partitions {
+            compatible = &quot;fixed-partitions&quot;;
+            #address-cells = &lt;1&gt;;
+            #size-cells = &lt;1&gt;;
+
+            partition@0 {
+                label = &quot;bootloader&quot;;
+                reg = &lt;0x0 0x100000&gt;;
+                read-only;
+            };
+
+            partition@100000 {
+                label = &quot;kernel&quot;;
+                reg = &lt;0x100000 0x400000&gt;;
+            };
+
+            partition@500000 {
+                label = &quot;rootfs&quot;;
+                reg = &lt;0x500000 0xb00000&gt;;
+            };
+        };
+    };
+
+    // SPI设备
+    spidev@1 {
+        compatible = &quot;rohm,dh2228fv&quot;;
+        spi-max-frequency = &lt;1000000&gt;;
+        reg = &lt;1&gt;;
+    };
+};
+
+&amp;iomuxc {
+    pinctrl_ecspi1: ecspi1grp {
+        fsl,pins = &lt;
+            MX6UL_PAD_CSI_DATA07__ECSPI1_MISO 0x100b1
+            MX6UL_PAD_CSI_DATA06__ECSPI1_MOSI 0x100b1
+            MX6UL_PAD_CSI_DATA04__ECSPI1_SCLK 0x100b1
+            MX6UL_PAD_CSI_DATA05__GPIO4_IO26  0x100b1
+            MX6UL_PAD_CSI_DATA08__GPIO4_IO27  0x100b1
+        &gt;;
+    };
+};
+</code></pre>
+<p><strong>测试SPI设备</strong>：</p>
+<pre><code class="language-bash"># 查看SPI设备
+ls /dev/spidev*
+
+# 查看Flash分区
+cat /proc/mtd
+
+# 读取Flash
+dd if=/dev/mtd0 of=/tmp/bootloader.bin bs=1M count=1
+
+# 使用spidev
+# 需要编写用户空间程序或使用spidev工具
+</code></pre>
+<h2 id="_20">最佳实践</h2>
+<h3 id="1">1. 设备树组织</h3>
+<p><strong>分层结构</strong>：</p>
+<pre><code>arch/arm/boot/dts/
+├── imx6ull.dtsi              # SoC通用定义
+├── imx6ull-14x14-evk.dtsi    # EVK板通用定义
+├── imx6ull-14x14-evk.dts     # EVK板具体配置
+└── imx6ull-myboard.dts       # 自定义板配置
+</code></pre>
+<p><strong>包含关系</strong>：</p>
+<pre><code class="language-dts">// imx6ull-myboard.dts
+#include &quot;imx6ull.dtsi&quot;
+#include &quot;imx6ull-14x14-evk.dtsi&quot;
+
+/ {
+    model = &quot;MyBoard i.MX6ULL&quot;;
+    compatible = &quot;mycompany,imx6ull-myboard&quot;, &quot;fsl,imx6ull&quot;;
+
+    // 板级特定配置
+};
+</code></pre>
+<h3 id="2">2. 命名规范</h3>
+<p><strong>节点命名</strong>：</p>
+<pre><code class="language-dts">// 格式：device-type@unit-address
+uart1: serial@02020000 { };
+i2c1: i2c@021a0000 { };
+gpio1: gpio@0209c000 { };
+
+// 不带地址的节点
+leds { };
+gpio-keys { };
+regulators { };
+</code></pre>
+<p><strong>属性命名</strong>：</p>
+<pre><code class="language-dts">// 使用小写和连字符
+compatible = &quot;vendor,device&quot;;
+clock-frequency = &lt;100000&gt;;
+pinctrl-names = &quot;default&quot;;
+
+// 避免使用下划线或驼峰命名
+// 错误：clockFrequency, clock_frequency
+</code></pre>
+<p><strong>标签命名</strong>：</p>
+<pre><code class="language-dts">// 使用有意义的标签
+uart1: serial@02020000 { };
+temp_sensor: lm75@48 { };
+led_red: led@0 { };
+
+// 避免使用无意义的标签
+// 错误：node1, dev2, label3
+</code></pre>
+<h3 id="3">3. 文档化</h3>
+<p><strong>添加注释</strong>：</p>
+<pre><code class="language-dts">/ {
+    model = &quot;MyBoard i.MX6ULL Board&quot;;
+    compatible = &quot;mycompany,imx6ull-myboard&quot;, &quot;fsl,imx6ull&quot;;
+
+    /*
+     * LED配置
+     * - led_red: GPIO1_IO03, 低电平有效
+     * - led_green: GPIO1_IO04, 低电平有效，心跳触发
+     */
+    leds {
+        compatible = &quot;gpio-leds&quot;;
+
+        led_red {
+            label = &quot;red&quot;;
+            gpios = &lt;&amp;gpio1 3 GPIO_ACTIVE_LOW&gt;;
+            default-state = &quot;off&quot;;
+        };
+    };
+};
+</code></pre>
+<p><strong>创建绑定文档</strong>：</p>
+<pre><code class="language-yaml"># Documentation/devicetree/bindings/leds/mycompany-leds.yaml
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/leds/mycompany-leds.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: MyCompany LED Controller
+
+maintainers:
+  - Your Name &lt;your.email@example.com&gt;
+
+properties:
+  compatible:
+    const: mycompany,led-controller
+
+  reg:
+    maxItems: 1
+
+  num-leds:
+    description: Number of LEDs
+    $ref: /schemas/types.yaml#/definitions/uint32
+
+required:
+  - compatible
+  - reg
+
+examples:
+  - |
+    leds@40000000 {
+        compatible = &quot;mycompany,led-controller&quot;;
+        reg = &lt;0x40000000 0x1000&gt;;
+        num-leds = &lt;4&gt;;
+    };
+</code></pre>
+<h3 id="4">4. 版本控制</h3>
+<p><strong>使用Git管理</strong>：</p>
+<pre><code class="language-bash"># 提交设备树修改
+git add arch/arm/boot/dts/imx6ull-myboard.dts
+git commit -m &quot;ARM: dts: imx6ull: Add support for MyBoard&quot;
+
+# 查看历史
+git log -- arch/arm/boot/dts/imx6ull-myboard.dts
+
+# 比较版本
+git diff v1.0..v2.0 arch/arm/boot/dts/imx6ull-myboard.dts
+</code></pre>
+<p><strong>版本标记</strong>：</p>
+<pre><code class="language-dts">/ {
+    model = &quot;MyBoard i.MX6ULL Board v2.0&quot;;
+    compatible = &quot;mycompany,imx6ull-myboard-v2&quot;, 
+                 &quot;mycompany,imx6ull-myboard&quot;,
+                 &quot;fsl,imx6ull&quot;;
+
+    // 硬件版本信息
+    hardware {
+        revision = &quot;2.0&quot;;
+        date = &quot;2024-01-15&quot;;
+    };
+};
+</code></pre>
+<h3 id="5">5. 测试验证</h3>
+<p><strong>编译检查</strong>：</p>
+<pre><code class="language-bash"># 编译设备树
+make ARCH=arm dtbs
+
+# 检查警告
+make ARCH=arm W=1 dtbs
+
+# 使用dtc检查
+dtc -I dts -O dtb -W all -o /dev/null myboard.dts
+</code></pre>
+<p><strong>运行时验证</strong>：</p>
+<pre><code class="language-bash"># 检查设备树加载
+dmesg | grep &quot;OF:&quot;
+dmesg | grep &quot;device tree&quot;
+
+# 验证设备创建
+ls /sys/bus/platform/devices/
+
+# 验证驱动匹配
+ls /sys/bus/platform/drivers/
+
+# 导出并检查
+dtc -I fs -O dts -o /tmp/current.dts /proc/device-tree
+diff -u original.dts /tmp/current.dts
+</code></pre>
+<h2 id="_21">常见问题</h2>
+<h3 id="q1-acpi">Q1: 设备树和ACPI有什么区别？</h3>
+<p><strong>A</strong>: 设备树(Device Tree)和ACPI(Advanced Configuration and Power Interface)都是硬件描述机制，但有不同的应用场景：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>设备树</th>
+<th>ACPI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主要平台</td>
+<td>ARM、PowerPC、RISC-V</td>
+<td>x86、x86_64</td>
+</tr>
+<tr>
+<td>复杂度</td>
+<td>相对简单</td>
+<td>复杂</td>
+</tr>
+<tr>
+<td>动态性</td>
+<td>静态描述</td>
+<td>支持动态配置</td>
+</tr>
+<tr>
+<td>电源管理</td>
+<td>基础支持</td>
+<td>完整的电源管理</td>
+</tr>
+<tr>
+<td>热插拔</td>
+<td>有限支持</td>
+<td>完整支持</td>
+</tr>
+<tr>
+<td>文件格式</td>
+<td>文本+二进制</td>
+<td>二进制表格</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 嵌入式ARM系统：使用设备树
+- x86服务器/PC：使用ACPI
+- ARM服务器：可能同时支持两者</p>
+<h3 id="q2">Q2: 为什么修改设备树后设备没有变化？</h3>
+<p><strong>A</strong>: 可能的原因和解决方案：</p>
+<ol>
+<li><strong>DTB未更新</strong></li>
+</ol>
+<pre><code class="language-bash"># 确保重新编译DTB
+make ARCH=arm dtbs
+
+# 确保复制到正确位置
+cp arch/arm/boot/dts/myboard.dtb /boot/
+</code></pre>
+<ol start="2">
+<li><strong>Bootloader未加载新DTB</strong></li>
+</ol>
+<pre><code class="language-bash"># 检查U-Boot配置
+printenv fdt_file
+printenv fdt_addr
+
+# 确保加载正确的DTB
+setenv fdt_file myboard.dtb
+saveenv
+</code></pre>
+<ol start="3">
+<li><strong>设备状态为disabled</strong></li>
+</ol>
+<pre><code class="language-dts">&amp;uart1 {
+    status = &quot;okay&quot;;  // 确保是okay而不是disabled
+};
+</code></pre>
+<ol start="4">
+<li><strong>驱动未加载</strong></li>
+</ol>
+<pre><code class="language-bash"># 检查驱动是否存在
+lsmod | grep driver_name
+
+# 加载驱动
+modprobe driver_name
+</code></pre>
+<h3 id="q3">Q3: 如何在设备树中引用其他节点？</h3>
+<p><strong>A</strong>: 使用phandle和标签：</p>
+<pre><code class="language-dts">// 方法1：使用标签引用
+gpio1: gpio@0209c000 {
+    // GPIO控制器定义
+};
+
+leds {
+    led1 {
+        gpios = &lt;&amp;gpio1 3 GPIO_ACTIVE_LOW&gt;;  // 引用gpio1
+    };
+};
+
+// 方法2：使用phandle
+/ {
+    gpio-controller {
+        phandle = &lt;0x10&gt;;
+    };
+
+    leds {
+        led1 {
+            gpios = &lt;0x10 3 0&gt;;  // 使用phandle值
+        };
+    };
+};
+
+// 方法3：使用路径
+leds {
+    led1 {
+        gpio-controller = &lt;&amp;{/soc/gpio@0209c000}&gt;;
+    };
+};
+</code></pre>
+<h3 id="q4">Q4: 设备树中的地址如何确定？</h3>
+<p><strong>A</strong>: 地址来源于硬件手册：</p>
+<pre><code class="language-dts">// 1. 查看芯片手册的Memory Map章节
+// 例如：i.MX6ULL参考手册
+// UART1: 0x02020000 - 0x02023FFF (16KB)
+
+uart1: serial@02020000 {
+    compatible = &quot;fsl,imx6ul-uart&quot;;
+    reg = &lt;0x02020000 0x4000&gt;;  // 地址和大小
+};
+
+// 2. 对于I2C/SPI设备，地址是设备地址
+i2c1 {
+    #address-cells = &lt;1&gt;;
+    #size-cells = &lt;0&gt;;
+
+    sensor@48 {  // I2C地址0x48
+        compatible = &quot;ti,tmp102&quot;;
+        reg = &lt;0x48&gt;;
+    };
+};
+</code></pre>
+<h3 id="q5">Q5: 如何调试设备树匹配问题？</h3>
+<p><strong>A</strong>: 使用以下方法：</p>
+<pre><code class="language-bash"># 1. 检查compatible字符串
+cat /proc/device-tree/path/to/node/compatible
+
+# 2. 查看驱动的匹配表
+grep -r &quot;compatible_string&quot; drivers/
+
+# 3. 启用调试信息
+echo 8 &gt; /proc/sys/kernel/printk
+dmesg -w
+
+# 4. 检查设备和驱动
+ls /sys/bus/platform/devices/
+ls /sys/bus/platform/drivers/
+
+# 5. 手动绑定驱动
+echo &quot;device_name&quot; &gt; /sys/bus/platform/drivers/driver_name/bind
+</code></pre>
+<h3 id="q6">Q6: 设备树可以在运行时修改吗？</h3>
+<p><strong>A</strong>: 有限支持，主要通过Overlay：</p>
+<pre><code class="language-bash"># 使用configfs动态加载overlay
+mount -t configfs none /sys/kernel/config
+mkdir /sys/kernel/config/device-tree/overlays/test
+cat overlay.dtbo &gt; /sys/kernel/config/device-tree/overlays/test/dtbo
+
+# 但不能修改已存在的节点的某些属性
+# 只能添加新节点或修改特定属性
+</code></pre>
+<p><strong>限制</strong>：
+- 不能删除已存在的节点
+- 不能修改某些关键属性
+- 需要内核支持CONFIG_OF_OVERLAY
+- 基础DTB需要编译时包含符号信息(-@选项)</p>
+<h2 id="_22">总结</h2>
+<p>通过本文的学习，你应该已经掌握了设备树的核心知识：</p>
+<h3 id="_23">核心要点</h3>
+<ol>
+<li>
+<p><strong>设备树的作用</strong>
+   - 将硬件描述从内核代码中分离
+   - 提供统一的硬件描述语言
+   - 支持一个内核适配多种硬件</p>
+</li>
+<li>
+<p><strong>DTS语法</strong>
+   - 节点和属性的基本结构
+   - 标准属性的使用方法
+   - 节点引用和phandle机制</p>
+</li>
+<li>
+<p><strong>设备树编译</strong>
+   - 使用dtc编译DTS到DTB
+   - 反编译DTB查看内容
+   - 在内核中编译设备树</p>
+</li>
+<li>
+<p><strong>驱动中使用</strong>
+   - 通过compatible匹配驱动
+   - 使用OF函数读取属性
+   - 获取资源和GPIO</p>
+</li>
+<li>
+<p><strong>调试方法</strong>
+   - 通过/proc和/sys查看设备树
+   - 检查设备和驱动匹配
+   - 排查常见问题</p>
+</li>
+</ol>
+<h3 id="_24">学习建议</h3>
+<p><strong>对于初学者</strong>：
+1. 从简单的LED、按键设备开始
+2. 理解节点和属性的基本概念
+3. 学会查看和修改现有设备树
+4. 掌握基本的调试方法</p>
+<p><strong>对于进阶开发者</strong>：
+1. 深入理解设备树绑定规范
+2. 学习编写设备树文档
+3. 掌握Overlay的使用
+4. 了解设备树在内核中的实现</p>
+<p><strong>对于驱动开发者</strong>：
+1. 熟练使用OF函数API
+2. 理解设备树与驱动的匹配机制
+3. 掌握资源获取方法
+4. 学会编写设备树绑定文档</p>
+<h3 id="_25">关键技能清单</h3>
+<p>完成本文学习后，你应该能够：</p>
+<ul>
+<li>[x] 理解设备树的概念和作用</li>
+<li>[x] 阅读和理解DTS文件</li>
+<li>[x] 编写简单的设备树节点</li>
+<li>[x] 编译和反编译设备树</li>
+<li>[x] 在驱动中使用设备树</li>
+<li>[x] 调试设备树相关问题</li>
+<li>[x] 使用设备树Overlay</li>
+</ul>
+<h2 id="_26">延伸阅读</h2>
+<h3 id="_27">推荐学习路径</h3>
+<ol>
+<li>
+<p><strong>Linux驱动开发</strong>
+   - <a href="../intermediate/01-linux-driver-basics.html">Linux驱动开发入门</a>
+   - 学习如何在驱动中使用设备树
+   - 理解平台设备驱动框架</p>
+</li>
+<li>
+<p><strong>BSP开发</strong>
+   - <a href="../../../02-driver-bsp-layer/06-device-tree-bsp/intermediate/01-device-tree-writing.html">设备树编写实战</a>
+   - 深入学习设备树编写技巧
+   - 掌握复杂设备的描述方法</p>
+</li>
+<li>
+<p><strong>内核移植</strong>
+   - <a href="../advanced/01-complete-linux-system.html">嵌入式Linux完整系统构建</a>
+   - 学习完整的系统移植流程
+   - 理解设备树在系统中的位置</p>
+</li>
+</ol>
+<h3 id="_28">相关文档</h3>
+<p><strong>官方文档</strong>：</p>
+<ol>
+<li>
+<p><strong>Linux内核设备树文档</strong>
+   - Documentation/devicetree/
+   - Documentation/devicetree/bindings/
+   - https://www.kernel.org/doc/Documentation/devicetree/</p>
+</li>
+<li>
+<p><strong>设备树规范</strong>
+   - https://www.devicetree.org/
+   - Device Tree Specification
+   - ePAPR (Embedded Power Architecture Platform Requirements)</p>
+</li>
+<li>
+<p><strong>内核源码</strong>
+   - drivers/of/ - OF核心代码
+   - include/linux/of*.h - OF头文件
+   - arch/arm/boot/dts/ - ARM设备树</p>
+</li>
+</ol>
+<p><strong>推荐书籍</strong>：</p>
+<ol>
+<li>
+<p><strong>《Linux设备驱动程序》</strong>
+   - 第14章：Linux设备模型
+   - 设备树相关内容</p>
+</li>
+<li>
+<p><strong>《嵌入式Linux系统开发》</strong>
+   - 设备树章节
+   - 实战案例</p>
+</li>
+<li>
+<p><strong>《ARM Linux内核源码剖析》</strong>
+   - 设备树解析过程
+   - 内核实现细节</p>
+</li>
+</ol>
+<p><strong>在线资源</strong>：</p>
+<ol>
+<li>
+<p><strong>Bootlin培训材料</strong>
+   - https://bootlin.com/docs/
+   - 免费的设备树教程</p>
+</li>
+<li>
+<p><strong>eLinux.org</strong>
+   - https://elinux.org/Device_Tree
+   - 设备树Wiki和示例</p>
+</li>
+<li>
+<p><strong>内核邮件列表</strong>
+   - https://lkml.org/
+   - 设备树相关讨论</p>
+</li>
+</ol>
+<h3 id="_29">实践项目建议</h3>
+<ol>
+<li>
+<p><strong>基础项目</strong>
+   - 为自己的开发板编写设备树
+   - 添加LED、按键等简单设备
+   - 测试I2C、SPI设备</p>
+</li>
+<li>
+<p><strong>进阶项目</strong>
+   - 编写设备树Overlay
+   - 支持可插拔扩展模块
+   - 实现运行时配置</p>
+</li>
+<li>
+<p><strong>高级项目</strong>
+   - 移植新的SoC设备树
+   - 编写设备树绑定文档
+   - 贡献设备树到内核主线</p>
+</li>
+</ol>
+<h2 id="_30">参考资料</h2>
+<ol>
+<li><strong>Device Tree Specification v0.3</strong> - devicetree.org</li>
+<li><strong>Linux Kernel Documentation: Device Tree</strong> - kernel.org</li>
+<li><strong>ePAPR v1.1</strong> - Power.org</li>
+<li><strong>ARM Linux Device Tree</strong> - ARM官方文档</li>
+<li><strong>i.MX6ULL Reference Manual</strong> - NXP</li>
+<li><strong>Bootlin Device Tree Training</strong> - bootlin.com</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>编写一个设备树节点，描述一个连接到I2C总线的温度传感器</li>
+<li>修改现有设备树，添加一个GPIO控制的LED</li>
+<li>编译设备树并在QEMU中测试</li>
+<li>编写一个简单的驱动，从设备树中读取配置信息</li>
+<li>创建一个设备树Overlay，动态添加一个SPI设备</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="../intermediate/01-linux-driver-basics.html">Linux驱动开发入门</a>，深入了解如何在驱动中使用设备树。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

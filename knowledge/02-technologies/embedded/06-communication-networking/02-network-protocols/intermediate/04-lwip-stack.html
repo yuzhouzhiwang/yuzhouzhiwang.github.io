@@ -1,0 +1,3066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>lwIP协议栈移植与应用开发 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/">06-communication-networking</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/">02-network-protocols</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a><ul>
+<li><a href="#1-stm32">1. 安装STM32开发环境</a></li>
+<li><a href="#2-lwip">2. 获取lwIP源码</a></li>
+<li><a href="#3-wireshark">3. 安装Wireshark</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#lwip_1">lwIP协议栈概述</a><ul>
+<li><a href="#lwip_2">什么是lwIP？</a></li>
+<li><a href="#lwip_3">lwIP支持的协议</a></li>
+<li><a href="#lwip_4">lwIP版本历史</a></li>
+<li><a href="#lwip_5">lwIP应用场景</a></li>
+</ul>
+</li>
+<li><a href="#lwip_6">lwIP架构设计</a><ul>
+<li><a href="#_7">整体架构</a></li>
+<li><a href="#_8">核心模块</a><ul>
+<li><a href="#1-core">1. 协议栈核心（Core）</a></li>
+<li><a href="#2-api">2. API接口层</a></li>
+<li><a href="#3-netif">3. 网络接口层（Netif）</a></li>
+<li><a href="#4">4. 内存管理</a></li>
+</ul>
+</li>
+<li><a href="#lwip_7">lwIP线程模型</a><ul>
+<li><a href="#1-no_sys">1. NO_SYS模式（无操作系统）</a></li>
+<li><a href="#2-rtos">2. RTOS模式（有操作系统）</a></li>
+</ul>
+</li>
+<li><a href="#lwip_8">lwIP数据包处理流程</a><ul>
+<li><a href="#_9">接收流程</a></li>
+<li><a href="#_10">发送流程</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#1stm32">步骤1：STM32硬件准备</a><ul>
+<li><a href="#11">1.1 以太网硬件架构</a></li>
+<li><a href="#12-rmii">1.2 RMII接口信号</a></li>
+<li><a href="#13-stm32f407">1.3 STM32F407引脚连接</a></li>
+<li><a href="#14">1.4 硬件电路设计要点</a><ul>
+<li><a href="#phy">PHY电源设计</a></li>
+<li><a href="#_11">晶振电路</a></li>
+<li><a href="#_12">网络变压器</a></li>
+<li><a href="#pcb">PCB布线建议</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#2stm32cubemx">步骤2：STM32CubeMX配置</a><ul>
+<li><a href="#21">2.1 创建新工程</a></li>
+<li><a href="#22">2.2 配置以太网外设</a><ul>
+<li><a href="#eth">启用ETH外设</a></li>
+<li><a href="#gpio">配置GPIO</a></li>
+</ul>
+</li>
+<li><a href="#23-freertos">2.3 配置FreeRTOS</a></li>
+<li><a href="#24-lwip">2.4 配置lwIP</a></li>
+<li><a href="#25">2.5 生成代码</a></li>
+</ul>
+</li>
+<li><a href="#3lwip">步骤3：lwIP移植实现</a><ul>
+<li><a href="#31-ethernetifc">3.1 理解ethernetif.c</a><ul>
+<li><a href="#_13">关键函数</a></li>
+</ul>
+</li>
+<li><a href="#32-phy">3.2 修改PHY地址（如果需要）</a></li>
+<li><a href="#33-phy">3.3 配置PHY时钟模式</a></li>
+<li><a href="#34">3.4 优化接收性能</a><ul>
+<li><a href="#dma">使用DMA接收</a></li>
+<li><a href="#_14">接收任务优化</a></li>
+</ul>
+</li>
+<li><a href="#35">3.5 实现零拷贝接收</a></li>
+<li><a href="#36-lwipoptsh">3.6 配置lwipopts.h</a></li>
+</ul>
+</li>
+<li><a href="#4lwip">步骤4：lwIP应用开发</a><ul>
+<li><a href="#41-raw-api-tcp">4.1 Raw API示例 - TCP服务器</a></li>
+<li><a href="#42-netconn-api-tcp">4.2 Netconn API示例 - TCP客户端</a></li>
+<li><a href="#43-socket-api-http">4.3 Socket API示例 - HTTP服务器</a></li>
+<li><a href="#44-udp">4.4 UDP通信示例</a></li>
+<li><a href="#45-dhcp">4.5 DHCP客户端使用</a></li>
+<li><a href="#46-dns">4.6 DNS客户端使用</a></li>
+<li><a href="#47-sntp">4.7 SNTP时间同步</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：内存管理优化</a><ul>
+<li><a href="#51-lwip">5.1 理解lwIP内存管理</a><ul>
+<li><a href="#1-heapmem_mallocmem_free">1. Heap内存（mem_malloc/mem_free）</a></li>
+<li><a href="#2-poolmemp_mallocmemp_free">2. Pool内存（memp_malloc/memp_free）</a></li>
+<li><a href="#3-pbuf">3. Pbuf内存池</a></li>
+</ul>
+</li>
+<li><a href="#52">5.2 内存使用监控</a></li>
+<li><a href="#53">5.3 内存优化策略</a><ul>
+<li><a href="#_15">减少内存占用</a></li>
+<li><a href="#_16">避免内存泄漏</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#6">步骤6：性能优化</a><ul>
+<li><a href="#61-tcp">6.1 TCP性能优化</a><ul>
+<li><a href="#tcp">调整TCP窗口大小</a></li>
+<li><a href="#tcp_1">启用TCP快速重传</a></li>
+<li><a href="#nagle">Nagle算法控制</a></li>
+</ul>
+</li>
+<li><a href="#62">6.2 零拷贝技术</a><ul>
+<li><a href="#pbuf_ref">使用PBUF_REF类型</a></li>
+<li><a href="#tcp_write_flag_copy">使用TCP_WRITE_FLAG_COPY</a></li>
+</ul>
+</li>
+<li><a href="#63-dma">6.3 DMA优化</a><ul>
+<li><a href="#dma_1">配置以太网DMA</a></li>
+<li><a href="#dma_2">使用DMA缓存一致性</a></li>
+</ul>
+</li>
+<li><a href="#64">6.4 中断优化</a><ul>
+<li><a href="#_17">配置以太网中断优先级</a></li>
+<li><a href="#_18">减少中断处理时间</a></li>
+</ul>
+</li>
+<li><a href="#65">6.5 性能测试</a><ul>
+<li><a href="#iperf">iperf测试</a></li>
+<li><a href="#_19">吞吐量测试代码</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#7">步骤7：调试与故障排除</a><ul>
+<li><a href="#71-lwip">7.1 启用lwIP调试输出</a><ul>
+<li><a href="#_20">配置调试选项</a></li>
+<li><a href="#printf">实现printf重定向</a></li>
+</ul>
+</li>
+<li><a href="#72">7.2 常见问题诊断</a><ul>
+<li><a href="#1ip">问题1：无法获取IP地址</a></li>
+<li><a href="#2ping">问题2：Ping不通</a></li>
+<li><a href="#3tcp">问题3：TCP连接失败</a></li>
+<li><a href="#4_1">问题4：内存不足</a></li>
+</ul>
+</li>
+<li><a href="#73-wireshark">7.3 使用Wireshark分析</a><ul>
+<li><a href="#tcp_2">抓包分析TCP连接</a></li>
+<li><a href="#_21">导出统计信息</a></li>
+</ul>
+</li>
+<li><a href="#74">7.4 性能分析工具</a><ul>
+<li><a href="#cpu">CPU使用率监控</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#8-web">步骤8：实战项目 - Web服务器</a><ul>
+<li><a href="#81">8.1 项目需求</a></li>
+<li><a href="#82">8.2 项目结构</a></li>
+<li><a href="#83-web">8.3 Web服务器实现</a><ul>
+<li><a href="#web_serverh">web_server.h</a></li>
+<li><a href="#web_serverc">web_server.c</a></li>
+</ul>
+</li>
+<li><a href="#84-mainc">8.4 在main.c中集成</a></li>
+<li><a href="#85-web">8.5 测试Web服务器</a></li>
+<li><a href="#86">8.6 项目扩展</a><ul>
+<li><a href="#_22">添加文件上传功能</a></li>
+<li><a href="#websocket">添加WebSocket支持</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_23">高级主题</a><ul>
+<li><a href="#91">9.1 多网络接口</a></li>
+<li><a href="#92-ipv6">9.2 IPv6支持</a></li>
+<li><a href="#93-tlsssl">9.3 TLS/SSL支持</a></li>
+<li><a href="#94-ppp">9.4 PPP支持</a></li>
+<li><a href="#95-mqtt">9.5 MQTT客户端</a></li>
+</ul>
+</li>
+<li><a href="#_24">最佳实践</a><ul>
+<li><a href="#101">10.1 代码组织</a><ul>
+<li><a href="#_25">模块化设计</a></li>
+<li><a href="#_26">配置管理</a></li>
+</ul>
+</li>
+<li><a href="#102">10.2 错误处理</a><ul>
+<li><a href="#_27">统一错误处理</a></li>
+</ul>
+</li>
+<li><a href="#103">10.3 安全考虑</a><ul>
+<li><a href="#_28">输入验证</a></li>
+<li><a href="#_29">访问控制</a></li>
+<li><a href="#dos">防止DoS攻击</a></li>
+</ul>
+</li>
+<li><a href="#104">10.4 资源管理</a><ul>
+<li><a href="#_30">连接池管理</a></li>
+<li><a href="#_31">内存泄漏检测</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_32">总结</a></li>
+<li><a href="#_33">进阶挑战</a></li>
+<li><a href="#_34">完整代码</a></li>
+<li><a href="#_35">下一步</a></li>
+<li><a href="#_36">参考资料</a></li>
+<li><a href="#faq">常见问题FAQ</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="lwip">lwIP协议栈移植与应用开发</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解lwIP协议栈的架构设计和工作原理</li>
+<li>[ ] 掌握lwIP在不同平台上的移植方法</li>
+<li>[ ] 熟悉lwIP的内存管理和线程模型</li>
+<li>[ ] 能够配置和优化lwIP性能参数</li>
+<li>[ ] 使用lwIP API进行网络应用开发</li>
+<li>[ ] 集成以太网驱动和实现网络通信</li>
+<li>[ ] 调试和解决lwIP常见问题</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 熟悉TCP/IP协议基础知识
+- 了解C语言编程和指针操作
+- 理解操作系统基本概念（任务、信号量、互斥锁）
+- 掌握嵌入式系统开发基础</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32CubeMX或类似工具配置外设
+- 会使用调试工具（JTAG/SWD、串口）
+- 了解以太网硬件接口（MAC/PHY）
+- 熟悉RTOS基本使用（FreeRTOS或其他）</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>带以太网MAC的MCU</td>
+<td>STM32F407/F429/H743</td>
+</tr>
+<tr>
+<td>以太网PHY模块</td>
+<td>1</td>
+<td>物理层收发器</td>
+<td>LAN8720/DP83848</td>
+</tr>
+<tr>
+<td>网线</td>
+<td>1</td>
+<td>Cat5e或更高</td>
+<td>-</td>
+</tr>
+<tr>
+<td>路由器/交换机</td>
+<td>1</td>
+<td>用于网络连接</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB调试器</td>
+<td>1</td>
+<td>ST-Link V2或J-Link</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Micro USB线</td>
+<td>1</td>
+<td>供电和串口调试</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：</li>
+<li>STM32CubeIDE 1.10+ 或 Keil MDK 5.36+</li>
+<li>STM32CubeMX 6.6+（用于配置生成）</li>
+<li>Git（用于获取lwIP源码）</li>
+<li><strong>lwIP源码</strong>：</li>
+<li>lwIP 2.1.3或更高版本</li>
+<li>官方仓库：https://git.savannah.nongnu.org/git/lwip.git</li>
+<li><strong>调试工具</strong>：</li>
+<li>Wireshark（网络抓包分析）</li>
+<li>Tera Term或PuTTY（串口调试）</li>
+<li>Ping/Telnet/HTTP客户端工具</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<h4 id="1-stm32">1. 安装STM32开发环境</h4>
+<pre><code class="language-bash"># 下载STM32CubeIDE
+# 访问 https://www.st.com/stm32cubeide
+# 安装对应操作系统版本
+
+# 安装STM32CubeMX（如果单独使用）
+# 访问 https://www.st.com/stm32cubemx
+</code></pre>
+<h4 id="2-lwip">2. 获取lwIP源码</h4>
+<pre><code class="language-bash"># 克隆lwIP官方仓库
+git clone https://git.savannah.nongnu.org/git/lwip.git
+cd lwip
+git checkout STABLE-2_1_3_RELEASE
+
+# 或者下载压缩包
+wget http://download.savannah.nongnu.org/releases/lwip/lwip-2.1.3.zip
+unzip lwip-2.1.3.zip
+</code></pre>
+<h4 id="3-wireshark">3. 安装Wireshark</h4>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt-get install wireshark
+
+# Windows
+# 访问 https://www.wireshark.org/download.html
+# 下载并安装
+
+# macOS
+brew install wireshark
+</code></pre>
+<h2 id="lwip_1">lwIP协议栈概述</h2>
+<h3 id="lwip_2">什么是lwIP？</h3>
+<p>lwIP（Lightweight IP）是一个开源的轻量级TCP/IP协议栈，专为嵌入式系统设计。由瑞典计算机科学研究所（SICS）的Adam Dunkels开发，现在由社区维护。</p>
+<p><strong>核心特点</strong>：
+- <strong>轻量级</strong>：代码量小（约40KB），RAM需求低（几十KB）
+- <strong>完整性</strong>：实现了完整的TCP/IP协议族
+- <strong>可移植性</strong>：易于移植到各种嵌入式平台
+- <strong>灵活性</strong>：支持多种API接口和配置选项
+- <strong>开源免费</strong>：BSD许可证，可商用</p>
+<h3 id="lwip_3">lwIP支持的协议</h3>
+<table>
+<thead>
+<tr>
+<th>协议层</th>
+<th>支持的协议</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>应用层</td>
+<td>HTTP, HTTPS, SMTP, SNMP, TFTP, DNS, DHCP, mDNS</td>
+</tr>
+<tr>
+<td>传输层</td>
+<td>TCP, UDP, UDP-Lite</td>
+</tr>
+<tr>
+<td>网络层</td>
+<td>IPv4, IPv6, ICMP, ICMPv6, IGMP</td>
+</tr>
+<tr>
+<td>链路层</td>
+<td>ARP, Ethernet, PPP, PPPoE, 6LoWPAN</td>
+</tr>
+</tbody>
+</table>
+<h3 id="lwip_4">lwIP版本历史</h3>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>发布时间</th>
+<th>主要特性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1</td>
+<td>2001</td>
+<td>初始版本，基本TCP/IP功能</td>
+</tr>
+<tr>
+<td>1.0</td>
+<td>2003</td>
+<td>稳定版本，广泛应用</td>
+</tr>
+<tr>
+<td>1.4.1</td>
+<td>2012</td>
+<td>性能优化，IPv6支持</td>
+</tr>
+<tr>
+<td>2.0.0</td>
+<td>2015</td>
+<td>架构重构，API改进</td>
+</tr>
+<tr>
+<td>2.1.0</td>
+<td>2018</td>
+<td>安全增强，性能提升</td>
+</tr>
+<tr>
+<td>2.1.3</td>
+<td>2021</td>
+<td>当前稳定版本</td>
+</tr>
+</tbody>
+</table>
+<h3 id="lwip_5">lwIP应用场景</h3>
+<ul>
+<li><strong>工业控制</strong>：PLC、HMI、工业网关</li>
+<li><strong>物联网设备</strong>：智能家居、传感器节点</li>
+<li><strong>网络设备</strong>：路由器、交换机、网关</li>
+<li><strong>消费电子</strong>：打印机、摄像头、音响</li>
+<li><strong>汽车电子</strong>：车载娱乐、诊断系统</li>
+</ul>
+<h2 id="lwip_6">lwIP架构设计</h2>
+<h3 id="_7">整体架构</h3>
+<pre><code class="language-text">+----------------------------------------------------------+
+|                    应用程序                                |
++----------------------------------------------------------+
+|                    应用层API                               |
+|  +------------------+  +------------------+               |
+|  |  Socket API      |  |  Netconn API     |               |
+|  +------------------+  +------------------+               |
+|  |           Raw API (Callback)           |               |
++----------------------------------------------------------+
+|                    协议栈核心                              |
+|  +------------------+  +------------------+               |
+|  |       TCP        |  |       UDP        |               |
+|  +------------------+  +------------------+               |
+|  |                   IP层                  |               |
+|  +------------------+  +------------------+               |
+|  |       ARP        |  |      ICMP        |               |
++----------------------------------------------------------+
+|                    网络接口层                              |
+|  +------------------+  +------------------+               |
+|  |   Ethernet IF    |  |     PPP IF       |               |
++----------------------------------------------------------+
+|                    硬件驱动层                              |
+|  +------------------+  +------------------+               |
+|  |    MAC Driver    |  |    PHY Driver    |               |
++----------------------------------------------------------+
+</code></pre>
+<h3 id="_8">核心模块</h3>
+<h4 id="1-core">1. 协议栈核心（Core）</h4>
+<p><strong>IP模块</strong>：
+- IP数据包的接收和发送
+- IP分片和重组
+- IP路由选择
+- 支持IPv4和IPv6</p>
+<p><strong>TCP模块</strong>：
+- 可靠的面向连接传输
+- 流量控制和拥塞控制
+- 超时重传机制
+- 滑动窗口协议</p>
+<p><strong>UDP模块</strong>：
+- 无连接的数据报传输
+- 轻量级，开销小
+- 支持广播和组播</p>
+<p><strong>ICMP模块</strong>：
+- Ping功能实现
+- 错误报告和诊断
+- 路径MTU发现</p>
+<h4 id="2-api">2. API接口层</h4>
+<p><strong>Raw API（回调API）</strong>：
+- 最底层的API接口
+- 基于回调函数机制
+- 零拷贝，性能最高
+- 适合资源受限的系统
+- 编程复杂度较高</p>
+<p><strong>Netconn API</strong>：
+- 基于消息传递的API
+- 需要操作系统支持
+- 使用更简单
+- 性能略低于Raw API</p>
+<p><strong>Socket API</strong>：
+- 标准BSD Socket接口
+- 兼容性最好
+- 需要操作系统支持
+- 适合移植现有应用</p>
+<h4 id="3-netif">3. 网络接口层（Netif）</h4>
+<ul>
+<li>抽象的网络接口</li>
+<li>支持多个网络接口</li>
+<li>处理链路层协议</li>
+<li>管理MAC地址和IP地址</li>
+</ul>
+<h4 id="4">4. 内存管理</h4>
+<p><strong>三种内存池</strong>：</p>
+<ol>
+<li>
+<p><strong>Heap内存池</strong>：
+   - 使用标准C库的malloc/free
+   - 灵活但可能产生碎片
+   - 适合内存充足的系统</p>
+</li>
+<li>
+<p><strong>Pool内存池</strong>：
+   - 固定大小的内存块
+   - 无碎片，分配快速
+   - 适合实时系统</p>
+</li>
+<li>
+<p><strong>Pbuf内存池</strong>：
+   - 专门用于数据包缓冲
+   - 支持链式缓冲区
+   - 零拷贝优化</p>
+</li>
+</ol>
+<h3 id="lwip_7">lwIP线程模型</h3>
+<h4 id="1-no_sys">1. NO_SYS模式（无操作系统）</h4>
+<pre><code class="language-text">主循环:
+  while(1) {
+    检查网络接口
+    处理接收数据
+    处理定时器
+    处理应用逻辑
+  }
+</code></pre>
+<p><strong>特点</strong>：
+- 不需要操作系统
+- 单线程运行
+- 只能使用Raw API
+- 资源占用最小</p>
+<h4 id="2-rtos">2. RTOS模式（有操作系统）</h4>
+<pre><code class="language-text">线程1: tcpip_thread
+  - 处理协议栈核心逻辑
+  - 接收来自驱动的数据包
+  - 处理定时器事件
+
+线程2: ethernetif_input
+  - 从网卡接收数据
+  - 将数据包传递给tcpip_thread
+
+线程3-N: 应用线程
+  - 使用Netconn或Socket API
+  - 通过消息队列与tcpip_thread通信
+</code></pre>
+<p><strong>特点</strong>：
+- 需要RTOS支持
+- 多线程并发
+- 支持所有API
+- 更好的实时性</p>
+<h3 id="lwip_8">lwIP数据包处理流程</h3>
+<h4 id="_9">接收流程</h4>
+<pre><code class="language-text">1. 网卡中断 → 驱动接收数据
+2. 驱动分配pbuf → 复制数据到pbuf
+3. 调用netif-&gt;input() → 传递给IP层
+4. IP层处理 → 检查目的地址、分片重组
+5. 传输层处理 → TCP/UDP协议处理
+6. 应用层回调 → 通知应用程序
+</code></pre>
+<h4 id="_10">发送流程</h4>
+<pre><code class="language-text">1. 应用调用发送函数 → 传递数据
+2. 传输层处理 → 添加TCP/UDP头
+3. IP层处理 → 添加IP头、路由选择
+4. ARP解析 → 获取目的MAC地址
+5. 链路层处理 → 添加以太网头
+6. 驱动发送 → 通过网卡发送数据
+</code></pre>
+<h2 id="1stm32">步骤1：STM32硬件准备</h2>
+<h3 id="11">1.1 以太网硬件架构</h3>
+<pre><code class="language-text">+-------------+     RMII/MII      +-------------+     RJ45      +----------+
+|   STM32     |&lt;-----------------&gt;|  PHY芯片    |&lt;-------------&gt;|  网线    |
+| (MAC控制器) |                   | (LAN8720)   |               |          |
++-------------+                   +-------------+               +----------+
+</code></pre>
+<p><strong>MAC（Media Access Control）</strong>：
+- 集成在STM32内部
+- 负责数据帧的组装和解析
+- 实现CSMA/CD协议
+- 支持RMII/MII接口</p>
+<p><strong>PHY（Physical Layer）</strong>：
+- 外部独立芯片
+- 负责物理信号的收发
+- 实现编码解码
+- 常用芯片：LAN8720、DP83848、RTL8201</p>
+<h3 id="12-rmii">1.2 RMII接口信号</h3>
+<table>
+<thead>
+<tr>
+<th>信号名</th>
+<th>方向</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>REF_CLK</td>
+<td>PHY→MAC</td>
+<td>50MHz参考时钟</td>
+</tr>
+<tr>
+<td>TXD0/TXD1</td>
+<td>MAC→PHY</td>
+<td>发送数据（2位）</td>
+</tr>
+<tr>
+<td>TX_EN</td>
+<td>MAC→PHY</td>
+<td>发送使能</td>
+</tr>
+<tr>
+<td>RXD0/RXD1</td>
+<td>PHY→MAC</td>
+<td>接收数据（2位）</td>
+</tr>
+<tr>
+<td>CRS_DV</td>
+<td>PHY→MAC</td>
+<td>载波侦听/数据有效</td>
+</tr>
+<tr>
+<td>MDIO</td>
+<td>双向</td>
+<td>管理数据输入输出</td>
+</tr>
+<tr>
+<td>MDC</td>
+<td>MAC→PHY</td>
+<td>管理时钟</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-stm32f407">1.3 STM32F407引脚连接</h3>
+<table>
+<thead>
+<tr>
+<th>STM32引脚</th>
+<th>功能</th>
+<th>LAN8720引脚</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PA1</td>
+<td>ETH_RMII_REF_CLK</td>
+<td>REFCLK</td>
+</tr>
+<tr>
+<td>PA2</td>
+<td>ETH_MDIO</td>
+<td>MDIO</td>
+</tr>
+<tr>
+<td>PC1</td>
+<td>ETH_MDC</td>
+<td>MDC</td>
+</tr>
+<tr>
+<td>PA7</td>
+<td>ETH_RMII_CRS_DV</td>
+<td>CRS_DV</td>
+</tr>
+<tr>
+<td>PC4</td>
+<td>ETH_RMII_RXD0</td>
+<td>RXD0</td>
+</tr>
+<tr>
+<td>PC5</td>
+<td>ETH_RMII_RXD1</td>
+<td>RXD1</td>
+</tr>
+<tr>
+<td>PG11</td>
+<td>ETH_RMII_TX_EN</td>
+<td>TXEN</td>
+</tr>
+<tr>
+<td>PG13</td>
+<td>ETH_RMII_TXD0</td>
+<td>TXD0</td>
+</tr>
+<tr>
+<td>PG14</td>
+<td>ETH_RMII_TXD1</td>
+<td>TXD1</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意事项</strong>：
+- REF_CLK必须由PHY提供（外部时钟模式）
+- 需要配置PHY的时钟输出模式
+- 某些引脚可能与其他外设复用，需要注意冲突</p>
+<h3 id="14">1.4 硬件电路设计要点</h3>
+<h4 id="phy">PHY电源设计</h4>
+<pre><code class="language-text">3.3V ──┬── 10μF ──┬── LAN8720 VDD
+       │          │
+       └── 0.1μF ─┘
+
+1.2V ── 10μF ── 0.1μF ── LAN8720 VDDCR (内核电压)
+</code></pre>
+<h4 id="_11">晶振电路</h4>
+<pre><code class="language-text">        ┌─────────┐
+25MHz ──┤ Crystal ├── LAN8720 XTAL1/XTAL2
+        └─────────┘
+         │       │
+        22pF    22pF
+         │       │
+        GND     GND
+</code></pre>
+<h4 id="_12">网络变压器</h4>
+<ul>
+<li>必须使用网络变压器（隔离变压器）</li>
+<li>提供电气隔离和共模抑制</li>
+<li>推荐型号：HR911105A、HanRun等</li>
+<li>集成RJ45接口和LED指示灯</li>
+</ul>
+<h4 id="pcb">PCB布线建议</h4>
+<ol>
+<li>
+<p><strong>差分信号</strong>：
+   - TXD+/TXD-、RXD+/RXD-保持等长
+   - 差分阻抗控制在100Ω±10%
+   - 避免直角走线</p>
+</li>
+<li>
+<p><strong>时钟信号</strong>：
+   - REF_CLK走线尽量短
+   - 远离高速信号和电源
+   - 可以串联22Ω电阻抑制振铃</p>
+</li>
+<li>
+<p><strong>电源去耦</strong>：
+   - 每个电源引脚靠近放置0.1μF电容
+   - 电源输入端放置10μF电容
+   - 使用多层板，独立电源层和地层</p>
+</li>
+</ol>
+<h2 id="2stm32cubemx">步骤2：STM32CubeMX配置</h2>
+<h3 id="21">2.1 创建新工程</h3>
+<ol>
+<li>打开STM32CubeMX</li>
+<li>选择芯片型号：STM32F407ZGT6</li>
+<li>配置时钟：
+   - HSE: 8MHz外部晶振
+   - PLL: 168MHz系统时钟
+   - HCLK: 168MHz
+   - APB1: 42MHz
+   - APB2: 84MHz</li>
+</ol>
+<h3 id="22">2.2 配置以太网外设</h3>
+<h4 id="eth">启用ETH外设</h4>
+<ol>
+<li>在Connectivity中选择ETH</li>
+<li>Mode: RMII</li>
+<li>配置参数：
+   - PHY Address: 0（LAN8720默认地址）
+   - Media Interface: RMII
+   - Auto Negotiation: Enabled
+   - Checksum by Hardware: Enabled</li>
+</ol>
+<h4 id="gpio">配置GPIO</h4>
+<p>CubeMX会自动配置以太网相关GPIO：
+- PA1: ETH_RMII_REF_CLK
+- PA2: ETH_MDIO
+- PC1: ETH_MDC
+- PA7: ETH_RMII_CRS_DV
+- PC4: ETH_RMII_RXD0
+- PC5: ETH_RMII_RXD1
+- PG11: ETH_RMII_TX_EN
+- PG13: ETH_RMII_TXD0
+- PG14: ETH_RMII_TXD1</p>
+<h3 id="23-freertos">2.3 配置FreeRTOS</h3>
+<ol>
+<li>在Middleware中启用FREERTOS</li>
+<li>
+<p>配置参数：
+   - Interface: CMSIS_V2
+   - TOTAL_HEAP_SIZE: 15360 bytes
+   - Minimal Stack Size: 128 words
+   - Timer Task Stack Depth: 256 words</p>
+</li>
+<li>
+<p>创建默认任务：
+   - Task Name: defaultTask
+   - Priority: Normal
+   - Stack Size: 128 words</p>
+</li>
+</ol>
+<h3 id="24-lwip">2.4 配置lwIP</h3>
+<ol>
+<li>在Middleware中启用LWIP</li>
+<li>
+<p>配置General Settings：
+   - LWIP_DHCP: Enabled（启用DHCP客户端）
+   - LWIP_DNS: Enabled（启用DNS）
+   - IP_ADDRESS: 192.168.1.100（静态IP，DHCP失败时使用）
+   - NETMASK_ADDRESS: 255.255.255.0
+   - GATEWAY_ADDRESS: 192.168.1.1</p>
+</li>
+<li>
+<p>配置Key Options：
+   - MEM_SIZE: 10240（内存堆大小）
+   - MEMP_NUM_PBUF: 10（pbuf数量）
+   - MEMP_NUM_TCP_PCB: 5（TCP连接数）
+   - MEMP_NUM_TCP_SEG: 8（TCP段数量）
+   - PBUF_POOL_SIZE: 8（pbuf池大小）</p>
+</li>
+<li>
+<p>配置Checksum：
+   - CHECKSUM_BY_HARDWARE: Enabled
+   - CHECKSUM_GEN_IP: Disabled（硬件计算）
+   - CHECKSUM_GEN_UDP: Disabled
+   - CHECKSUM_GEN_TCP: Disabled
+   - CHECKSUM_CHECK_IP: Disabled
+   - CHECKSUM_CHECK_UDP: Disabled
+   - CHECKSUM_CHECK_TCP: Disabled</p>
+</li>
+</ol>
+<h3 id="25">2.5 生成代码</h3>
+<ol>
+<li>
+<p>配置Project Manager：
+   - Project Name: lwip_demo
+   - Toolchain: STM32CubeIDE
+   - Generate peripheral initialization as pair of '.c/.h'</p>
+</li>
+<li>
+<p>点击"GENERATE CODE"生成工程</p>
+</li>
+<li>
+<p>生成的重要文件：
+   - <code>Core/Src/main.c</code>: 主程序
+   - <code>LWIP/App/lwip.c</code>: lwIP初始化
+   - <code>LWIP/Target/ethernetif.c</code>: 以太网驱动接口
+   - <code>Middlewares/Third_Party/LwIP/</code>: lwIP源码</p>
+</li>
+</ol>
+<h2 id="3lwip">步骤3：lwIP移植实现</h2>
+<h3 id="31-ethernetifc">3.1 理解ethernetif.c</h3>
+<p><code>ethernetif.c</code>是lwIP与硬件驱动的接口层，主要包含：</p>
+<h4 id="_13">关键函数</h4>
+<pre><code class="language-c">// 初始化网络接口
+err_t ethernetif_init(struct netif *netif);
+
+// 接收数据包（从网卡读取）
+static void ethernetif_input(void *argument);
+
+// 发送数据包（写入网卡）
+static err_t low_level_output(struct netif *netif, struct pbuf *p);
+
+// 初始化底层硬件
+static void low_level_init(struct netif *netif);
+</code></pre>
+<h3 id="32-phy">3.2 修改PHY地址（如果需要）</h3>
+<p>在<code>ethernetif.c</code>中找到PHY地址定义：</p>
+<pre><code class="language-c">// LAN8720的默认地址通常是0或1
+#define PHY_ADDRESS       0x00  // 根据硬件原理图确定
+</code></pre>
+<p>如果PHY地址不正确，会导致初始化失败。可以通过MDIO扫描所有地址：</p>
+<pre><code class="language-c">void PHY_Scan(void)
+{
+    uint32_t phyreg;
+    for(uint8_t addr = 0; addr &lt; 32; addr++)
+    {
+        if(HAL_ETH_ReadPHYRegister(&amp;heth, addr, PHY_BCR, &amp;phyreg) == HAL_OK)
+        {
+            printf(&quot;Found PHY at address: 0x%02X\r\n&quot;, addr);
+        }
+    }
+}
+</code></pre>
+<h3 id="33-phy">3.3 配置PHY时钟模式</h3>
+<p>LAN8720需要配置为输出50MHz时钟给STM32：</p>
+<pre><code class="language-c">static void LAN8720_Init(void)
+{
+    uint32_t regvalue = 0;
+
+    // 读取PHY特殊控制/状态寄存器
+    HAL_ETH_ReadPHYRegister(&amp;heth, PHY_ADDRESS, PHY_SR, &amp;regvalue);
+
+    // 配置为50MHz时钟输出模式
+    regvalue |= (1 &lt;&lt; 7);  // 设置时钟输出使能位
+    HAL_ETH_WritePHYRegister(&amp;heth, PHY_ADDRESS, PHY_SR, regvalue);
+
+    // 软复位PHY
+    HAL_ETH_WritePHYRegister(&amp;heth, PHY_ADDRESS, PHY_BCR, PHY_RESET);
+
+    // 等待复位完成
+    HAL_Delay(100);
+}
+</code></pre>
+<h3 id="34">3.4 优化接收性能</h3>
+<h4 id="dma">使用DMA接收</h4>
+<p>STM32的以太网MAC支持DMA，可以大幅提升性能：</p>
+<pre><code class="language-c">// 在ethernetif.c的low_level_init()中
+static void low_level_init(struct netif *netif)
+{
+    // ... 其他初始化代码 ...
+
+    // 配置DMA接收描述符
+    HAL_ETH_DescriptorsConfigTypeDef dmaconf;
+    dmaconf.RxDescLength = ETH_RX_DESC_CNT;
+    dmaconf.TxDescLength = ETH_TX_DESC_CNT;
+    dmaconf.RxBuffLen = 1536;  // 每个缓冲区大小
+
+    HAL_ETH_DescriptorsConfig(&amp;heth, &amp;dmaconf);
+
+    // 启动以太网
+    HAL_ETH_Start(&amp;heth);
+}
+</code></pre>
+<h4 id="_14">接收任务优化</h4>
+<pre><code class="language-c">void ethernetif_input(void *argument)
+{
+    struct pbuf *p;
+    struct netif *netif = (struct netif *) argument;
+
+    for(;;)
+    {
+        // 等待接收信号量（由中断触发）
+        if(osSemaphoreAcquire(RxPktSemaphore, osWaitForever) == osOK)
+        {
+            do
+            {
+                // 从网卡读取数据包
+                p = low_level_input(netif);
+
+                if(p != NULL)
+                {
+                    // 传递给lwIP协议栈
+                    if(netif-&gt;input(p, netif) != ERR_OK)
+                    {
+                        pbuf_free(p);
+                    }
+                }
+            } while(p != NULL);
+        }
+    }
+}
+</code></pre>
+<h3 id="35">3.5 实现零拷贝接收</h3>
+<p>为了提高性能，可以实现零拷贝接收：</p>
+<pre><code class="language-c">static struct pbuf *low_level_input(struct netif *netif)
+{
+    struct pbuf *p = NULL;
+    ETH_BufferTypeDef RxBuff;
+    uint32_t framelength = 0;
+
+    // 获取接收到的数据帧
+    if(HAL_ETH_GetRxDataBuffer(&amp;heth, &amp;RxBuff) == HAL_OK)
+    {
+        HAL_ETH_GetRxDataLength(&amp;heth, &amp;framelength);
+
+        // 分配pbuf，使用PBUF_REF类型（引用外部缓冲区）
+        p = pbuf_alloc(PBUF_RAW, framelength, PBUF_REF);
+
+        if(p != NULL)
+        {
+            // 直接引用DMA缓冲区，避免拷贝
+            p-&gt;payload = RxBuff.buffer;
+            p-&gt;len = framelength;
+        }
+
+        // 构建接收描述符
+        HAL_ETH_BuildRxDescriptors(&amp;heth);
+    }
+
+    return p;
+}
+</code></pre>
+<h3 id="36-lwipoptsh">3.6 配置lwipopts.h</h3>
+<p><code>lwipopts.h</code>是lwIP的配置文件，需要根据应用需求调整：</p>
+<pre><code class="language-c">// ========== 内存配置 ==========
+#define MEM_ALIGNMENT           4           // 内存对齐（字节）
+#define MEM_SIZE                (10*1024)   // 堆内存大小
+#define MEMP_NUM_PBUF           10          // pbuf结构数量
+#define MEMP_NUM_TCP_PCB        5           // TCP连接数
+#define MEMP_NUM_TCP_PCB_LISTEN 5           // TCP监听连接数
+#define MEMP_NUM_TCP_SEG        8           // TCP段数量
+#define MEMP_NUM_UDP_PCB        4           // UDP连接数
+#define PBUF_POOL_SIZE          8           // pbuf池大小
+#define PBUF_POOL_BUFSIZE       1536        // pbuf缓冲区大小
+
+// ========== TCP配置 ==========
+#define TCP_MSS                 1460        // TCP最大段大小
+#define TCP_WND                 (4*TCP_MSS) // TCP接收窗口
+#define TCP_SND_BUF             (4*TCP_MSS) // TCP发送缓冲区
+#define TCP_SND_QUEUELEN        (2*TCP_SND_BUF/TCP_MSS) // 发送队列长度
+
+// ========== 性能优化 ==========
+#define LWIP_CHECKSUM_ON_COPY   1           // 拷贝时计算校验和
+#define LWIP_NETIF_TX_SINGLE_PBUF 1         // 单pbuf发送优化
+
+// ========== 功能开关 ==========
+#define LWIP_DHCP               1           // 启用DHCP
+#define LWIP_DNS                1           // 启用DNS
+#define LWIP_IGMP               1           // 启用IGMP（组播）
+#define LWIP_NETIF_HOSTNAME     1           // 支持主机名
+
+// ========== 调试选项 ==========
+#define LWIP_DEBUG              1           // 启用调试
+#define ETHARP_DEBUG            LWIP_DBG_OFF
+#define NETIF_DEBUG             LWIP_DBG_OFF
+#define PBUF_DEBUG              LWIP_DBG_OFF
+#define IP_DEBUG                LWIP_DBG_OFF
+#define TCP_DEBUG               LWIP_DBG_OFF
+#define TCP_INPUT_DEBUG         LWIP_DBG_OFF
+#define TCP_OUTPUT_DEBUG        LWIP_DBG_OFF
+</code></pre>
+<p><strong>配置建议</strong>：
+- 内存受限系统：减小MEM_SIZE、PBUF_POOL_SIZE
+- 高性能需求：增大TCP_WND、TCP_SND_BUF
+- 多连接应用：增大MEMP_NUM_TCP_PCB
+- 调试阶段：启用相关DEBUG选项</p>
+<h2 id="4lwip">步骤4：lwIP应用开发</h2>
+<h3 id="41-raw-api-tcp">4.1 Raw API示例 - TCP服务器</h3>
+<p>Raw API是最底层的接口，性能最高但编程复杂：</p>
+<pre><code class="language-c">#include &quot;lwip/tcp.h&quot;
+
+// TCP服务器PCB
+static struct tcp_pcb *tcp_server_pcb;
+
+// 接收回调函数
+static err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, 
+                              struct pbuf *p, err_t err)
+{
+    if(p == NULL)
+    {
+        // 连接关闭
+        tcp_close(tpcb);
+        return ERR_OK;
+    }
+
+    // 处理接收到的数据
+    printf(&quot;Received %d bytes\r\n&quot;, p-&gt;tot_len);
+
+    // 回显数据
+    tcp_write(tpcb, p-&gt;payload, p-&gt;len, TCP_WRITE_FLAG_COPY);
+    tcp_output(tpcb);
+
+    // 释放pbuf
+    pbuf_free(p);
+
+    return ERR_OK;
+}
+
+// 接受连接回调
+static err_t tcp_server_accept(void *arg, struct tcp_pcb *newpcb, err_t err)
+{
+    printf(&quot;New connection accepted\r\n&quot;);
+
+    // 设置接收回调
+    tcp_recv(newpcb, tcp_server_recv);
+
+    return ERR_OK;
+}
+
+// 初始化TCP服务器
+void tcp_server_init(void)
+{
+    // 创建PCB
+    tcp_server_pcb = tcp_new();
+
+    // 绑定到端口8080
+    tcp_bind(tcp_server_pcb, IP_ADDR_ANY, 8080);
+
+    // 开始监听
+    tcp_server_pcb = tcp_listen(tcp_server_pcb);
+
+    // 设置接受回调
+    tcp_accept(tcp_server_pcb, tcp_server_accept);
+
+    printf(&quot;TCP server started on port 8080\r\n&quot;);
+}
+</code></pre>
+<h3 id="42-netconn-api-tcp">4.2 Netconn API示例 - TCP客户端</h3>
+<p>Netconn API基于消息传递，使用更简单：</p>
+<pre><code class="language-c">#include &quot;lwip/api.h&quot;
+
+void tcp_client_thread(void *arg)
+{
+    struct netconn *conn;
+    struct netbuf *buf;
+    ip_addr_t server_ip;
+    uint16_t server_port = 8080;
+    err_t err;
+
+    // 设置服务器IP
+    IP4_ADDR(&amp;server_ip, 192, 168, 1, 100);
+
+    // 创建TCP连接
+    conn = netconn_new(NETCONN_TCP);
+
+    if(conn != NULL)
+    {
+        // 连接到服务器
+        err = netconn_connect(conn, &amp;server_ip, server_port);
+
+        if(err == ERR_OK)
+        {
+            printf(&quot;Connected to server\r\n&quot;);
+
+            // 发送数据
+            const char *data = &quot;Hello from STM32!&quot;;
+            netconn_write(conn, data, strlen(data), NETCONN_COPY);
+
+            // 接收响应
+            err = netconn_recv(conn, &amp;buf);
+            if(err == ERR_OK)
+            {
+                char *recv_data;
+                uint16_t len;
+
+                netbuf_data(buf, (void**)&amp;recv_data, &amp;len);
+                printf(&quot;Received: %.*s\r\n&quot;, len, recv_data);
+
+                netbuf_delete(buf);
+            }
+
+            // 关闭连接
+            netconn_close(conn);
+        }
+
+        // 删除连接
+        netconn_delete(conn);
+    }
+
+    vTaskDelete(NULL);
+}
+</code></pre>
+<h3 id="43-socket-api-http">4.3 Socket API示例 - HTTP服务器</h3>
+<p>Socket API是标准BSD接口，兼容性最好：</p>
+<pre><code class="language-c">#include &quot;lwip/sockets.h&quot;
+
+void http_server_thread(void *arg)
+{
+    int sock, newsock;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len;
+    char recv_buf[512];
+    int recv_len;
+
+    // 创建socket
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    if(sock &lt; 0)
+    {
+        printf(&quot;Socket creation failed\r\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // 绑定地址
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(80);
+
+    if(bind(sock, (struct sockaddr*)&amp;server_addr, sizeof(server_addr)) &lt; 0)
+    {
+        printf(&quot;Bind failed\r\n&quot;);
+        close(sock);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // 监听
+    listen(sock, 5);
+    printf(&quot;HTTP server listening on port 80\r\n&quot;);
+
+    while(1)
+    {
+        // 接受连接
+        client_len = sizeof(client_addr);
+        newsock = accept(sock, (struct sockaddr*)&amp;client_addr, &amp;client_len);
+
+        if(newsock &lt; 0)
+        {
+            continue;
+        }
+
+        printf(&quot;Client connected\r\n&quot;);
+
+        // 接收HTTP请求
+        recv_len = recv(newsock, recv_buf, sizeof(recv_buf)-1, 0);
+
+        if(recv_len &gt; 0)
+        {
+            recv_buf[recv_len] = '\0';
+            printf(&quot;Request: %s\r\n&quot;, recv_buf);
+
+            // 发送HTTP响应
+            const char *response = 
+                &quot;HTTP/1.1 200 OK\r\n&quot;
+                &quot;Content-Type: text/html\r\n&quot;
+                &quot;Connection: close\r\n&quot;
+                &quot;\r\n&quot;
+                &quot;&lt;html&gt;&lt;body&gt;&quot;
+                &quot;&lt;h1&gt;Hello from STM32!&lt;/h1&gt;&quot;
+                &quot;&lt;p&gt;lwIP HTTP Server&lt;/p&gt;&quot;
+                &quot;&lt;/body&gt;&lt;/html&gt;&quot;;
+
+            send(newsock, response, strlen(response), 0);
+        }
+
+        // 关闭连接
+        close(newsock);
+    }
+}
+</code></pre>
+<h3 id="44-udp">4.4 UDP通信示例</h3>
+<pre><code class="language-c">#include &quot;lwip/sockets.h&quot;
+
+void udp_echo_thread(void *arg)
+{
+    int sock;
+    struct sockaddr_in server_addr, client_addr;
+    socklen_t client_len;
+    char recv_buf[512];
+    int recv_len;
+
+    // 创建UDP socket
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if(sock &lt; 0)
+    {
+        printf(&quot;UDP socket creation failed\r\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // 绑定地址
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(5000);
+
+    if(bind(sock, (struct sockaddr*)&amp;server_addr, sizeof(server_addr)) &lt; 0)
+    {
+        printf(&quot;UDP bind failed\r\n&quot;);
+        close(sock);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    printf(&quot;UDP echo server started on port 5000\r\n&quot;);
+
+    while(1)
+    {
+        // 接收数据
+        client_len = sizeof(client_addr);
+        recv_len = recvfrom(sock, recv_buf, sizeof(recv_buf)-1, 0,
+                           (struct sockaddr*)&amp;client_addr, &amp;client_len);
+
+        if(recv_len &gt; 0)
+        {
+            recv_buf[recv_len] = '\0';
+            printf(&quot;UDP received: %s\r\n&quot;, recv_buf);
+
+            // 回显数据
+            sendto(sock, recv_buf, recv_len, 0,
+                  (struct sockaddr*)&amp;client_addr, client_len);
+        }
+    }
+}
+</code></pre>
+<h3 id="45-dhcp">4.5 DHCP客户端使用</h3>
+<p>lwIP内置DHCP客户端，自动获取IP地址：</p>
+<pre><code class="language-c">#include &quot;lwip/dhcp.h&quot;
+
+void dhcp_check_thread(void *arg)
+{
+    struct netif *netif = &amp;gnetif;  // 全局网络接口
+
+    while(1)
+    {
+        if(dhcp_supplied_address(netif))
+        {
+            // DHCP成功获取IP
+            printf(&quot;DHCP IP: %s\r\n&quot;, ip4addr_ntoa(&amp;netif-&gt;ip_addr));
+            printf(&quot;Netmask: %s\r\n&quot;, ip4addr_ntoa(&amp;netif-&gt;netmask));
+            printf(&quot;Gateway: %s\r\n&quot;, ip4addr_ntoa(&amp;netif-&gt;gw));
+            break;
+        }
+        else
+        {
+            printf(&quot;Waiting for DHCP...\r\n&quot;);
+        }
+
+        vTaskDelay(1000);
+    }
+
+    vTaskDelete(NULL);
+}
+
+// 在main.c中启动DHCP
+void MX_LWIP_Init(void)
+{
+    // ... lwIP初始化代码 ...
+
+    // 启动DHCP
+    dhcp_start(&amp;gnetif);
+
+    // 创建DHCP检查任务
+    osThreadNew(dhcp_check_thread, NULL, &amp;dhcp_check_attributes);
+}
+</code></pre>
+<h3 id="46-dns">4.6 DNS客户端使用</h3>
+<pre><code class="language-c">#include &quot;lwip/dns.h&quot;
+
+// DNS查询回调函数
+static void dns_found_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
+{
+    if(ipaddr != NULL)
+    {
+        printf(&quot;DNS resolved: %s -&gt; %s\r\n&quot;, name, ip4addr_ntoa(ipaddr));
+    }
+    else
+    {
+        printf(&quot;DNS resolution failed for %s\r\n&quot;, name);
+    }
+}
+
+// 执行DNS查询
+void dns_query_example(void)
+{
+    ip_addr_t server_ip;
+    err_t err;
+
+    // 异步DNS查询
+    err = dns_gethostbyname(&quot;www.example.com&quot;, &amp;server_ip, dns_found_callback, NULL);
+
+    if(err == ERR_OK)
+    {
+        // 立即返回（已缓存）
+        printf(&quot;DNS cached: %s\r\n&quot;, ip4addr_ntoa(&amp;server_ip));
+    }
+    else if(err == ERR_INPROGRESS)
+    {
+        // 查询进行中，等待回调
+        printf(&quot;DNS query in progress...\r\n&quot;);
+    }
+    else
+    {
+        printf(&quot;DNS query failed\r\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="47-sntp">4.7 SNTP时间同步</h3>
+<pre><code class="language-c">#include &quot;lwip/apps/sntp.h&quot;
+
+void sntp_init_example(void)
+{
+    // 设置SNTP服务器
+    sntp_setservername(0, &quot;pool.ntp.org&quot;);
+    sntp_setservername(1, &quot;time.nist.gov&quot;);
+
+    // 设置时区（东八区）
+    sntp_set_timezone(8);
+
+    // 初始化SNTP
+    sntp_init();
+
+    printf(&quot;SNTP client started\r\n&quot;);
+}
+
+// 获取当前时间
+void get_current_time(void)
+{
+    time_t now;
+    struct tm timeinfo;
+
+    time(&amp;now);
+    localtime_r(&amp;now, &amp;timeinfo);
+
+    printf(&quot;Current time: %04d-%02d-%02d %02d:%02d:%02d\r\n&quot;,
+           timeinfo.tm_year + 1900,
+           timeinfo.tm_mon + 1,
+           timeinfo.tm_mday,
+           timeinfo.tm_hour,
+           timeinfo.tm_min,
+           timeinfo.tm_sec);
+}
+</code></pre>
+<h2 id="5">步骤5：内存管理优化</h2>
+<h3 id="51-lwip">5.1 理解lwIP内存管理</h3>
+<p>lwIP提供三种内存管理方式：</p>
+<h4 id="1-heapmem_mallocmem_free">1. Heap内存（mem_malloc/mem_free）</h4>
+<pre><code class="language-c">// 在lwipopts.h中配置
+#define MEM_LIBC_MALLOC     0       // 不使用标准库malloc
+#define MEM_SIZE            10240   // 堆大小（字节）
+
+// 使用示例
+void *ptr = mem_malloc(100);
+if(ptr != NULL)
+{
+    // 使用内存
+    mem_free(ptr);
+}
+</code></pre>
+<p><strong>特点</strong>：
+- 动态分配，灵活
+- 可能产生内存碎片
+- 分配速度较慢</p>
+<h4 id="2-poolmemp_mallocmemp_free">2. Pool内存（memp_malloc/memp_free）</h4>
+<pre><code class="language-c">// 在lwipopts.h中配置
+#define MEMP_NUM_TCP_PCB    5   // TCP PCB数量
+#define MEMP_NUM_UDP_PCB    4   // UDP PCB数量
+#define MEMP_NUM_PBUF       10  // PBUF数量
+
+// 使用示例（内部使用）
+struct tcp_pcb *pcb = memp_malloc(MEMP_TCP_PCB);
+if(pcb != NULL)
+{
+    // 使用PCB
+    memp_free(MEMP_TCP_PCB, pcb);
+}
+</code></pre>
+<p><strong>特点</strong>：
+- 固定大小内存块
+- 无碎片问题
+- 分配速度快
+- 适合实时系统</p>
+<h4 id="3-pbuf">3. Pbuf内存池</h4>
+<pre><code class="language-c">// 在lwipopts.h中配置
+#define PBUF_POOL_SIZE      8       // pbuf池大小
+#define PBUF_POOL_BUFSIZE   1536    // 每个pbuf大小
+
+// 使用示例
+struct pbuf *p = pbuf_alloc(PBUF_RAW, 1500, PBUF_POOL);
+if(p != NULL)
+{
+    // 使用pbuf
+    pbuf_free(p);
+}
+</code></pre>
+<h3 id="52">5.2 内存使用监控</h3>
+<pre><code class="language-c">#include &quot;lwip/stats.h&quot;
+
+void print_memory_stats(void)
+{
+    printf(&quot;=== Memory Statistics ===\r\n&quot;);
+
+    // Heap内存统计
+    printf(&quot;Heap:\r\n&quot;);
+    printf(&quot;  Available: %d bytes\r\n&quot;, stats.mem.avail);
+    printf(&quot;  Used: %d bytes\r\n&quot;, stats.mem.used);
+    printf(&quot;  Max: %d bytes\r\n&quot;, stats.mem.max);
+    printf(&quot;  Errors: %d\r\n&quot;, stats.mem.err);
+
+    // Pool内存统计
+    printf(&quot;\nPools:\r\n&quot;);
+    printf(&quot;  TCP PCB: %d/%d\r\n&quot;, 
+           stats.memp[MEMP_TCP_PCB]-&gt;used,
+           stats.memp[MEMP_TCP_PCB]-&gt;max);
+    printf(&quot;  UDP PCB: %d/%d\r\n&quot;,
+           stats.memp[MEMP_UDP_PCB]-&gt;used,
+           stats.memp[MEMP_UDP_PCB]-&gt;max);
+    printf(&quot;  PBUF: %d/%d\r\n&quot;,
+           stats.memp[MEMP_PBUF]-&gt;used,
+           stats.memp[MEMP_PBUF]-&gt;max);
+}
+</code></pre>
+<h3 id="53">5.3 内存优化策略</h3>
+<h4 id="_15">减少内存占用</h4>
+<pre><code class="language-c">// lwipopts.h配置建议
+
+// 1. 减少连接数
+#define MEMP_NUM_TCP_PCB        3   // 根据实际需要设置
+#define MEMP_NUM_TCP_PCB_LISTEN 2
+#define MEMP_NUM_UDP_PCB        2
+
+// 2. 减少缓冲区
+#define TCP_MSS                 536 // 减小MSS
+#define TCP_WND                 (2*TCP_MSS)
+#define TCP_SND_BUF             (2*TCP_MSS)
+
+// 3. 减少pbuf池
+#define PBUF_POOL_SIZE          4
+#define MEMP_NUM_PBUF           6
+
+// 4. 禁用不需要的功能
+#define LWIP_IGMP               0   // 不需要组播
+#define LWIP_SNMP               0   // 不需要SNMP
+#define LWIP_DHCP_AUTOIP_COOP   0   // 不需要AutoIP
+</code></pre>
+<h4 id="_16">避免内存泄漏</h4>
+<pre><code class="language-c">// 正确的pbuf使用
+void correct_pbuf_usage(void)
+{
+    struct pbuf *p = pbuf_alloc(PBUF_RAW, 100, PBUF_RAM);
+
+    if(p != NULL)
+    {
+        // 使用pbuf
+        // ...
+
+        // 必须释放
+        pbuf_free(p);
+    }
+}
+
+// 错误示例：忘记释放
+void wrong_pbuf_usage(void)
+{
+    struct pbuf *p = pbuf_alloc(PBUF_RAW, 100, PBUF_RAM);
+
+    if(p != NULL)
+    {
+        // 使用pbuf
+        // ...
+
+        // 忘记释放 - 内存泄漏！
+    }
+}
+
+// 链式pbuf的正确处理
+void chain_pbuf_usage(void)
+{
+    struct pbuf *p = pbuf_alloc(PBUF_RAW, 2000, PBUF_POOL);
+
+    if(p != NULL)
+    {
+        // p可能是链式pbuf（多个pbuf链接）
+        struct pbuf *q;
+
+        for(q = p; q != NULL; q = q-&gt;next)
+        {
+            // 处理每个pbuf
+            printf(&quot;Pbuf len: %d\r\n&quot;, q-&gt;len);
+        }
+
+        // 只需要释放头部，会自动释放整个链
+        pbuf_free(p);
+    }
+}
+</code></pre>
+<h2 id="6">步骤6：性能优化</h2>
+<h3 id="61-tcp">6.1 TCP性能优化</h3>
+<h4 id="tcp">调整TCP窗口大小</h4>
+<pre><code class="language-c">// lwipopts.h配置
+#define TCP_WND                 (8*TCP_MSS)     // 接收窗口
+#define TCP_SND_BUF             (8*TCP_MSS)     // 发送缓冲区
+#define TCP_SND_QUEUELEN        ((4*TCP_SND_BUF)/TCP_MSS)
+
+// 窗口缩放选项（支持大窗口）
+#define LWIP_WND_SCALE          1
+#define TCP_RCV_SCALE           2   // 窗口缩放因子
+</code></pre>
+<p><strong>原理</strong>：
+- 更大的窗口允许更多数据在途
+- 提高带宽利用率
+- 适合高延迟网络</p>
+<h4 id="tcp_1">启用TCP快速重传</h4>
+<pre><code class="language-c">#define LWIP_TCP_SACK_OUT       1   // 启用SACK
+#define TCP_QUEUE_OOSEQ         1   // 队列乱序段
+</code></pre>
+<h4 id="nagle">Nagle算法控制</h4>
+<pre><code class="language-c">// 禁用Nagle算法（减少延迟）
+tcp_pcb-&gt;flags |= TF_NODELAY;
+
+// 或在socket中设置
+int flag = 1;
+setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &amp;flag, sizeof(flag));
+</code></pre>
+<h3 id="62">6.2 零拷贝技术</h3>
+<h4 id="pbuf_ref">使用PBUF_REF类型</h4>
+<pre><code class="language-c">// 发送静态数据（如网页内容）
+const char *html_page = &quot;&lt;html&gt;...&lt;/html&gt;&quot;;
+
+void send_static_data(struct tcp_pcb *pcb)
+{
+    struct pbuf *p;
+
+    // 使用PBUF_REF引用静态数据，避免拷贝
+    p = pbuf_alloc(PBUF_RAW, strlen(html_page), PBUF_REF);
+
+    if(p != NULL)
+    {
+        p-&gt;payload = (void*)html_page;
+
+        // 发送（不拷贝）
+        tcp_write(pcb, p-&gt;payload, p-&gt;len, TCP_WRITE_FLAG_MORE);
+        tcp_output(pcb);
+
+        pbuf_free(p);
+    }
+}
+</code></pre>
+<h4 id="tcp_write_flag_copy">使用TCP_WRITE_FLAG_COPY</h4>
+<pre><code class="language-c">// 发送动态数据
+void send_dynamic_data(struct tcp_pcb *pcb, char *data, uint16_t len)
+{
+    // TCP_WRITE_FLAG_COPY: lwIP会拷贝数据，函数返回后可以释放data
+    tcp_write(pcb, data, len, TCP_WRITE_FLAG_COPY);
+    tcp_output(pcb);
+}
+
+// 发送静态数据（不拷贝）
+void send_static_data_nocopy(struct tcp_pcb *pcb, const char *data, uint16_t len)
+{
+    // 不使用COPY标志，data必须保持有效直到数据发送完成
+    tcp_write(pcb, data, len, 0);
+    tcp_output(pcb);
+}
+</code></pre>
+<h3 id="63-dma">6.3 DMA优化</h3>
+<h4 id="dma_1">配置以太网DMA</h4>
+<pre><code class="language-c">// 在ethernetif.c中优化DMA配置
+static void low_level_init(struct netif *netif)
+{
+    // 增加DMA描述符数量
+    #define ETH_RX_DESC_CNT     8   // 接收描述符
+    #define ETH_TX_DESC_CNT     4   // 发送描述符
+
+    // 配置DMA突发长度
+    heth.Init.DMAArbitration = ETH_DMAARBITRATION_ROUNDROBIN_RXTX_1_1;
+
+    // 启用DMA增强描述符
+    heth.Init.DescriptorSkipLength = 0;
+
+    // 配置接收缓冲区大小
+    #define ETH_RX_BUF_SIZE     1536
+}
+</code></pre>
+<h4 id="dma_2">使用DMA缓存一致性</h4>
+<pre><code class="language-c">// STM32H7等带缓存的MCU需要处理缓存一致性
+void cache_maintenance(void)
+{
+    // 发送前：清除D-Cache
+    SCB_CleanDCache_by_Addr((uint32_t*)tx_buffer, length);
+
+    // 接收后：使D-Cache无效
+    SCB_InvalidateDCache_by_Addr((uint32_t*)rx_buffer, length);
+}
+</code></pre>
+<h3 id="64">6.4 中断优化</h3>
+<h4 id="_17">配置以太网中断优先级</h4>
+<pre><code class="language-c">// 在main.c中设置中断优先级
+void HAL_ETH_MspInit(ETH_HandleTypeDef* ethHandle)
+{
+    // 以太网中断优先级应高于FreeRTOS最低优先级
+    // 但低于关键中断
+    HAL_NVIC_SetPriority(ETH_IRQn, 5, 0);
+    HAL_NVIC_EnableIRQ(ETH_IRQn);
+}
+</code></pre>
+<h4 id="_18">减少中断处理时间</h4>
+<pre><code class="language-c">// 在中断中只做必要的工作
+void ETH_IRQHandler(void)
+{
+    HAL_ETH_IRQHandler(&amp;heth);
+}
+
+// HAL回调函数
+void HAL_ETH_RxCpltCallback(ETH_HandleTypeDef *heth)
+{
+    // 只发送信号量，不处理数据
+    osSemaphoreRelease(RxPktSemaphore);
+}
+
+// 在任务中处理数据
+void ethernetif_input(void *argument)
+{
+    while(1)
+    {
+        if(osSemaphoreAcquire(RxPktSemaphore, osWaitForever) == osOK)
+        {
+            // 在任务上下文中处理数据包
+            process_received_packets();
+        }
+    }
+}
+</code></pre>
+<h3 id="65">6.5 性能测试</h3>
+<h4 id="iperf">iperf测试</h4>
+<p>lwIP支持iperf服务器，用于测试网络性能：</p>
+<pre><code class="language-c">// 在lwipopts.h中启用
+#define LWIP_IPERF_SERVER   1
+
+// 在应用中启动
+#include &quot;lwip/apps/lwiperf.h&quot;
+
+void start_iperf_server(void)
+{
+    lwiperf_start_tcp_server_default(NULL, NULL);
+    printf(&quot;iPerf server started\r\n&quot;);
+}
+</code></pre>
+<p>在PC上运行iperf客户端：</p>
+<pre><code class="language-bash"># 测试下载速度（STM32发送）
+iperf -c 192.168.1.100 -t 30
+
+# 测试上传速度（STM32接收）
+iperf -c 192.168.1.100 -t 30 -r
+
+# UDP测试
+iperf -c 192.168.1.100 -u -b 100M
+</code></pre>
+<h4 id="_19">吞吐量测试代码</h4>
+<pre><code class="language-c">void throughput_test_server(void)
+{
+    int sock, newsock;
+    struct sockaddr_in server_addr;
+    char recv_buf[1460];
+    int recv_len;
+    uint32_t total_bytes = 0;
+    uint32_t start_time, elapsed_time;
+
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(5001);
+
+    bind(sock, (struct sockaddr*)&amp;server_addr, sizeof(server_addr));
+    listen(sock, 1);
+
+    printf(&quot;Throughput test server started\r\n&quot;);
+
+    newsock = accept(sock, NULL, NULL);
+
+    start_time = HAL_GetTick();
+
+    while(1)
+    {
+        recv_len = recv(newsock, recv_buf, sizeof(recv_buf), 0);
+
+        if(recv_len &lt;= 0)
+            break;
+
+        total_bytes += recv_len;
+
+        elapsed_time = HAL_GetTick() - start_time;
+
+        if(elapsed_time &gt;= 10000)  // 10秒
+        {
+            float throughput = (total_bytes * 8.0) / (elapsed_time / 1000.0) / 1000000.0;
+            printf(&quot;Throughput: %.2f Mbps\r\n&quot;, throughput);
+
+            total_bytes = 0;
+            start_time = HAL_GetTick();
+        }
+    }
+
+    close(newsock);
+    close(sock);
+}
+</code></pre>
+<h2 id="7">步骤7：调试与故障排除</h2>
+<h3 id="71-lwip">7.1 启用lwIP调试输出</h3>
+<h4 id="_20">配置调试选项</h4>
+<pre><code class="language-c">// 在lwipopts.h中启用调试
+#define LWIP_DEBUG              1
+
+// 重定向调试输出到串口
+#define LWIP_PLATFORM_DIAG(x)   do {printf x;} while(0)
+
+// 启用各模块调试
+#define ETHARP_DEBUG            LWIP_DBG_ON
+#define NETIF_DEBUG             LWIP_DBG_ON
+#define PBUF_DEBUG              LWIP_DBG_ON
+#define IP_DEBUG                LWIP_DBG_ON
+#define ICMP_DEBUG              LWIP_DBG_ON
+#define DHCP_DEBUG              LWIP_DBG_ON
+#define TCP_DEBUG               LWIP_DBG_ON
+#define TCP_INPUT_DEBUG         LWIP_DBG_ON
+#define TCP_OUTPUT_DEBUG        LWIP_DBG_ON
+#define TCP_RTO_DEBUG           LWIP_DBG_ON
+#define UDP_DEBUG               LWIP_DBG_ON
+
+// 调试级别
+#define LWIP_DBG_MIN_LEVEL      LWIP_DBG_LEVEL_ALL
+</code></pre>
+<h4 id="printf">实现printf重定向</h4>
+<pre><code class="language-c">// 在usart.c中实现
+#include &lt;stdio.h&gt;
+
+int fputc(int ch, FILE *f)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)&amp;ch, 1, 0xFFFF);
+    return ch;
+}
+
+int fgetc(FILE *f)
+{
+    uint8_t ch;
+    HAL_UART_Receive(&amp;huart1, &amp;ch, 1, 0xFFFF);
+    return ch;
+}
+</code></pre>
+<h3 id="72">7.2 常见问题诊断</h3>
+<h4 id="1ip">问题1：无法获取IP地址</h4>
+<p><strong>症状</strong>：
+- DHCP一直失败
+- 静态IP也无法通信</p>
+<p><strong>诊断步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查PHY状态
+void check_phy_status(void)
+{
+    uint32_t phyreg;
+
+    // 读取PHY基本状态寄存器
+    HAL_ETH_ReadPHYRegister(&amp;heth, PHY_ADDRESS, PHY_BSR, &amp;phyreg);
+
+    printf(&quot;PHY Status: 0x%04X\r\n&quot;, phyreg);
+    printf(&quot;Link Status: %s\r\n&quot;, (phyreg &amp; PHY_LINKED_STATUS) ? &quot;UP&quot; : &quot;DOWN&quot;);
+    printf(&quot;Auto-negotiation: %s\r\n&quot;, (phyreg &amp; PHY_AUTONEGO_COMPLETE) ? &quot;Complete&quot; : &quot;In progress&quot;);
+}
+
+// 2. 检查网络接口状态
+void check_netif_status(void)
+{
+    struct netif *netif = &amp;gnetif;
+
+    printf(&quot;Netif Status:\r\n&quot;);
+    printf(&quot;  Link: %s\r\n&quot;, netif_is_link_up(netif) ? &quot;UP&quot; : &quot;DOWN&quot;);
+    printf(&quot;  Up: %s\r\n&quot;, netif_is_up(netif) ? &quot;YES&quot; : &quot;NO&quot;);
+    printf(&quot;  IP: %s\r\n&quot;, ip4addr_ntoa(&amp;netif-&gt;ip_addr));
+}
+
+// 3. 检查以太网MAC状态
+void check_eth_status(void)
+{
+    printf(&quot;ETH Status:\r\n&quot;);
+    printf(&quot;  State: %d\r\n&quot;, heth.gState);
+    printf(&quot;  Error: 0x%08X\r\n&quot;, heth.ErrorCode);
+}
+</code></pre>
+<p><strong>可能原因</strong>：
+- PHY地址配置错误
+- PHY时钟未正确配置
+- 网线未连接
+- 路由器DHCP服务未启用</p>
+<h4 id="2ping">问题2：Ping不通</h4>
+<p><strong>症状</strong>：
+- 设备有IP地址
+- 但无法ping通</p>
+<p><strong>诊断步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查ICMP是否启用
+#define LWIP_ICMP   1  // 在lwipopts.h中
+
+// 2. 检查防火墙
+// 确保PC防火墙允许ICMP
+
+// 3. 测试ARP
+void test_arp(void)
+{
+    ip4_addr_t target_ip;
+    IP4_ADDR(&amp;target_ip, 192, 168, 1, 1);
+
+    // 发送ARP请求
+    etharp_request(&amp;gnetif, &amp;target_ip);
+
+    // 等待并检查ARP表
+    vTaskDelay(1000);
+
+    const struct eth_addr *eth_ret;
+    const ip4_addr_t *ip_ret;
+
+    for(int i = 0; i &lt; ARP_TABLE_SIZE; i++)
+    {
+        if(etharp_get_entry(i, &amp;ip_ret, &amp;gnetif, &amp;eth_ret))
+        {
+            printf(&quot;ARP Entry %d: %s -&gt; %02X:%02X:%02X:%02X:%02X:%02X\r\n&quot;,
+                   i, ip4addr_ntoa(ip_ret),
+                   eth_ret-&gt;addr[0], eth_ret-&gt;addr[1], eth_ret-&gt;addr[2],
+                   eth_ret-&gt;addr[3], eth_ret-&gt;addr[4], eth_ret-&gt;addr[5]);
+        }
+    }
+}
+</code></pre>
+<h4 id="3tcp">问题3：TCP连接失败</h4>
+<p><strong>症状</strong>：
+- 无法建立TCP连接
+- 连接超时</p>
+<p><strong>诊断步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查端口是否监听
+void list_tcp_pcbs(void)
+{
+    struct tcp_pcb *pcb;
+
+    printf(&quot;=== TCP Listen PCBs ===\r\n&quot;);
+    for(pcb = tcp_listen_pcbs.pcbs; pcb != NULL; pcb = pcb-&gt;next)
+    {
+        printf(&quot;Port: %d\r\n&quot;, pcb-&gt;local_port);
+    }
+
+    printf(&quot;\n=== TCP Active PCBs ===\r\n&quot;);
+    for(pcb = tcp_active_pcbs; pcb != NULL; pcb = pcb-&gt;next)
+    {
+        printf(&quot;Local: %s:%d\r\n&quot;, 
+               ip4addr_ntoa(&amp;pcb-&gt;local_ip), pcb-&gt;local_port);
+        printf(&quot;Remote: %s:%d\r\n&quot;,
+               ip4addr_ntoa(&amp;pcb-&gt;remote_ip), pcb-&gt;remote_port);
+        printf(&quot;State: %d\r\n&quot;, pcb-&gt;state);
+    }
+}
+
+// 2. 使用Wireshark抓包分析
+// 检查TCP三次握手是否完成
+// 检查是否有RST包
+</code></pre>
+<h4 id="4_1">问题4：内存不足</h4>
+<p><strong>症状</strong>：
+- 连接失败
+- 数据丢失
+- 系统崩溃</p>
+<p><strong>诊断步骤</strong>：</p>
+<pre><code class="language-c">// 1. 监控内存使用
+void monitor_memory(void)
+{
+    printf(&quot;=== Memory Usage ===\r\n&quot;);
+    printf(&quot;Heap available: %d\r\n&quot;, mem_stats.avail);
+    printf(&quot;Heap used: %d\r\n&quot;, mem_stats.used);
+    printf(&quot;Heap max: %d\r\n&quot;, mem_stats.max);
+    printf(&quot;Heap errors: %d\r\n&quot;, mem_stats.err);
+
+    printf(&quot;\n=== Pool Usage ===\r\n&quot;);
+    printf(&quot;TCP PCB: %d/%d\r\n&quot;,
+           memp_stats[MEMP_TCP_PCB].used,
+           MEMP_NUM_TCP_PCB);
+    printf(&quot;PBUF: %d/%d\r\n&quot;,
+           memp_stats[MEMP_PBUF].used,
+           MEMP_NUM_PBUF);
+    printf(&quot;PBUF_POOL: %d/%d\r\n&quot;,
+           memp_stats[MEMP_PBUF_POOL].used,
+           PBUF_POOL_SIZE);
+}
+
+// 2. 增加内存配置
+// 在lwipopts.h中增大相关参数
+</code></pre>
+<h3 id="73-wireshark">7.3 使用Wireshark分析</h3>
+<h4 id="tcp_2">抓包分析TCP连接</h4>
+<ol>
+<li>
+<p><strong>启动Wireshark</strong>：
+   - 选择网络接口
+   - 开始捕获</p>
+</li>
+<li>
+<p><strong>过滤规则</strong>：
+   ```
+   # 只显示与STM32通信的包
+   ip.addr == 192.168.1.100</p>
+</li>
+</ol>
+<p># 只显示TCP包
+   tcp</p>
+<p># 显示特定端口
+   tcp.port == 8080</p>
+<p># 显示TCP错误
+   tcp.analysis.flags
+   ```</p>
+<ol start="3">
+<li>
+<p><strong>分析TCP三次握手</strong>：
+   <code>客户端 -&gt; 服务器: SYN
+   服务器 -&gt; 客户端: SYN+ACK
+   客户端 -&gt; 服务器: ACK</code></p>
+</li>
+<li>
+<p><strong>检查常见问题</strong>：
+   - <strong>RST包</strong>：连接被重置，可能是端口未监听
+   - <strong>重传</strong>：数据包丢失，检查网络质量
+   - <strong>零窗口</strong>：接收缓冲区满，增大TCP_WND
+   - <strong>乱序</strong>：网络延迟不稳定</p>
+</li>
+</ol>
+<h4 id="_21">导出统计信息</h4>
+<pre><code>Statistics -&gt; Conversations -&gt; TCP
+  - 查看每个连接的统计信息
+  - 吞吐量、丢包率、延迟
+
+Statistics -&gt; IO Graphs
+  - 绘制流量图表
+  - 分析流量模式
+</code></pre>
+<h3 id="74">7.4 性能分析工具</h3>
+<h4 id="cpu">CPU使用率监控</h4>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+void print_task_stats(void)
+{
+    TaskStatus_t *pxTaskStatusArray;
+    volatile UBaseType_t uxArraySize, x;
+    uint32_t ulTotalRunTime, ulStatsAsPercentage;
+
+    // 获取任务数量
+    uxArraySize = uxTaskGetNumberOfTasks();
+
+    // 分配内存
+    pxTaskStatusArray = pvPortMalloc(uxArraySize * sizeof(TaskStatus_t));
+
+    if(pxTaskStatusArray != NULL)
+    {
+        // 获取任务状态
+        uxArraySize = uxTaskGetSystemState(pxTaskStatusArray, uxArraySize, &amp;ulTotalRunTime);
+
+        printf(&quot;Task Name\t\tStatus\tPrio\tStack\tCPU%%\r\n&quot;);
+        printf(&quot;========================================================\r\n&quot;);
+
+        for(x = 0; x &lt; uxArraySize; x++)
+        {
+            // 计算CPU使用率
+            ulStatsAsPercentage = pxTaskStatusArray[x].ulRunTimeCounter / (ulTotalRunTime / 100);
+
+            printf(&quot;%-16s\t%c\t%u\t%u\t%u%%\r\n&quot;,
+                   pxTaskStatusArray[x].pcTaskName,
+                   pxTaskStatusArray[x].eCurrentState == eRunning ? 'R' : 'B',
+                   pxTaskStatusArray[x].uxCurrentPriority,
+                   pxTaskStatusArray[x].usStackHighWaterMark,
+                   ulStatsAsPercentage);
+        }
+
+        vPortFree(pxTaskStatusArray);
+    }
+}
+</code></pre>
+<h2 id="8-web">步骤8：实战项目 - Web服务器</h2>
+<h3 id="81">8.1 项目需求</h3>
+<p>实现一个功能完整的Web服务器：
+- 提供静态网页服务
+- 显示系统状态（CPU、内存、网络）
+- 支持LED控制
+- 实时数据更新（使用AJAX）</p>
+<h3 id="82">8.2 项目结构</h3>
+<pre><code class="language-text">project/
+├── Core/
+│   ├── Src/
+│   │   ├── main.c
+│   │   └── web_server.c
+│   └── Inc/
+│       └── web_server.h
+├── LWIP/
+│   ├── App/
+│   └── Target/
+└── Web/
+    ├── index.html
+    ├── style.css
+    └── script.js
+</code></pre>
+<h3 id="83-web">8.3 Web服务器实现</h3>
+<h4 id="web_serverh">web_server.h</h4>
+<pre><code class="language-c">#ifndef WEB_SERVER_H
+#define WEB_SERVER_H
+
+#include &quot;lwip/api.h&quot;
+
+// 初始化Web服务器
+void web_server_init(void);
+
+// Web服务器任务
+void web_server_thread(void *arg);
+
+// 处理HTTP请求
+void http_process_request(struct netconn *conn, char *buf, uint16_t buflen);
+
+// 发送HTTP响应
+void http_send_response(struct netconn *conn, const char *content_type, 
+                        const char *content, uint16_t content_len);
+
+// 生成JSON状态数据
+void generate_status_json(char *buf, uint16_t buflen);
+
+#endif
+</code></pre>
+<h4 id="web_serverc">web_server.c</h4>
+<pre><code class="language-c">#include &quot;web_server.h&quot;
+#include &quot;lwip/api.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// HTML页面内容
+const char html_page[] = 
+&quot;&lt;!DOCTYPE html&gt;&quot;
+&quot;&lt;html&gt;&quot;
+&quot;&lt;head&gt;&quot;
+&quot;&lt;meta charset='UTF-8'&gt;&quot;
+&quot;&lt;title&gt;STM32 Web Server&lt;/title&gt;&quot;
+&quot;&lt;style&gt;&quot;
+&quot;body { font-family: Arial; margin: 20px; background: #f0f0f0; }&quot;
+&quot;.container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }&quot;
+&quot;h1 { color: #333; }&quot;
+&quot;.status { background: #e8f5e9; padding: 15px; border-radius: 5px; margin: 10px 0; }&quot;
+&quot;.control { background: #fff3e0; padding: 15px; border-radius: 5px; margin: 10px 0; }&quot;
+&quot;button { padding: 10px 20px; font-size: 16px; cursor: pointer; border: none; border-radius: 5px; }&quot;
+&quot;.btn-on { background: #4caf50; color: white; }&quot;
+&quot;.btn-off { background: #f44336; color: white; }&quot;
+&quot;&lt;/style&gt;&quot;
+&quot;&lt;/head&gt;&quot;
+&quot;&lt;body&gt;&quot;
+&quot;&lt;div class='container'&gt;&quot;
+&quot;&lt;h1&gt;STM32 Web Server&lt;/h1&gt;&quot;
+&quot;&lt;div class='status'&gt;&quot;
+&quot;&lt;h2&gt;System Status&lt;/h2&gt;&quot;
+&quot;&lt;p&gt;CPU Usage: &lt;span id='cpu'&gt;--&lt;/span&gt;%&lt;/p&gt;&quot;
+&quot;&lt;p&gt;Free Memory: &lt;span id='memory'&gt;--&lt;/span&gt; KB&lt;/p&gt;&quot;
+&quot;&lt;p&gt;Uptime: &lt;span id='uptime'&gt;--&lt;/span&gt; seconds&lt;/p&gt;&quot;
+&quot;&lt;p&gt;IP Address: &lt;span id='ip'&gt;--&lt;/span&gt;&lt;/p&gt;&quot;
+&quot;&lt;/div&gt;&quot;
+&quot;&lt;div class='control'&gt;&quot;
+&quot;&lt;h2&gt;LED Control&lt;/h2&gt;&quot;
+&quot;&lt;button class='btn-on' onclick='controlLED(1)'&gt;LED ON&lt;/button&gt;&quot;
+&quot;&lt;button class='btn-off' onclick='controlLED(0)'&gt;LED OFF&lt;/button&gt;&quot;
+&quot;&lt;p&gt;LED Status: &lt;span id='led-status'&gt;--&lt;/span&gt;&lt;/p&gt;&quot;
+&quot;&lt;/div&gt;&quot;
+&quot;&lt;/div&gt;&quot;
+&quot;&lt;script&gt;&quot;
+&quot;function updateStatus() {&quot;
+&quot;  fetch('/api/status')&quot;
+&quot;    .then(response =&gt; response.json())&quot;
+&quot;    .then(data =&gt; {&quot;
+&quot;      document.getElementById('cpu').textContent = data.cpu;&quot;
+&quot;      document.getElementById('memory').textContent = data.memory;&quot;
+&quot;      document.getElementById('uptime').textContent = data.uptime;&quot;
+&quot;      document.getElementById('ip').textContent = data.ip;&quot;
+&quot;      document.getElementById('led-status').textContent = data.led ? 'ON' : 'OFF';&quot;
+&quot;    });&quot;
+&quot;}&quot;
+&quot;function controlLED(state) {&quot;
+&quot;  fetch('/api/led?state=' + state)&quot;
+&quot;    .then(() =&gt; updateStatus());&quot;
+&quot;}&quot;
+&quot;setInterval(updateStatus, 1000);&quot;
+&quot;updateStatus();&quot;
+&quot;&lt;/script&gt;&quot;
+&quot;&lt;/body&gt;&quot;
+&quot;&lt;/html&gt;&quot;;
+
+// LED状态
+static uint8_t led_state = 0;
+
+void web_server_init(void)
+{
+    sys_thread_new(&quot;web_server&quot;, web_server_thread, NULL, 
+                   DEFAULT_THREAD_STACKSIZE, osPriorityNormal);
+}
+</code></pre>
+<pre><code class="language-c">void web_server_thread(void *arg)
+{
+    struct netconn *conn, *newconn;
+    err_t err;
+
+    // 创建TCP连接
+    conn = netconn_new(NETCONN_TCP);
+
+    if(conn == NULL)
+    {
+        printf(&quot;Failed to create netconn\r\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // 绑定到端口80
+    err = netconn_bind(conn, IP_ADDR_ANY, 80);
+
+    if(err != ERR_OK)
+    {
+        printf(&quot;Failed to bind: %d\r\n&quot;, err);
+        netconn_delete(conn);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // 开始监听
+    netconn_listen(conn);
+    printf(&quot;Web server started on port 80\r\n&quot;);
+
+    while(1)
+    {
+        // 接受新连接
+        err = netconn_accept(conn, &amp;newconn);
+
+        if(err == ERR_OK)
+        {
+            // 处理HTTP请求
+            struct netbuf *buf;
+            char *data;
+            uint16_t len;
+
+            err = netconn_recv(newconn, &amp;buf);
+
+            if(err == ERR_OK)
+            {
+                netbuf_data(buf, (void**)&amp;data, &amp;len);
+
+                // 处理请求
+                http_process_request(newconn, data, len);
+
+                netbuf_delete(buf);
+            }
+
+            // 关闭连接
+            netconn_close(newconn);
+            netconn_delete(newconn);
+        }
+    }
+}
+
+void http_process_request(struct netconn *conn, char *buf, uint16_t buflen)
+{
+    char *method, *uri, *params;
+
+    // 解析HTTP请求行
+    method = strtok(buf, &quot; &quot;);
+    uri = strtok(NULL, &quot; &quot;);
+
+    if(method == NULL || uri == NULL)
+        return;
+
+    printf(&quot;HTTP Request: %s %s\r\n&quot;, method, uri);
+
+    // 处理不同的URI
+    if(strcmp(uri, &quot;/&quot;) == 0 || strncmp(uri, &quot;/index&quot;, 6) == 0)
+    {
+        // 返回主页
+        http_send_response(conn, &quot;text/html&quot;, html_page, strlen(html_page));
+    }
+    else if(strcmp(uri, &quot;/api/status&quot;) == 0)
+    {
+        // 返回状态JSON
+        char json_buf[256];
+        generate_status_json(json_buf, sizeof(json_buf));
+        http_send_response(conn, &quot;application/json&quot;, json_buf, strlen(json_buf));
+    }
+    else if(strncmp(uri, &quot;/api/led&quot;, 8) == 0)
+    {
+        // LED控制
+        params = strchr(uri, '?');
+        if(params != NULL)
+        {
+            params++;  // 跳过'?'
+
+            if(strncmp(params, &quot;state=1&quot;, 7) == 0)
+            {
+                led_state = 1;
+                HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+            }
+            else if(strncmp(params, &quot;state=0&quot;, 7) == 0)
+            {
+                led_state = 0;
+                HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);
+            }
+        }
+
+        http_send_response(conn, &quot;text/plain&quot;, &quot;OK&quot;, 2);
+    }
+    else
+    {
+        // 404 Not Found
+        const char *response = &quot;HTTP/1.1 404 Not Found\r\n\r\n&quot;;
+        netconn_write(conn, response, strlen(response), NETCONN_COPY);
+    }
+}
+
+void http_send_response(struct netconn *conn, const char *content_type,
+                        const char *content, uint16_t content_len)
+{
+    char header[256];
+
+    // 构建HTTP响应头
+    snprintf(header, sizeof(header),
+             &quot;HTTP/1.1 200 OK\r\n&quot;
+             &quot;Content-Type: %s\r\n&quot;
+             &quot;Content-Length: %d\r\n&quot;
+             &quot;Connection: close\r\n&quot;
+             &quot;\r\n&quot;,
+             content_type, content_len);
+
+    // 发送响应头
+    netconn_write(conn, header, strlen(header), NETCONN_COPY);
+
+    // 发送响应体
+    netconn_write(conn, content, content_len, NETCONN_COPY);
+}
+
+void generate_status_json(char *buf, uint16_t buflen)
+{
+    extern struct netif gnetif;
+    uint32_t uptime = HAL_GetTick() / 1000;
+    uint32_t free_heap = xPortGetFreeHeapSize();
+
+    // 简化的CPU使用率（实际应该使用FreeRTOS统计）
+    uint32_t cpu_usage = 50;
+
+    snprintf(buf, buflen,
+             &quot;{&quot;
+             &quot;\&quot;cpu\&quot;:%u,&quot;
+             &quot;\&quot;memory\&quot;:%u,&quot;
+             &quot;\&quot;uptime\&quot;:%u,&quot;
+             &quot;\&quot;ip\&quot;:\&quot;%s\&quot;,&quot;
+             &quot;\&quot;led\&quot;:%d&quot;
+             &quot;}&quot;,
+             cpu_usage,
+             free_heap / 1024,
+             uptime,
+             ip4addr_ntoa(&amp;gnetif.ip_addr),
+             led_state);
+}
+</code></pre>
+<h3 id="84-mainc">8.4 在main.c中集成</h3>
+<pre><code class="language-c">#include &quot;web_server.h&quot;
+
+int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_ETH_Init();
+
+    // 初始化FreeRTOS
+    osKernelInitialize();
+
+    // 初始化lwIP
+    MX_LWIP_Init();
+
+    // 启动Web服务器
+    web_server_init();
+
+    // 启动调度器
+    osKernelStart();
+
+    while(1)
+    {
+        // 不应该到达这里
+    }
+}
+</code></pre>
+<h3 id="85-web">8.5 测试Web服务器</h3>
+<ol>
+<li>
+<p><strong>编译并下载程序到STM32</strong></p>
+</li>
+<li>
+<p><strong>查看串口输出获取IP地址</strong>：
+   <code>DHCP IP: 192.168.1.100
+   Web server started on port 80</code></p>
+</li>
+<li>
+<p><strong>在浏览器中访问</strong>：
+   <code>http://192.168.1.100</code></p>
+</li>
+<li>
+<p><strong>测试功能</strong>：
+   - 查看系统状态（自动更新）
+   - 点击LED控制按钮
+   - 观察LED状态变化</p>
+</li>
+</ol>
+<h3 id="86">8.6 项目扩展</h3>
+<h4 id="_22">添加文件上传功能</h4>
+<pre><code class="language-c">void handle_file_upload(struct netconn *conn, char *buf, uint16_t buflen)
+{
+    // 解析multipart/form-data
+    char *boundary = strstr(buf, &quot;boundary=&quot;);
+    if(boundary == NULL)
+        return;
+
+    boundary += 9;  // 跳过&quot;boundary=&quot;
+
+    // 查找文件数据
+    char *file_data = strstr(buf, &quot;\r\n\r\n&quot;);
+    if(file_data == NULL)
+        return;
+
+    file_data += 4;  // 跳过&quot;\r\n\r\n&quot;
+
+    // 保存文件到Flash或SD卡
+    // ...
+
+    http_send_response(conn, &quot;text/plain&quot;, &quot;Upload successful&quot;, 17);
+}
+</code></pre>
+<h4 id="websocket">添加WebSocket支持</h4>
+<pre><code class="language-c">// 需要启用lwIP的WebSocket支持
+#define LWIP_HTTPD_SUPPORT_WEBSOCKET  1
+
+// 实现WebSocket回调
+void websocket_callback(struct tcp_pcb *pcb, uint8_t *data, uint16_t len)
+{
+    // 处理WebSocket消息
+    printf(&quot;WebSocket data: %.*s\r\n&quot;, len, data);
+
+    // 发送响应
+    websocket_write(pcb, data, len, WS_TEXT_MODE);
+}
+</code></pre>
+<h2 id="_23">高级主题</h2>
+<h3 id="91">9.1 多网络接口</h3>
+<p>lwIP支持多个网络接口（如以太网+WiFi）：</p>
+<pre><code class="language-c">struct netif eth_netif;  // 以太网接口
+struct netif wifi_netif; // WiFi接口
+
+void multi_netif_init(void)
+{
+    ip4_addr_t ipaddr, netmask, gw;
+
+    // 初始化以太网接口
+    IP4_ADDR(&amp;ipaddr, 192, 168, 1, 100);
+    IP4_ADDR(&amp;netmask, 255, 255, 255, 0);
+    IP4_ADDR(&amp;gw, 192, 168, 1, 1);
+
+    netif_add(&amp;eth_netif, &amp;ipaddr, &amp;netmask, &amp;gw, NULL,
+              ethernetif_init, tcpip_input);
+
+    netif_set_default(&amp;eth_netif);
+    netif_set_up(&amp;eth_netif);
+
+    // 初始化WiFi接口
+    IP4_ADDR(&amp;ipaddr, 192, 168, 2, 100);
+    IP4_ADDR(&amp;netmask, 255, 255, 255, 0);
+    IP4_ADDR(&amp;gw, 192, 168, 2, 1);
+
+    netif_add(&amp;wifi_netif, &amp;ipaddr, &amp;netmask, &amp;gw, NULL,
+              wifiif_init, tcpip_input);
+
+    netif_set_up(&amp;wifi_netif);
+}
+
+// 路由选择
+void set_default_route(struct netif *netif)
+{
+    netif_set_default(netif);
+}
+</code></pre>
+<h3 id="92-ipv6">9.2 IPv6支持</h3>
+<p>启用IPv6：</p>
+<pre><code class="language-c">// 在lwipopts.h中
+#define LWIP_IPV6               1
+#define LWIP_IPV6_DHCP6         1
+#define LWIP_IPV6_AUTOCONFIG    1
+
+// 配置IPv6地址
+void ipv6_init(void)
+{
+    ip6_addr_t ip6addr;
+
+    // 设置链路本地地址
+    netif_create_ip6_linklocal_address(&amp;gnetif, 1);
+
+    // 设置全局地址
+    IP6_ADDR(&amp;ip6addr, 0x2001, 0x0db8, 0, 0, 0, 0, 0, 0x0001);
+    netif_ip6_addr_set(&amp;gnetif, 1, &amp;ip6addr);
+    netif_ip6_addr_set_state(&amp;gnetif, 1, IP6_ADDR_VALID);
+
+    printf(&quot;IPv6 Address: %s\r\n&quot;, ip6addr_ntoa(&amp;gnetif.ip6_addr[0]));
+}
+</code></pre>
+<h3 id="93-tlsssl">9.3 TLS/SSL支持</h3>
+<p>使用mbedTLS实现HTTPS：</p>
+<pre><code class="language-c">// 在lwipopts.h中
+#define LWIP_ALTCP              1
+#define LWIP_ALTCP_TLS          1
+
+// 包含mbedTLS
+#include &quot;mbedtls/ssl.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+
+// HTTPS服务器示例
+void https_server_init(void)
+{
+    struct altcp_tls_config *tls_config;
+    struct altcp_pcb *pcb;
+
+    // 创建TLS配置
+    tls_config = altcp_tls_create_config_server_privkey_cert(
+        server_key, server_key_len,
+        server_cert, server_cert_len);
+
+    // 创建TLS PCB
+    pcb = altcp_tls_new(tls_config, IPADDR_TYPE_ANY);
+
+    // 绑定和监听
+    altcp_bind(pcb, IP_ADDR_ANY, 443);
+    pcb = altcp_listen(pcb);
+
+    // 设置回调
+    altcp_accept(pcb, https_accept_callback);
+}
+</code></pre>
+<h3 id="94-ppp">9.4 PPP支持</h3>
+<p>lwIP支持PPP协议，可用于串口拨号或4G模块：</p>
+<pre><code class="language-c">// 在lwipopts.h中
+#define PPP_SUPPORT             1
+#define PPPOS_SUPPORT           1
+
+// PPP初始化
+#include &quot;netif/ppp/pppos.h&quot;
+
+ppp_pcb *ppp;
+
+void ppp_init_example(void)
+{
+    // 创建PPP控制块
+    ppp = pppos_create(&amp;ppp_netif, ppp_output_callback, 
+                       ppp_link_status_cb, NULL);
+
+    if(ppp == NULL)
+    {
+        printf(&quot;Failed to create PPP\r\n&quot;);
+        return;
+    }
+
+    // 设置认证信息
+    ppp_set_auth(ppp, PPPAUTHTYPE_PAP, &quot;username&quot;, &quot;password&quot;);
+
+    // 连接
+    ppp_connect(ppp, 0);
+}
+
+// PPP输出回调（发送到串口）
+uint32_t ppp_output_callback(ppp_pcb *pcb, uint8_t *data, uint32_t len, void *ctx)
+{
+    HAL_UART_Transmit(&amp;huart2, data, len, 1000);
+    return len;
+}
+
+// PPP状态回调
+void ppp_link_status_cb(ppp_pcb *pcb, int err_code, void *ctx)
+{
+    switch(err_code)
+    {
+        case PPPERR_NONE:
+            printf(&quot;PPP connected\r\n&quot;);
+            printf(&quot;IP: %s\r\n&quot;, ipaddr_ntoa(&amp;ppp_netif.ip_addr));
+            break;
+
+        case PPPERR_CONNECT:
+            printf(&quot;PPP connection failed\r\n&quot;);
+            break;
+
+        case PPPERR_AUTHFAIL:
+            printf(&quot;PPP authentication failed\r\n&quot;);
+            break;
+
+        default:
+            printf(&quot;PPP error: %d\r\n&quot;, err_code);
+            break;
+    }
+}
+
+// 接收PPP数据（从串口）
+void ppp_input_data(uint8_t *data, uint16_t len)
+{
+    pppos_input(ppp, data, len);
+}
+</code></pre>
+<h3 id="95-mqtt">9.5 MQTT客户端</h3>
+<p>使用lwIP实现MQTT客户端：</p>
+<pre><code class="language-c">#include &quot;lwip/apps/mqtt.h&quot;
+
+mqtt_client_t *mqtt_client;
+
+// MQTT连接回调
+static void mqtt_connection_cb(mqtt_client_t *client, void *arg, 
+                                mqtt_connection_status_t status)
+{
+    if(status == MQTT_CONNECT_ACCEPTED)
+    {
+        printf(&quot;MQTT connected\r\n&quot;);
+
+        // 订阅主题
+        mqtt_subscribe(client, &quot;sensor/temperature&quot;, 0, 
+                      mqtt_sub_request_cb, arg);
+    }
+    else
+    {
+        printf(&quot;MQTT connection failed: %d\r\n&quot;, status);
+    }
+}
+
+// MQTT消息接收回调
+static void mqtt_incoming_data_cb(void *arg, const uint8_t *data, 
+                                   uint16_t len, uint8_t flags)
+{
+    printf(&quot;MQTT received: %.*s\r\n&quot;, len, data);
+}
+
+// MQTT发布回调
+static void mqtt_pub_request_cb(void *arg, err_t result)
+{
+    if(result == ERR_OK)
+    {
+        printf(&quot;MQTT publish successful\r\n&quot;);
+    }
+}
+
+// 初始化MQTT客户端
+void mqtt_client_init(void)
+{
+    struct mqtt_connect_client_info_t ci;
+    ip_addr_t mqtt_server_ip;
+
+    // 创建MQTT客户端
+    mqtt_client = mqtt_client_new();
+
+    // 配置连接信息
+    memset(&amp;ci, 0, sizeof(ci));
+    ci.client_id = &quot;stm32_client&quot;;
+    ci.client_user = &quot;username&quot;;
+    ci.client_pass = &quot;password&quot;;
+    ci.keep_alive = 60;
+
+    // 设置服务器IP
+    IP4_ADDR(&amp;mqtt_server_ip, 192, 168, 1, 10);
+
+    // 连接到MQTT服务器
+    mqtt_client_connect(mqtt_client, &amp;mqtt_server_ip, 1883,
+                       mqtt_connection_cb, NULL, &amp;ci);
+}
+
+// 发布MQTT消息
+void mqtt_publish_example(void)
+{
+    const char *topic = &quot;sensor/temperature&quot;;
+    const char *payload = &quot;25.5&quot;;
+
+    mqtt_publish(mqtt_client, topic, payload, strlen(payload),
+                0, 0, mqtt_pub_request_cb, NULL);
+}
+</code></pre>
+<h2 id="_24">最佳实践</h2>
+<h3 id="101">10.1 代码组织</h3>
+<h4 id="_25">模块化设计</h4>
+<pre><code class="language-text">project/
+├── network/
+│   ├── lwip_init.c/h       # lwIP初始化
+│   ├── ethernetif.c/h      # 以太网驱动
+│   └── network_config.h    # 网络配置
+├── applications/
+│   ├── web_server.c/h      # Web服务器
+│   ├── tcp_client.c/h      # TCP客户端
+│   └── udp_server.c/h      # UDP服务器
+└── utils/
+    ├── http_parser.c/h     # HTTP解析
+    └── json_builder.c/h    # JSON构建
+</code></pre>
+<h4 id="_26">配置管理</h4>
+<pre><code class="language-c">// network_config.h
+#ifndef NETWORK_CONFIG_H
+#define NETWORK_CONFIG_H
+
+// 网络配置
+#define USE_DHCP                1
+#define STATIC_IP_ADDRESS       &quot;192.168.1.100&quot;
+#define STATIC_NETMASK          &quot;255.255.255.0&quot;
+#define STATIC_GATEWAY          &quot;192.168.1.1&quot;
+
+// 应用配置
+#define WEB_SERVER_PORT         80
+#define TCP_SERVER_PORT         8080
+#define UDP_SERVER_PORT         5000
+
+// 性能配置
+#define ENABLE_ZERO_COPY        1
+#define ENABLE_CHECKSUM_OFFLOAD 1
+
+#endif
+</code></pre>
+<h3 id="102">10.2 错误处理</h3>
+<h4 id="_27">统一错误处理</h4>
+<pre><code class="language-c">typedef enum {
+    NET_OK = 0,
+    NET_ERR_TIMEOUT,
+    NET_ERR_CONN_FAILED,
+    NET_ERR_NO_MEMORY,
+    NET_ERR_INVALID_PARAM,
+    NET_ERR_NOT_CONNECTED
+} net_error_t;
+
+// 错误处理函数
+void handle_network_error(net_error_t error, const char *context)
+{
+    printf(&quot;[ERROR] %s: &quot;, context);
+
+    switch(error)
+    {
+        case NET_ERR_TIMEOUT:
+            printf(&quot;Timeout\r\n&quot;);
+            break;
+        case NET_ERR_CONN_FAILED:
+            printf(&quot;Connection failed\r\n&quot;);
+            break;
+        case NET_ERR_NO_MEMORY:
+            printf(&quot;Out of memory\r\n&quot;);
+            break;
+        default:
+            printf(&quot;Unknown error %d\r\n&quot;, error);
+            break;
+    }
+}
+
+// 使用示例
+net_error_t tcp_connect_with_retry(const char *host, uint16_t port, int retries)
+{
+    int attempt = 0;
+
+    while(attempt &lt; retries)
+    {
+        if(tcp_connect(host, port) == NET_OK)
+        {
+            return NET_OK;
+        }
+
+        attempt++;
+        printf(&quot;Connection attempt %d/%d failed\r\n&quot;, attempt, retries);
+        vTaskDelay(1000);
+    }
+
+    return NET_ERR_CONN_FAILED;
+}
+</code></pre>
+<h3 id="103">10.3 安全考虑</h3>
+<h4 id="_28">输入验证</h4>
+<pre><code class="language-c">// HTTP请求验证
+bool validate_http_request(const char *request, uint16_t len)
+{
+    // 检查长度
+    if(len &gt; MAX_HTTP_REQUEST_SIZE)
+    {
+        printf(&quot;HTTP request too large\r\n&quot;);
+        return false;
+    }
+
+    // 检查方法
+    if(strncmp(request, &quot;GET &quot;, 4) != 0 &amp;&amp;
+       strncmp(request, &quot;POST &quot;, 5) != 0)
+    {
+        printf(&quot;Invalid HTTP method\r\n&quot;);
+        return false;
+    }
+
+    // 检查路径遍历攻击
+    if(strstr(request, &quot;..&quot;) != NULL)
+    {
+        printf(&quot;Path traversal attempt detected\r\n&quot;);
+        return false;
+    }
+
+    return true;
+}
+
+// SQL注入防护（如果使用数据库）
+void sanitize_input(char *input)
+{
+    char *dangerous_chars = &quot;';\&quot;\\&quot;;
+    char *p = input;
+
+    while(*p)
+    {
+        if(strchr(dangerous_chars, *p) != NULL)
+        {
+            *p = '_';  // 替换危险字符
+        }
+        p++;
+    }
+}
+</code></pre>
+<h4 id="_29">访问控制</h4>
+<pre><code class="language-c">// 简单的IP白名单
+bool is_ip_allowed(ip4_addr_t *ip)
+{
+    // 允许的IP列表
+    const ip4_addr_t allowed_ips[] = {
+        IPADDR4_INIT_BYTES(192, 168, 1, 10),
+        IPADDR4_INIT_BYTES(192, 168, 1, 20),
+    };
+
+    for(int i = 0; i &lt; sizeof(allowed_ips)/sizeof(allowed_ips[0]); i++)
+    {
+        if(ip4_addr_cmp(ip, &amp;allowed_ips[i]))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// 在接受连接时检查
+err_t tcp_accept_with_acl(void *arg, struct tcp_pcb *newpcb, err_t err)
+{
+    if(!is_ip_allowed(&amp;newpcb-&gt;remote_ip))
+    {
+        printf(&quot;Connection from %s denied\r\n&quot;, 
+               ip4addr_ntoa(&amp;newpcb-&gt;remote_ip));
+        tcp_abort(newpcb);
+        return ERR_ABRT;
+    }
+
+    // 继续处理连接
+    return tcp_accept_callback(arg, newpcb, err);
+}
+</code></pre>
+<h4 id="dos">防止DoS攻击</h4>
+<pre><code class="language-c">// 连接限制
+#define MAX_CONNECTIONS     10
+static uint8_t active_connections = 0;
+
+err_t tcp_accept_with_limit(void *arg, struct tcp_pcb *newpcb, err_t err)
+{
+    if(active_connections &gt;= MAX_CONNECTIONS)
+    {
+        printf(&quot;Max connections reached, rejecting\r\n&quot;);
+        tcp_abort(newpcb);
+        return ERR_ABRT;
+    }
+
+    active_connections++;
+
+    // 设置关闭回调以减少计数
+    tcp_arg(newpcb, NULL);
+    tcp_err(newpcb, tcp_error_callback);
+
+    return ERR_OK;
+}
+
+void tcp_error_callback(void *arg, err_t err)
+{
+    if(active_connections &gt; 0)
+    {
+        active_connections--;
+    }
+}
+</code></pre>
+<h3 id="104">10.4 资源管理</h3>
+<h4 id="_30">连接池管理</h4>
+<pre><code class="language-c">#define CONNECTION_POOL_SIZE    5
+
+typedef struct {
+    struct tcp_pcb *pcb;
+    bool in_use;
+    uint32_t last_activity;
+} connection_t;
+
+static connection_t connection_pool[CONNECTION_POOL_SIZE];
+
+// 获取空闲连接
+connection_t* get_free_connection(void)
+{
+    for(int i = 0; i &lt; CONNECTION_POOL_SIZE; i++)
+    {
+        if(!connection_pool[i].in_use)
+        {
+            connection_pool[i].in_use = true;
+            connection_pool[i].last_activity = HAL_GetTick();
+            return &amp;connection_pool[i];
+        }
+    }
+
+    return NULL;  // 无空闲连接
+}
+
+// 释放连接
+void release_connection(connection_t *conn)
+{
+    if(conn != NULL)
+    {
+        if(conn-&gt;pcb != NULL)
+        {
+            tcp_close(conn-&gt;pcb);
+            conn-&gt;pcb = NULL;
+        }
+        conn-&gt;in_use = false;
+    }
+}
+
+// 超时清理
+void cleanup_idle_connections(void)
+{
+    uint32_t now = HAL_GetTick();
+    const uint32_t timeout = 30000;  // 30秒超时
+
+    for(int i = 0; i &lt; CONNECTION_POOL_SIZE; i++)
+    {
+        if(connection_pool[i].in_use)
+        {
+            if(now - connection_pool[i].last_activity &gt; timeout)
+            {
+                printf(&quot;Closing idle connection %d\r\n&quot;, i);
+                release_connection(&amp;connection_pool[i]);
+            }
+        }
+    }
+}
+</code></pre>
+<h4 id="_31">内存泄漏检测</h4>
+<pre><code class="language-c">// 定期检查内存使用
+void memory_leak_detector(void)
+{
+    static uint32_t last_free_heap = 0;
+    static uint32_t check_count = 0;
+
+    uint32_t current_free_heap = xPortGetFreeHeapSize();
+
+    if(last_free_heap &gt; 0)
+    {
+        int32_t diff = (int32_t)current_free_heap - (int32_t)last_free_heap;
+
+        if(diff &lt; -1024)  // 减少超过1KB
+        {
+            printf(&quot;WARNING: Possible memory leak detected\r\n&quot;);
+            printf(&quot;Free heap decreased by %d bytes\r\n&quot;, -diff);
+
+            // 打印内存统计
+            print_memory_stats();
+        }
+    }
+
+    last_free_heap = current_free_heap;
+    check_count++;
+
+    if(check_count % 10 == 0)
+    {
+        printf(&quot;Memory check #%u: %u bytes free\r\n&quot;, 
+               check_count, current_free_heap);
+    }
+}
+</code></pre>
+<h2 id="_32">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ lwIP协议栈的架构设计和核心模块</li>
+<li>✅ STM32平台上的lwIP移植方法</li>
+<li>✅ 以太网硬件接口和驱动开发</li>
+<li>✅ lwIP的三种API接口（Raw、Netconn、Socket）</li>
+<li>✅ 内存管理和性能优化技术</li>
+<li>✅ TCP/UDP网络应用开发</li>
+<li>✅ DHCP、DNS、SNTP等协议的使用</li>
+<li>✅ Web服务器实战项目开发</li>
+<li>✅ 调试技巧和故障排除方法</li>
+<li>✅ 安全和资源管理最佳实践</li>
+</ul>
+<p><strong>关键要点</strong>：</p>
+<ol>
+<li><strong>架构理解</strong>：lwIP采用分层设计，支持多种API和配置选项</li>
+<li><strong>移植要点</strong>：正确配置PHY、实现驱动接口、调整内存参数</li>
+<li><strong>API选择</strong>：Raw API性能最高，Socket API兼容性最好</li>
+<li><strong>内存管理</strong>：合理配置三种内存池，避免内存泄漏</li>
+<li><strong>性能优化</strong>：使用DMA、零拷贝、硬件校验和</li>
+<li><strong>调试方法</strong>：启用调试输出、使用Wireshark抓包分析</li>
+<li><strong>安全考虑</strong>：输入验证、访问控制、防DoS攻击</li>
+</ol>
+<h2 id="_33">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现一个FTP服务器，支持文件上传下载</li>
+<li><strong>挑战2</strong>：添加HTTPS支持，使用mbedTLS加密通信</li>
+<li><strong>挑战3</strong>：实现MQTT客户端，连接到云平台</li>
+<li><strong>挑战4</strong>：优化TCP性能，达到100Mbps吞吐量</li>
+<li><strong>挑战5</strong>：实现网络配置Web界面，支持动态修改IP地址</li>
+</ol>
+<h2 id="_34">完整代码</h2>
+<p>完整的项目代码可以在GitHub上找到：</p>
+<pre><code class="language-text">GitHub仓库: https://github.com/embedded-knowledge/lwip-tutorial
+</code></pre>
+<p>项目包含：
+- STM32F407完整工程代码
+- lwIP 2.1.3移植代码
+- Web服务器示例
+- TCP/UDP客户端服务器示例
+- 性能测试代码
+- 调试工具脚本</p>
+<h2 id="_35">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><strong>Modbus TCP协议</strong> - 学习工业以太网通信</li>
+<li><strong>OPC UA协议</strong> - 学习工业4.0通信标准</li>
+<li><strong>CoAP协议</strong> - 学习物联网轻量级协议</li>
+<li><strong>WebSocket协议</strong> - 学习实时双向通信</li>
+<li><strong>MQTT协议深入</strong> - 学习物联网消息队列</li>
+</ul>
+<h2 id="_36">参考资料</h2>
+<ol>
+<li>
+<p><strong>lwIP官方文档</strong>
+   - 官网：https://savannah.nongnu.org/projects/lwip/
+   - Wiki：https://lwip.wikia.com/</p>
+</li>
+<li>
+<p><strong>STM32以太网应用笔记</strong>
+   - AN3966: LwIP TCP/IP stack demonstration for STM32F4x7 microcontrollers
+   - AN4044: Ethernet on STM32F107 microcontroller</p>
+</li>
+<li>
+<p><strong>TCP/IP协议书籍</strong>
+   - 《TCP/IP详解 卷1：协议》- W. Richard Stevens
+   - 《嵌入式网络那些事》- 朱晓明</p>
+</li>
+<li>
+<p><strong>在线资源</strong>
+   - lwIP邮件列表：https://lists.nongnu.org/mailman/listinfo/lwip-users
+   - STM32社区：https://community.st.com/
+   - Stack Overflow lwIP标签</p>
+</li>
+<li>
+<p><strong>开源项目参考</strong>
+   - FreeRTOS+TCP：https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/
+   - uIP：http://www.sics.se/~adam/uip/
+   - picoTCP：https://github.com/tass-belgium/picotcp</p>
+</li>
+</ol>
+<h2 id="faq">常见问题FAQ</h2>
+<p><strong>Q1: lwIP和FreeRTOS+TCP有什么区别？</strong></p>
+<p>A: lwIP是独立的协议栈，可以在有无操作系统下运行；FreeRTOS+TCP是专门为FreeRTOS设计的，集成度更高但只能在FreeRTOS上运行。lwIP社区更活跃，支持更广泛。</p>
+<p><strong>Q2: 如何选择合适的内存配置？</strong></p>
+<p>A: 根据应用需求：
+- 简单应用（1-2个连接）：MEM_SIZE=5KB, TCP_PCB=2
+- 中等应用（5-10个连接）：MEM_SIZE=10KB, TCP_PCB=5
+- 复杂应用（&gt;10个连接）：MEM_SIZE=20KB, TCP_PCB=10+</p>
+<p><strong>Q3: lwIP能达到多高的吞吐量？</strong></p>
+<p>A: 在STM32F4上，优化后可以达到：
+- 10/100M以太网：80-95Mbps
+- 受限因素：CPU频率、DMA配置、内存带宽</p>
+<p><strong>Q4: 如何处理lwIP的线程安全问题？</strong></p>
+<p>A: 使用RTOS模式时，lwIP内部已经处理了线程安全。应用层需要注意：
+- 不要在多个任务中同时操作同一个PCB
+- 使用消息队列在任务间传递数据
+- 使用互斥锁保护共享资源</p>
+<p><strong>Q5: lwIP支持哪些RTOS？</strong></p>
+<p>A: lwIP支持多种RTOS：
+- FreeRTOS（最常用）
+- RT-Thread
+- μC/OS-II/III
+- ThreadX
+- 也可以在裸机上运行（NO_SYS模式）</p>
+<hr />
+<p><em>本教程持续更新中，欢迎反馈和建议！</em></p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

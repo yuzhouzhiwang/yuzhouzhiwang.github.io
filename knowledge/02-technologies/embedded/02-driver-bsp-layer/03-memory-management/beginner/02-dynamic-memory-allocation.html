@@ -1,0 +1,1317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>动态内存分配算法 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/">03-memory-management</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">为什么需要动态内存分配？</a></li>
+</ul>
+</li>
+<li><a href="#_5">核心内容</a><ul>
+<li><a href="#1-mallocfree">1. malloc/free实现原理</a><ul>
+<li><a href="#11">1.1 基本概念</a></li>
+<li><a href="#12">1.2 内存块结构</a></li>
+<li><a href="#13-malloc">1.3 简单malloc实现</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 内存分配算法</a><ul>
+<li><a href="#21-first-fit">2.1 首次适配（First Fit）</a></li>
+<li><a href="#22-best-fit">2.2 最佳适配（Best Fit）</a></li>
+<li><a href="#23-worst-fit">2.3 最差适配（Worst Fit）</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 内存池设计</a><ul>
+<li><a href="#31">3.1 固定大小内存池</a></li>
+<li><a href="#32">3.2 多级内存池</a></li>
+</ul>
+</li>
+<li><a href="#4-buddy-system">4. 伙伴算法（Buddy System）</a><ul>
+<li><a href="#41">4.1 基本原理</a></li>
+<li><a href="#42">4.2 简化实现</a></li>
+</ul>
+</li>
+<li><a href="#5">5. 内存碎片管理</a><ul>
+<li><a href="#51">5.1 内存碎片类型</a></li>
+<li><a href="#52">5.2 碎片整理</a></li>
+<li><a href="#53">5.3 预防碎片化</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 内存对齐</a><ul>
+<li><a href="#61">6.1 为什么需要对齐？</a></li>
+<li><a href="#62">6.2 对齐实现</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_6">实践示例</a><ul>
+<li><a href="#1">示例1：完整的内存池系统</a></li>
+<li><a href="#2_1">示例2：内存泄漏检测</a></li>
+</ul>
+</li>
+<li><a href="#_7">深入理解</a><ul>
+<li><a href="#_8">内存分配器的性能考虑</a></li>
+<li><a href="#_9">嵌入式系统的选择建议</a></li>
+<li><a href="#_10">最佳实践</a></li>
+</ul>
+</li>
+<li><a href="#_11">常见问题</a><ul>
+<li><a href="#q1">Q1: 什么时候应该使用动态内存分配？</a></li>
+<li><a href="#q2-mallocfree">Q2: 内存池和malloc/free有什么区别？</a></li>
+<li><a href="#q3">Q3: 如何检测和预防内存泄漏？</a></li>
+<li><a href="#q4">Q4: 伙伴算法相比其他算法有什么优势？</a></li>
+<li><a href="#q5">Q5: 如何选择内存池的块大小？</a></li>
+</ul>
+</li>
+<li><a href="#_12">总结</a></li>
+<li><a href="#_13">延伸阅读</a></li>
+<li><a href="#_14">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">动态内存分配算法</h1>
+<h2 id="_2">概述</h2>
+<p>动态内存分配是嵌入式系统中一个重要但需要谨慎使用的技术。与桌面系统不同，嵌入式系统的内存资源有限，动态分配不当可能导致内存碎片、泄漏和系统不稳定。完成本教程后，你将能够：</p>
+<ul>
+<li>理解malloc/free的实现原理和工作机制</li>
+<li>掌握内存池的设计和实现方法</li>
+<li>了解伙伴算法等高级内存分配算法</li>
+<li>学会管理和预防内存碎片</li>
+<li>掌握内存对齐的原理和实现</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">为什么需要动态内存分配？</h3>
+<p>在某些场景下，我们无法在编译时确定需要多少内存：</p>
+<ul>
+<li>处理可变长度的数据（如网络数据包）</li>
+<li>实现动态数据结构（如链表、树）</li>
+<li>临时缓冲区的创建和销毁</li>
+<li>资源的按需分配</li>
+</ul>
+<p>然而，在嵌入式系统中使用动态内存分配需要权衡：</p>
+<p><strong>优点</strong>：
+- 灵活性高，按需分配
+- 可以节省内存（不用预留最大空间）
+- 适合处理可变大小的数据</p>
+<p><strong>缺点</strong>：
+- 可能产生内存碎片
+- 分配/释放时间不确定
+- 可能导致内存泄漏
+- 需要额外的管理开销</p>
+<h2 id="_5">核心内容</h2>
+<h3 id="1-mallocfree">1. malloc/free实现原理</h3>
+<h4 id="11">1.1 基本概念</h4>
+<p>malloc（memory allocation）和free是C标准库提供的动态内存分配函数。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">void* malloc(size_t size);  // 分配size字节的内存
+void free(void* ptr);       // 释放ptr指向的内存
+void* calloc(size_t num, size_t size);  // 分配并清零
+void* realloc(void* ptr, size_t size);  // 重新分配大小
+</code></pre>
+<h4 id="12">1.2 内存块结构</h4>
+<p>动态内存分配器通常使用链表来管理空闲和已分配的内存块。</p>
+<p><strong>内存块头部结构</strong>：</p>
+<pre><code class="language-c">typedef struct mem_block {
+    size_t size;              // 块大小（包含头部）
+    struct mem_block* next;   // 下一个空闲块
+    int is_free;              // 是否空闲
+} mem_block_t;
+</code></pre>
+<p><strong>内存布局</strong>：</p>
+<pre><code>┌──────────────┬──────────────┬──────────────┐
+│  块头部      │  用户数据    │  块头部      │
+│  (metadata)  │  (payload)   │  (metadata)  │
+├──────────────┼──────────────┼──────────────┤
+│ size | next  │   数据区     │ size | next  │
+│ is_free      │              │ is_free      │
+└──────────────┴──────────────┴──────────────┘
+</code></pre>
+<h4 id="13-malloc">1.3 简单malloc实现</h4>
+<p>让我们实现一个简单的内存分配器：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+
+// 内存块头部
+typedef struct block_header {
+    size_t size;                    // 块大小
+    struct block_header* next;      // 下一个块
+    int is_free;                    // 是否空闲
+} block_header_t;
+
+// 堆内存区域
+#define HEAP_SIZE 4096
+static uint8_t heap_memory[HEAP_SIZE];
+static block_header_t* free_list = NULL;
+static int heap_initialized = 0;
+
+// 初始化堆
+void heap_init(void) {
+    if (heap_initialized) return;
+
+    // 创建第一个空闲块
+    free_list = (block_header_t*)heap_memory;
+    free_list-&gt;size = HEAP_SIZE - sizeof(block_header_t);
+    free_list-&gt;next = NULL;
+    free_list-&gt;is_free = 1;
+
+    heap_initialized = 1;
+}
+
+// 简单的malloc实现（首次适配算法）
+void* simple_malloc(size_t size) {
+    if (!heap_initialized) {
+        heap_init();
+    }
+
+    if (size == 0) return NULL;
+
+    // 对齐到4字节边界
+    size = (size + 3) &amp; ~3;
+
+    // 遍历空闲链表
+    block_header_t* current = free_list;
+    block_header_t* prev = NULL;
+
+    while (current != NULL) {
+        if (current-&gt;is_free &amp;&amp; current-&gt;size &gt;= size) {
+            // 找到合适的块
+
+            // 如果剩余空间足够，分割块
+            if (current-&gt;size &gt;= size + sizeof(block_header_t) + 16) {
+                block_header_t* new_block = 
+                    (block_header_t*)((uint8_t*)current + 
+                    sizeof(block_header_t) + size);
+
+                new_block-&gt;size = current-&gt;size - size - sizeof(block_header_t);
+                new_block-&gt;next = current-&gt;next;
+                new_block-&gt;is_free = 1;
+
+                current-&gt;size = size;
+                current-&gt;next = new_block;
+            }
+
+            current-&gt;is_free = 0;
+            return (void*)((uint8_t*)current + sizeof(block_header_t));
+        }
+
+        prev = current;
+        current = current-&gt;next;
+    }
+
+    return NULL;  // 没有足够的内存
+}
+
+// 简单的free实现
+void simple_free(void* ptr) {
+    if (ptr == NULL) return;
+
+    // 获取块头部
+    block_header_t* block = 
+        (block_header_t*)((uint8_t*)ptr - sizeof(block_header_t));
+
+    block-&gt;is_free = 1;
+
+    // 合并相邻的空闲块
+    block_header_t* current = free_list;
+    while (current != NULL) {
+        if (current-&gt;is_free &amp;&amp; current-&gt;next != NULL &amp;&amp; 
+            current-&gt;next-&gt;is_free) {
+            // 合并当前块和下一个块
+            current-&gt;size += sizeof(block_header_t) + current-&gt;next-&gt;size;
+            current-&gt;next = current-&gt;next-&gt;next;
+        } else {
+            current = current-&gt;next;
+        }
+    }
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">void test_simple_allocator(void) {
+    // 分配内存
+    int* array1 = (int*)simple_malloc(10 * sizeof(int));
+    char* str = (char*)simple_malloc(50);
+
+    if (array1 != NULL &amp;&amp; str != NULL) {
+        // 使用内存
+        for (int i = 0; i &lt; 10; i++) {
+            array1[i] = i;
+        }
+
+        strcpy(str, &quot;Hello, embedded world!&quot;);
+
+        // 释放内存
+        simple_free(array1);
+        simple_free(str);
+    }
+}
+</code></pre>
+<h3 id="2">2. 内存分配算法</h3>
+<h4 id="21-first-fit">2.1 首次适配（First Fit）</h4>
+<p>从链表头开始，找到第一个足够大的空闲块。</p>
+<p><strong>优点</strong>：
+- 实现简单
+- 分配速度快</p>
+<p><strong>缺点</strong>：
+- 容易在链表前部产生小碎片
+- 可能浪费大块内存</p>
+<pre><code class="language-c">// 首次适配算法
+void* first_fit_malloc(size_t size) {
+    block_header_t* current = free_list;
+
+    while (current != NULL) {
+        if (current-&gt;is_free &amp;&amp; current-&gt;size &gt;= size) {
+            // 找到第一个合适的块
+            current-&gt;is_free = 0;
+            return (void*)((uint8_t*)current + sizeof(block_header_t));
+        }
+        current = current-&gt;next;
+    }
+
+    return NULL;
+}
+</code></pre>
+<h4 id="22-best-fit">2.2 最佳适配（Best Fit）</h4>
+<p>遍历整个链表，找到最小的足够大的空闲块。</p>
+<p><strong>优点</strong>：
+- 减少内存浪费
+- 更好的空间利用率</p>
+<p><strong>缺点</strong>：
+- 需要遍历整个链表，速度慢
+- 可能产生很多小碎片</p>
+<pre><code class="language-c">// 最佳适配算法
+void* best_fit_malloc(size_t size) {
+    block_header_t* current = free_list;
+    block_header_t* best = NULL;
+    size_t best_size = SIZE_MAX;
+
+    // 遍历所有空闲块
+    while (current != NULL) {
+        if (current-&gt;is_free &amp;&amp; current-&gt;size &gt;= size) {
+            if (current-&gt;size &lt; best_size) {
+                best = current;
+                best_size = current-&gt;size;
+            }
+        }
+        current = current-&gt;next;
+    }
+
+    if (best != NULL) {
+        best-&gt;is_free = 0;
+        return (void*)((uint8_t*)best + sizeof(block_header_t));
+    }
+
+    return NULL;
+}
+</code></pre>
+<h4 id="23-worst-fit">2.3 最差适配（Worst Fit）</h4>
+<p>找到最大的空闲块进行分配。</p>
+<p><strong>优点</strong>：
+- 分割后剩余块较大，更有用
+- 减少小碎片</p>
+<p><strong>缺点</strong>：
+- 浪费大块内存
+- 需要遍历整个链表</p>
+<pre><code class="language-c">// 最差适配算法
+void* worst_fit_malloc(size_t size) {
+    block_header_t* current = free_list;
+    block_header_t* worst = NULL;
+    size_t worst_size = 0;
+
+    while (current != NULL) {
+        if (current-&gt;is_free &amp;&amp; current-&gt;size &gt;= size) {
+            if (current-&gt;size &gt; worst_size) {
+                worst = current;
+                worst_size = current-&gt;size;
+            }
+        }
+        current = current-&gt;next;
+    }
+
+    if (worst != NULL) {
+        worst-&gt;is_free = 0;
+        return (void*)((uint8_t*)worst + sizeof(block_header_t));
+    }
+
+    return NULL;
+}
+</code></pre>
+<h3 id="3">3. 内存池设计</h3>
+<p>内存池是嵌入式系统中最常用的内存管理方法，它预先分配固定大小的内存块。</p>
+<h4 id="31">3.1 固定大小内存池</h4>
+<p><strong>设计思路</strong>：
+- 预分配N个固定大小的内存块
+- 使用链表管理空闲块
+- 分配和释放都是O(1)操作</p>
+<p><strong>实现</strong>：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+
+// 内存池配置
+#define POOL_BLOCK_SIZE 64      // 每个块64字节
+#define POOL_BLOCK_COUNT 32     // 总共32个块
+
+// 内存池结构
+typedef struct {
+    uint8_t memory[POOL_BLOCK_SIZE * POOL_BLOCK_COUNT];
+    void* free_list;
+    uint32_t free_count;
+    uint32_t total_count;
+} memory_pool_t;
+
+// 初始化内存池
+void pool_init(memory_pool_t* pool) {
+    pool-&gt;total_count = POOL_BLOCK_COUNT;
+    pool-&gt;free_count = POOL_BLOCK_COUNT;
+
+    // 构建空闲链表
+    pool-&gt;free_list = NULL;
+    for (int i = POOL_BLOCK_COUNT - 1; i &gt;= 0; i--) {
+        void** block = (void**)&amp;pool-&gt;memory[i * POOL_BLOCK_SIZE];
+        *block = pool-&gt;free_list;
+        pool-&gt;free_list = block;
+    }
+}
+
+// 从内存池分配
+void* pool_alloc(memory_pool_t* pool) {
+    if (pool-&gt;free_list == NULL) {
+        return NULL;  // 内存池已满
+    }
+
+    // 从空闲链表取出第一个块
+    void* block = pool-&gt;free_list;
+    pool-&gt;free_list = *(void**)block;
+    pool-&gt;free_count--;
+
+    // 清零内存块
+    memset(block, 0, POOL_BLOCK_SIZE);
+
+    return block;
+}
+
+// 释放到内存池
+void pool_free(memory_pool_t* pool, void* ptr) {
+    if (ptr == NULL) return;
+
+    // 将块加入空闲链表
+    *(void**)ptr = pool-&gt;free_list;
+    pool-&gt;free_list = ptr;
+    pool-&gt;free_count++;
+}
+
+// 获取内存池使用情况
+uint32_t pool_get_usage(memory_pool_t* pool) {
+    return pool-&gt;total_count - pool-&gt;free_count;
+}
+
+uint32_t pool_get_free(memory_pool_t* pool) {
+    return pool-&gt;free_count;
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">// 全局内存池
+static memory_pool_t g_pool;
+
+void test_memory_pool(void) {
+    // 初始化内存池
+    pool_init(&amp;g_pool);
+
+    // 分配内存
+    uint8_t* buffer1 = (uint8_t*)pool_alloc(&amp;g_pool);
+    uint8_t* buffer2 = (uint8_t*)pool_alloc(&amp;g_pool);
+
+    if (buffer1 != NULL &amp;&amp; buffer2 != NULL) {
+        // 使用内存
+        memcpy(buffer1, &quot;Data 1&quot;, 7);
+        memcpy(buffer2, &quot;Data 2&quot;, 7);
+
+        printf(&quot;Pool usage: %lu/%lu\n&quot;, 
+               pool_get_usage(&amp;g_pool), 
+               g_pool.total_count);
+
+        // 释放内存
+        pool_free(&amp;g_pool, buffer1);
+        pool_free(&amp;g_pool, buffer2);
+    }
+}
+</code></pre>
+<h4 id="32">3.2 多级内存池</h4>
+<p>为了支持不同大小的内存分配，可以创建多个不同大小的内存池。</p>
+<pre><code class="language-c">// 多级内存池配置
+typedef struct {
+    size_t block_size;
+    memory_pool_t pool;
+} sized_pool_t;
+
+#define POOL_SIZES 4
+
+// 定义不同大小的内存池
+static sized_pool_t pools[POOL_SIZES] = {
+    {32, {0}},   // 32字节池
+    {64, {0}},   // 64字节池
+    {128, {0}},  // 128字节池
+    {256, {0}}   // 256字节池
+};
+
+// 初始化所有内存池
+void multi_pool_init(void) {
+    for (int i = 0; i &lt; POOL_SIZES; i++) {
+        pool_init(&amp;pools[i].pool);
+    }
+}
+
+// 从合适的池中分配
+void* multi_pool_alloc(size_t size) {
+    // 找到最小的合适池
+    for (int i = 0; i &lt; POOL_SIZES; i++) {
+        if (size &lt;= pools[i].block_size) {
+            return pool_alloc(&amp;pools[i].pool);
+        }
+    }
+
+    return NULL;  // 请求的大小太大
+}
+
+// 释放到对应的池
+void multi_pool_free(void* ptr, size_t size) {
+    for (int i = 0; i &lt; POOL_SIZES; i++) {
+        if (size &lt;= pools[i].block_size) {
+            pool_free(&amp;pools[i].pool, ptr);
+            return;
+        }
+    }
+}
+</code></pre>
+<h3 id="4-buddy-system">4. 伙伴算法（Buddy System）</h3>
+<p>伙伴算法是一种高效的内存分配算法，它将内存分成2的幂次大小的块。</p>
+<h4 id="41">4.1 基本原理</h4>
+<ul>
+<li>内存块大小为2的幂次（如8, 16, 32, 64...）</li>
+<li>分配时，如果没有合适大小的块，将大块分裂成两个"伙伴"</li>
+<li>释放时，如果伙伴也空闲，则合并成更大的块</li>
+</ul>
+<p><strong>示例</strong>：</p>
+<pre><code>初始状态: [256字节空闲块]
+
+分配70字节:
+1. 256 → 128 + 128
+2. 128 → 64 + 64
+3. 64 → 32 + 32 (不够)
+4. 128 → 64 + 64 (不够)
+5. 分配128字节块
+
+结果: [128已分配] [128空闲]
+</code></pre>
+<h4 id="42">4.2 简化实现</h4>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+
+#define MIN_BLOCK_SIZE 32       // 最小块32字节
+#define MAX_BLOCK_SIZE 2048     // 最大块2KB
+#define BUDDY_LEVELS 7          // log2(2048/32) + 1
+
+typedef struct buddy_block {
+    struct buddy_block* next;
+    int is_free;
+} buddy_block_t;
+
+// 每个级别的空闲链表
+static buddy_block_t* free_lists[BUDDY_LEVELS];
+static uint8_t buddy_memory[MAX_BLOCK_SIZE];
+
+// 计算块的级别
+static int get_level(size_t size) {
+    int level = 0;
+    size_t block_size = MIN_BLOCK_SIZE;
+
+    while (block_size &lt; size &amp;&amp; level &lt; BUDDY_LEVELS - 1) {
+        block_size *= 2;
+        level++;
+    }
+
+    return level;
+}
+
+// 获取级别对应的块大小
+static size_t get_block_size(int level) {
+    return MIN_BLOCK_SIZE &lt;&lt; level;
+}
+
+// 初始化伙伴系统
+void buddy_init(void) {
+    // 清空所有链表
+    for (int i = 0; i &lt; BUDDY_LEVELS; i++) {
+        free_lists[i] = NULL;
+    }
+
+    // 将整个内存作为最大块加入
+    buddy_block_t* block = (buddy_block_t*)buddy_memory;
+    block-&gt;next = NULL;
+    block-&gt;is_free = 1;
+    free_lists[BUDDY_LEVELS - 1] = block;
+}
+
+// 分裂块
+static void split_block(int level) {
+    if (level &gt;= BUDDY_LEVELS - 1) return;
+    if (free_lists[level + 1] == NULL) {
+        split_block(level + 1);
+    }
+
+    if (free_lists[level + 1] != NULL) {
+        // 取出大块
+        buddy_block_t* block = free_lists[level + 1];
+        free_lists[level + 1] = block-&gt;next;
+
+        // 分裂成两个伙伴
+        size_t half_size = get_block_size(level);
+        buddy_block_t* buddy = 
+            (buddy_block_t*)((uint8_t*)block + half_size);
+
+        // 加入小块链表
+        block-&gt;next = buddy;
+        buddy-&gt;next = free_lists[level];
+        block-&gt;is_free = 1;
+        buddy-&gt;is_free = 1;
+        free_lists[level] = block;
+    }
+}
+
+// 伙伴系统分配
+void* buddy_alloc(size_t size) {
+    int level = get_level(size);
+
+    // 如果该级别没有空闲块，分裂更大的块
+    if (free_lists[level] == NULL) {
+        split_block(level);
+    }
+
+    if (free_lists[level] != NULL) {
+        // 取出空闲块
+        buddy_block_t* block = free_lists[level];
+        free_lists[level] = block-&gt;next;
+        block-&gt;is_free = 0;
+        return (void*)block;
+    }
+
+    return NULL;
+}
+
+// 伙伴系统释放
+void buddy_free(void* ptr, size_t size) {
+    if (ptr == NULL) return;
+
+    int level = get_level(size);
+    buddy_block_t* block = (buddy_block_t*)ptr;
+
+    // 标记为空闲
+    block-&gt;is_free = 1;
+    block-&gt;next = free_lists[level];
+    free_lists[level] = block;
+
+    // TODO: 实现伙伴合并逻辑
+}
+</code></pre>
+<h3 id="5">5. 内存碎片管理</h3>
+<h4 id="51">5.1 内存碎片类型</h4>
+<p><strong>外部碎片</strong>：
+- 空闲内存块太小，无法满足分配请求
+- 虽然总空闲内存足够，但不连续</p>
+<p><strong>内部碎片</strong>：
+- 分配的内存块大于实际需求
+- 浪费的空间无法被其他分配使用</p>
+<h4 id="52">5.2 碎片整理</h4>
+<p>在某些情况下，可以通过移动已分配的内存块来整理碎片。</p>
+<pre><code class="language-c">// 简单的碎片整理（仅适用于可移动的对象）
+void defragment_memory(void) {
+    block_header_t* current = free_list;
+
+    while (current != NULL &amp;&amp; current-&gt;next != NULL) {
+        // 如果当前块和下一个块都空闲，合并它们
+        if (current-&gt;is_free &amp;&amp; current-&gt;next-&gt;is_free) {
+            current-&gt;size += sizeof(block_header_t) + current-&gt;next-&gt;size;
+            current-&gt;next = current-&gt;next-&gt;next;
+        } else {
+            current = current-&gt;next;
+        }
+    }
+}
+</code></pre>
+<h4 id="53">5.3 预防碎片化</h4>
+<p><strong>最佳实践</strong>：</p>
+<ol>
+<li><strong>使用内存池</strong>：预分配固定大小的块</li>
+<li><strong>避免频繁分配释放</strong>：重用内存块</li>
+<li><strong>按大小分组</strong>：使用多级内存池</li>
+<li><strong>预留缓冲区</strong>：使用静态缓冲区代替动态分配</li>
+<li><strong>合并空闲块</strong>：及时合并相邻的空闲块</li>
+</ol>
+<h3 id="6">6. 内存对齐</h3>
+<h4 id="61">6.1 为什么需要对齐？</h4>
+<p>现代处理器要求数据按特定边界对齐：
+- 提高访问效率
+- 某些指令要求对齐
+- 避免硬件异常</p>
+<p><strong>对齐规则</strong>：
+- 1字节数据：任意地址
+- 2字节数据：2字节边界
+- 4字节数据：4字节边界
+- 8字节数据：8字节边界</p>
+<h4 id="62">6.2 对齐实现</h4>
+<pre><code class="language-c">// 向上对齐到指定边界
+#define ALIGN_UP(size, align) (((size) + (align) - 1) &amp; ~((align) - 1))
+
+// 向下对齐到指定边界
+#define ALIGN_DOWN(size, align) ((size) &amp; ~((align) - 1))
+
+// 检查是否对齐
+#define IS_ALIGNED(ptr, align) (((uintptr_t)(ptr) &amp; ((align) - 1)) == 0)
+
+// 对齐分配示例
+void* aligned_malloc(size_t size, size_t alignment) {
+    // 分配额外空间用于对齐
+    size_t total_size = size + alignment + sizeof(void*);
+    void* raw_ptr = simple_malloc(total_size);
+
+    if (raw_ptr == NULL) return NULL;
+
+    // 计算对齐后的地址
+    uintptr_t aligned_addr = 
+        ALIGN_UP((uintptr_t)raw_ptr + sizeof(void*), alignment);
+    void* aligned_ptr = (void*)aligned_addr;
+
+    // 在对齐地址前保存原始指针
+    ((void**)aligned_ptr)[-1] = raw_ptr;
+
+    return aligned_ptr;
+}
+
+// 释放对齐分配的内存
+void aligned_free(void* ptr) {
+    if (ptr == NULL) return;
+
+    // 获取原始指针
+    void* raw_ptr = ((void**)ptr)[-1];
+    simple_free(raw_ptr);
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">void test_aligned_allocation(void) {
+    // 分配16字节对齐的内存
+    float* aligned_array = (float*)aligned_malloc(64, 16);
+
+    if (aligned_array != NULL) {
+        // 检查对齐
+        if (IS_ALIGNED(aligned_array, 16)) {
+            printf(&quot;Memory is properly aligned\n&quot;);
+        }
+
+        // 使用内存
+        for (int i = 0; i &lt; 16; i++) {
+            aligned_array[i] = i * 1.5f;
+        }
+
+        // 释放内存
+        aligned_free(aligned_array);
+    }
+}
+</code></pre>
+<h2 id="_6">实践示例</h2>
+<h3 id="1">示例1：完整的内存池系统</h3>
+<p>让我们实现一个带统计功能的完整内存池系统：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 内存池统计信息
+typedef struct {
+    uint32_t total_allocs;      // 总分配次数
+    uint32_t total_frees;       // 总释放次数
+    uint32_t current_usage;     // 当前使用量
+    uint32_t peak_usage;        // 峰值使用量
+    uint32_t failed_allocs;     // 失败的分配次数
+} pool_stats_t;
+
+// 增强的内存池
+typedef struct {
+    uint8_t* memory;
+    void* free_list;
+    uint32_t block_size;
+    uint32_t block_count;
+    uint32_t free_count;
+    pool_stats_t stats;
+} enhanced_pool_t;
+
+// 初始化增强内存池
+void enhanced_pool_init(enhanced_pool_t* pool, 
+                       uint8_t* memory,
+                       uint32_t block_size, 
+                       uint32_t block_count) {
+    pool-&gt;memory = memory;
+    pool-&gt;block_size = block_size;
+    pool-&gt;block_count = block_count;
+    pool-&gt;free_count = block_count;
+
+    // 清空统计
+    memset(&amp;pool-&gt;stats, 0, sizeof(pool_stats_t));
+
+    // 构建空闲链表
+    pool-&gt;free_list = NULL;
+    for (int i = block_count - 1; i &gt;= 0; i--) {
+        void** block = (void**)&amp;memory[i * block_size];
+        *block = pool-&gt;free_list;
+        pool-&gt;free_list = block;
+    }
+}
+
+// 从增强内存池分配
+void* enhanced_pool_alloc(enhanced_pool_t* pool) {
+    if (pool-&gt;free_list == NULL) {
+        pool-&gt;stats.failed_allocs++;
+        return NULL;
+    }
+
+    // 取出空闲块
+    void* block = pool-&gt;free_list;
+    pool-&gt;free_list = *(void**)block;
+    pool-&gt;free_count--;
+
+    // 更新统计
+    pool-&gt;stats.total_allocs++;
+    pool-&gt;stats.current_usage++;
+    if (pool-&gt;stats.current_usage &gt; pool-&gt;stats.peak_usage) {
+        pool-&gt;stats.peak_usage = pool-&gt;stats.current_usage;
+    }
+
+    // 清零内存
+    memset(block, 0, pool-&gt;block_size);
+
+    return block;
+}
+
+// 释放到增强内存池
+void enhanced_pool_free(enhanced_pool_t* pool, void* ptr) {
+    if (ptr == NULL) return;
+
+    // 验证指针是否属于这个池
+    uintptr_t pool_start = (uintptr_t)pool-&gt;memory;
+    uintptr_t pool_end = pool_start + 
+                         (pool-&gt;block_size * pool-&gt;block_count);
+    uintptr_t ptr_addr = (uintptr_t)ptr;
+
+    if (ptr_addr &lt; pool_start || ptr_addr &gt;= pool_end) {
+        // 指针不属于这个池
+        return;
+    }
+
+    // 加入空闲链表
+    *(void**)ptr = pool-&gt;free_list;
+    pool-&gt;free_list = ptr;
+    pool-&gt;free_count++;
+
+    // 更新统计
+    pool-&gt;stats.total_frees++;
+    pool-&gt;stats.current_usage--;
+}
+
+// 打印内存池统计信息
+void enhanced_pool_print_stats(enhanced_pool_t* pool) {
+    printf(&quot;Memory Pool Statistics:\n&quot;);
+    printf(&quot;  Block size: %lu bytes\n&quot;, pool-&gt;block_size);
+    printf(&quot;  Total blocks: %lu\n&quot;, pool-&gt;block_count);
+    printf(&quot;  Free blocks: %lu\n&quot;, pool-&gt;free_count);
+    printf(&quot;  Used blocks: %lu\n&quot;, 
+           pool-&gt;block_count - pool-&gt;free_count);
+    printf(&quot;  Total allocations: %lu\n&quot;, pool-&gt;stats.total_allocs);
+    printf(&quot;  Total frees: %lu\n&quot;, pool-&gt;stats.total_frees);
+    printf(&quot;  Failed allocations: %lu\n&quot;, pool-&gt;stats.failed_allocs);
+    printf(&quot;  Current usage: %lu blocks\n&quot;, pool-&gt;stats.current_usage);
+    printf(&quot;  Peak usage: %lu blocks\n&quot;, pool-&gt;stats.peak_usage);
+    printf(&quot;  Utilization: %.1f%%\n&quot;, 
+           (float)pool-&gt;stats.current_usage * 100 / pool-&gt;block_count);
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">#define POOL_BLOCK_SIZE 128
+#define POOL_BLOCK_COUNT 50
+
+static uint8_t pool_memory[POOL_BLOCK_SIZE * POOL_BLOCK_COUNT];
+static enhanced_pool_t my_pool;
+
+void test_enhanced_pool(void) {
+    // 初始化内存池
+    enhanced_pool_init(&amp;my_pool, pool_memory, 
+                      POOL_BLOCK_SIZE, POOL_BLOCK_COUNT);
+
+    // 模拟使用场景
+    void* buffers[10];
+
+    // 分配多个块
+    for (int i = 0; i &lt; 10; i++) {
+        buffers[i] = enhanced_pool_alloc(&amp;my_pool);
+        if (buffers[i] != NULL) {
+            sprintf((char*)buffers[i], &quot;Buffer %d&quot;, i);
+        }
+    }
+
+    // 打印统计
+    enhanced_pool_print_stats(&amp;my_pool);
+
+    // 释放一些块
+    for (int i = 0; i &lt; 5; i++) {
+        enhanced_pool_free(&amp;my_pool, buffers[i]);
+    }
+
+    // 再次打印统计
+    printf(&quot;\nAfter freeing 5 blocks:\n&quot;);
+    enhanced_pool_print_stats(&amp;my_pool);
+
+    // 释放剩余块
+    for (int i = 5; i &lt; 10; i++) {
+        enhanced_pool_free(&amp;my_pool, buffers[i]);
+    }
+}
+</code></pre>
+<h3 id="2_1">示例2：内存泄漏检测</h3>
+<p>实现一个简单的内存泄漏检测机制：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdio.h&gt;
+
+#define MAX_ALLOCATIONS 100
+
+// 分配记录
+typedef struct {
+    void* ptr;
+    size_t size;
+    const char* file;
+    int line;
+    uint32_t timestamp;
+} alloc_record_t;
+
+// 分配跟踪器
+static alloc_record_t alloc_records[MAX_ALLOCATIONS];
+static int alloc_count = 0;
+static uint32_t alloc_id = 0;
+
+// 记录分配
+static void record_alloc(void* ptr, size_t size, 
+                        const char* file, int line) {
+    if (alloc_count &lt; MAX_ALLOCATIONS) {
+        alloc_records[alloc_count].ptr = ptr;
+        alloc_records[alloc_count].size = size;
+        alloc_records[alloc_count].file = file;
+        alloc_records[alloc_count].line = line;
+        alloc_records[alloc_count].timestamp = alloc_id++;
+        alloc_count++;
+    }
+}
+
+// 记录释放
+static void record_free(void* ptr) {
+    for (int i = 0; i &lt; alloc_count; i++) {
+        if (alloc_records[i].ptr == ptr) {
+            // 移除记录
+            for (int j = i; j &lt; alloc_count - 1; j++) {
+                alloc_records[j] = alloc_records[j + 1];
+            }
+            alloc_count--;
+            return;
+        }
+    }
+
+    // 如果没找到，可能是重复释放或野指针
+    printf(&quot;WARNING: Freeing untracked pointer %p\n&quot;, ptr);
+}
+
+// 带跟踪的malloc
+#define tracked_malloc(size) \
+    tracked_malloc_impl(size, __FILE__, __LINE__)
+
+void* tracked_malloc_impl(size_t size, const char* file, int line) {
+    void* ptr = simple_malloc(size);
+    if (ptr != NULL) {
+        record_alloc(ptr, size, file, line);
+    }
+    return ptr;
+}
+
+// 带跟踪的free
+void tracked_free(void* ptr) {
+    record_free(ptr);
+    simple_free(ptr);
+}
+
+// 检查内存泄漏
+void check_memory_leaks(void) {
+    if (alloc_count == 0) {
+        printf(&quot;No memory leaks detected!\n&quot;);
+        return;
+    }
+
+    printf(&quot;Memory leak detected! %d allocations not freed:\n&quot;, 
+           alloc_count);
+
+    size_t total_leaked = 0;
+    for (int i = 0; i &lt; alloc_count; i++) {
+        printf(&quot;  [%u] %zu bytes at %p (%s:%d)\n&quot;,
+               alloc_records[i].timestamp,
+               alloc_records[i].size,
+               alloc_records[i].ptr,
+               alloc_records[i].file,
+               alloc_records[i].line);
+        total_leaked += alloc_records[i].size;
+    }
+
+    printf(&quot;Total leaked: %zu bytes\n&quot;, total_leaked);
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">void test_leak_detection(void) {
+    // 正常使用
+    char* str1 = (char*)tracked_malloc(50);
+    strcpy(str1, &quot;Hello&quot;);
+    tracked_free(str1);
+
+    // 内存泄漏
+    char* str2 = (char*)tracked_malloc(100);
+    strcpy(str2, &quot;World&quot;);
+    // 忘记释放str2
+
+    // 检查泄漏
+    check_memory_leaks();
+}
+</code></pre>
+<h2 id="_7">深入理解</h2>
+<h3 id="_8">内存分配器的性能考虑</h3>
+<p>选择内存分配算法时需要考虑：</p>
+<ol>
+<li>
+<p><strong>分配速度</strong>：
+   - 首次适配：O(n)
+   - 最佳适配：O(n)
+   - 内存池：O(1)</p>
+</li>
+<li>
+<p><strong>空间利用率</strong>：
+   - 最佳适配：最高
+   - 首次适配：中等
+   - 内存池：可能较低（固定大小）</p>
+</li>
+<li>
+<p><strong>碎片化程度</strong>：
+   - 内存池：无碎片
+   - 伙伴算法：内部碎片
+   - 首次适配：外部碎片</p>
+</li>
+<li>
+<p><strong>实时性</strong>：
+   - 内存池：确定性最好
+   - malloc/free：不确定</p>
+</li>
+</ol>
+<h3 id="_9">嵌入式系统的选择建议</h3>
+<p><strong>推荐使用内存池的场景</strong>：
+- 实时系统
+- 对象大小固定或可预测
+- 需要确定性的分配时间
+- 内存资源有限</p>
+<p><strong>可以使用malloc/free的场景</strong>：
+- 非实时系统
+- 对象大小变化大
+- 内存充足
+- 开发原型阶段</p>
+<p><strong>混合策略</strong>：
+- 关键路径使用内存池
+- 非关键路径使用动态分配
+- 启动阶段使用动态分配，运行时使用静态</p>
+<h3 id="_10">最佳实践</h3>
+<ol>
+<li><strong>优先使用静态分配</strong>
+   ```c
+   // 好的做法
+   static uint8_t buffer[1024];</li>
+</ol>
+<p>// 避免
+   uint8_t* buffer = malloc(1024);
+   ```</p>
+<ol start="2">
+<li><strong>使用内存池管理动态对象</strong>
+   ```c
+   // 为特定类型创建内存池
+   typedef struct {
+       int id;
+       char name[32];
+       // ...
+   } my_object_t;</li>
+</ol>
+<p>static my_object_t object_pool[MAX_OBJECTS];
+   ```</p>
+<ol start="3">
+<li><strong>限制动态分配的使用</strong>
+   ```c
+   // 只在初始化时分配
+   void init(void) {
+       buffer = malloc(size);
+   }</li>
+</ol>
+<p>// 运行时不再分配
+   void runtime_function(void) {
+       // 使用已分配的buffer
+   }
+   ```</p>
+<ol start="4">
+<li><strong>使用RAII模式（C++）或配对函数（C）</strong>
+   ```c
+   // 配对的分配和释放
+   void* create_resource(void) {
+       return pool_alloc(&amp;pool);
+   }</li>
+</ol>
+<p>void destroy_resource(void* res) {
+       pool_free(&amp;pool, res);
+   }
+   ```</p>
+<ol start="5">
+<li>
+<p><strong>定期检查内存使用</strong>
+   ```c
+   void monitor_memory(void) {
+       uint32_t usage = pool_get_usage(&amp;pool);
+       uint32_t total = pool.total_count;</p>
+<p>if (usage &gt; total * 0.9) {
+       printf("WARNING: Memory usage &gt; 90%%\n");
+   }
+   }
+   ```</p>
+</li>
+</ol>
+<h2 id="_11">常见问题</h2>
+<h3 id="q1">Q1: 什么时候应该使用动态内存分配？</h3>
+<p><strong>A</strong>: 在嵌入式系统中，应该尽量避免使用动态内存分配。只在以下情况考虑：</p>
+<p><strong>可以使用的场景</strong>：
+- 初始化阶段的一次性分配
+- 数据大小在运行时才能确定
+- 需要实现复杂的数据结构（如链表、树）
+- 有足够的内存和时间余量</p>
+<p><strong>应该避免的场景</strong>：
+- 实时任务中
+- 中断服务程序中
+- 频繁分配和释放
+- 内存非常有限的系统</p>
+<p><strong>替代方案</strong>：
+- 使用静态数组
+- 使用内存池
+- 预分配最大可能的空间</p>
+<h3 id="q2-mallocfree">Q2: 内存池和malloc/free有什么区别？</h3>
+<p><strong>A</strong>: 主要区别：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>内存池</th>
+<th>malloc/free</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分配速度</td>
+<td>O(1)，非常快</td>
+<td>O(n)，较慢</td>
+</tr>
+<tr>
+<td>碎片化</td>
+<td>无外部碎片</td>
+<td>可能产生碎片</td>
+</tr>
+<tr>
+<td>确定性</td>
+<td>确定性好</td>
+<td>不确定</td>
+</tr>
+<tr>
+<td>灵活性</td>
+<td>固定大小</td>
+<td>任意大小</td>
+</tr>
+<tr>
+<td>开销</td>
+<td>低</td>
+<td>较高</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>实时系统</td>
+<td>通用场景</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 实时系统：使用内存池
+- 对象大小固定：使用内存池
+- 对象大小变化大：考虑多级内存池或malloc
+- 原型开发：可以先用malloc，后期优化为内存池</p>
+<h3 id="q3">Q3: 如何检测和预防内存泄漏？</h3>
+<p><strong>A</strong>: 多种方法：</p>
+<p><strong>1. 代码审查</strong>：
+- 检查每个malloc是否有对应的free
+- 使用静态分析工具</p>
+<p><strong>2. 运行时跟踪</strong>：</p>
+<pre><code class="language-c">// 使用前面实现的跟踪机制
+void* ptr = tracked_malloc(100);
+// ...
+tracked_free(ptr);
+check_memory_leaks();  // 定期检查
+</code></pre>
+<p><strong>3. 使用工具</strong>：
+- Valgrind（Linux）
+- AddressSanitizer
+- 嵌入式专用工具</p>
+<p><strong>4. 设计模式</strong>：
+- 使用配对的创建/销毁函数
+- 明确内存所有权
+- 使用智能指针（C++）</p>
+<p><strong>5. 定期监控</strong>：</p>
+<pre><code class="language-c">void periodic_check(void) {
+    uint32_t free_mem = get_free_memory();
+    if (free_mem &lt; threshold) {
+        log_warning(&quot;Low memory&quot;);
+    }
+}
+</code></pre>
+<h3 id="q4">Q4: 伙伴算法相比其他算法有什么优势？</h3>
+<p><strong>A</strong>: 伙伴算法的特点：</p>
+<p><strong>优势</strong>：
+- 分配和释放速度快（O(log n)）
+- 合并空闲块简单高效
+- 减少外部碎片
+- 实现相对简单</p>
+<p><strong>劣势</strong>：
+- 存在内部碎片（2的幂次大小）
+- 可能浪费空间（如请求65字节需要分配128字节）
+- 需要额外的管理结构</p>
+<p><strong>适用场景</strong>：
+- 内存充足的系统
+- 需要支持多种大小的分配
+- 对碎片化敏感的应用
+- 操作系统内核</p>
+<p><strong>示例</strong>：</p>
+<pre><code class="language-c">// 请求70字节
+// 伙伴算法会分配128字节（浪费58字节）
+void* ptr = buddy_alloc(70);  // 实际分配128字节
+
+// 内存池会分配固定大小
+void* ptr = pool_alloc(&amp;pool_128);  // 分配128字节块
+</code></pre>
+<h3 id="q5">Q5: 如何选择内存池的块大小？</h3>
+<p><strong>A</strong>: 选择策略：</p>
+<p><strong>1. 分析实际使用</strong>：</p>
+<pre><code class="language-c">// 统计实际分配的大小
+void analyze_allocations(void) {
+    // 记录每次分配的大小
+    // 分析大小分布
+    // 选择覆盖80-90%场景的大小
+}
+</code></pre>
+<p><strong>2. 常见策略</strong>：
+- 小对象池：32, 64, 128字节
+- 中等对象池：256, 512字节
+- 大对象池：1024, 2048字节</p>
+<p><strong>3. 多级池设计</strong>：</p>
+<pre><code class="language-c">// 根据使用频率配置不同大小的池
+static sized_pool_t pools[] = {
+    {32,  100},  // 小对象，数量多
+    {64,  50},   // 中等对象
+    {128, 30},   // 较大对象
+    {256, 10}    // 大对象，数量少
+};
+</code></pre>
+<p><strong>4. 动态调整</strong>：</p>
+<pre><code class="language-c">// 运行时监控使用情况
+void monitor_pool_usage(void) {
+    for (int i = 0; i &lt; POOL_COUNT; i++) {
+        float usage = get_pool_usage(&amp;pools[i]);
+        if (usage &gt; 0.9) {
+            log_warning(&quot;Pool %d usage high: %.1f%%&quot;, 
+                       i, usage * 100);
+        }
+    }
+}
+</code></pre>
+<h2 id="_12">总结</h2>
+<p>本教程深入讲解了动态内存分配的原理和实现，核心要点包括：</p>
+<ul>
+<li><strong>malloc/free原理</strong>：基于链表的内存块管理</li>
+<li><strong>分配算法</strong>：首次适配、最佳适配、最差适配各有优劣</li>
+<li><strong>内存池</strong>：嵌入式系统的最佳选择，O(1)分配，无碎片</li>
+<li><strong>伙伴算法</strong>：平衡了速度和空间利用率</li>
+<li><strong>碎片管理</strong>：预防比治理更重要</li>
+<li><strong>内存对齐</strong>：提高访问效率，满足硬件要求</li>
+</ul>
+<p>在嵌入式系统开发中，应该：
+1. 优先使用静态分配
+2. 需要动态分配时首选内存池
+3. 避免在实时任务中使用malloc/free
+4. 定期监控内存使用情况
+5. 使用工具检测内存泄漏</p>
+<p>掌握这些技术后，你就能够设计出高效、可靠的内存管理系统。</p>
+<h2 id="_13">延伸阅读</h2>
+<ul>
+<li><a href="03-stack-overflow-detection.html">堆栈溢出检测与防护</a> - 学习栈保护技术</li>
+<li><a href="../intermediate/01-mmu-virtual-memory.html">MMU与虚拟内存管理</a> - 了解高级内存管理</li>
+<li><a href="../intermediate/02-memory-leak-detection.html">内存泄漏检测与分析</a> - 深入学习调试技术</li>
+</ul>
+<h2 id="_14">参考资料</h2>
+<ol>
+<li>"Dynamic Memory Allocation in Embedded Systems" - Embedded.com</li>
+<li>"The Art of Memory Management" - Embedded Systems Programming</li>
+<li>"Memory Management Algorithms and Implementation in C/C++" by Bill Blunden</li>
+<li>ARM Cortex-M Memory Management - ARM官方文档</li>
+<li>"Embedded Systems Architecture" by Tammy Noergaard</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>实现一个简单的malloc/free，支持首次适配算法和块合并。</li>
+<li>设计一个多级内存池系统，支持32、64、128、256字节四种大小。</li>
+<li>实现伙伴算法的完整版本，包括块分裂和合并。</li>
+<li>编写一个内存泄漏检测工具，能够追踪所有分配和释放操作。</li>
+<li>比较不同分配算法的性能，测试分配速度和碎片化程度。</li>
+</ol>
+<p><strong>实践项目</strong>：</p>
+<p>创建一个完整的内存管理系统，包括：
+- 多级内存池
+- 统计和监控功能
+- 内存泄漏检测
+- 碎片整理功能
+- 性能分析工具</p>
+<p><strong>下一步</strong>：建议学习 <a href="03-stack-overflow-detection.html">堆栈溢出检测与防护</a>，了解如何保护栈内存。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

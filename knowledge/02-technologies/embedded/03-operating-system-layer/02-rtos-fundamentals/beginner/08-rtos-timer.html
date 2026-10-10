@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>RTOS软件定时器使用：实现灵活的定时任务管理 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/">02-rtos-fundamentals</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a><ul>
+<li><a href="#_3">知识要求</a></li>
+<li><a href="#_4">技能要求</a></li>
+<li><a href="#_5">环境要求</a></li>
+</ul>
+</li>
+<li><a href="#_6">准备工作</a><ul>
+<li><a href="#_7">硬件准备</a></li>
+<li><a href="#_8">软件准备</a></li>
+<li><a href="#_9">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_10">概述</a><ul>
+<li><a href="#rtos_1">什么是RTOS软件定时器？</a></li>
+<li><a href="#_11">为什么需要软件定时器？</a></li>
+<li><a href="#vs">软件定时器 vs 任务延时</a></li>
+</ul>
+</li>
+<li><a href="#_12">核心概念</a><ul>
+<li><a href="#_13">定时器类型</a></li>
+<li><a href="#_14">定时器工作原理</a></li>
+<li><a href="#_15">定时器状态</a></li>
+</ul>
+</li>
+<li><a href="#_16">基本操作</a><ul>
+<li><a href="#_17">创建定时器</a></li>
+<li><a href="#_18">启动定时器</a></li>
+<li><a href="#_19">停止定时器</a></li>
+<li><a href="#_20">重置定时器</a></li>
+<li><a href="#_21">修改定时器周期</a></li>
+<li><a href="#_22">删除定时器</a></li>
+<li><a href="#_23">查询定时器状态</a></li>
+</ul>
+</li>
+<li><a href="#_24">实际应用场景</a><ul>
+<li><a href="#1led">场景1：LED闪烁控制</a></li>
+<li><a href="#2">场景2：按键消抖</a></li>
+<li><a href="#3">场景3：周期性数据采集</a></li>
+<li><a href="#4">场景4：超时保护</a></li>
+<li><a href="#5">场景5：看门狗喂狗</a></li>
+</ul>
+</li>
+<li><a href="#_25">使用技巧</a><ul>
+<li><a href="#1id">技巧1：使用定时器ID区分多个定时器</a></li>
+<li><a href="#2_1">技巧2：在回调中设置标志，在任务中处理</a></li>
+<li><a href="#3_1">技巧3：动态调整定时器周期</a></li>
+<li><a href="#4_1">技巧4：使用定时器实现延迟执行</a></li>
+</ul>
+</li>
+<li><a href="#_26">常见问题</a><ul>
+<li><a href="#q1">Q1: 软件定时器和硬件定时器有什么区别？</a></li>
+<li><a href="#q2">Q2: 为什么回调函数不能阻塞？</a></li>
+<li><a href="#q3">Q3: 如何选择定时器服务任务的优先级？</a></li>
+<li><a href="#q4">Q4: 定时器命令队列满了怎么办？</a></li>
+<li><a href="#q5">Q5: 定时器精度如何？</a></li>
+</ul>
+</li>
+<li><a href="#_27">故障排除</a><ul>
+<li><a href="#1">问题1：定时器创建失败</a></li>
+<li><a href="#2_2">问题2：定时器不执行</a></li>
+<li><a href="#3_2">问题3：定时不准确</a></li>
+<li><a href="#4_2">问题4：内存泄漏</a></li>
+</ul>
+</li>
+<li><a href="#_28">总结</a><ul>
+<li><a href="#_29">核心要点</a></li>
+<li><a href="#vs_1">软件定时器 vs 其他机制</a></li>
+<li><a href="#_30">学习检查</a></li>
+</ul>
+</li>
+<li><a href="#_31">延伸阅读</a><ul>
+<li><a href="#_32">相关主题</a></li>
+<li><a href="#_33">参考资料</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rtos">RTOS软件定时器使用：实现灵活的定时任务管理</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解RTOS软件定时器的概念和工作原理</li>
+<li>掌握软件定时器的创建和管理方法</li>
+<li>学会使用单次和周期定时器</li>
+<li>理解定时器回调函数的使用规则</li>
+<li>掌握定时器在不同场景下的应用</li>
+<li>能够解决常见的定时器使用问题</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<h3 id="_3">知识要求</h3>
+<ul>
+<li>理解RTOS的基本概念</li>
+<li>掌握任务创建和管理</li>
+<li>了解任务调度机制</li>
+<li>理解中断和任务的区别</li>
+</ul>
+<h3 id="_4">技能要求</h3>
+<ul>
+<li>能够创建和管理RTOS任务</li>
+<li>了解任务状态和状态转换</li>
+<li>理解任务优先级的作用</li>
+<li>掌握基本的同步机制</li>
+</ul>
+<h3 id="_5">环境要求</h3>
+<ul>
+<li>STM32开发板（或其他支持FreeRTOS的开发板）</li>
+<li>STM32CubeIDE或Keil MDK开发环境</li>
+<li>FreeRTOS源码或HAL库</li>
+<li>串口调试工具</li>
+</ul>
+<h2 id="_6">准备工作</h2>
+<h3 id="_7">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>硬件</th>
+<th>数量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>如STM32F407、STM32F103等</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>1</td>
+<td>用于下载和供电</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>2-3个</td>
+<td>用于状态指示（可选）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">软件准备</h3>
+<ol>
+<li>
+<p><strong>安装开发环境</strong>
+   - STM32CubeIDE v1.10或更高版本
+   - 或Keil MDK v5.30或更高版本</p>
+</li>
+<li>
+<p><strong>配置FreeRTOS</strong>
+   - 在STM32CubeMX中启用FreeRTOS
+   - 启用软件定时器功能</p>
+</li>
+<li>
+<p><strong>配置串口</strong>
+   - 配置UART用于调试输出
+   - 波特率：115200
+   - 数据位：8，停止位：1，无校验</p>
+</li>
+</ol>
+<h3 id="_9">环境配置</h3>
+<pre><code class="language-c">// FreeRTOSConfig.h 关键配置
+#define configUSE_PREEMPTION                1  // 启用抢占式调度
+#define configUSE_TIMERS                    1  // 启用软件定时器
+#define configTIMER_TASK_PRIORITY           3  // 定时器任务优先级
+#define configTIMER_QUEUE_LENGTH            10 // 定时器命令队列长度
+#define configTIMER_TASK_STACK_DEPTH        256 // 定时器任务堆栈大小
+#define configTICK_RATE_HZ                  1000  // 时钟节拍频率
+</code></pre>
+<h2 id="_10">概述</h2>
+<h3 id="rtos_1">什么是RTOS软件定时器？</h3>
+<p><strong>RTOS软件定时器</strong>是RTOS提供的一种定时机制，允许在指定时间后执行回调函数，而不需要创建专门的任务。</p>
+<p><strong>生活中的类比</strong>：</p>
+<p>想象一个智能厨房定时器：
+- 可以设置多个定时提醒（多个定时器）
+- 有单次提醒（煮鸡蛋15分钟）
+- 有重复提醒（每小时检查烤箱）
+- 时间到了会响铃（回调函数）
+- 不需要专人盯着（不占用任务资源）</p>
+<h3 id="_11">为什么需要软件定时器？</h3>
+<p>在RTOS系统中，我们经常需要定时执行某些操作：</p>
+<p><strong>问题场景：使用任务实现定时</strong></p>
+<pre><code class="language-c">// 方法1：使用任务+延时（不推荐）
+void LED_Task(void *param) {
+    while(1) {
+        LED_Toggle();
+        vTaskDelay(pdMS_TO_TICKS(500));  // 占用一个任务
+    }
+}
+
+void Sensor_Task(void *param) {
+    while(1) {
+        ReadSensor();
+        vTaskDelay(pdMS_TO_TICKS(1000));  // 又占用一个任务
+    }
+}
+
+// 需要创建多个任务，每个任务占用堆栈内存
+</code></pre>
+<p><strong>使用软件定时器的优势</strong>：</p>
+<pre><code class="language-c">// 方法2：使用软件定时器（推荐）
+void LED_Timer_Callback(TimerHandle_t xTimer) {
+    LED_Toggle();
+}
+
+void Sensor_Timer_Callback(TimerHandle_t xTimer) {
+    ReadSensor();
+}
+
+// 只需要创建定时器，不需要额外的任务
+// 节省内存，代码更简洁
+</code></pre>
+<h3 id="vs">软件定时器 vs 任务延时</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>软件定时器</th>
+<th>任务延时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>内存占用</strong></td>
+<td>小（只有定时器结构）</td>
+<td>大（需要任务堆栈）</td>
+</tr>
+<tr>
+<td><strong>创建数量</strong></td>
+<td>可以很多</td>
+<td>受任务数量限制</td>
+</tr>
+<tr>
+<td><strong>执行上下文</strong></td>
+<td>定时器任务</td>
+<td>独立任务</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>简单的周期性操作</td>
+<td>复杂的任务逻辑</td>
+</tr>
+<tr>
+<td><strong>资源消耗</strong></td>
+<td>低</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 简单的定时操作（如LED闪烁、定时读取） → 使用软件定时器
+- 复杂的任务逻辑（如数据处理、状态机） → 使用任务</p>
+<h2 id="_12">核心概念</h2>
+<h3 id="_13">定时器类型</h3>
+<p>FreeRTOS支持两种类型的软件定时器：</p>
+<p><strong>1. 单次定时器（One-Shot Timer）</strong></p>
+<pre><code>启动 → 计时 → 超时 → 执行回调 → 停止
+
+时间轴：
+0ms -------- 500ms -------- 1000ms
+ |            |              |
+启动         (计时中)      超时，执行回调，停止
+</code></pre>
+<p><strong>2. 周期定时器（Periodic Timer）</strong></p>
+<pre><code>启动 → 计时 → 超时 → 执行回调 → 重新计时 → 超时 → ...
+
+时间轴：
+0ms --- 500ms --- 1000ms --- 1500ms --- 2000ms
+ |       |         |          |          |
+启动    回调      回调       回调       回调
+</code></pre>
+<h3 id="_14">定时器工作原理</h3>
+<p>软件定时器的工作机制：</p>
+<pre><code>[用户任务] → 创建/启动定时器 → [定时器命令队列]
+                                      ↓
+                              [定时器服务任务]
+                                      ↓
+                              管理所有定时器
+                                      ↓
+                              检查超时 → 执行回调函数
+</code></pre>
+<p><strong>关键组件</strong>：
+- <strong>定时器服务任务</strong>：专门管理所有软件定时器的任务
+- <strong>定时器命令队列</strong>：用于接收定时器操作命令
+- <strong>回调函数</strong>：定时器超时时执行的函数</p>
+<p><strong>重要特性</strong>：
+- 所有定时器回调函数在定时器服务任务中执行
+- 回调函数不能阻塞或长时间运行
+- 定时器服务任务优先级通常较高</p>
+<h3 id="_15">定时器状态</h3>
+<p>定时器有两种状态：</p>
+<pre><code>[休眠状态] ←→ [运行状态]
+  (Dormant)     (Running)
+      ↑             ↓
+   停止/删除    启动/重启
+</code></pre>
+<p><strong>状态说明</strong>：
+- <strong>休眠状态</strong>：定时器已创建但未启动，或已停止
+- <strong>运行状态</strong>：定时器正在计时，会在超时后执行回调</p>
+<h2 id="_16">基本操作</h2>
+<h3 id="_17">创建定时器</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+
+// 定时器回调函数
+void Timer_Callback(TimerHandle_t xTimer) {
+    printf(&quot;Timer expired!\n&quot;);
+}
+
+int main(void) {
+    // 系统初始化
+    SystemInit();
+
+    // 创建单次定时器
+    TimerHandle_t one_shot_timer = xTimerCreate(
+        &quot;OneShot&quot;,              // 定时器名称
+        pdMS_TO_TICKS(1000),    // 定时周期（1000ms）
+        pdFALSE,                // 单次定时器
+        (void *)0,              // 定时器ID
+        Timer_Callback          // 回调函数
+    );
+
+    // 创建周期定时器
+    TimerHandle_t periodic_timer = xTimerCreate(
+        &quot;Periodic&quot;,             // 定时器名称
+        pdMS_TO_TICKS(500),     // 定时周期（500ms）
+        pdTRUE,                 // 周期定时器
+        (void *)1,              // 定时器ID
+        Timer_Callback          // 回调函数
+    );
+
+    if(one_shot_timer != NULL &amp;&amp; periodic_timer != NULL) {
+        printf(&quot;Timers created successfully\n&quot;);
+
+        // 创建任务...
+
+        // 启动调度器
+        vTaskStartScheduler();
+    } else {
+        printf(&quot;Failed to create timers\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>参数说明</strong>：
+- <strong>pcTimerName</strong>：定时器名称，用于调试
+- <strong>xTimerPeriod</strong>：定时周期，单位为tick
+- <strong>uxAutoReload</strong>：pdTRUE为周期定时器，pdFALSE为单次定时器
+- <strong>pvTimerID</strong>：定时器ID，可用于区分不同定时器
+- <strong>pxCallbackFunction</strong>：超时时调用的回调函数</p>
+<h3 id="_18">启动定时器</h3>
+<pre><code class="language-c">// 启动定时器
+BaseType_t xTimerStart(
+    TimerHandle_t xTimer,
+    TickType_t xBlockTime  // 命令队列满时的等待时间
+);
+
+// 示例：启动定时器
+if(xTimerStart(one_shot_timer, 0) == pdPASS) {
+    printf(&quot;Timer started\n&quot;);
+} else {
+    printf(&quot;Failed to start timer\n&quot;);
+}
+
+// 从中断中启动定时器
+BaseType_t xTimerStartFromISR(
+    TimerHandle_t xTimer,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+
+// 中断服务函数示例
+void Button_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 启动定时器
+    xTimerStartFromISR(debounce_timer, &amp;xHigherPriorityTaskWoken);
+
+    // 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<h3 id="_19">停止定时器</h3>
+<pre><code class="language-c">// 停止定时器
+BaseType_t xTimerStop(
+    TimerHandle_t xTimer,
+    TickType_t xBlockTime
+);
+
+// 示例
+if(xTimerStop(periodic_timer, 0) == pdPASS) {
+    printf(&quot;Timer stopped\n&quot;);
+}
+
+// 从中断中停止定时器
+BaseType_t xTimerStopFromISR(
+    TimerHandle_t xTimer,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+</code></pre>
+<h3 id="_20">重置定时器</h3>
+<pre><code class="language-c">// 重置定时器（重新开始计时）
+BaseType_t xTimerReset(
+    TimerHandle_t xTimer,
+    TickType_t xBlockTime
+);
+
+// 示例：看门狗喂狗
+void Watchdog_Feed(void) {
+    // 重置看门狗定时器
+    xTimerReset(watchdog_timer, 0);
+}
+
+// 从中断中重置定时器
+BaseType_t xTimerResetFromISR(
+    TimerHandle_t xTimer,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+</code></pre>
+<h3 id="_21">修改定时器周期</h3>
+<pre><code class="language-c">// 修改定时器周期
+BaseType_t xTimerChangePeriod(
+    TimerHandle_t xTimer,
+    TickType_t xNewPeriod,
+    TickType_t xBlockTime
+);
+
+// 示例：动态调整LED闪烁速度
+void SetBlinkSpeed(uint32_t period_ms) {
+    xTimerChangePeriod(led_timer, pdMS_TO_TICKS(period_ms), 0);
+}
+
+// 从中断中修改周期
+BaseType_t xTimerChangePeriodFromISR(
+    TimerHandle_t xTimer,
+    TickType_t xNewPeriod,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+</code></pre>
+<h3 id="_22">删除定时器</h3>
+<pre><code class="language-c">// 删除定时器
+BaseType_t xTimerDelete(
+    TimerHandle_t xTimer,
+    TickType_t xBlockTime
+);
+
+// 示例
+if(xTimerDelete(one_shot_timer, 0) == pdPASS) {
+    printf(&quot;Timer deleted\n&quot;);
+}
+</code></pre>
+<h3 id="_23">查询定时器状态</h3>
+<pre><code class="language-c">// 检查定时器是否处于活动状态
+BaseType_t xTimerIsTimerActive(TimerHandle_t xTimer);
+
+// 获取定时器名称
+const char* pcTimerGetName(TimerHandle_t xTimer);
+
+// 获取定时器周期
+TickType_t xTimerGetPeriod(TimerHandle_t xTimer);
+
+// 获取定时器到期时间
+TickType_t xTimerGetExpiryTime(TimerHandle_t xTimer);
+
+// 示例
+if(xTimerIsTimerActive(led_timer)) {
+    printf(&quot;Timer '%s' is running\n&quot;, pcTimerGetName(led_timer));
+    printf(&quot;Period: %d ms\n&quot;, xTimerGetPeriod(led_timer));
+}
+</code></pre>
+<h2 id="_24">实际应用场景</h2>
+<h3 id="1led">场景1：LED闪烁控制</h3>
+<p>使用周期定时器实现LED闪烁：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+
+// LED定时器句柄
+TimerHandle_t led_timer;
+
+// LED闪烁回调函数
+void LED_Blink_Callback(TimerHandle_t xTimer) {
+    static bool led_state = false;
+
+    // 切换LED状态
+    led_state = !led_state;
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, led_state ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    printf(&quot;[%d] LED: %s\n&quot;, xTaskGetTickCount(), led_state ? &quot;ON&quot; : &quot;OFF&quot;);
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+
+    // 创建LED闪烁定时器（周期500ms）
+    led_timer = xTimerCreate(
+        &quot;LED_Blink&quot;,            // 名称
+        pdMS_TO_TICKS(500),     // 500ms周期
+        pdTRUE,                 // 周期定时器
+        (void *)0,              // ID
+        LED_Blink_Callback      // 回调函数
+    );
+
+    if(led_timer != NULL) {
+        // 启动定时器
+        xTimerStart(led_timer, 0);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>：</p>
+<pre><code>[500] LED: ON
+[1000] LED: OFF
+[1500] LED: ON
+[2000] LED: OFF
+[2500] LED: ON
+</code></pre>
+<h3 id="2">场景2：按键消抖</h3>
+<p>使用单次定时器实现按键消抖：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+
+// 消抖定时器
+TimerHandle_t debounce_timer;
+
+// 按键状态
+typedef struct {
+    uint8_t button_id;
+    bool pressed;
+} ButtonState_t;
+
+ButtonState_t button_state;
+
+// 消抖回调函数
+void Debounce_Callback(TimerHandle_t xTimer) {
+    // 再次读取按键状态
+    bool current_state = HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET;
+
+    // 如果状态一致，确认按键事件
+    if(current_state == button_state.pressed) {
+        if(button_state.pressed) {
+            printf(&quot;Button %d pressed (confirmed)\n&quot;, button_state.button_id);
+            OnButtonPressed(button_state.button_id);
+        } else {
+            printf(&quot;Button %d released (confirmed)\n&quot;, button_state.button_id);
+            OnButtonReleased(button_state.button_id);
+        }
+    } else {
+        printf(&quot;Button state changed during debounce, ignored\n&quot;);
+    }
+}
+
+// 按键中断处理
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    if(GPIO_Pin == BUTTON_Pin) {
+        // 读取按键状态
+        button_state.button_id = 1;
+        button_state.pressed = (HAL_GPIO_ReadPin(BUTTON_GPIO_Port, BUTTON_Pin) == GPIO_PIN_RESET);
+
+        // 重启消抖定时器（20ms）
+        xTimerResetFromISR(debounce_timer, &amp;xHigherPriorityTaskWoken);
+
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+
+    // 创建消抖定时器（单次20ms）
+    debounce_timer = xTimerCreate(
+        &quot;Debounce&quot;,
+        pdMS_TO_TICKS(20),      // 20ms消抖时间
+        pdFALSE,                // 单次定时器
+        (void *)0,
+        Debounce_Callback
+    );
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<h3 id="3">场景3：周期性数据采集</h3>
+<p>使用定时器实现周期性传感器数据采集：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+#include &quot;queue.h&quot;
+
+// 传感器数据结构
+typedef struct {
+    float temperature;
+    float humidity;
+    uint32_t timestamp;
+} SensorData_t;
+
+// 数据队列
+QueueHandle_t sensor_queue;
+
+// 传感器定时器
+TimerHandle_t sensor_timer;
+
+// 传感器读取回调
+void Sensor_Read_Callback(TimerHandle_t xTimer) {
+    SensorData_t data;
+
+    // 读取传感器数据
+    data.temperature = ReadTemperatureSensor();
+    data.humidity = ReadHumiditySensor();
+    data.timestamp = xTaskGetTickCount();
+
+    printf(&quot;[%d] Sensor: Temp=%.1f°C, Humidity=%.1f%%\n&quot;,
+           data.timestamp, data.temperature, data.humidity);
+
+    // 发送到队列供其他任务处理
+    xQueueSend(sensor_queue, &amp;data, 0);
+}
+
+// 数据处理任务
+void Data_Process_Task(void *param) {
+    SensorData_t data;
+
+    while(1) {
+        // 等待传感器数据
+        if(xQueueReceive(sensor_queue, &amp;data, portMAX_DELAY) == pdTRUE) {
+            // 处理数据
+            ProcessSensorData(&amp;data);
+
+            // 检查阈值
+            if(data.temperature &gt; 30.0f) {
+                printf(&quot;Warning: High temperature!\n&quot;);
+            }
+        }
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建数据队列
+    sensor_queue = xQueueCreate(10, sizeof(SensorData_t));
+
+    // 创建传感器定时器（周期1000ms）
+    sensor_timer = xTimerCreate(
+        &quot;Sensor&quot;,
+        pdMS_TO_TICKS(1000),    // 每秒读取一次
+        pdTRUE,                 // 周期定时器
+        (void *)0,
+        Sensor_Read_Callback
+    );
+
+    // 创建数据处理任务
+    xTaskCreate(Data_Process_Task, &quot;DataProc&quot;, 256, NULL, 2, NULL);
+
+    // 启动定时器
+    xTimerStart(sensor_timer, 0);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>：</p>
+<pre><code>[1000] Sensor: Temp=25.5°C, Humidity=60.0%
+[2000] Sensor: Temp=25.6°C, Humidity=60.2%
+[3000] Sensor: Temp=25.7°C, Humidity=60.1%
+[4000] Sensor: Temp=31.2°C, Humidity=58.5%
+Warning: High temperature!
+</code></pre>
+<h3 id="4">场景4：超时保护</h3>
+<p>使用单次定时器实现操作超时保护：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+
+// 超时定时器
+TimerHandle_t timeout_timer;
+
+// 操作状态
+typedef enum {
+    OP_STATE_IDLE,
+    OP_STATE_BUSY,
+    OP_STATE_TIMEOUT,
+    OP_STATE_COMPLETE
+} OperationState_t;
+
+volatile OperationState_t operation_state = OP_STATE_IDLE;
+
+// 超时回调函数
+void Timeout_Callback(TimerHandle_t xTimer) {
+    if(operation_state == OP_STATE_BUSY) {
+        printf(&quot;Operation timeout!\n&quot;);
+        operation_state = OP_STATE_TIMEOUT;
+
+        // 取消操作
+        CancelOperation();
+    }
+}
+
+// 开始操作
+bool StartOperation(void) {
+    if(operation_state != OP_STATE_IDLE) {
+        return false;  // 操作正在进行
+    }
+
+    printf(&quot;Starting operation...\n&quot;);
+    operation_state = OP_STATE_BUSY;
+
+    // 启动超时定时器（5秒）
+    xTimerStart(timeout_timer, 0);
+
+    // 执行操作
+    DoOperation();
+
+    return true;
+}
+
+// 操作完成
+void OperationComplete(void) {
+    if(operation_state == OP_STATE_BUSY) {
+        // 停止超时定时器
+        xTimerStop(timeout_timer, 0);
+
+        printf(&quot;Operation completed successfully\n&quot;);
+        operation_state = OP_STATE_COMPLETE;
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建超时定时器（单次5000ms）
+    timeout_timer = xTimerCreate(
+        &quot;Timeout&quot;,
+        pdMS_TO_TICKS(5000),    // 5秒超时
+        pdFALSE,                // 单次定时器
+        (void *)0,
+        Timeout_Callback
+    );
+
+    // 创建任务...
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<h3 id="5">场景5：看门狗喂狗</h3>
+<p>使用周期定时器实现看门狗喂狗：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;timers.h&quot;
+
+// 看门狗定时器
+TimerHandle_t watchdog_timer;
+
+// 看门狗喂狗回调
+void Watchdog_Feed_Callback(TimerHandle_t xTimer) {
+    // 喂狗
+    HAL_IWDG_Refresh(&amp;hiwdg);
+
+    printf(&quot;[%d] Watchdog fed\n&quot;, xTaskGetTickCount());
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化看门狗（超时时间1000ms）
+    MX_IWDG_Init();
+
+    // 创建喂狗定时器（周期500ms，小于看门狗超时时间）
+    watchdog_timer = xTimerCreate(
+        &quot;Watchdog&quot;,
+        pdMS_TO_TICKS(500),     // 每500ms喂一次狗
+        pdTRUE,                 // 周期定时器
+        (void *)0,
+        Watchdog_Feed_Callback
+    );
+
+    // 启动喂狗定时器
+    xTimerStart(watchdog_timer, 0);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<h2 id="_25">使用技巧</h2>
+<h3 id="1id">技巧1：使用定时器ID区分多个定时器</h3>
+<pre><code class="language-c">// 使用同一个回调函数处理多个定时器
+void Multi_Timer_Callback(TimerHandle_t xTimer) {
+    // 获取定时器ID
+    uint32_t timer_id = (uint32_t)pvTimerGetTimerID(xTimer);
+
+    switch(timer_id) {
+        case 0:
+            printf(&quot;Timer 0 expired\n&quot;);
+            LED1_Toggle();
+            break;
+        case 1:
+            printf(&quot;Timer 1 expired\n&quot;);
+            LED2_Toggle();
+            break;
+        case 2:
+            printf(&quot;Timer 2 expired\n&quot;);
+            LED3_Toggle();
+            break;
+        default:
+            break;
+    }
+}
+
+// 创建多个定时器
+TimerHandle_t timer1 = xTimerCreate(&quot;T1&quot;, pdMS_TO_TICKS(500), pdTRUE, (void *)0, Multi_Timer_Callback);
+TimerHandle_t timer2 = xTimerCreate(&quot;T2&quot;, pdMS_TO_TICKS(1000), pdTRUE, (void *)1, Multi_Timer_Callback);
+TimerHandle_t timer3 = xTimerCreate(&quot;T3&quot;, pdMS_TO_TICKS(1500), pdTRUE, (void *)2, Multi_Timer_Callback);
+</code></pre>
+<h3 id="2_1">技巧2：在回调中设置标志，在任务中处理</h3>
+<pre><code class="language-c">// 定时器标志
+volatile bool timer_flag = false;
+
+// 回调函数（快速返回）
+void Timer_Callback(TimerHandle_t xTimer) {
+    timer_flag = true;  // 只设置标志
+}
+
+// 任务中处理
+void Process_Task(void *param) {
+    while(1) {
+        if(timer_flag) {
+            timer_flag = false;
+
+            // 在这里执行耗时操作
+            ProcessComplexData();
+            SaveToFlash();
+            SendToNetwork();
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+}
+</code></pre>
+<h3 id="3_1">技巧3：动态调整定时器周期</h3>
+<pre><code class="language-c">// 根据系统状态调整定时器周期
+void AdjustTimerPeriod(SystemState_t state) {
+    uint32_t new_period;
+
+    switch(state) {
+        case STATE_ACTIVE:
+            new_period = 100;  // 活动状态：快速采样
+            break;
+        case STATE_IDLE:
+            new_period = 1000;  // 空闲状态：慢速采样
+            break;
+        case STATE_SLEEP:
+            new_period = 5000;  // 睡眠状态：极慢采样
+            break;
+        default:
+            new_period = 1000;
+            break;
+    }
+
+    // 修改定时器周期
+    xTimerChangePeriod(sensor_timer, pdMS_TO_TICKS(new_period), 0);
+    printf(&quot;Timer period changed to %d ms\n&quot;, new_period);
+}
+</code></pre>
+<h3 id="4_1">技巧4：使用定时器实现延迟执行</h3>
+<pre><code class="language-c">// 延迟执行任务
+typedef struct {
+    void (*function)(void *);
+    void *param;
+} DelayedTask_t;
+
+void Delayed_Callback(TimerHandle_t xTimer) {
+    DelayedTask_t *task = (DelayedTask_t *)pvTimerGetTimerID(xTimer);
+
+    // 执行延迟任务
+    if(task != NULL &amp;&amp; task-&gt;function != NULL) {
+        task-&gt;function(task-&gt;param);
+    }
+
+    // 删除定时器
+    xTimerDelete(xTimer, 0);
+
+    // 释放内存
+    free(task);
+}
+
+// 延迟执行函数
+void ExecuteDelayed(void (*func)(void *), void *param, uint32_t delay_ms) {
+    // 分配任务结构
+    DelayedTask_t *task = (DelayedTask_t *)malloc(sizeof(DelayedTask_t));
+    task-&gt;function = func;
+    task-&gt;param = param;
+
+    // 创建单次定时器
+    TimerHandle_t timer = xTimerCreate(
+        &quot;Delayed&quot;,
+        pdMS_TO_TICKS(delay_ms),
+        pdFALSE,
+        (void *)task,
+        Delayed_Callback
+    );
+
+    // 启动定时器
+    xTimerStart(timer, 0);
+}
+
+// 使用示例
+void MyDelayedFunction(void *param) {
+    printf(&quot;This function executed after delay\n&quot;);
+}
+
+// 延迟2秒执行
+ExecuteDelayed(MyDelayedFunction, NULL, 2000);
+</code></pre>
+<h2 id="_26">常见问题</h2>
+<h3 id="q1">Q1: 软件定时器和硬件定时器有什么区别？</h3>
+<p><strong>A</strong>: 主要区别在于实现方式和精度：</p>
+<p><strong>硬件定时器</strong>：
+- 由硬件实现，精度高
+- 数量有限（通常2-4个）
+- 可以产生中断
+- 配置复杂
+- 适合需要高精度的场景</p>
+<p><strong>软件定时器</strong>：
+- 由软件实现，基于RTOS时钟节拍
+- 数量不限（受内存限制）
+- 在定时器任务中执行回调
+- 使用简单
+- 精度受时钟节拍影响（通常1ms）</p>
+<p><strong>选择建议</strong>：
+- 需要高精度（微秒级） → 使用硬件定时器
+- 一般应用（毫秒级） → 使用软件定时器</p>
+<h3 id="q2">Q2: 为什么回调函数不能阻塞？</h3>
+<p><strong>A</strong>: 因为所有定时器回调函数都在定时器服务任务中执行：</p>
+<p><strong>问题示例</strong>：</p>
+<pre><code class="language-c">// ❌ 错误：回调函数中阻塞
+void Bad_Callback(TimerHandle_t xTimer) {
+    vTaskDelay(pdMS_TO_TICKS(1000));  // 阻塞1秒
+    // 这会阻塞定时器服务任务，影响所有其他定时器！
+}
+</code></pre>
+<p><strong>后果</strong>：
+- 定时器服务任务被阻塞
+- 其他定时器无法及时执行
+- 系统响应变慢</p>
+<p><strong>正确做法</strong>：</p>
+<pre><code class="language-c">// ✅ 正确：快速返回
+void Good_Callback(TimerHandle_t xTimer) {
+    timer_flag = true;  // 只设置标志
+}
+
+// 在任务中处理
+void Task(void *param) {
+    while(1) {
+        if(timer_flag) {
+            timer_flag = false;
+            vTaskDelay(pdMS_TO_TICKS(1000));  // 在任务中可以阻塞
+        }
+    }
+}
+</code></pre>
+<h3 id="q3">Q3: 如何选择定时器服务任务的优先级？</h3>
+<p><strong>A</strong>: 定时器服务任务优先级的选择很重要：</p>
+<p><strong>配置参数</strong>：</p>
+<pre><code class="language-c">// FreeRTOSConfig.h
+#define configTIMER_TASK_PRIORITY  3  // 定时器任务优先级
+</code></pre>
+<p><strong>选择原则</strong>：
+- <strong>太低</strong>：定时器回调执行不及时
+- <strong>太高</strong>：可能影响高优先级任务
+- <strong>推荐</strong>：设置为中等偏高的优先级</p>
+<p><strong>示例场景</strong>：</p>
+<pre><code>优先级5：紧急中断处理任务
+优先级4：实时控制任务
+优先级3：定时器服务任务  ← 推荐
+优先级2：数据处理任务
+优先级1：后台任务
+</code></pre>
+<h3 id="q4">Q4: 定时器命令队列满了怎么办？</h3>
+<p><strong>A</strong>: 当定时器命令队列满时，定时器操作会失败：</p>
+<p><strong>问题场景</strong>：</p>
+<pre><code class="language-c">// 命令队列已满
+if(xTimerStart(timer, 0) != pdPASS) {
+    printf(&quot;Failed to start timer: queue full\n&quot;);
+}
+</code></pre>
+<p><strong>解决方法</strong>：</p>
+<p><strong>方法1：增加队列长度</strong></p>
+<pre><code class="language-c">// FreeRTOSConfig.h
+#define configTIMER_QUEUE_LENGTH  20  // 增加队列长度
+</code></pre>
+<p><strong>方法2：使用阻塞等待</strong></p>
+<pre><code class="language-c">// 等待队列有空间
+if(xTimerStart(timer, pdMS_TO_TICKS(100)) != pdPASS) {
+    printf(&quot;Failed to start timer after waiting\n&quot;);
+}
+</code></pre>
+<p><strong>方法3：减少定时器操作频率</strong></p>
+<pre><code class="language-c">// 避免频繁启动/停止定时器
+// 使用标志控制回调函数的行为
+volatile bool timer_enabled = true;
+
+void Timer_Callback(TimerHandle_t xTimer) {
+    if(timer_enabled) {
+        // 执行操作
+    }
+}
+
+// 不需要频繁调用xTimerStart/xTimerStop
+timer_enabled = false;  // 禁用
+timer_enabled = true;   // 启用
+</code></pre>
+<h3 id="q5">Q5: 定时器精度如何？</h3>
+<p><strong>A</strong>: 软件定时器的精度受多个因素影响：</p>
+<p><strong>影响因素</strong>：</p>
+<ol>
+<li><strong>时钟节拍频率</strong></li>
+</ol>
+<pre><code class="language-c">// FreeRTOSConfig.h
+#define configTICK_RATE_HZ  1000  // 1ms节拍
+// 定时器精度最高为1ms
+</code></pre>
+<ol start="2">
+<li>
+<p><strong>定时器服务任务调度</strong>
+- 如果定时器任务被高优先级任务抢占，会有延迟
+- 回调函数执行时间也会影响其他定时器</p>
+</li>
+<li>
+<p><strong>系统负载</strong>
+- 系统负载高时，定时器可能不够及时</p>
+</li>
+</ol>
+<p><strong>精度范围</strong>：
+- <strong>理论精度</strong>：等于时钟节拍周期（通常1ms）
+- <strong>实际精度</strong>：1-10ms（取决于系统负载）</p>
+<p><strong>提高精度的方法</strong>：</p>
+<pre><code class="language-c">// 1. 提高时钟节拍频率
+#define configTICK_RATE_HZ  10000  // 0.1ms节拍
+
+// 2. 提高定时器任务优先级
+#define configTIMER_TASK_PRIORITY  4
+
+// 3. 保持回调函数简短
+void Fast_Callback(TimerHandle_t xTimer) {
+    flag = true;  // 快速返回
+}
+</code></pre>
+<p><strong>注意</strong>：
+- 提高时钟节拍频率会增加系统开销
+- 如果需要微秒级精度，应使用硬件定时器</p>
+<h2 id="_27">故障排除</h2>
+<h3 id="1">问题1：定时器创建失败</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">TimerHandle_t timer = xTimerCreate(...);
+if(timer == NULL) {
+    printf(&quot;Failed to create timer\n&quot;);
+}
+</code></pre>
+<p><strong>可能原因</strong>：
+1. 堆内存不足
+2. 未启用软件定时器功能
+3. 定时器服务任务创建失败</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 检查FreeRTOS配置
+// FreeRTOSConfig.h
+#define configUSE_TIMERS  1  // 必须启用
+
+// 2. 增加堆大小
+#define configTOTAL_HEAP_SIZE  ((size_t)(20 * 1024))
+
+// 3. 检查剩余堆空间
+size_t free_heap = xPortGetFreeHeapSize();
+printf(&quot;Free heap: %d bytes\n&quot;, free_heap);
+
+// 4. 检查定时器任务配置
+#define configTIMER_TASK_STACK_DEPTH  256  // 增加堆栈
+</code></pre>
+<h3 id="2_2">问题2：定时器不执行</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 定时器已启动，但回调函数不执行
+xTimerStart(timer, 0);
+// 回调函数从未被调用
+</code></pre>
+<p><strong>可能原因</strong>：
+1. 定时器未正确启动
+2. 调度器未启动
+3. 定时器服务任务被阻塞</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 检查启动结果
+if(xTimerStart(timer, 0) != pdPASS) {
+    printf(&quot;Failed to start timer\n&quot;);
+}
+
+// 2. 确保调度器已启动
+vTaskStartScheduler();  // 必须调用
+
+// 3. 检查定时器状态
+if(xTimerIsTimerActive(timer)) {
+    printf(&quot;Timer is active\n&quot;);
+} else {
+    printf(&quot;Timer is not active\n&quot;);
+}
+
+// 4. 添加调试输出
+void Debug_Callback(TimerHandle_t xTimer) {
+    printf(&quot;Timer callback executed\n&quot;);
+}
+</code></pre>
+<h3 id="3_2">问题3：定时不准确</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 设置500ms定时器，但实际执行间隔不稳定
+// 有时490ms，有时510ms
+</code></pre>
+<p><strong>可能原因</strong>：
+1. 系统负载高
+2. 回调函数执行时间长
+3. 定时器任务优先级低</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 提高定时器任务优先级
+#define configTIMER_TASK_PRIORITY  4
+
+// 2. 简化回调函数
+void Fast_Callback(TimerHandle_t xTimer) {
+    flag = true;  // 只设置标志，快速返回
+}
+
+// 3. 监控定时器执行时间
+void Monitor_Callback(TimerHandle_t xTimer) {
+    static uint32_t last_time = 0;
+    uint32_t current_time = xTaskGetTickCount();
+    uint32_t interval = current_time - last_time;
+
+    printf(&quot;Timer interval: %d ms\n&quot;, interval);
+    last_time = current_time;
+}
+
+// 4. 减少系统负载
+// 降低其他任务的优先级或减少任务数量
+</code></pre>
+<h3 id="4_2">问题4：内存泄漏</h3>
+<p><strong>现象</strong>：</p>
+<pre><code class="language-c">// 系统运行一段时间后，可用堆内存持续减少
+</code></pre>
+<p><strong>可能原因</strong>：
+1. 创建定时器后未删除
+2. 在回调中分配内存未释放</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 及时删除不需要的定时器
+void CleanupTimer(TimerHandle_t timer) {
+    if(timer != NULL) {
+        xTimerStop(timer, 0);
+        xTimerDelete(timer, 0);
+    }
+}
+
+// 2. 避免在回调中动态分配内存
+// ❌ 错误
+void Bad_Callback(TimerHandle_t xTimer) {
+    char *buffer = (char *)malloc(100);
+    // 忘记释放
+}
+
+// ✅ 正确
+char static_buffer[100];
+void Good_Callback(TimerHandle_t xTimer) {
+    // 使用静态缓冲区
+}
+
+// 3. 监控堆内存
+void Monitor_Heap(void) {
+    size_t free_heap = xPortGetFreeHeapSize();
+    size_t min_free_heap = xPortGetMinimumEverFreeHeapSize();
+
+    printf(&quot;Free heap: %d bytes\n&quot;, free_heap);
+    printf(&quot;Min free heap: %d bytes\n&quot;, min_free_heap);
+}
+</code></pre>
+<h2 id="_28">总结</h2>
+<h3 id="_29">核心要点</h3>
+<ol>
+<li>
+<p><strong>软件定时器概念</strong>
+   - 基于RTOS时钟节拍的定时机制
+   - 不需要创建专门的任务
+   - 所有回调在定时器服务任务中执行</p>
+</li>
+<li>
+<p><strong>定时器类型</strong>
+   - 单次定时器：执行一次后停止
+   - 周期定时器：自动重复执行</p>
+</li>
+<li>
+<p><strong>基本操作</strong>
+   - <code>xTimerCreate()</code>：创建定时器
+   - <code>xTimerStart()</code>：启动定时器
+   - <code>xTimerStop()</code>：停止定时器
+   - <code>xTimerReset()</code>：重置定时器
+   - <code>xTimerDelete()</code>：删除定时器</p>
+</li>
+<li>
+<p><strong>回调函数规则</strong>
+   - 必须快速返回，不能阻塞
+   - 不能调用会阻塞的API
+   - 可以设置标志，在任务中处理</p>
+</li>
+<li>
+<p><strong>典型应用</strong>
+   - LED闪烁控制
+   - 按键消抖
+   - 周期性数据采集
+   - 超时保护
+   - 看门狗喂狗</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>
+   - 保持回调函数简短
+   - 使用标志+任务处理复杂逻辑
+   - 合理设置定时器任务优先级
+   - 及时删除不需要的定时器
+   - 监控系统资源使用</p>
+</li>
+</ol>
+<h3 id="vs_1">软件定时器 vs 其他机制</h3>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>内存占用</th>
+<th>精度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>软件定时器</strong></td>
+<td>小</td>
+<td>毫秒级</td>
+<td>简单定时操作</td>
+</tr>
+<tr>
+<td><strong>任务+延时</strong></td>
+<td>大</td>
+<td>毫秒级</td>
+<td>复杂任务逻辑</td>
+</tr>
+<tr>
+<td><strong>硬件定时器</strong></td>
+<td>小</td>
+<td>微秒级</td>
+<td>高精度定时</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_30">学习检查</h3>
+<p>完成本文后，你应该能够：</p>
+<ul>
+<li>[ ] 理解软件定时器的概念和工作原理</li>
+<li>[ ] 掌握定时器的创建和管理方法</li>
+<li>[ ] 能够使用单次和周期定时器</li>
+<li>[ ] 理解回调函数的使用规则</li>
+<li>[ ] 知道何时使用软件定时器</li>
+<li>[ ] 能够解决常见的定时器问题</li>
+</ul>
+<h2 id="_31">延伸阅读</h2>
+<h3 id="_32">相关主题</h3>
+<ul>
+<li><a href="02-rtos-task-management.html">RTOS任务管理</a> - 了解任务的基本概念</li>
+<li><a href="03-rtos-scheduling.html">RTOS调度算法</a> - 理解任务调度机制</li>
+<li><a href="04-semaphore.html">信号量使用</a> - 学习任务同步方法</li>
+<li><a href="06-message-queue.html">消息队列通信</a> - 学习任务间数据传递</li>
+<li><a href="../intermediate/01-rtos-memory.html">RTOS内存管理</a> - 深入理解内存管理</li>
+</ul>
+<h3 id="_33">参考资料</h3>
+<ul>
+<li><a href="https://www.freertos.org/RTOS-software-timer.html">FreeRTOS官方文档 - Software Timers</a></li>
+<li><a href="https://www.freertos.org/FreeRTOS-Software-Timer-API-Functions.html">FreeRTOS Software Timer API</a></li>
+<li><a href="https://www.freertos.org/Documentation/RTOS_book.html">Mastering the FreeRTOS Real Time Kernel</a></li>
+</ul>
+<hr />
+<p><strong>文档版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2024-01-15<br />
+<strong>作者</strong>: 嵌入式知识平台</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

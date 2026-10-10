@@ -1,0 +1,1150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>J1939协议应用与车载网络开发 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/">06-communication-networking</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/">02-network-protocols</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+</ul>
+</li>
+<li><a href="#1-j1939">1. J1939协议简介</a><ul>
+<li><a href="#11-j1939">1.1 什么是J1939</a></li>
+<li><a href="#12-j1939">1.2 J1939协议架构</a></li>
+<li><a href="#13-j1939can">1.3 J1939与CAN的关系</a></li>
+<li><a href="#14-pgn">1.4 PGN（参数组编号）</a></li>
+<li><a href="#15-spn">1.5 SPN（可疑参数编号）</a></li>
+</ul>
+</li>
+<li><a href="#2-j1939">2. J1939消息格式</a><ul>
+<li><a href="#21">2.1 标识符构造</a></li>
+<li><a href="#22-pgn">2.2 常用PGN实现</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 地址管理</a><ul>
+<li><a href="#31">3.1 地址声明</a></li>
+<li><a href="#32">3.2 地址冲突解决</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 传输协议</a><ul>
+<li><a href="#41-bam">4.1 BAM（广播公告消息）</a></li>
+<li><a href="#42-cmdt">4.2 CMDT（连接模式数据传输）</a></li>
+</ul>
+</li>
+<li><a href="#5">5. 诊断消息</a><ul>
+<li><a href="#51-dtc">5.1 DTC（诊断故障码）</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 实战应用示例</a><ul>
+<li><a href="#61-ecu">6.1 发动机ECU实现</a></li>
+</ul>
+</li>
+<li><a href="#7">7. 调试与故障排除</a><ul>
+<li><a href="#71">7.1 常见问题</a></li>
+</ul>
+</li>
+<li><a href="#8">8. 最佳实践</a></li>
+<li><a href="#9">9. 总结</a></li>
+<li><a href="#_6">参考资料</a></li>
+<li><a href="#_7">相关主题</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="j1939">J1939协议应用与车载网络开发</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解J1939协议的架构设计和应用场景</li>
+<li>[ ] 掌握PGN（参数组编号）和SPN（可疑参数编号）的概念</li>
+<li>[ ] 熟悉J1939消息格式和标识符结构</li>
+<li>[ ] 能够实现J1939地址声明和网络管理</li>
+<li>[ ] 使用J1939传输协议进行大数据传输</li>
+<li>[ ] 实现J1939诊断消息和故障码</li>
+<li>[ ] 开发J1939车载网络应用</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 熟悉CAN总线基础知识和扩展帧格式
+- 了解C语言编程和位操作
+- 理解车辆电子系统基本概念
+- 掌握嵌入式系统开发基础</p>
+<p><strong>技能要求</strong>：
+- 能够使用CAN分析仪进行总线调试
+- 会使用J1939协议分析工具
+- 了解SAE J1939标准文档
+- 熟悉RTOS基本使用（可选）</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>2+</td>
+<td>带CAN控制器的MCU</td>
+<td>STM32F407/F767/H743</td>
+</tr>
+<tr>
+<td>CAN收发器模块</td>
+<td>2+</td>
+<td>CAN物理层收发器</td>
+<td>TJA1050/SN65HVD230</td>
+</tr>
+<tr>
+<td>CAN分析仪</td>
+<td>1</td>
+<td>支持J1939协议</td>
+<td>PCAN-USB/Vector VN1630</td>
+</tr>
+<tr>
+<td>120Ω终端电阻</td>
+<td>2</td>
+<td>CAN总线终端匹配</td>
+<td>-</td>
+</tr>
+<tr>
+<td>车辆诊断接口</td>
+<td>1</td>
+<td>OBD-II或J1939接口</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB调试器</td>
+<td>1</td>
+<td>ST-Link V2或J-Link</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<table>
+<thead>
+<tr>
+<th>软件</th>
+<th>版本</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32CubeIDE</td>
+<td>最新版</td>
+<td>开发环境</td>
+</tr>
+<tr>
+<td>J1939 Stack</td>
+<td>开源版本</td>
+<td>J1939协议栈</td>
+</tr>
+<tr>
+<td>PCAN-View</td>
+<td>最新版</td>
+<td>CAN总线监控</td>
+</tr>
+<tr>
+<td>Vector CANoe</td>
+<td>可选</td>
+<td>专业协议分析</td>
+</tr>
+<tr>
+<td>DBC Editor</td>
+<td>最新版</td>
+<td>数据库编辑</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-j1939">1. J1939协议简介</h2>
+<h3 id="11-j1939">1.1 什么是J1939</h3>
+<p>J1939是由SAE（美国汽车工程师学会）制定的车载网络通信协议，专门用于商用车辆（卡车、客车、工程机械等）的电子控制单元（ECU）之间的通信。</p>
+<p><strong>核心特点</strong>：
+- <strong>基于CAN 2.0B</strong>：使用29位扩展标识符
+- <strong>标准化消息</strong>：定义了大量标准PGN和SPN
+- <strong>多主网络</strong>：支持多个ECU同时通信
+- <strong>地址管理</strong>：动态地址声明和冲突解决
+- <strong>传输协议</strong>：支持大于8字节的数据传输
+- <strong>诊断功能</strong>：标准化的故障码和诊断消息</p>
+<p><strong>应用领域</strong>：
+- 重型卡车（发动机、变速箱、制动系统）
+- 客车（车身控制、空调系统）
+- 工程机械（挖掘机、装载机、起重机）
+- 农业机械（拖拉机、收割机）
+- 船舶和海洋工程
+- 发电机组和工业设备</p>
+<h3 id="12-j1939">1.2 J1939协议架构</h3>
+<p>J1939协议采用分层架构，建立在CAN 2.0B物理层之上：</p>
+<pre><code>┌─────────────────────────────────────────┐
+│        应用层（Application Layer）        │
+│  车辆功能、诊断、配置                     │
+├─────────────────────────────────────────┤
+│      J1939应用层（J1939/71-73）          │
+│  PGN定义、SPN定义、诊断消息              │
+├─────────────────────────────────────────┤
+│      J1939网络层（J1939/21）             │
+│  地址声明、网络管理、传输协议            │
+├─────────────────────────────────────────┤
+│      J1939数据链路层（J1939/11）         │
+│  消息格式、优先级、标识符结构            │
+├─────────────────────────────────────────┤
+│      CAN物理层（ISO 11898）              │
+│  差分信号、位时序、总线拓扑              │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>J1939标准文档</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>文档编号</th>
+<th>名称</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>J1939/01</td>
+<td>推荐实践</td>
+<td>总体介绍和术语</td>
+</tr>
+<tr>
+<td>J1939/11</td>
+<td>物理层</td>
+<td>电气特性和连接器</td>
+</tr>
+<tr>
+<td>J1939/13</td>
+<td>离线数据</td>
+<td>数据库格式和工具</td>
+</tr>
+<tr>
+<td>J1939/21</td>
+<td>数据链路层</td>
+<td>消息格式和标识符</td>
+</tr>
+<tr>
+<td>J1939/31</td>
+<td>网络层</td>
+<td>地址管理和传输协议</td>
+</tr>
+<tr>
+<td>J1939/71</td>
+<td>车辆应用层</td>
+<td>标准PGN和SPN定义</td>
+</tr>
+<tr>
+<td>J1939/73</td>
+<td>应用层诊断</td>
+<td>诊断消息和故障码</td>
+</tr>
+<tr>
+<td>J1939/81</td>
+<td>网络管理</td>
+<td>网络配置和管理</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-j1939can">1.3 J1939与CAN的关系</h3>
+<p>J1939使用CAN 2.0B扩展帧（29位标识符）：</p>
+<pre><code>CAN扩展帧格式：
+┌────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┐
+│SOF │ ID │SRR │IDE │ ID │RTR │r1  │r0  │DLC │Data│CRC │
+│    │(11)│    │    │(18)│    │    │    │    │(0-8)│   │
+└────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┘
+
+J1939标识符结构（29位）：
+┌────┬────┬────┬────┬────┬────┬────┐
+│ P  │ R  │ DP │ PF │ PS │ SA │    │
+│(3) │(1) │(1) │(8) │(8) │(8) │    │
+└────┴────┴────┴────┴────┴────┴────┘
+
+P:  优先级（Priority，3位）
+R:  保留位（Reserved，1位）
+DP: 数据页（Data Page，1位）
+PF: PDU格式（PDU Format，8位）
+PS: PDU特定（PDU Specific，8位）
+SA: 源地址（Source Address，8位）
+</code></pre>
+<p><strong>标识符字段说明</strong>：</p>
+<ol>
+<li><strong>优先级（P）</strong>：0-7，0最高，7最低</li>
+<li><strong>保留位（R）</strong>：固定为0</li>
+<li><strong>数据页（DP）</strong>：扩展PGN空间，0或1</li>
+<li><strong>PDU格式（PF）</strong>：
+   - PF &lt; 240：PDU1格式（点对点通信）
+   - PF ≥ 240：PDU2格式（广播通信）</li>
+<li><strong>PDU特定（PS）</strong>：
+   - PDU1：目标地址（DA）
+   - PDU2：组扩展（GE）</li>
+<li><strong>源地址（SA）</strong>：发送节点的地址（0-253）</li>
+</ol>
+<h3 id="14-pgn">1.4 PGN（参数组编号）</h3>
+<p>PGN是J1939中最重要的概念，它定义了一组相关参数的集合。</p>
+<p><strong>PGN计算</strong>：</p>
+<pre><code class="language-c">// PDU1格式（PF &lt; 240）：点对点通信
+// PGN = (DP &lt;&lt; 16) | (PF &lt;&lt; 8) | 0x00
+// 例如：PF=234, DP=0 → PGN = 0x00EA00 = 59904
+
+// PDU2格式（PF ≥ 240）：广播通信
+// PGN = (DP &lt;&lt; 16) | (PF &lt;&lt; 8) | PS
+// 例如：PF=240, PS=1, DP=0 → PGN = 0x00F001 = 61441
+
+// PGN提取函数
+uint32_t J1939_GetPGN(uint32_t canID) {
+    uint8_t pf = (canID &gt;&gt; 16) &amp; 0xFF;
+    uint8_t ps = (canID &gt;&gt; 8) &amp; 0xFF;
+    uint8_t dp = (canID &gt;&gt; 24) &amp; 0x01;
+
+    if (pf &lt; 240) {
+        // PDU1：PS字段不是PGN的一部分
+        return (dp &lt;&lt; 16) | (pf &lt;&lt; 8);
+    } else {
+        // PDU2：PS字段是PGN的一部分
+        return (dp &lt;&lt; 16) | (pf &lt;&lt; 8) | ps;
+    }
+}
+</code></pre>
+<p><strong>常用PGN列表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>PGN</th>
+<th>名称</th>
+<th>说明</th>
+<th>更新率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>转矩/速度控制</td>
+<td>发动机转矩和速度命令</td>
+<td>10ms</td>
+</tr>
+<tr>
+<td>61444</td>
+<td>电子发动机控制器1</td>
+<td>发动机转速、转矩</td>
+<td>10ms</td>
+</tr>
+<tr>
+<td>61443</td>
+<td>电子发动机控制器2</td>
+<td>加速踏板位置、负载</td>
+<td>50ms</td>
+</tr>
+<tr>
+<td>65262</td>
+<td>发动机温度1</td>
+<td>冷却液温度、燃油温度</td>
+<td>1000ms</td>
+</tr>
+<tr>
+<td>65263</td>
+<td>发动机流体液位/压力1</td>
+<td>机油压力、燃油压力</td>
+<td>1000ms</td>
+</tr>
+<tr>
+<td>65265</td>
+<td>巡航控制/车速</td>
+<td>车速、巡航控制状态</td>
+<td>100ms</td>
+</tr>
+<tr>
+<td>65266</td>
+<td>燃油经济性</td>
+<td>燃油消耗率</td>
+<td>1000ms</td>
+</tr>
+<tr>
+<td>65269</td>
+<td>环境条件</td>
+<td>大气压力、温度</td>
+<td>1000ms</td>
+</tr>
+<tr>
+<td>61445</td>
+<td>电子变速箱控制器1</td>
+<td>档位、输出轴转速</td>
+<td>10ms</td>
+</tr>
+<tr>
+<td>65247</td>
+<td>电子制动控制器1</td>
+<td>制动状态、ABS状态</td>
+<td>20ms</td>
+</tr>
+<tr>
+<td>65215</td>
+<td>车轮速度信息</td>
+<td>各车轮速度</td>
+<td>100ms</td>
+</tr>
+<tr>
+<td>59904</td>
+<td>请求PGN</td>
+<td>请求特定PGN数据</td>
+<td>按需</td>
+</tr>
+<tr>
+<td>60416</td>
+<td>传输协议-连接管理</td>
+<td>BAM/RTS/CTS</td>
+<td>按需</td>
+</tr>
+<tr>
+<td>60160</td>
+<td>传输协议-数据传输</td>
+<td>多包数据传输</td>
+<td>按需</td>
+</tr>
+<tr>
+<td>60928</td>
+<td>地址声明</td>
+<td>节点地址声明</td>
+<td>按需</td>
+</tr>
+<tr>
+<td>65226</td>
+<td>激活诊断故障码</td>
+<td>DTC状态</td>
+<td>1000ms</td>
+</tr>
+</tbody>
+</table>
+<h3 id="15-spn">1.5 SPN（可疑参数编号）</h3>
+<p>SPN定义了PGN中的具体参数。每个SPN有唯一的编号、数据类型、单位和分辨率。</p>
+<p><strong>SPN示例</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>SPN</th>
+<th>名称</th>
+<th>单位</th>
+<th>分辨率</th>
+<th>偏移</th>
+<th>数据长度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>84</td>
+<td>车速</td>
+<td>km/h</td>
+<td>1/256</td>
+<td>0</td>
+<td>16位</td>
+</tr>
+<tr>
+<td>190</td>
+<td>发动机转速</td>
+<td>rpm</td>
+<td>0.125</td>
+<td>0</td>
+<td>16位</td>
+</tr>
+<tr>
+<td>110</td>
+<td>冷却液温度</td>
+<td>°C</td>
+<td>1</td>
+<td>-40</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>100</td>
+<td>机油压力</td>
+<td>kPa</td>
+<td>4</td>
+<td>0</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>91</td>
+<td>加速踏板位置</td>
+<td>%</td>
+<td>0.4</td>
+<td>0</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>92</td>
+<td>发动机负载</td>
+<td>%</td>
+<td>1</td>
+<td>0</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>183</td>
+<td>燃油消耗率</td>
+<td>L/h</td>
+<td>0.05</td>
+<td>0</td>
+<td>16位</td>
+</tr>
+<tr>
+<td>96</td>
+<td>燃油液位</td>
+<td>%</td>
+<td>0.4</td>
+<td>0</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>108</td>
+<td>大气压力</td>
+<td>kPa</td>
+<td>0.5</td>
+<td>0</td>
+<td>8位</td>
+</tr>
+<tr>
+<td>110</td>
+<td>冷却液温度</td>
+<td>°C</td>
+<td>1</td>
+<td>-40</td>
+<td>8位</td>
+</tr>
+</tbody>
+</table>
+<p><strong>SPN数据解析</strong>：</p>
+<pre><code class="language-c">// SPN数据结构
+typedef struct {
+    uint16_t spn;           // SPN编号
+    uint8_t startBit;       // 起始位
+    uint8_t bitLength;      // 位长度
+    float resolution;       // 分辨率
+    float offset;           // 偏移
+    char* unit;             // 单位
+} SPN_Info_t;
+
+// 解析SPN值
+float J1939_ParseSPN(uint8_t* data, SPN_Info_t* spn) {
+    uint32_t rawValue = 0;
+    uint8_t startByte = spn-&gt;startBit / 8;
+    uint8_t startBitInByte = spn-&gt;startBit % 8;
+    uint8_t bytesToRead = (spn-&gt;bitLength + startBitInByte + 7) / 8;
+
+    // 提取原始值
+    for (int i = 0; i &lt; bytesToRead; i++) {
+        rawValue |= (data[startByte + i] &lt;&lt; (i * 8));
+    }
+
+    // 移位和掩码
+    rawValue &gt;&gt;= startBitInByte;
+    uint32_t mask = (1 &lt;&lt; spn-&gt;bitLength) - 1;
+    rawValue &amp;= mask;
+
+    // 应用分辨率和偏移
+    float value = (rawValue * spn-&gt;resolution) + spn-&gt;offset;
+
+    return value;
+}
+
+// 编码SPN值
+void J1939_EncodeSPN(uint8_t* data, SPN_Info_t* spn, float value) {
+    // 反向计算原始值
+    uint32_t rawValue = (uint32_t)((value - spn-&gt;offset) / spn-&gt;resolution);
+
+    uint8_t startByte = spn-&gt;startBit / 8;
+    uint8_t startBitInByte = spn-&gt;startBit % 8;
+    uint8_t bytesToWrite = (spn-&gt;bitLength + startBitInByte + 7) / 8;
+
+    // 移位
+    rawValue &lt;&lt;= startBitInByte;
+
+    // 写入数据
+    for (int i = 0; i &lt; bytesToWrite; i++) {
+        uint8_t mask = 0xFF;
+        if (i == 0) {
+            mask = ~((1 &lt;&lt; startBitInByte) - 1);
+        }
+        if (i == bytesToWrite - 1) {
+            uint8_t endBit = (spn-&gt;startBit + spn-&gt;bitLength) % 8;
+            if (endBit &gt; 0) {
+                mask &amp;= (1 &lt;&lt; endBit) - 1;
+            }
+        }
+
+        data[startByte + i] = (data[startByte + i] &amp; ~mask) | 
+                              ((rawValue &gt;&gt; (i * 8)) &amp; mask);
+    }
+}
+
+// 使用示例
+void Example_ParseEngineSpeed(uint8_t* data) {
+    // SPN 190: 发动机转速
+    SPN_Info_t spn190 = {
+        .spn = 190,
+        .startBit = 24,      // 字节3-4
+        .bitLength = 16,
+        .resolution = 0.125,
+        .offset = 0,
+        .unit = &quot;rpm&quot;
+    };
+
+    float engineSpeed = J1939_ParseSPN(data, &amp;spn190);
+    printf(&quot;Engine Speed: %.1f %s\n&quot;, engineSpeed, spn190.unit);
+}
+</code></pre>
+<h2 id="2-j1939">2. J1939消息格式</h2>
+<h3 id="21">2.1 标识符构造</h3>
+<pre><code class="language-c">// J1939标识符构造
+typedef struct {
+    uint8_t priority;       // 优先级（0-7）
+    uint8_t dataPage;       // 数据页（0-1）
+    uint8_t pduFormat;      // PDU格式（0-255）
+    uint8_t pduSpecific;    // PDU特定（0-255）
+    uint8_t sourceAddress;  // 源地址（0-253）
+} J1939_ID_t;
+
+uint32_t J1939_ConstructID(J1939_ID_t* id) {
+    uint32_t canID = 0;
+
+    canID |= ((uint32_t)id-&gt;priority &amp; 0x07) &lt;&lt; 26;
+    canID |= ((uint32_t)id-&gt;dataPage &amp; 0x01) &lt;&lt; 24;
+    canID |= ((uint32_t)id-&gt;pduFormat &amp; 0xFF) &lt;&lt; 16;
+    canID |= ((uint32_t)id-&gt;pduSpecific &amp; 0xFF) &lt;&lt; 8;
+    canID |= ((uint32_t)id-&gt;sourceAddress &amp; 0xFF);
+
+    return canID;
+}
+
+void J1939_ParseID(uint32_t canID, J1939_ID_t* id) {
+    id-&gt;priority = (canID &gt;&gt; 26) &amp; 0x07;
+    id-&gt;dataPage = (canID &gt;&gt; 24) &amp; 0x01;
+    id-&gt;pduFormat = (canID &gt;&gt; 16) &amp; 0xFF;
+    id-&gt;pduSpecific = (canID &gt;&gt; 8) &amp; 0xFF;
+    id-&gt;sourceAddress = canID &amp; 0xFF;
+}
+</code></pre>
+<h3 id="22-pgn">2.2 常用PGN实现</h3>
+<pre><code class="language-c">// PGN 61444: 电子发动机控制器1
+typedef struct {
+    uint16_t engineSpeed;           // SPN 190: 发动机转速（rpm）
+    uint8_t engineTorqueMode;       // SPN 899: 转矩模式
+    uint8_t driverDemandTorque;     // SPN 512: 驾驶员需求转矩（%）
+    uint8_t actualTorque;           // SPN 513: 实际转矩（%）
+} PGN_61444_t;
+
+void EncodePGN61444(uint8_t* data, PGN_61444_t* pgn) {
+    memset(data, 0xFF, 8);  // 初始化为无效值
+
+    // SPN 899: 转矩模式（字节0，位0-3）
+    data[0] = (data[0] &amp; 0xF0) | (pgn-&gt;engineTorqueMode &amp; 0x0F);
+
+    // SPN 512: 驾驶员需求转矩（字节1）
+    data[1] = pgn-&gt;driverDemandTorque;
+
+    // SPN 513: 实际转矩（字节2）
+    data[2] = pgn-&gt;actualTorque;
+
+    // SPN 190: 发动机转速（字节3-4）
+    uint16_t speedRaw = (uint16_t)(pgn-&gt;engineSpeed / 0.125);
+    data[3] = speedRaw &amp; 0xFF;
+    data[4] = (speedRaw &gt;&gt; 8) &amp; 0xFF;
+}
+
+// PGN 65265: 巡航控制/车速
+typedef struct {
+    uint16_t wheelBasedSpeed;       // SPN 84: 车速（km/h）
+    uint8_t cruiseControlState;     // SPN 527: 巡航控制状态
+    uint8_t cruiseControlSetSpeed;  // SPN 528: 巡航设定速度
+} PGN_65265_t;
+
+void EncodePGN65265(uint8_t* data, PGN_65265_t* pgn) {
+    memset(data, 0xFF, 8);
+
+    // SPN 84: 车速（字节1-2）
+    uint16_t speedRaw = (uint16_t)(pgn-&gt;wheelBasedSpeed * 256);
+    data[1] = speedRaw &amp; 0xFF;
+    data[2] = (speedRaw &gt;&gt; 8) &amp; 0xFF;
+
+    // SPN 527: 巡航控制状态（字节3，位0-2）
+    data[3] = (data[3] &amp; 0xF8) | (pgn-&gt;cruiseControlState &amp; 0x07);
+
+    // SPN 528: 巡航设定速度（字节5）
+    data[5] = pgn-&gt;cruiseControlSetSpeed;
+}
+</code></pre>
+<h2 id="3">3. 地址管理</h2>
+<h3 id="31">3.1 地址声明</h3>
+<pre><code class="language-c">// 地址声明（PGN 60928）
+typedef struct {
+    uint32_t identityNumber;    // 21位：制造商分配的唯一编号
+    uint16_t manufacturerCode;  // 11位：制造商代码
+    uint8_t ecuInstance;        // 3位：ECU实例
+    uint8_t functionInstance;   // 5位：功能实例
+    uint8_t function;           // 8位：功能代码
+    uint8_t vehicleSystem;      // 7位：车辆系统
+    uint8_t vehicleSystemInstance; // 4位：车辆系统实例
+    uint8_t industryGroup;      // 3位：行业组
+    uint8_t arbitraryAddressCapable; // 1位：任意地址能力
+} J1939_NAME_t;
+
+uint64_t J1939_ConstructNAME(J1939_NAME_t* name) {
+    uint64_t nameValue = 0;
+
+    nameValue |= ((uint64_t)name-&gt;identityNumber &amp; 0x1FFFFF);
+    nameValue |= ((uint64_t)name-&gt;manufacturerCode &amp; 0x7FF) &lt;&lt; 21;
+    nameValue |= ((uint64_t)name-&gt;ecuInstance &amp; 0x07) &lt;&lt; 32;
+    nameValue |= ((uint64_t)name-&gt;functionInstance &amp; 0x1F) &lt;&lt; 35;
+    nameValue |= ((uint64_t)name-&gt;function &amp; 0xFF) &lt;&lt; 40;
+    nameValue |= ((uint64_t)name-&gt;vehicleSystem &amp; 0x7F) &lt;&lt; 48;
+    nameValue |= ((uint64_t)name-&gt;vehicleSystemInstance &amp; 0x0F) &lt;&lt; 55;
+    nameValue |= ((uint64_t)name-&gt;industryGroup &amp; 0x07) &lt;&lt; 59;
+    nameValue |= ((uint64_t)name-&gt;arbitraryAddressCapable &amp; 0x01) &lt;&lt; 63;
+
+    return nameValue;
+}
+
+void J1939_SendAddressClaim(uint8_t address, J1939_NAME_t* name) {
+    uint8_t data[8];
+    uint64_t nameValue = J1939_ConstructNAME(name);
+
+    // 将NAME值转换为8字节数据
+    for (int i = 0; i &lt; 8; i++) {
+        data[i] = (nameValue &gt;&gt; (i * 8)) &amp; 0xFF;
+    }
+
+    // 构造CAN标识符（PGN 60928）
+    J1939_ID_t id = {
+        .priority = 6,
+        .dataPage = 0,
+        .pduFormat = 238,
+        .pduSpecific = 0,
+        .sourceAddress = address
+    };
+
+    uint32_t canID = J1939_ConstructID(&amp;id);
+    CAN_Send(canID, data, 8);
+}
+</code></pre>
+<h3 id="32">3.2 地址冲突解决</h3>
+<pre><code class="language-c">typedef struct {
+    uint8_t claimedAddress;
+    J1939_NAME_t name;
+    uint8_t addressClaimState;
+    uint32_t lastClaimTime;
+} J1939_AddressManager_t;
+
+#define ADDR_STATE_IDLE             0
+#define ADDR_STATE_WAIT_VERIFY      1
+#define ADDR_STATE_CLAIMED          2
+#define ADDR_STATE_CANNOT_CLAIM     3
+
+void J1939_AddressClaimProcess(J1939_AddressManager_t* mgr) {
+    switch (mgr-&gt;addressClaimState) {
+        case ADDR_STATE_IDLE:
+            // 发送地址声明
+            J1939_SendAddressClaim(mgr-&gt;claimedAddress, &amp;mgr-&gt;name);
+            mgr-&gt;addressClaimState = ADDR_STATE_WAIT_VERIFY;
+            mgr-&gt;lastClaimTime = GetMilliseconds();
+            break;
+
+        case ADDR_STATE_WAIT_VERIFY:
+            // 等待250ms，检查是否有冲突
+            if (GetMilliseconds() - mgr-&gt;lastClaimTime &gt; 250) {
+                mgr-&gt;addressClaimState = ADDR_STATE_CLAIMED;
+            }
+            break;
+
+        case ADDR_STATE_CLAIMED:
+            // 地址已声明，正常运行
+            break;
+
+        case ADDR_STATE_CANNOT_CLAIM:
+            // 无法声明地址
+            break;
+    }
+}
+
+void J1939_HandleAddressClaimConflict(J1939_AddressManager_t* mgr, 
+                                      uint8_t conflictAddress, 
+                                      uint64_t conflictNAME) {
+    if (conflictAddress != mgr-&gt;claimedAddress) {
+        return;  // 不是我们的地址
+    }
+
+    uint64_t myNAME = J1939_ConstructNAME(&amp;mgr-&gt;name);
+
+    if (myNAME &lt; conflictNAME) {
+        // 我们的NAME优先级更高，重新声明
+        J1939_SendAddressClaim(mgr-&gt;claimedAddress, &amp;mgr-&gt;name);
+    } else {
+        // 对方NAME优先级更高，我们需要更换地址
+        if (mgr-&gt;name.arbitraryAddressCapable) {
+            // 尝试新地址
+            mgr-&gt;claimedAddress++;
+            if (mgr-&gt;claimedAddress &gt; 253) {
+                mgr-&gt;claimedAddress = 128;  // 从动态地址范围重新开始
+            }
+            mgr-&gt;addressClaimState = ADDR_STATE_IDLE;
+        } else {
+            // 无法更换地址
+            mgr-&gt;addressClaimState = ADDR_STATE_CANNOT_CLAIM;
+        }
+    }
+}
+</code></pre>
+<h2 id="4">4. 传输协议</h2>
+<h3 id="41-bam">4.1 BAM（广播公告消息）</h3>
+<pre><code class="language-c">// BAM传输（用于广播大于8字节的数据）
+typedef struct {
+    uint32_t pgn;
+    uint16_t dataSize;
+    uint8_t numPackets;
+    uint8_t* data;
+    uint8_t currentPacket;
+} J1939_BAM_t;
+
+void J1939_SendBAM(J1939_BAM_t* bam, uint8_t sourceAddress) {
+    // 1. 发送BAM连接管理消息（PGN 60416）
+    uint8_t cmData[8];
+    cmData[0] = 32;  // 控制字节：BAM
+    cmData[1] = bam-&gt;dataSize &amp; 0xFF;
+    cmData[2] = (bam-&gt;dataSize &gt;&gt; 8) &amp; 0xFF;
+    cmData[3] = bam-&gt;numPackets;
+    cmData[4] = 0xFF;  // 保留
+    cmData[5] = bam-&gt;pgn &amp; 0xFF;
+    cmData[6] = (bam-&gt;pgn &gt;&gt; 8) &amp; 0xFF;
+    cmData[7] = (bam-&gt;pgn &gt;&gt; 16) &amp; 0xFF;
+
+    J1939_ID_t cmID = {
+        .priority = 6,
+        .dataPage = 0,
+        .pduFormat = 236,
+        .pduSpecific = 255,  // 全局地址
+        .sourceAddress = sourceAddress
+    };
+    CAN_Send(J1939_ConstructID(&amp;cmID), cmData, 8);
+
+    // 2. 发送数据包（PGN 60160）
+    for (uint8_t i = 0; i &lt; bam-&gt;numPackets; i++) {
+        uint8_t dtData[8];
+        dtData[0] = i + 1;  // 序列号
+
+        uint16_t offset = i * 7;
+        uint8_t bytesToCopy = (bam-&gt;dataSize - offset &gt; 7) ? 7 : (bam-&gt;dataSize - offset);
+        memcpy(&amp;dtData[1], &amp;bam-&gt;data[offset], bytesToCopy);
+
+        // 填充剩余字节为0xFF
+        for (uint8_t j = bytesToCopy + 1; j &lt; 8; j++) {
+            dtData[j] = 0xFF;
+        }
+
+        J1939_ID_t dtID = {
+            .priority = 6,
+            .dataPage = 0,
+            .pduFormat = 235,
+            .pduSpecific = 255,
+            .sourceAddress = sourceAddress
+        };
+        CAN_Send(J1939_ConstructID(&amp;dtID), dtData, 8);
+
+        // BAM要求包间延迟50-200ms
+        Delay_ms(50);
+    }
+}
+</code></pre>
+<h3 id="42-cmdt">4.2 CMDT（连接模式数据传输）</h3>
+<pre><code class="language-c">// RTS/CTS传输（用于点对点大数据传输）
+typedef struct {
+    uint32_t pgn;
+    uint16_t dataSize;
+    uint8_t numPackets;
+    uint8_t* data;
+    uint8_t destAddress;
+    uint8_t sourceAddress;
+    uint8_t state;
+    uint8_t nextPacket;
+    uint8_t packetsToSend;
+} J1939_CMDT_t;
+
+#define CMDT_STATE_IDLE         0
+#define CMDT_STATE_WAIT_CTS     1
+#define CMDT_STATE_SENDING      2
+#define CMDT_STATE_WAIT_EOMA    3
+
+// 发送RTS（请求发送）
+void J1939_SendRTS(J1939_CMDT_t* cmdt) {
+    uint8_t data[8];
+    data[0] = 16;  // 控制字节：RTS
+    data[1] = cmdt-&gt;dataSize &amp; 0xFF;
+    data[2] = (cmdt-&gt;dataSize &gt;&gt; 8) &amp; 0xFF;
+    data[3] = cmdt-&gt;numPackets;
+    data[4] = 0xFF;  // 最大包数（由接收方决定）
+    data[5] = cmdt-&gt;pgn &amp; 0xFF;
+    data[6] = (cmdt-&gt;pgn &gt;&gt; 8) &amp; 0xFF;
+    data[7] = (cmdt-&gt;pgn &gt;&gt; 16) &amp; 0xFF;
+
+    J1939_ID_t id = {
+        .priority = 6,
+        .dataPage = 0,
+        .pduFormat = 236,
+        .pduSpecific = cmdt-&gt;destAddress,
+        .sourceAddress = cmdt-&gt;sourceAddress
+    };
+    CAN_Send(J1939_ConstructID(&amp;id), data, 8);
+
+    cmdt-&gt;state = CMDT_STATE_WAIT_CTS;
+}
+
+// 处理CTS（清除发送）
+void J1939_HandleCTS(J1939_CMDT_t* cmdt, uint8_t* data) {
+    uint8_t packetsToSend = data[1];
+    uint8_t nextPacket = data[2];
+
+    cmdt-&gt;packetsToSend = packetsToSend;
+    cmdt-&gt;nextPacket = nextPacket;
+    cmdt-&gt;state = CMDT_STATE_SENDING;
+}
+
+// 发送数据包
+void J1939_SendDataPackets(J1939_CMDT_t* cmdt) {
+    for (uint8_t i = 0; i &lt; cmdt-&gt;packetsToSend; i++) {
+        uint8_t packetNum = cmdt-&gt;nextPacket + i;
+        if (packetNum &gt; cmdt-&gt;numPackets) {
+            break;
+        }
+
+        uint8_t dtData[8];
+        dtData[0] = packetNum;
+
+        uint16_t offset = (packetNum - 1) * 7;
+        uint8_t bytesToCopy = (cmdt-&gt;dataSize - offset &gt; 7) ? 7 : (cmdt-&gt;dataSize - offset);
+        memcpy(&amp;dtData[1], &amp;cmdt-&gt;data[offset], bytesToCopy);
+
+        for (uint8_t j = bytesToCopy + 1; j &lt; 8; j++) {
+            dtData[j] = 0xFF;
+        }
+
+        J1939_ID_t id = {
+            .priority = 6,
+            .dataPage = 0,
+            .pduFormat = 235,
+            .pduSpecific = cmdt-&gt;destAddress,
+            .sourceAddress = cmdt-&gt;sourceAddress
+        };
+        CAN_Send(J1939_ConstructID(&amp;id), dtData, 8);
+    }
+
+    if (cmdt-&gt;nextPacket + cmdt-&gt;packetsToSend &gt; cmdt-&gt;numPackets) {
+        cmdt-&gt;state = CMDT_STATE_WAIT_EOMA;
+    } else {
+        cmdt-&gt;state = CMDT_STATE_WAIT_CTS;
+    }
+}
+</code></pre>
+<h2 id="5">5. 诊断消息</h2>
+<h3 id="51-dtc">5.1 DTC（诊断故障码）</h3>
+<pre><code class="language-c">// DTC格式
+typedef struct {
+    uint32_t spn;           // SPN编号（19位）
+    uint8_t fmi;            // 故障模式标识符（5位）
+    uint8_t occurrenceCount;// 发生次数
+} J1939_DTC_t;
+
+// PGN 65226: 激活诊断故障码
+void J1939_SendActiveDTC(J1939_DTC_t* dtc, uint8_t sourceAddress) {
+    uint8_t data[8];
+
+    // 保护灯状态（字节0-1）
+    data[0] = 0xFF;
+    data[1] = 0xFF;
+
+    // DTC（字节2-5）
+    uint32_t dtcValue = (dtc-&gt;spn &amp; 0x7FFFF) | ((dtc-&gt;fmi &amp; 0x1F) &lt;&lt; 19);
+    data[2] = dtcValue &amp; 0xFF;
+    data[3] = (dtcValue &gt;&gt; 8) &amp; 0xFF;
+    data[4] = (dtcValue &gt;&gt; 16) &amp; 0xFF;
+    data[5] = (dtcValue &gt;&gt; 24) &amp; 0xFF;
+
+    // 发生次数（字节6）
+    data[6] = dtc-&gt;occurrenceCount;
+
+    // 保留（字节7）
+    data[7] = 0xFF;
+
+    J1939_ID_t id = {
+        .priority = 6,
+        .dataPage = 0,
+        .pduFormat = 254,
+        .pduSpecific = 202,
+        .sourceAddress = sourceAddress
+    };
+    CAN_Send(J1939_ConstructID(&amp;id), data, 8);
+}
+</code></pre>
+<h2 id="6">6. 实战应用示例</h2>
+<h3 id="61-ecu">6.1 发动机ECU实现</h3>
+<pre><code class="language-c">typedef struct {
+    // 地址管理
+    J1939_AddressManager_t addrMgr;
+
+    // 发动机参数
+    uint16_t engineSpeed;       // rpm
+    uint8_t engineLoad;         // %
+    uint8_t coolantTemp;        // °C
+    uint16_t fuelRate;          // L/h
+    uint8_t throttlePosition;   // %
+
+    // 诊断
+    J1939_DTC_t activeDTCs[10];
+    uint8_t numActiveDTCs;
+} EngineECU_t;
+
+void EngineECU_Init(EngineECU_t* ecu) {
+    // 配置NAME
+    ecu-&gt;addrMgr.name.identityNumber = 12345;
+    ecu-&gt;addrMgr.name.manufacturerCode = 123;
+    ecu-&gt;addrMgr.name.function = 0;  // 发动机
+    ecu-&gt;addrMgr.name.vehicleSystem = 0;
+    ecu-&gt;addrMgr.name.arbitraryAddressCapable = 1;
+
+    // 声明地址
+    ecu-&gt;addrMgr.claimedAddress = 0;  // 发动机通常使用地址0
+    ecu-&gt;addrMgr.addressClaimState = ADDR_STATE_IDLE;
+
+    // 初始化参数
+    ecu-&gt;engineSpeed = 0;
+    ecu-&gt;engineLoad = 0;
+    ecu-&gt;coolantTemp = 20;
+    ecu-&gt;fuelRate = 0;
+    ecu-&gt;throttlePosition = 0;
+    ecu-&gt;numActiveDTCs = 0;
+}
+
+void EngineECU_SendPGN61444(EngineECU_t* ecu) {
+    PGN_61444_t pgn;
+    pgn.engineSpeed = ecu-&gt;engineSpeed;
+    pgn.engineTorqueMode = 0;
+    pgn.driverDemandTorque = ecu-&gt;throttlePosition;
+    pgn.actualTorque = ecu-&gt;engineLoad;
+
+    uint8_t data[8];
+    EncodePGN61444(data, &amp;pgn);
+
+    J1939_ID_t id = {
+        .priority = 3,
+        .dataPage = 0,
+        .pduFormat = 240,
+        .pduSpecific = 4,
+        .sourceAddress = ecu-&gt;addrMgr.claimedAddress
+    };
+    CAN_Send(J1939_ConstructID(&amp;id), data, 8);
+}
+
+void EngineECU_Process(EngineECU_t* ecu) {
+    static uint32_t lastPGN61444Time = 0;
+    static uint32_t lastDTCTime = 0;
+
+    uint32_t currentTime = GetMilliseconds();
+
+    // 地址声明处理
+    J1939_AddressClaimProcess(&amp;ecu-&gt;addrMgr);
+
+    if (ecu-&gt;addrMgr.addressClaimState != ADDR_STATE_CLAIMED) {
+        return;  // 地址未声明，不发送数据
+    }
+
+    // 发送PGN 61444（10ms周期）
+    if (currentTime - lastPGN61444Time &gt;= 10) {
+        EngineECU_SendPGN61444(ecu);
+        lastPGN61444Time = currentTime;
+    }
+
+    // 发送DTC（1000ms周期）
+    if (currentTime - lastDTCTime &gt;= 1000 &amp;&amp; ecu-&gt;numActiveDTCs &gt; 0) {
+        J1939_SendActiveDTC(&amp;ecu-&gt;activeDTCs[0], ecu-&gt;addrMgr.claimedAddress);
+        lastDTCTime = currentTime;
+    }
+}
+</code></pre>
+<h2 id="7">7. 调试与故障排除</h2>
+<h3 id="71">7.1 常见问题</h3>
+<p><strong>问题1：地址冲突</strong>
+- 检查NAME配置是否唯一
+- 验证地址声明流程
+- 使用CAN分析仪监控地址声明消息</p>
+<p><strong>问题2：数据解析错误</strong>
+- 验证PGN和SPN定义
+- 检查字节序（小端序）
+- 确认分辨率和偏移计算</p>
+<p><strong>问题3：传输协议失败</strong>
+- 检查包间延迟
+- 验证序列号
+- 监控CTS/RTS消息</p>
+<h2 id="8">8. 最佳实践</h2>
+<ol>
+<li><strong>使用标准PGN</strong>：优先使用SAE定义的标准PGN</li>
+<li><strong>正确的优先级</strong>：根据消息重要性设置优先级</li>
+<li><strong>周期性发送</strong>：按照标准要求的更新率发送</li>
+<li><strong>错误处理</strong>：实现完善的DTC报告机制</li>
+<li><strong>测试验证</strong>：使用专业工具进行一致性测试</li>
+</ol>
+<h2 id="9">9. 总结</h2>
+<p>J1939协议是商用车辆CAN通信的行业标准，掌握其核心概念（PGN、SPN、地址管理、传输协议）对于车载网络开发至关重要。</p>
+<h2 id="_6">参考资料</h2>
+<ol>
+<li>SAE International. "J1939 Digital Annex". 2023.</li>
+<li>SAE J1939/21. "Data Link Layer". 2015.</li>
+<li>SAE J1939/71. "Vehicle Application Layer". 2017.</li>
+<li>SAE J1939/73. "Application Layer - Diagnostics". 2016.</li>
+<li>Copperhill Technologies. "J1939 Protocol Stack". 2022.</li>
+</ol>
+<h2 id="_7">相关主题</h2>
+<ul>
+<li><a href="../../../01-hardware-layer/06-communication-interface-hardware/intermediate/01-can-bus-hardware.html">CAN总线硬件</a></li>
+<li><a href="../../../01-hardware-layer/06-communication-interface-hardware/intermediate/06-canopen-protocol.html">CANopen协议</a></li>
+</ul>
+<!-- 以下链接指向的文件不存在，待补充后取消注释
+- [车载网络](../../01-wireless-communication/intermediate/02-vehicle-networking.html)
+-->
+
+<hr />
+<p><strong>文档版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2026-04-05<br />
+<strong>作者</strong>: 嵌入式知识平台<br />
+<strong>许可</strong>: CC BY-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

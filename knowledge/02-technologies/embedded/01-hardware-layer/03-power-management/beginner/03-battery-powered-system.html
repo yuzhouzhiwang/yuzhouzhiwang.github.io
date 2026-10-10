@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>电池供电系统设计要点 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/03-power-management/">03-power-management</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/03-power-management/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a></li>
+<li><a href="#_4">概述</a><ul>
+<li><a href="#_5">为什么需要电池供电</a></li>
+<li><a href="#_6">电池供电系统的挑战</a></li>
+</ul>
+</li>
+<li><a href="#_7">第一部分：电池类型与选择</a><ul>
+<li><a href="#_8">常见电池类型</a><ul>
+<li><a href="#1-li-ion">1. 锂离子电池（Li-ion）</a></li>
+<li><a href="#2-li-po">2. 锂聚合物电池（Li-Po）</a></li>
+<li><a href="#3-nimh">3. 镍氢电池（NiMH）</a></li>
+<li><a href="#4-alkaline">4. 碱性电池（Alkaline）</a></li>
+</ul>
+</li>
+<li><a href="#_9">电池选型指南</a><ul>
+<li><a href="#_10">选型考虑因素</a></li>
+<li><a href="#_11">选型决策树</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_12">第二部分：电池容量计算</a><ul>
+<li><a href="#_13">电池容量基础</a></li>
+<li><a href="#_14">容量需求计算</a><ul>
+<li><a href="#1">方法1：基于平均电流</a></li>
+<li><a href="#2">方法2：基于工作模式</a></li>
+</ul>
+</li>
+<li><a href="#_15">实际容量与标称容量</a></li>
+</ul>
+</li>
+<li><a href="#_16">第三部分：充电管理</a><ul>
+<li><a href="#_17">锂电池充电原理</a></li>
+<li><a href="#_18">充电管理芯片</a><ul>
+<li><a href="#1-tp4056-">1. TP4056 - 单节锂电池充电芯片</a></li>
+<li><a href="#2-bq24075-">2. BQ24075 - 高级充电管理芯片</a></li>
+</ul>
+</li>
+<li><a href="#_19">电池保护电路</a></li>
+<li><a href="#_20">充电安全注意事项</a></li>
+</ul>
+</li>
+<li><a href="#_21">第四部分：电量监测</a><ul>
+<li><a href="#_22">电量监测方法</a><ul>
+<li><a href="#1_1">方法1：电压法</a></li>
+<li><a href="#2_1">方法2：库仑计法</a></li>
+<li><a href="#3">方法3：电量计芯片</a></li>
+</ul>
+</li>
+<li><a href="#_23">电量显示</a></li>
+</ul>
+</li>
+<li><a href="#_24">第五部分：电池寿命优化</a><ul>
+<li><a href="#_25">延长电池寿命的策略</a><ul>
+<li><a href="#1_2">1. 降低平均功耗</a></li>
+<li><a href="#2_2">2. 优化工作频率</a></li>
+<li><a href="#3_1">3. 关闭不用的外设</a></li>
+<li><a href="#4">4. 使用低功耗模式</a></li>
+</ul>
+</li>
+<li><a href="#_26">电池保养建议</a></li>
+<li><a href="#_27">电池寿命预测</a></li>
+</ul>
+</li>
+<li><a href="#_28">第六部分：实用设计案例</a><ul>
+<li><a href="#1_3">案例1：智能手环电池系统</a></li>
+<li><a href="#2_3">案例2：无线传感器节点</a></li>
+<li><a href="#3_2">案例3：便携式测量仪</a></li>
+</ul>
+</li>
+<li><a href="#_29">总结</a><ul>
+<li><a href="#_30">核心要点回顾</a></li>
+<li><a href="#_31">设计检查清单</a></li>
+<li><a href="#_32">最佳实践</a></li>
+</ul>
+</li>
+<li><a href="#_33">延伸阅读</a></li>
+<li><a href="#_34">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">电池供电系统设计要点</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>[ ] 理解不同类型电池的特性和应用场景</li>
+<li>[ ] 掌握电池容量计算和选型方法</li>
+<li>[ ] 了解充电管理电路的设计原理</li>
+<li>[ ] 学会实现电量监测和显示功能</li>
+<li>[ ] 掌握延长电池寿命的优化技巧</li>
+<li>[ ] 能够设计完整的电池供电系统</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<p>在开始本文学习之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解嵌入式系统电源设计基础
+- 熟悉基本的电学概念（电压、电流、容量）
+- 了解常见的电源管理芯片
+- 掌握基本的电路分析方法</p>
+<p><strong>技能要求</strong>：
+- 能够阅读电路原理图
+- 会使用万用表测量电压和电流
+- 了解基本的PCB设计知识</p>
+<p><strong>推荐但非必需</strong>：
+- 有使用电池供电设备的经验
+- 了解低功耗设计技术
+- 熟悉常见的充电管理芯片</p>
+<h2 id="_4">概述</h2>
+<p>电池供电系统是现代移动设备和物联网设备的核心。随着可穿戴设备、无线传感器网络和便携式设备的普及，电池供电系统设计变得越来越重要。</p>
+<h3 id="_5">为什么需要电池供电</h3>
+<ol>
+<li>
+<p><strong>移动性需求</strong>：
+   - 摆脱电源线束缚
+   - 支持便携式应用
+   - 适合移动场景</p>
+</li>
+<li>
+<p><strong>部署灵活性</strong>：
+   - 无需布线，降低成本
+   - 适合偏远地区
+   - 便于快速部署</p>
+</li>
+<li>
+<p><strong>应急备份</strong>：
+   - 停电时继续工作
+   - 提高系统可靠性
+   - 保护关键数据</p>
+</li>
+<li>
+<p><strong>环境适应性</strong>：
+   - 适合户外环境
+   - 无需市电供应
+   - 降低能源依赖</p>
+</li>
+</ol>
+<h3 id="_6">电池供电系统的挑战</h3>
+<pre><code>主要挑战：
+1. 有限的能量存储
+   - 电池容量有限
+   - 需要精心设计功耗
+   - 平衡性能和续航
+
+2. 充电管理复杂
+   - 需要专门的充电电路
+   - 保护电池安全
+   - 优化充电速度
+
+3. 电量监测困难
+   - 准确估算剩余电量
+   - 提供用户反馈
+   - 预警低电量
+
+4. 寿命管理
+   - 电池会老化
+   - 充放电次数有限
+   - 需要优化使用策略
+</code></pre>
+<h2 id="_7">第一部分：电池类型与选择</h2>
+<h3 id="_8">常见电池类型</h3>
+<h4 id="1-li-ion">1. 锂离子电池（Li-ion）</h4>
+<p><strong>特性</strong>：
+- 标称电压：3.7V
+- 充电截止电压：4.2V
+- 放电截止电压：3.0V
+- 能量密度：高（150-250 Wh/kg）
+- 自放电率：低（2-5%/月）
+- 循环寿命：300-500次</p>
+<p><strong>优点</strong>：
+- 能量密度高
+- 无记忆效应
+- 自放电率低
+- 重量轻</p>
+<p><strong>缺点</strong>：
+- 需要保护电路
+- 对温度敏感
+- 成本较高
+- 安全性要求高</p>
+<p><strong>应用场景</strong>：
+- 智能手机
+- 笔记本电脑
+- 无人机
+- 电动工具</p>
+<p><strong>电压特性曲线</strong>：</p>
+<pre><code>电压(V)
+4.2 ┤     ╭─────────────╮
+    │    ╱               ╲
+4.0 ┤   ╱                 ╲
+    │  ╱                   ╲
+3.7 ┤ ╱                     ╲
+    │╱                       ╲
+3.0 ┤                         ╲___
+    └─────────────────────────────→ 容量(%)
+    0   20   40   60   80   100
+
+特点：
+- 放电曲线平坦
+- 大部分时间维持在3.7V左右
+- 接近放电终止时电压快速下降
+</code></pre>
+<h4 id="2-li-po">2. 锂聚合物电池（Li-Po）</h4>
+<p><strong>特性</strong>：
+- 标称电压：3.7V
+- 充电截止电压：4.2V
+- 放电截止电压：3.0V
+- 能量密度：高（150-200 Wh/kg）
+- 自放电率：低（2-5%/月）
+- 循环寿命：300-500次</p>
+<p><strong>优点</strong>：
+- 形状灵活，可定制
+- 更轻薄
+- 安全性相对较好
+- 无液体泄漏风险</p>
+<p><strong>缺点</strong>：
+- 成本高于Li-ion
+- 需要保护电路
+- 对温度敏感
+- 容易鼓包</p>
+<p><strong>应用场景</strong>：
+- 可穿戴设备
+- 超薄设备
+- 无人机
+- 遥控模型</p>
+<h4 id="3-nimh">3. 镍氢电池（NiMH）</h4>
+<p><strong>特性</strong>：
+- 标称电压：1.2V
+- 充电截止电压：1.4-1.5V
+- 放电截止电压：1.0V
+- 能量密度：中（60-120 Wh/kg）
+- 自放电率：高（15-30%/月）
+- 循环寿命：500-1000次</p>
+<p><strong>优点</strong>：
+- 成本低
+- 安全性好
+- 环保
+- 可快速充电</p>
+<p><strong>缺点</strong>：
+- 有记忆效应
+- 自放电率高
+- 能量密度低
+- 电压低</p>
+<p><strong>应用场景</strong>：
+- 玩具
+- 手电筒
+- 无线鼠标键盘
+- 低成本设备</p>
+<h4 id="4-alkaline">4. 碱性电池（Alkaline）</h4>
+<p><strong>特性</strong>：
+- 标称电压：1.5V
+- 放电截止电压：0.9V
+- 能量密度：中（80-150 Wh/kg）
+- 自放电率：低（2-3%/年）
+- 不可充电（一次性）</p>
+<p><strong>优点</strong>：
+- 成本最低
+- 保存时间长
+- 购买方便
+- 无需充电电路</p>
+<p><strong>缺点</strong>：
+- 不可充电
+- 内阻较大
+- 不适合大电流
+- 环境污染</p>
+<p><strong>应用场景</strong>：
+- 遥控器
+- 时钟
+- 低功耗传感器
+- 应急备用</p>
+<h3 id="_9">电池选型指南</h3>
+<h4 id="_10">选型考虑因素</h4>
+<pre><code class="language-c">/**
+ * @brief  电池选型评分系统
+ */
+typedef struct {
+    char name[20];
+    int energy_density;    // 能量密度 (1-10)
+    int cost;             // 成本 (1-10, 越高越便宜)
+    int safety;           // 安全性 (1-10)
+    int cycle_life;       // 循环寿命 (1-10)
+    int self_discharge;   // 自放电 (1-10, 越高越好)
+    int rechargeability;  // 可充电性 (1-10)
+} BatteryScore;
+
+void compare_battery_types(void) {
+    BatteryScore batteries[] = {
+        {&quot;Li-ion&quot;,     9, 5, 6, 6, 9, 10},
+        {&quot;Li-Po&quot;,      8, 4, 7, 6, 9, 10},
+        {&quot;NiMH&quot;,       5, 7, 9, 8, 4, 10},
+        {&quot;Alkaline&quot;,   6, 9, 10, 1, 9, 1}
+    };
+
+    printf(&quot;\n电池类型对比\n&quot;);
+    printf(&quot;%-12s %6s %6s %6s %6s %6s %6s %6s\n&quot;,
+           &quot;类型&quot;, &quot;能量&quot;, &quot;成本&quot;, &quot;安全&quot;, &quot;寿命&quot;, &quot;自放&quot;, &quot;充电&quot;, &quot;总分&quot;);
+    printf(&quot;─────────────────────────────────────────────────────────────\n&quot;);
+
+    for (int i = 0; i &lt; 4; i++) {
+        int total = batteries[i].energy_density +
+                   batteries[i].cost +
+                   batteries[i].safety +
+                   batteries[i].cycle_life +
+                   batteries[i].self_discharge +
+                   batteries[i].rechargeability;
+
+        printf(&quot;%-12s %6d %6d %6d %6d %6d %6d %6d\n&quot;,
+               batteries[i].name,
+               batteries[i].energy_density,
+               batteries[i].cost,
+               batteries[i].safety,
+               batteries[i].cycle_life,
+               batteries[i].self_discharge,
+               batteries[i].rechargeability,
+               total);
+    }
+}
+</code></pre>
+<h4 id="_11">选型决策树</h4>
+<pre><code>开始
+  │
+  ├─ 需要充电？
+  │   ├─ 是 → 需要高能量密度？
+  │   │        ├─ 是 → 形状要求？
+  │   │        │       ├─ 灵活 → Li-Po
+  │   │        │       └─ 标准 → Li-ion
+  │   │        └─ 否 → NiMH
+  │   │
+  │   └─ 否 → 碱性电池
+  │
+  └─ 预算充足？
+       ├─ 是 → Li-ion/Li-Po
+       └─ 否 → NiMH/碱性
+</code></pre>
+<h2 id="_12">第二部分：电池容量计算</h2>
+<h3 id="_13">电池容量基础</h3>
+<p><strong>容量单位</strong>：
+- mAh（毫安时）：最常用
+- Ah（安时）：1Ah = 1000mAh
+- Wh（瓦时）：能量单位</p>
+<p><strong>容量计算公式</strong>：</p>
+<pre><code>容量(mAh) = 电流(mA) × 时间(h)
+
+能量(Wh) = 容量(Ah) × 电压(V)
+
+示例：
+- 2000mAh @ 3.7V = 7.4Wh
+- 1000mAh @ 1.2V = 1.2Wh
+</code></pre>
+<h3 id="_14">容量需求计算</h3>
+<h4 id="1">方法1：基于平均电流</h4>
+<pre><code class="language-c">/**
+ * @brief  根据平均电流计算所需电池容量
+ * @param  avg_current_ma: 平均电流（mA）
+ * @param  target_hours: 目标工作时间（小时）
+ * @param  safety_margin: 安全余量（1.2-1.5）
+ * @param  aging_factor: 老化系数（0.7-0.8）
+ * @retval 所需电池容量（mAh）
+ */
+float calculate_required_capacity(float avg_current_ma,
+                                  float target_hours,
+                                  float safety_margin,
+                                  float aging_factor) {
+    // 理论容量
+    float theoretical_capacity = avg_current_ma * target_hours;
+
+    // 考虑安全余量
+    float capacity_with_margin = theoretical_capacity * safety_margin;
+
+    // 考虑老化因素
+    float required_capacity = capacity_with_margin / aging_factor;
+
+    printf(&quot;\n电池容量计算\n&quot;);
+    printf(&quot;平均电流: %.2f mA\n&quot;, avg_current_ma);
+    printf(&quot;目标时间: %.1f 小时\n&quot;, target_hours);
+    printf(&quot;安全余量: %.0f%%\n&quot;, (safety_margin - 1) * 100);
+    printf(&quot;老化系数: %.0f%%\n&quot;, aging_factor * 100);
+    printf(&quot;─────────────────────────\n&quot;);
+    printf(&quot;理论容量: %.0f mAh\n&quot;, theoretical_capacity);
+    printf(&quot;含余量: %.0f mAh\n&quot;, capacity_with_margin);
+    printf(&quot;推荐容量: %.0f mAh\n&quot;, required_capacity);
+
+    return required_capacity;
+}
+
+// 使用示例
+void capacity_calculation_example(void) {
+    // 平均50mA，工作24小时，30%余量，80%老化系数
+    float capacity = calculate_required_capacity(50, 24, 1.3, 0.8);
+    // 结果：推荐1950mAh，选择2000mAh电池
+}
+</code></pre>
+<h4 id="2">方法2：基于工作模式</h4>
+<pre><code class="language-c">/**
+ * @brief  工作模式定义
+ */
+typedef struct {
+    char name[32];
+    float current_ma;     // 电流（mA）
+    float duration_s;     // 持续时间（秒）
+    float frequency_hz;   // 频率（次/小时）
+} WorkMode;
+
+/**
+ * @brief  根据工作模式计算平均电流
+ * @param  modes: 工作模式数组
+ * @param  count: 模式数量
+ * @retval 平均电流（mA）
+ */
+float calculate_average_current(WorkMode *modes, int count) {
+    float total_charge = 0;  // 总电荷量（mAs）
+    float cycle_time = 3600; // 周期时间（秒/小时）
+
+    printf(&quot;\n工作模式分析\n&quot;);
+    printf(&quot;%-15s %10s %10s %10s %12s\n&quot;,
+           &quot;模式&quot;, &quot;电流(mA)&quot;, &quot;时间(s)&quot;, &quot;频率(/h)&quot;, &quot;电荷(mAs)&quot;);
+    printf(&quot;──────────────────────────────────────────────────────────\n&quot;);
+
+    for (int i = 0; i &lt; count; i++) {
+        // 每小时的电荷量
+        float charge = modes[i].current_ma * 
+                      modes[i].duration_s * 
+                      modes[i].frequency_hz;
+        total_charge += charge;
+
+        printf(&quot;%-15s %10.1f %10.1f %10.1f %12.1f\n&quot;,
+               modes[i].name,
+               modes[i].current_ma,
+               modes[i].duration_s,
+               modes[i].frequency_hz,
+               charge);
+    }
+
+    // 平均电流 = 总电荷量 / 时间
+    float avg_current = total_charge / cycle_time;
+
+    printf(&quot;──────────────────────────────────────────────────────────\n&quot;);
+    printf(&quot;总电荷量: %.1f mAs\n&quot;, total_charge);
+    printf(&quot;平均电流: %.2f mA\n&quot;, avg_current);
+
+    return avg_current;
+}
+
+// 使用示例
+void work_mode_example(void) {
+    WorkMode modes[] = {
+        {&quot;深度睡眠&quot;, 0.5, 3540, 1},    // 0.5mA, 59分钟, 1次/小时
+        {&quot;唤醒&quot;, 50, 10, 1},            // 50mA, 10秒, 1次/小时
+        {&quot;数据采集&quot;, 100, 5, 1},        // 100mA, 5秒, 1次/小时
+        {&quot;数据传输&quot;, 200, 5, 1}         // 200mA, 5秒, 1次/小时
+    };
+
+    float avg = calculate_average_current(modes, 4);
+    // 结果：约3.5mA平均电流
+
+    // 计算所需容量（工作30天）
+    float capacity = calculate_required_capacity(avg, 30 * 24, 1.3, 0.8);
+    // 结果：约3400mAh
+}
+</code></pre>
+<h3 id="_15">实际容量与标称容量</h3>
+<p><strong>重要概念</strong>：</p>
+<pre><code>标称容量 vs 实际容量
+
+标称容量：
+- 厂商标注的容量
+- 理想条件下测得
+- 通常在0.2C放电率
+
+实际容量：
+- 实际使用中的容量
+- 受多种因素影响
+- 通常低于标称容量
+
+影响因素：
+1. 放电率
+   - 大电流放电容量降低
+   - 1C放电约为标称容量的90%
+   - 2C放电约为标称容量的80%
+
+2. 温度
+   - 低温容量显著降低
+   - 0°C约为标称容量的80%
+   - -20°C约为标称容量的50%
+
+3. 老化
+   - 循环次数增加容量降低
+   - 300次循环约为标称容量的80%
+   - 500次循环约为标称容量的70%
+
+4. 放电截止电压
+   - 截止电压越高，可用容量越少
+   - 3.0V截止：100%容量
+   - 3.3V截止：约80%容量
+</code></pre>
+<pre><code class="language-c">/**
+ * @brief  计算实际可用容量
+ * @param  nominal_capacity: 标称容量（mAh）
+ * @param  discharge_rate: 放电倍率（C）
+ * @param  temperature: 温度（°C）
+ * @param  cycle_count: 循环次数
+ * @retval 实际容量（mAh）
+ */
+float calculate_actual_capacity(float nominal_capacity,
+                                float discharge_rate,
+                                float temperature,
+                                int cycle_count) {
+    float capacity = nominal_capacity;
+
+    // 放电率影响
+    float rate_factor = 1.0;
+    if (discharge_rate &lt;= 0.2) {
+        rate_factor = 1.0;
+    } else if (discharge_rate &lt;= 1.0) {
+        rate_factor = 1.0 - (discharge_rate - 0.2) * 0.125;
+    } else {
+        rate_factor = 0.9 - (discharge_rate - 1.0) * 0.1;
+    }
+    capacity *= rate_factor;
+
+    // 温度影响
+    float temp_factor = 1.0;
+    if (temperature &gt;= 20) {
+        temp_factor = 1.0;
+    } else if (temperature &gt;= 0) {
+        temp_factor = 1.0 - (20 - temperature) * 0.01;
+    } else {
+        temp_factor = 0.8 - (0 - temperature) * 0.015;
+    }
+    capacity *= temp_factor;
+
+    // 老化影响
+    float aging_factor = 1.0;
+    if (cycle_count &lt;= 100) {
+        aging_factor = 1.0;
+    } else if (cycle_count &lt;= 300) {
+        aging_factor = 1.0 - (cycle_count - 100) * 0.001;
+    } else {
+        aging_factor = 0.8 - (cycle_count - 300) * 0.0005;
+    }
+    capacity *= aging_factor;
+
+    printf(&quot;\n实际容量计算\n&quot;);
+    printf(&quot;标称容量: %.0f mAh\n&quot;, nominal_capacity);
+    printf(&quot;放电倍率: %.1fC (系数: %.2f)\n&quot;, discharge_rate, rate_factor);
+    printf(&quot;环境温度: %.0f°C (系数: %.2f)\n&quot;, temperature, temp_factor);
+    printf(&quot;循环次数: %d (系数: %.2f)\n&quot;, cycle_count, aging_factor);
+    printf(&quot;─────────────────────────\n&quot;);
+    printf(&quot;实际容量: %.0f mAh (%.0f%%)\n&quot;, 
+           capacity, capacity / nominal_capacity * 100);
+
+    return capacity;
+}
+
+// 使用示例
+void actual_capacity_example(void) {
+    // 2000mAh电池，1C放电，10°C，200次循环
+    float actual = calculate_actual_capacity(2000, 1.0, 10, 200);
+    // 结果：约1530mAh（76.5%）
+}
+</code></pre>
+<h2 id="_16">第三部分：充电管理</h2>
+<h3 id="_17">锂电池充电原理</h3>
+<p><strong>充电过程</strong>：</p>
+<pre><code>锂电池充电分为三个阶段：
+
+1. 涓流充电（Trickle Charge）
+   - 电池电压 &lt; 3.0V
+   - 小电流充电（0.1C）
+   - 激活深度放电的电池
+   - 时间：5-10分钟
+
+2. 恒流充电（Constant Current, CC）
+   - 电池电压：3.0V - 4.2V
+   - 恒定电流充电（0.5C - 1C）
+   - 主要充电阶段
+   - 时间：1-2小时
+
+3. 恒压充电（Constant Voltage, CV）
+   - 电池电压：4.2V
+   - 恒定电压，电流逐渐减小
+   - 充满最后的容量
+   - 时间：0.5-1小时
+   - 截止条件：电流 &lt; 0.1C
+
+充电曲线：
+电压(V)  电流(A)
+4.2 ┤        ╭────────────  电压
+    │       ╱
+4.0 │      ╱
+    │     ╱
+3.7 │    ╱
+    │   ╱
+3.0 │  ╱
+    │ ╱
+    └─────────────────────→ 时间
+
+1.0 ┤ ────────╮            电流
+    │          ╲
+0.5 │           ╲
+    │            ╲
+0.1 │             ╲________
+    │
+    └─────────────────────→ 时间
+      涓流  恒流    恒压
+</code></pre>
+<h3 id="_18">充电管理芯片</h3>
+<h4 id="1-tp4056-">1. TP4056 - 单节锂电池充电芯片</h4>
+<p><strong>特性</strong>：
+- 输入电压：4-8V
+- 充电电流：可调（最大1A）
+- 充电精度：±1%
+- 充电截止电压：4.2V
+- 封装：SOP-8</p>
+<p><strong>典型应用电路</strong>：</p>
+<pre><code>VIN (5V) ──┬── C1(10μF) ──┬── TP4056 ──┬── C2(10μF) ──┬── BAT+
+           │              │   Pin 5,6  │              │
+           │              │            │              │
+           └── R_PROG ────┤ Pin 2      │              │
+                          │            │              │
+                         GND          GND            BAT-
+
+充电电流设置：
+I_charge = 1000V / R_PROG
+
+示例：
+- R_PROG = 1.2kΩ → I = 833mA
+- R_PROG = 2kΩ → I = 500mA
+- R_PROG = 10kΩ → I = 100mA
+
+LED指示：
+- CHRG引脚：充电指示（低电平点亮）
+- STDBY引脚：充满指示（低电平点亮）
+</code></pre>
+<p><strong>代码示例</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  TP4056充电状态监测
+ */
+typedef enum {
+    CHARGE_STATUS_IDLE = 0,      // 空闲
+    CHARGE_STATUS_CHARGING = 1,  // 充电中
+    CHARGE_STATUS_FULL = 2,      // 充满
+    CHARGE_STATUS_ERROR = 3      // 错误
+} ChargeStatus;
+
+/**
+ * @brief  读取充电状态
+ * @retval 充电状态
+ */
+ChargeStatus read_charge_status(void) {
+    uint8_t chrg = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0);  // CHRG引脚
+    uint8_t stdby = HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_1); // STDBY引脚
+
+    if (chrg == 0 &amp;&amp; stdby == 1) {
+        return CHARGE_STATUS_CHARGING;
+    } else if (chrg == 1 &amp;&amp; stdby == 0) {
+        return CHARGE_STATUS_FULL;
+    } else if (chrg == 1 &amp;&amp; stdby == 1) {
+        return CHARGE_STATUS_IDLE;
+    } else {
+        return CHARGE_STATUS_ERROR;
+    }
+}
+
+/**
+ * @brief  充电状态显示
+ */
+void display_charge_status(void) {
+    ChargeStatus status = read_charge_status();
+
+    switch(status) {
+        case CHARGE_STATUS_IDLE:
+            printf(&quot;充电状态：空闲\n&quot;);
+            break;
+        case CHARGE_STATUS_CHARGING:
+            printf(&quot;充电状态：充电中\n&quot;);
+            // 点亮充电LED
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+            break;
+        case CHARGE_STATUS_FULL:
+            printf(&quot;充电状态：已充满\n&quot;);
+            // 熄灭充电LED，点亮充满LED
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+            HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_SET);
+            break;
+        case CHARGE_STATUS_ERROR:
+            printf(&quot;充电状态：错误\n&quot;);
+            break;
+    }
+}
+</code></pre>
+<h4 id="2-bq24075-">2. BQ24075 - 高级充电管理芯片</h4>
+<p><strong>特性</strong>：
+- 输入电压：4.35-6.5V
+- 充电电流：可调（最大1.5A）
+- 输入电流限制
+- 电源路径管理
+- 温度监测
+- I2C接口</p>
+<p><strong>优势</strong>：
+- 支持边充边用
+- 智能电源管理
+- 更多保护功能
+- 可编程配置</p>
+<h3 id="_19">电池保护电路</h3>
+<p><strong>保护功能</strong>：</p>
+<pre><code>电池保护电路（Protection Circuit Module, PCM）
+
+保护功能：
+1. 过充保护（Over Charge Protection）
+   - 电压 &gt; 4.25V → 断开充电
+   - 防止过充损坏电池
+
+2. 过放保护（Over Discharge Protection）
+   - 电压 &lt; 2.5V → 断开负载
+   - 防止过放损坏电池
+
+3. 过流保护（Over Current Protection）
+   - 电流 &gt; 限制值 → 断开输出
+   - 防止短路损坏
+
+4. 短路保护（Short Circuit Protection）
+   - 检测到短路 → 立即断开
+   - 保护电池和电路
+
+5. 温度保护（Temperature Protection）
+   - 温度异常 → 停止充放电
+   - 防止热失控
+
+保护芯片示例：
+- DW01：单节锂电池保护IC
+- S-8261：精密保护IC
+- BQ29700：多节保护IC
+</code></pre>
+<p><strong>典型保护电路</strong>：</p>
+<pre><code>BAT+ ──┬── DW01 ──┬── MOSFET1 ──┬── OUT+
+       │   (保护IC) │  (充电控制) │
+       │          │            │
+       │          └── MOSFET2 ──┤
+       │              (放电控制) │
+       │                       │
+BAT- ──┴───────────────────────┴── OUT-
+
+工作原理：
+1. 正常状态：两个MOSFET导通
+2. 过充：MOSFET1关断，停止充电
+3. 过放：MOSFET2关断，停止放电
+4. 过流/短路：两个MOSFET关断
+</code></pre>
+<h3 id="_20">充电安全注意事项</h3>
+<pre><code>充电安全检查清单：
+
+硬件设计：
+□ 使用专用充电管理芯片
+□ 添加电池保护电路
+□ 设置合适的充电电流
+□ 添加温度监测
+□ 使用合格的电池
+
+电路保护：
+□ 输入过压保护
+□ 输入反接保护
+□ 输出短路保护
+□ 过温保护
+□ ESD保护
+
+软件监控：
+□ 监测充电状态
+□ 监测电池温度
+□ 监测充电时间
+□ 异常情况报警
+□ 记录充电历史
+
+使用规范：
+□ 使用原装充电器
+□ 避免高温环境充电
+□ 避免过度充电
+□ 定期检查电池状态
+□ 及时更换老化电池
+</code></pre>
+<h2 id="_21">第四部分：电量监测</h2>
+<h3 id="_22">电量监测方法</h3>
+<h4 id="1_1">方法1：电压法</h4>
+<p><strong>原理</strong>：
+- 通过测量电池电压估算剩余电量
+- 简单但不够准确
+- 受负载影响大</p>
+<p><strong>实现</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  基于电压的电量估算
+ * @param  voltage: 电池电压（V）
+ * @retval 剩余电量（%）
+ */
+uint8_t estimate_battery_level_by_voltage(float voltage) {
+    // 锂电池电压-电量对应表
+    typedef struct {
+        float voltage;
+        uint8_t level;
+    } VoltageLevelMap;
+
+    VoltageLevelMap map[] = {
+        {4.20, 100},
+        {4.10, 90},
+        {4.00, 80},
+        {3.90, 70},
+        {3.80, 60},
+        {3.70, 50},
+        {3.60, 40},
+        {3.50, 30},
+        {3.40, 20},
+        {3.30, 10},
+        {3.00, 0}
+    };
+
+    // 线性插值
+    for (int i = 0; i &lt; 10; i++) {
+        if (voltage &gt;= map[i+1].voltage) {
+            float v_range = map[i].voltage - map[i+1].voltage;
+            float l_range = map[i].level - map[i+1].level;
+            float v_offset = voltage - map[i+1].voltage;
+
+            uint8_t level = map[i+1].level + 
+                           (uint8_t)(v_offset / v_range * l_range);
+            return level;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  读取电池电压
+ * @retval 电池电压（V）
+ */
+float read_battery_voltage(void) {
+    // 使用ADC读取电池电压
+    // 假设使用分压电阻：R1=100k, R2=100k
+    uint16_t adc_value = adc_single_conversion(ADC_CHANNEL_VBAT);
+
+    // 计算电压
+    float adc_voltage = (float)adc_value * 3.3 / 4096;
+    float battery_voltage = adc_voltage * 2;  // 分压比为2
+
+    return battery_voltage;
+}
+
+/**
+ * @brief  电量监测任务
+ */
+void battery_monitor_task(void) {
+    // 读取电池电压
+    float voltage = read_battery_voltage();
+
+    // 估算电量
+    uint8_t level = estimate_battery_level_by_voltage(voltage);
+
+    printf(&quot;电池电压: %.2f V\n&quot;, voltage);
+    printf(&quot;剩余电量: %d%%\n&quot;, level);
+
+    // 低电量报警
+    if (level &lt; 20) {
+        printf(&quot;警告：电量低于20%%！\n&quot;);
+        // 触发低电量报警
+    }
+
+    if (level &lt; 10) {
+        printf(&quot;严重警告：电量低于10%%！\n&quot;);
+        // 进入省电模式
+        enter_power_saving_mode();
+    }
+}
+</code></pre>
+<h4 id="2_1">方法2：库仑计法</h4>
+<p><strong>原理</strong>：
+- 通过积分电流计算消耗的电量
+- 更准确但需要专用芯片
+- 需要初始化和校准</p>
+<p><strong>实现</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  库仑计数据结构
+ */
+typedef struct {
+    float capacity_mah;      // 电池容量（mAh）
+    float remaining_mah;     // 剩余容量（mAh）
+    float current_ma;        // 当前电流（mA）
+    uint32_t last_update_ms; // 上次更新时间（ms）
+} CoulombCounter;
+
+CoulombCounter coulomb_counter = {
+    .capacity_mah = 2000,
+    .remaining_mah = 2000,
+    .current_ma = 0,
+    .last_update_ms = 0
+};
+
+/**
+ * @brief  初始化库仑计
+ * @param  capacity: 电池容量（mAh）
+ * @param  initial_level: 初始电量（%）
+ */
+void coulomb_counter_init(float capacity, uint8_t initial_level) {
+    coulomb_counter.capacity_mah = capacity;
+    coulomb_counter.remaining_mah = capacity * initial_level / 100.0;
+    coulomb_counter.last_update_ms = HAL_GetTick();
+
+    printf(&quot;库仑计初始化\n&quot;);
+    printf(&quot;电池容量: %.0f mAh\n&quot;, capacity);
+    printf(&quot;初始电量: %d%% (%.0f mAh)\n&quot;, 
+           initial_level, coulomb_counter.remaining_mah);
+}
+
+/**
+ * @brief  更新库仑计
+ * @param  current_ma: 当前电流（mA，正值为放电，负值为充电）
+ */
+void coulomb_counter_update(float current_ma) {
+    uint32_t current_time = HAL_GetTick();
+    uint32_t elapsed_ms = current_time - coulomb_counter.last_update_ms;
+
+    // 计算消耗的电量（mAh）
+    // Q = I × t
+    float consumed_mah = current_ma * elapsed_ms / 3600000.0;
+
+    // 更新剩余容量
+    coulomb_counter.remaining_mah -= consumed_mah;
+
+    // 限制范围
+    if (coulomb_counter.remaining_mah &lt; 0) {
+        coulomb_counter.remaining_mah = 0;
+    }
+    if (coulomb_counter.remaining_mah &gt; coulomb_counter.capacity_mah) {
+        coulomb_counter.remaining_mah = coulomb_counter.capacity_mah;
+    }
+
+    // 更新状态
+    coulomb_counter.current_ma = current_ma;
+    coulomb_counter.last_update_ms = current_time;
+}
+
+/**
+ * @brief  获取剩余电量
+ * @retval 剩余电量（%）
+ */
+uint8_t coulomb_counter_get_level(void) {
+    float level = coulomb_counter.remaining_mah / 
+                  coulomb_counter.capacity_mah * 100.0;
+    return (uint8_t)level;
+}
+
+/**
+ * @brief  获取剩余时间
+ * @retval 剩余时间（分钟）
+ */
+uint16_t coulomb_counter_get_remaining_time(void) {
+    if (coulomb_counter.current_ma &lt;= 0) {
+        return 0xFFFF;  // 充电中或无负载
+    }
+
+    float remaining_hours = coulomb_counter.remaining_mah / 
+                           coulomb_counter.current_ma;
+    return (uint16_t)(remaining_hours * 60);
+}
+
+/**
+ * @brief  库仑计监测任务
+ */
+void coulomb_counter_task(void) {
+    // 读取当前电流（需要电流传感器）
+    float current = read_battery_current();
+
+    // 更新库仑计
+    coulomb_counter_update(current);
+
+    // 获取电量信息
+    uint8_t level = coulomb_counter_get_level();
+    uint16_t remaining_time = coulomb_counter_get_remaining_time();
+
+    printf(&quot;当前电流: %.1f mA\n&quot;, current);
+    printf(&quot;剩余容量: %.0f mAh\n&quot;, coulomb_counter.remaining_mah);
+    printf(&quot;剩余电量: %d%%\n&quot;, level);
+    if (remaining_time != 0xFFFF) {
+        printf(&quot;剩余时间: %d 分钟\n&quot;, remaining_time);
+    }
+}
+</code></pre>
+<h4 id="3">方法3：电量计芯片</h4>
+<p><strong>常用芯片</strong>：
+- BQ27441：单节锂电池电量计
+- MAX17048：高精度电量计
+- LC709203F：超低功耗电量计</p>
+<p><strong>BQ27441示例</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  BQ27441寄存器地址
+ */
+#define BQ27441_I2C_ADDR        0x55
+#define BQ27441_REG_VOLTAGE     0x04  // 电压
+#define BQ27441_REG_CURRENT     0x10  // 电流
+#define BQ27441_REG_CAPACITY    0x0C  // 剩余容量
+#define BQ27441_REG_SOC         0x1C  // 电量百分比
+#define BQ27441_REG_TEMPERATURE 0x06  // 温度
+
+/**
+ * @brief  读取BQ27441寄存器
+ * @param  reg: 寄存器地址
+ * @retval 寄存器值
+ */
+uint16_t bq27441_read_register(uint8_t reg) {
+    uint8_t data[2];
+    HAL_I2C_Mem_Read(&amp;hi2c1, BQ27441_I2C_ADDR &lt;&lt; 1, 
+                     reg, 1, data, 2, 100);
+    return (data[1] &lt;&lt; 8) | data[0];
+}
+
+/**
+ * @brief  读取电池信息
+ */
+typedef struct {
+    uint16_t voltage_mv;      // 电压（mV）
+    int16_t current_ma;       // 电流（mA）
+    uint16_t capacity_mah;    // 剩余容量（mAh）
+    uint8_t soc_percent;      // 电量（%）
+    int16_t temperature_c;    // 温度（°C）
+} BatteryInfo;
+
+void bq27441_read_battery_info(BatteryInfo *info) {
+    // 读取电压
+    info-&gt;voltage_mv = bq27441_read_register(BQ27441_REG_VOLTAGE);
+
+    // 读取电流
+    info-&gt;current_ma = (int16_t)bq27441_read_register(BQ27441_REG_CURRENT);
+
+    // 读取剩余容量
+    info-&gt;capacity_mah = bq27441_read_register(BQ27441_REG_CAPACITY);
+
+    // 读取电量百分比
+    info-&gt;soc_percent = (uint8_t)bq27441_read_register(BQ27441_REG_SOC);
+
+    // 读取温度
+    uint16_t temp_raw = bq27441_read_register(BQ27441_REG_TEMPERATURE);
+    info-&gt;temperature_c = (int16_t)(temp_raw / 10 - 273);  // 转换为摄氏度
+
+    // 打印信息
+    printf(&quot;\n电池信息\n&quot;);
+    printf(&quot;电压: %d mV (%.2f V)\n&quot;, 
+           info-&gt;voltage_mv, info-&gt;voltage_mv / 1000.0);
+    printf(&quot;电流: %d mA\n&quot;, info-&gt;current_ma);
+    printf(&quot;剩余容量: %d mAh\n&quot;, info-&gt;capacity_mah);
+    printf(&quot;电量: %d%%\n&quot;, info-&gt;soc_percent);
+    printf(&quot;温度: %d°C\n&quot;, info-&gt;temperature_c);
+}
+</code></pre>
+<h3 id="_23">电量显示</h3>
+<p><strong>LED指示</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  LED电量指示
+ * @param  level: 电量（%）
+ */
+void battery_led_indicator(uint8_t level) {
+    // 4个LED表示电量
+    // LED1: 0-25%
+    // LED2: 25-50%
+    // LED3: 50-75%
+    // LED4: 75-100%
+
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, level &gt; 0 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, level &gt; 25 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_2, level &gt; 50 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, level &gt; 75 ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+/**
+ * @brief  电量条显示（OLED/LCD）
+ * @param  level: 电量（%）
+ */
+void battery_bar_display(uint8_t level) {
+    // 绘制电池图标
+    // ┌────────┐
+    // │████░░░░│ 50%
+    // └────────┘
+
+    char bar[21];
+    int filled = level / 5;  // 0-20个字符
+
+    for (int i = 0; i &lt; 20; i++) {
+        bar[i] = (i &lt; filled) ? '█' : '░';
+    }
+    bar[20] = '\0';
+
+    printf(&quot;┌────────────────────┐\n&quot;);
+    printf(&quot;│%s│ %d%%\n&quot;, bar, level);
+    printf(&quot;└────────────────────┘\n&quot;);
+}
+</code></pre>
+<h2 id="_24">第五部分：电池寿命优化</h2>
+<h3 id="_25">延长电池寿命的策略</h3>
+<h4 id="1_2">1. 降低平均功耗</h4>
+<p><strong>间歇工作模式</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  间歇工作模式配置
+ */
+typedef struct {
+    uint32_t work_duration_ms;   // 工作时间（ms）
+    uint32_t sleep_duration_ms;  // 睡眠时间（ms）
+    float work_current_ma;       // 工作电流（mA）
+    float sleep_current_ma;      // 睡眠电流（mA）
+} IntermittentMode;
+
+/**
+ * @brief  计算间歇模式的平均功耗和电池寿命
+ * @param  mode: 间歇模式配置
+ * @param  battery_capacity: 电池容量（mAh）
+ */
+void analyze_intermittent_mode(IntermittentMode *mode, 
+                               float battery_capacity) {
+    // 计算占空比
+    float total_time = mode-&gt;work_duration_ms + mode-&gt;sleep_duration_ms;
+    float duty_cycle = mode-&gt;work_duration_ms / total_time;
+
+    // 计算平均电流
+    float avg_current = mode-&gt;work_current_ma * duty_cycle +
+                       mode-&gt;sleep_current_ma * (1 - duty_cycle);
+
+    // 计算电池寿命
+    float battery_life_hours = battery_capacity / avg_current;
+    float battery_life_days = battery_life_hours / 24;
+
+    printf(&quot;\n间歇工作模式分析\n&quot;);
+    printf(&quot;工作时间: %lu ms\n&quot;, mode-&gt;work_duration_ms);
+    printf(&quot;睡眠时间: %lu ms\n&quot;, mode-&gt;sleep_duration_ms);
+    printf(&quot;占空比: %.1f%%\n&quot;, duty_cycle * 100);
+    printf(&quot;工作电流: %.1f mA\n&quot;, mode-&gt;work_current_ma);
+    printf(&quot;睡眠电流: %.2f mA\n&quot;, mode-&gt;sleep_current_ma);
+    printf(&quot;─────────────────────────\n&quot;);
+    printf(&quot;平均电流: %.2f mA\n&quot;, avg_current);
+    printf(&quot;电池容量: %.0f mAh\n&quot;, battery_capacity);
+    printf(&quot;理论寿命: %.1f 小时 = %.1f 天\n&quot;, 
+           battery_life_hours, battery_life_days);
+
+    // 节能效果
+    float continuous_life = battery_capacity / mode-&gt;work_current_ma / 24;
+    float improvement = battery_life_days / continuous_life;
+    printf(&quot;相比持续工作延长: %.1f 倍\n&quot;, improvement);
+}
+
+// 使用示例
+void intermittent_mode_example(void) {
+    IntermittentMode mode = {
+        .work_duration_ms = 1000,    // 工作1秒
+        .sleep_duration_ms = 59000,  // 睡眠59秒
+        .work_current_ma = 100,      // 工作100mA
+        .sleep_current_ma = 0.5      // 睡眠0.5mA
+    };
+
+    analyze_intermittent_mode(&amp;mode, 2000);
+    // 结果：平均2.16mA，可工作38.6天
+    // 相比持续工作（0.83天）延长46倍
+}
+</code></pre>
+<h4 id="2_2">2. 优化工作频率</h4>
+<p><strong>动态调频</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  根据负载动态调整CPU频率
+ * @param  load_percent: 负载百分比（0-100）
+ */
+void dynamic_frequency_scaling(uint8_t load_percent) {
+    typedef struct {
+        uint8_t freq_mhz;
+        float current_ma;
+    } FreqCurrentMap;
+
+    FreqCurrentMap map[] = {
+        {8, 5},      // 8MHz: 5mA
+        {36, 20},    // 36MHz: 20mA
+        {72, 50}     // 72MHz: 50mA
+    };
+
+    uint8_t target_freq;
+    if (load_percent &lt; 20) {
+        target_freq = 8;
+    } else if (load_percent &lt; 60) {
+        target_freq = 36;
+    } else {
+        target_freq = 72;
+    }
+
+    printf(&quot;负载: %d%%, 目标频率: %d MHz\n&quot;, load_percent, target_freq);
+
+    // 设置系统时钟频率
+    // set_system_clock_frequency(target_freq);
+}
+</code></pre>
+<h4 id="3_1">3. 关闭不用的外设</h4>
+<p><strong>外设电源管理</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  外设电源管理
+ */
+typedef struct {
+    char name[20];
+    uint8_t is_enabled;
+    float current_ma;
+    void (*enable)(void);
+    void (*disable)(void);
+} PeripheralPower;
+
+/**
+ * @brief  外设列表
+ */
+PeripheralPower peripherals[] = {
+    {&quot;UART1&quot;, 0, 2.0, uart1_enable, uart1_disable},
+    {&quot;SPI1&quot;, 0, 1.5, spi1_enable, spi1_disable},
+    {&quot;I2C1&quot;, 0, 1.0, i2c1_enable, i2c1_disable},
+    {&quot;ADC1&quot;, 0, 3.0, adc1_enable, adc1_disable},
+    {&quot;TIM2&quot;, 0, 0.5, tim2_enable, tim2_disable}
+};
+
+/**
+ * @brief  使能外设
+ * @param  index: 外设索引
+ */
+void peripheral_enable(uint8_t index) {
+    if (!peripherals[index].is_enabled) {
+        peripherals[index].enable();
+        peripherals[index].is_enabled = 1;
+        printf(&quot;%s 已使能 (+%.1f mA)\n&quot;, 
+               peripherals[index].name,
+               peripherals[index].current_ma);
+    }
+}
+
+/**
+ * @brief  关闭外设
+ * @param  index: 外设索引
+ */
+void peripheral_disable(uint8_t index) {
+    if (peripherals[index].is_enabled) {
+        peripherals[index].disable();
+        peripherals[index].is_enabled = 0;
+        printf(&quot;%s 已关闭 (-%.1f mA)\n&quot;, 
+               peripherals[index].name,
+               peripherals[index].current_ma);
+    }
+}
+
+/**
+ * @brief  计算当前总功耗
+ * @retval 总电流（mA）
+ */
+float calculate_total_current(void) {
+    float total = 0;
+    for (int i = 0; i &lt; 5; i++) {
+        if (peripherals[i].is_enabled) {
+            total += peripherals[i].current_ma;
+        }
+    }
+    return total;
+}
+</code></pre>
+<h4 id="4">4. 使用低功耗模式</h4>
+<p><strong>睡眠策略</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  智能睡眠管理
+ */
+typedef struct {
+    uint32_t idle_threshold_ms;  // 空闲阈值（ms）
+    uint32_t last_activity_ms;   // 最后活动时间
+    uint8_t sleep_level;         // 睡眠级别（0-3）
+} SleepManager;
+
+SleepManager sleep_mgr = {
+    .idle_threshold_ms = 5000,
+    .last_activity_ms = 0,
+    .sleep_level = 0
+};
+
+/**
+ * @brief  更新活动时间
+ */
+void sleep_manager_activity(void) {
+    sleep_mgr.last_activity_ms = HAL_GetTick();
+    sleep_mgr.sleep_level = 0;
+}
+
+/**
+ * @brief  睡眠管理任务
+ */
+void sleep_manager_task(void) {
+    uint32_t idle_time = HAL_GetTick() - sleep_mgr.last_activity_ms;
+
+    if (idle_time &lt; sleep_mgr.idle_threshold_ms) {
+        // 活跃状态，不睡眠
+        return;
+    }
+
+    // 根据空闲时间选择睡眠级别
+    if (idle_time &lt; 10000) {
+        // 短时间空闲：睡眠模式
+        printf(&quot;进入睡眠模式\n&quot;);
+        enter_sleep_mode();
+        sleep_mgr.sleep_level = 1;
+    } else if (idle_time &lt; 60000) {
+        // 中等时间空闲：停止模式
+        printf(&quot;进入停止模式\n&quot;);
+        enter_stop_mode();
+        sleep_mgr.sleep_level = 2;
+    } else {
+        // 长时间空闲：待机模式
+        printf(&quot;进入待机模式\n&quot;);
+        enter_standby_mode();
+        sleep_mgr.sleep_level = 3;
+    }
+}
+</code></pre>
+<h3 id="_26">电池保养建议</h3>
+<p><strong>充电建议</strong>：</p>
+<pre><code>锂电池充电最佳实践：
+
+1. 充电频率
+   ✓ 随用随充，不必等到完全放电
+   ✓ 保持电量在20%-80%之间
+   ✗ 避免完全放电（&lt; 5%）
+   ✗ 避免长时间满电（100%）
+
+2. 充电环境
+   ✓ 室温充电（15-25°C）
+   ✗ 避免高温充电（&gt; 40°C）
+   ✗ 避免低温充电（&lt; 0°C）
+   ✓ 充电时保持通风
+
+3. 充电速度
+   ✓ 慢充更好（0.5C）
+   ✓ 快充偶尔使用（1C）
+   ✗ 避免超快充（&gt; 2C）
+   ✓ 充满后及时断电
+
+4. 长期存储
+   ✓ 存储电量：40-60%
+   ✓ 存储温度：15-25°C
+   ✓ 每3个月充放电一次
+   ✗ 避免满电或空电存储
+</code></pre>
+<p><strong>使用建议</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  电池健康检查
+ */
+typedef struct {
+    uint16_t cycle_count;        // 循环次数
+    float capacity_mah;          // 当前容量
+    float nominal_capacity_mah;  // 标称容量
+    float health_percent;        // 健康度
+    int16_t temperature_c;       // 温度
+} BatteryHealth;
+
+/**
+ * @brief  评估电池健康状态
+ * @param  health: 电池健康数据
+ */
+void evaluate_battery_health(BatteryHealth *health) {
+    // 计算健康度
+    health-&gt;health_percent = health-&gt;capacity_mah / 
+                            health-&gt;nominal_capacity_mah * 100;
+
+    printf(&quot;\n电池健康检查\n&quot;);
+    printf(&quot;循环次数: %d\n&quot;, health-&gt;cycle_count);
+    printf(&quot;当前容量: %.0f mAh\n&quot;, health-&gt;capacity_mah);
+    printf(&quot;标称容量: %.0f mAh\n&quot;, health-&gt;nominal_capacity_mah);
+    printf(&quot;健康度: %.1f%%\n&quot;, health-&gt;health_percent);
+    printf(&quot;温度: %d°C\n&quot;, health-&gt;temperature_c);
+    printf(&quot;─────────────────────────\n&quot;);
+
+    // 健康评估
+    if (health-&gt;health_percent &gt;= 80) {
+        printf(&quot;状态: 良好 ✓\n&quot;);
+    } else if (health-&gt;health_percent &gt;= 60) {
+        printf(&quot;状态: 一般 !\n&quot;);
+        printf(&quot;建议: 考虑更换电池\n&quot;);
+    } else {
+        printf(&quot;状态: 较差 ✗\n&quot;);
+        printf(&quot;建议: 尽快更换电池\n&quot;);
+    }
+
+    // 循环次数评估
+    if (health-&gt;cycle_count &gt; 500) {
+        printf(&quot;警告: 循环次数较多，电池接近寿命\n&quot;);
+    }
+
+    // 温度评估
+    if (health-&gt;temperature_c &gt; 45) {
+        printf(&quot;警告: 温度过高，请停止使用\n&quot;);
+    } else if (health-&gt;temperature_c &lt; 0) {
+        printf(&quot;警告: 温度过低，性能下降\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="_27">电池寿命预测</h3>
+<pre><code class="language-c">/**
+ * @brief  预测电池剩余寿命
+ * @param  current_cycles: 当前循环次数
+ * @param  current_capacity: 当前容量（mAh）
+ * @param  nominal_capacity: 标称容量（mAh）
+ * @retval 预计剩余循环次数
+ */
+uint16_t predict_battery_life(uint16_t current_cycles,
+                              float current_capacity,
+                              float nominal_capacity) {
+    // 容量衰减率
+    float degradation_rate = (nominal_capacity - current_capacity) / 
+                            current_cycles;
+
+    // 预测到80%容量的循环次数
+    float target_capacity = nominal_capacity * 0.8;
+    float remaining_capacity = current_capacity - target_capacity;
+    uint16_t remaining_cycles = (uint16_t)(remaining_capacity / 
+                                           degradation_rate);
+
+    printf(&quot;\n电池寿命预测\n&quot;);
+    printf(&quot;当前循环: %d 次\n&quot;, current_cycles);
+    printf(&quot;当前容量: %.0f mAh (%.1f%%)\n&quot;, 
+           current_capacity, 
+           current_capacity / nominal_capacity * 100);
+    printf(&quot;衰减率: %.2f mAh/次\n&quot;, degradation_rate);
+    printf(&quot;─────────────────────────\n&quot;);
+    printf(&quot;预计剩余: %d 次循环\n&quot;, remaining_cycles);
+    printf(&quot;预计总寿命: %d 次循环\n&quot;, 
+           current_cycles + remaining_cycles);
+
+    return remaining_cycles;
+}
+</code></pre>
+<h2 id="_28">第六部分：实用设计案例</h2>
+<h3 id="1_3">案例1：智能手环电池系统</h3>
+<p><strong>系统需求</strong>：
+- 电池：3.7V 150mAh锂聚合物电池
+- 工作模式：
+  - 待机：0.5mA（95%时间）
+  - 显示：20mA（4%时间）
+  - 运动监测：50mA（1%时间）
+- 目标续航：7天</p>
+<p><strong>设计方案</strong>：</p>
+<pre><code>电池系统架构：
+150mAh Li-Po (3.7V)
+    │
+    ├─── 保护电路（DW01 + MOSFET）
+    │
+    ├─── 充电管理（TP4056，100mA充电）
+    │
+    ├─── 电量计（MAX17048）
+    │
+    ├─── Buck DC-DC（3.3V，90%效率）
+    │
+    └─── MCU + 传感器 + 显示
+
+功耗分析：
+- 待机：0.5mA × 95% = 0.475mA
+- 显示：20mA × 4% = 0.8mA
+- 运动：50mA × 1% = 0.5mA
+- 平均电流：1.775mA
+
+电池寿命：
+- 理论寿命：150 / 1.775 = 84.5小时 = 3.5天
+- 实际寿命：3.5 × 0.8 = 2.8天
+
+优化方案：
+1. 降低待机电流到0.2mA
+2. 优化显示时间到2%
+3. 优化后平均电流：0.79mA
+4. 优化后寿命：150 / 0.79 = 190小时 = 7.9天 ✓
+
+充电时间：
+- 充电电流：100mA
+- 充电效率：85%
+- 充电时间：150 / (100 × 0.85) = 1.76小时
+</code></pre>
+<h3 id="2_3">案例2：无线传感器节点</h3>
+<p><strong>系统需求</strong>：
+- 电池：2节AA碱性电池（3V，2500mAh）
+- 工作模式：
+  - 深度睡眠：10μA（99%时间）
+  - 采集数据：50mA，5秒（每小时1次）
+  - 发送数据：100mA，2秒（每小时1次）
+- 目标续航：1年</p>
+<p><strong>设计方案</strong>：</p>
+<pre><code>电池系统架构：
+2×AA (3V, 2500mAh)
+    │
+    ├─── 反接保护（二极管）
+    │
+    ├─── Boost DC-DC（3.3V，85%效率）
+    │    （支持低至1.8V输入）
+    │
+    └─── MCU + 传感器 + 无线模块
+
+功耗分析（每小时）：
+- 深度睡眠：10μA × 3595s = 0.01mAh
+- 采集数据：50mA × 5s / 3600 = 0.07mAh
+- 发送数据：100mA × 2s / 3600 = 0.06mAh
+- 每小时消耗：0.14mAh
+- 平均电流：0.14mA
+
+电池寿命：
+- 有效容量：2500 × 0.85 = 2125mAh
+- 理论寿命：2125 / 0.14 = 15179小时 = 632天
+- 实际寿命：632 × 0.7 = 442天 ✓
+
+成本分析：
+- AA电池：¥2 × 2 = ¥4
+- DC-DC：¥3
+- 保护电路：¥1
+- 总计：¥8
+</code></pre>
+<h3 id="3_2">案例3：便携式测量仪</h3>
+<p><strong>系统需求</strong>：
+- 电池：18650锂电池（3.7V，3000mAh）
+- 工作模式：
+  - 待机：5mA
+  - 测量：200mA，持续工作
+- 充电：支持USB充电
+- 目标续航：10小时连续工作</p>
+<p><strong>设计方案</strong>：</p>
+<pre><code>电池系统架构：
+18650 Li-ion (3.7V, 3000mAh)
+    │
+    ├─── 保护电路（S-8261）
+    │
+    ├─── 充电管理（BQ24075，1A充电）
+    │    支持边充边用
+    │
+    ├─── 电量计（BQ27441）
+    │
+    ├─── Buck DC-DC（5V，90%效率）
+    │    │
+    │    ├─── 显示屏（5V）
+    │    │
+    │    └─── LDO（3.3V）
+    │         └─── MCU + 传感器
+    │
+    └─── 电源开关
+
+功耗分析：
+- 待机：5mA
+- 测量：200mA
+- 目标工作时间：10小时
+
+电池容量需求：
+- 所需容量：200mA × 10h = 2000mAh
+- 考虑效率：2000 / 0.9 = 2222mAh
+- 考虑余量：2222 × 1.3 = 2889mAh
+- 选择：3000mAh ✓
+
+实际续航：
+- 连续测量：3000 × 0.9 / 200 = 13.5小时
+- 待机：3000 × 0.9 / 5 = 540小时 = 22.5天
+
+充电时间：
+- 充电电流：1A
+- 充电效率：85%
+- 充电时间：3000 / (1000 × 0.85) = 3.5小时
+
+特色功能：
+- 电量百分比显示
+- 剩余时间估算
+- 低电量报警
+- 边充边用
+</code></pre>
+<h2 id="_29">总结</h2>
+<p>本文全面介绍了电池供电系统设计的核心要点。</p>
+<h3 id="_30">核心要点回顾</h3>
+<ol>
+<li>
+<p><strong>电池类型选择</strong>：
+   - Li-ion/Li-Po：高能量密度，适合移动设备
+   - NiMH：成本低，适合低成本应用
+   - 碱性：一次性，适合低功耗长期应用
+   - 根据应用需求选择合适的电池类型</p>
+</li>
+<li>
+<p><strong>容量计算</strong>：
+   - 基于平均电流计算
+   - 考虑工作模式和占空比
+   - 预留安全余量（30-50%）
+   - 考虑老化因素（70-80%）</p>
+</li>
+<li>
+<p><strong>充电管理</strong>：
+   - 使用专用充电管理芯片
+   - 实现CC-CV充电过程
+   - 添加完善的保护电路
+   - 监测充电状态和温度</p>
+</li>
+<li>
+<p><strong>电量监测</strong>：
+   - 电压法：简单但不够准确
+   - 库仑计法：较准确但需要校准
+   - 电量计芯片：最准确但成本高
+   - 提供直观的电量显示</p>
+</li>
+<li>
+<p><strong>寿命优化</strong>：
+   - 降低平均功耗
+   - 使用间歇工作模式
+   - 动态调整工作频率
+   - 关闭不用的外设
+   - 合理使用睡眠模式</p>
+</li>
+</ol>
+<h3 id="_31">设计检查清单</h3>
+<pre><code>电池系统设计检查清单：
+
+需求分析：
+□ 确定工作模式和功耗
+□ 计算平均电流
+□ 确定目标续航时间
+□ 选择合适的电池类型
+□ 计算所需电池容量
+
+硬件设计：
+□ 选择充电管理芯片
+□ 设计保护电路
+□ 添加电量监测功能
+□ 设计电源开关
+□ 添加充电指示
+
+软件设计：
+□ 实现电量监测
+□ 实现低电量报警
+□ 实现功耗优化
+□ 实现充电管理
+□ 记录电池历史
+
+测试验证：
+□ 测试充电功能
+□ 测试保护功能
+□ 测试电量监测精度
+□ 测试实际续航时间
+□ 测试温度特性
+
+安全考虑：
+□ 过充保护
+□ 过放保护
+□ 过流保护
+□ 短路保护
+□ 温度保护
+</code></pre>
+<h3 id="_32">最佳实践</h3>
+<ol>
+<li>
+<p><strong>设计原则</strong>：
+   - 安全第一，保护电路必不可少
+   - 准确监测，提供可靠的电量信息
+   - 优化功耗，延长电池寿命
+   - 用户友好，提供清晰的状态指示</p>
+</li>
+<li>
+<p><strong>常见错误</strong>：
+   - ❌ 容量计算不准确
+   - ❌ 没有保护电路
+   - ❌ 充电电流过大
+   - ❌ 电量监测不准
+   - ❌ 忽略温度影响</p>
+</li>
+<li>
+<p><strong>设计建议</strong>：
+   - ✅ 使用专用充电管理芯片
+   - ✅ 添加完善的保护电路
+   - ✅ 实现准确的电量监测
+   - ✅ 优化系统功耗
+   - ✅ 充分测试验证</p>
+</li>
+</ol>
+<h2 id="_33">延伸阅读</h2>
+<p>推荐进一步学习的内容：</p>
+<ol>
+<li>
+<p><strong>进阶主题</strong>：
+   - <a href="../intermediate/01-bms-design.html">电池管理系统(BMS)设计实战</a>
+   - <a href="../intermediate/02-dynamic-power-management.html">动态电源管理(DPM)技术</a>
+   - <a href="../advanced/01-ultra-low-power-sensor.html">超低功耗传感器节点设计</a></p>
+</li>
+<li>
+<p><strong>相关知识</strong>：
+   - <a href="02-low-power-design.html">低功耗设计技术入门</a>
+   - <a href="04-power-monitoring.html">电源监控与保护电路设计</a>
+   - <a href="05-power-measurement.html">功耗测量与分析方法</a></p>
+</li>
+<li>
+<p><strong>实践项目</strong>：
+   - 便携式设备电源设计
+   - 无线传感器节点</p>
+</li>
+</ol>
+<h2 id="_34">参考资料</h2>
+<ol>
+<li>《锂电池管理系统设计》- Davide Andrea</li>
+<li>《Battery Management Systems》- Gregory L. Plett</li>
+<li>《电池技术手册》- 中国电池工业协会</li>
+<li>Texas Instruments - Battery Management Solutions</li>
+<li>Maxim Integrated - Battery Management Application Notes</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>
+<p>容量计算：
+   - 平均电流10mA，目标工作30天
+   - 考虑30%余量和80%老化系数
+   - 计算所需电池容量</p>
+</li>
+<li>
+<p>充电时间计算：
+   - 2000mAh电池，充电电流500mA
+   - 充电效率85%
+   - 计算充电时间</p>
+</li>
+<li>
+<p>寿命优化：
+   - 工作电流100mA，睡眠电流0.5mA
+   - 工作1秒，睡眠59秒
+   - 计算平均电流和续航时间</p>
+</li>
+<li>
+<p>电量监测：
+   - 设计一个基于电压的电量估算算法
+   - 绘制电压-电量对应曲线
+   - 实现线性插值计算</p>
+</li>
+</ol>
+<p><strong>实践任务</strong>：</p>
+<ol>
+<li>搭建一个简单的锂电池充电电路</li>
+<li>使用TP4056实现充电管理</li>
+<li>添加LED充电指示</li>
+<li>测量充电电流和电压曲线</li>
+<li>实现电量监测和显示</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="04-power-monitoring.html">电源监控与保护电路设计</a>，了解如何实现更完善的电源监控和保护功能。</p>
+<hr />
+<p><strong>常见问题解答</strong>：</p>
+<p><strong>Q: 锂电池和锂聚合物电池有什么区别？</strong></p>
+<p>A: 主要区别：
+- 封装：Li-ion用金属外壳，Li-Po用铝塑膜
+- 形状：Li-ion固定形状，Li-Po可定制
+- 安全性：Li-Po相对更安全
+- 成本：Li-Po更贵
+- 性能：基本相同</p>
+<p><strong>Q: 如何选择充电电流？</strong></p>
+<p>A: 建议：
+- 标准充电：0.5C（如2000mAh用1A）
+- 快速充电：1C（如2000mAh用2A）
+- 超快充电：&gt;1C（需要电池支持）
+- 充电电流越大，电池寿命越短</p>
+<p><strong>Q: 电池可以边充边用吗？</strong></p>
+<p>A: 取决于充电管理芯片：
+- 普通芯片（如TP4056）：不支持
+- 高级芯片（如BQ24075）：支持
+- 需要电源路径管理功能
+- 建议使用支持的芯片</p>
+<p><strong>Q: 如何延长电池寿命？</strong></p>
+<p>A: 方法：
+- 避免完全放电（保持&gt;20%）
+- 避免长时间满电（保持&lt;80%）
+- 避免高温环境
+- 使用合适的充电电流
+- 定期充放电循环</p>
+<p><strong>Q: 电池鼓包了怎么办？</strong></p>
+<p>A: 处理方法：
+- 立即停止使用
+- 不要充电
+- 不要挤压或刺穿
+- 放在安全地方
+- 联系专业回收机构
+- 更换新电池</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

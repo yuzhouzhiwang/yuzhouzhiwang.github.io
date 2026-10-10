@@ -1,0 +1,1673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>Modbus工业协议实战开发 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/">06-communication-networking</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/">02-network-protocols</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a><ul>
+<li><a href="#1-stm32">1. 安装STM32开发环境</a></li>
+<li><a href="#2-esp32">2. 安装ESP32开发环境</a></li>
+<li><a href="#3-modbus">3. 安装Modbus测试工具</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#modbus_1">Modbus协议基础</a><ul>
+<li><a href="#modbus_2">什么是Modbus？</a></li>
+<li><a href="#modbus_3">Modbus协议变体</a></li>
+<li><a href="#modbus_4">Modbus数据模型</a></li>
+<li><a href="#_7">常用功能码</a></li>
+<li><a href="#modbus-rtu">Modbus RTU帧格式</a></li>
+<li><a href="#modbus-tcp">Modbus TCP帧格式</a></li>
+</ul>
+</li>
+<li><a href="#1stm32-modbus-rtu">步骤1：STM32 Modbus RTU从站实现</a><ul>
+<li><a href="#11">1.1 硬件连接</a><ul>
+<li><a href="#rs485">RS485电路连接</a></li>
+</ul>
+</li>
+<li><a href="#12-stm32cubemx">1.2 STM32CubeMX配置</a><ul>
+<li><a href="#uart1">配置UART1</a></li>
+</ul>
+</li>
+<li><a href="#13-freemodbus">1.3 集成FreeModbus库</a><ul>
+<li><a href="#freemodbus">下载FreeModbus</a></li>
+<li><a href="#_8">添加源文件到项目</a></li>
+</ul>
+</li>
+<li><a href="#14">1.4 移植代码</a><ul>
+<li><a href="#mbconfigh">配置mbconfig.h</a></li>
+<li><a href="#_9">实现串口发送接收</a></li>
+<li><a href="#_10">实现定时器</a></li>
+</ul>
+</li>
+<li><a href="#15">1.5 实现寄存器回调函数</a><ul>
+<li><a href="#_11">定义寄存器数据</a></li>
+<li><a href="#_12">实现保持寄存器回调</a></li>
+<li><a href="#_13">实现输入寄存器回调</a></li>
+<li><a href="#_14">实现线圈回调</a></li>
+</ul>
+</li>
+<li><a href="#16">1.6 主程序实现</a></li>
+</ul>
+</li>
+<li><a href="#2modbus-poll">步骤2：使用Modbus Poll测试</a><ul>
+<li><a href="#21-modbus-poll">2.1 配置Modbus Poll</a></li>
+<li><a href="#22">2.2 测试读取保持寄存器</a></li>
+<li><a href="#23">2.3 测试读取输入寄存器</a></li>
+<li><a href="#24">2.4 测试线圈控制</a></li>
+</ul>
+</li>
+<li><a href="#3esp32-modbus-tcp">步骤3：ESP32 Modbus TCP服务器</a><ul>
+<li><a href="#31-arduino">3.1 Arduino实现</a><ul>
+<li><a href="#modbustcp">安装ModbusTCP库</a></li>
+<li><a href="#_15">基础代码框架</a></li>
+</ul>
+</li>
+<li><a href="#32-esp-idf">3.2 ESP-IDF实现</a><ul>
+<li><a href="#menuconfig">配置menuconfig</a></li>
+<li><a href="#_16">主程序代码</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#4modbus-tcp">步骤4：Modbus TCP客户端测试</a><ul>
+<li><a href="#41-modbus-poll">4.1 使用Modbus Poll测试</a></li>
+<li><a href="#42-python">4.2 使用Python测试</a><ul>
+<li><a href="#_17">读取寄存器</a></li>
+<li><a href="#_18">写入寄存器</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#5modbus">步骤5：Modbus主站实现</a><ul>
+<li><a href="#51-arduino-modbus">5.1 Arduino Modbus主站</a><ul>
+<li><a href="#modbusmaster">安装ModbusMaster库</a></li>
+<li><a href="#_19">主站代码</a></li>
+</ul>
+</li>
+<li><a href="#52-esp32-modbus-tcp">5.2 ESP32 Modbus TCP主站</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：实际应用案例</a><ul>
+<li><a href="#61">6.1 多传感器数据采集系统</a><ul>
+<li><a href="#_20">系统架构</a></li>
+<li><a href="#stm32">STM32从站代码（多传感器）</a></li>
+</ul>
+</li>
+<li><a href="#62-esp32modbus-rtumodbus-tcp">6.2 ESP32网关（Modbus RTU转Modbus TCP）</a></li>
+</ul>
+</li>
+<li><a href="#_21">故障排除</a><ul>
+<li><a href="#1modbus-rtu">问题1：Modbus RTU通信失败</a></li>
+<li><a href="#2crc">问题2：CRC校验错误</a></li>
+<li><a href="#3modbus-tcp">问题3：Modbus TCP连接超时</a></li>
+<li><a href="#4">问题4：寄存器读写失败</a></li>
+<li><a href="#5">问题5：多从站冲突</a></li>
+</ul>
+</li>
+<li><a href="#_22">总结</a></li>
+<li><a href="#_23">进阶挑战</a></li>
+<li><a href="#_24">完整代码</a></li>
+<li><a href="#_25">下一步</a></li>
+<li><a href="#_26">参考资料</a></li>
+<li><a href="#modbus_5">常见Modbus术语</a></li>
+<li><a href="#modbus_6">Modbus功能码速查表</a></li>
+<li><a href="#_27">异常码说明</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="modbus">Modbus工业协议实战开发</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解Modbus协议的工作原理和应用场景</li>
+<li>[ ] 掌握Modbus RTU和Modbus TCP的区别</li>
+<li>[ ] 了解主从通信机制和寄存器类型</li>
+<li>[ ] 使用STM32实现Modbus RTU从站</li>
+<li>[ ] 使用ESP32实现Modbus TCP服务器</li>
+<li>[ ] 开发Modbus主站进行设备控制和数据采集</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解串口通信基础（UART、RS485）
+- 熟悉TCP/IP网络协议
+- 理解客户端-服务器架构
+- 掌握C语言编程</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32CubeMX配置外设
+- 会使用ESP32进行网络编程
+- 了解工业自动化基本概念</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32F103开发板</td>
+<td>1</td>
+<td>用于Modbus RTU从站</td>
+<td>-</td>
+</tr>
+<tr>
+<td>ESP32开发板</td>
+<td>1</td>
+<td>用于Modbus TCP服务器</td>
+<td>-</td>
+</tr>
+<tr>
+<td>RS485转换模块</td>
+<td>1</td>
+<td>MAX485或类似芯片</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB转RS485模块</td>
+<td>1</td>
+<td>用于PC端测试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>DHT11温湿度传感器</td>
+<td>1</td>
+<td>可选，用于数据采集</td>
+<td>-</td>
+</tr>
+<tr>
+<td>继电器模块</td>
+<td>1</td>
+<td>可选，用于控制输出</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Micro USB数据线</td>
+<td>2</td>
+<td>用于供电和程序下载</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：</li>
+<li>STM32CubeIDE 或 Keil MDK</li>
+<li>Arduino IDE 2.0+ 或 ESP-IDF</li>
+<li><strong>Modbus库</strong>：</li>
+<li>FreeModbus (STM32)</li>
+<li>ModbusMaster (Arduino)</li>
+<li>esp-modbus (ESP-IDF)</li>
+<li><strong>测试工具</strong>：</li>
+<li>Modbus Poll (主站模拟器)</li>
+<li>Modbus Slave (从站模拟器)</li>
+<li>QModMaster (开源工具)</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<h4 id="1-stm32">1. 安装STM32开发环境</h4>
+<ul>
+<li>下载并安装STM32CubeIDE</li>
+<li>安装STM32F1系列支持包</li>
+<li>配置串口调试工具（如PuTTY、Tera Term）</li>
+</ul>
+<h4 id="2-esp32">2. 安装ESP32开发环境</h4>
+<p>在Arduino IDE中：
+- 添加ESP32开发板支持
+- 安装ModbusTCP库</p>
+<p>或使用ESP-IDF：
+- 安装ESP-IDF v4.4+
+- esp-modbus组件已内置</p>
+<h4 id="3-modbus">3. 安装Modbus测试工具</h4>
+<p>下载Modbus Poll和Modbus Slave：
+- 访问 https://www.modbustools.com/
+- 下载试用版或购买完整版
+- 或使用开源工具QModMaster</p>
+<h2 id="modbus_1">Modbus协议基础</h2>
+<h3 id="modbus_2">什么是Modbus？</h3>
+<p>Modbus是一种串行通信协议，由Modicon（现为施耐德电气）于1979年发布，是工业自动化领域应用最广泛的通信协议之一。</p>
+<p><strong>核心特点</strong>：
+- <strong>开放标准</strong>：协议规范公开，免费使用
+- <strong>简单可靠</strong>：协议简单，易于实现和维护
+- <strong>主从架构</strong>：一个主站，多个从站（最多247个）
+- <strong>广泛支持</strong>：几乎所有工业设备都支持
+- <strong>多种传输方式</strong>：支持串口（RTU/ASCII）和以太网（TCP）</p>
+<h3 id="modbus_3">Modbus协议变体</h3>
+<table>
+<thead>
+<tr>
+<th>协议类型</th>
+<th>传输介质</th>
+<th>数据格式</th>
+<th>应用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Modbus RTU</td>
+<td>RS232/RS485</td>
+<td>二进制</td>
+<td>现场总线，短距离通信</td>
+</tr>
+<tr>
+<td>Modbus ASCII</td>
+<td>RS232/RS485</td>
+<td>ASCII字符</td>
+<td>调试和简单应用</td>
+</tr>
+<tr>
+<td>Modbus TCP</td>
+<td>以太网</td>
+<td>TCP/IP封装</td>
+<td>工业以太网，远程监控</td>
+</tr>
+</tbody>
+</table>
+<h3 id="modbus_4">Modbus数据模型</h3>
+<p>Modbus定义了四种数据类型（寄存器）：</p>
+<table>
+<thead>
+<tr>
+<th>数据类型</th>
+<th>地址范围</th>
+<th>访问权限</th>
+<th>功能码</th>
+<th>应用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>线圈（Coil）</td>
+<td>00001-09999</td>
+<td>读/写</td>
+<td>01, 05, 15</td>
+<td>数字输出（继电器、LED）</td>
+</tr>
+<tr>
+<td>离散输入（Discrete Input）</td>
+<td>10001-19999</td>
+<td>只读</td>
+<td>02</td>
+<td>数字输入（开关、按钮）</td>
+</tr>
+<tr>
+<td>输入寄存器（Input Register）</td>
+<td>30001-39999</td>
+<td>只读</td>
+<td>04</td>
+<td>模拟输入（传感器数据）</td>
+</tr>
+<tr>
+<td>保持寄存器（Holding Register）</td>
+<td>40001-49999</td>
+<td>读/写</td>
+<td>03, 06, 16</td>
+<td>配置参数、设定值</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意</strong>：实际编程中地址从0开始，上表地址为Modbus协议规范中的逻辑地址。</p>
+<h3 id="_7">常用功能码</h3>
+<table>
+<thead>
+<tr>
+<th>功能码</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>Read Coils</td>
+<td>读取线圈状态</td>
+</tr>
+<tr>
+<td>02</td>
+<td>Read Discrete Inputs</td>
+<td>读取离散输入状态</td>
+</tr>
+<tr>
+<td>03</td>
+<td>Read Holding Registers</td>
+<td>读取保持寄存器</td>
+</tr>
+<tr>
+<td>04</td>
+<td>Read Input Registers</td>
+<td>读取输入寄存器</td>
+</tr>
+<tr>
+<td>05</td>
+<td>Write Single Coil</td>
+<td>写单个线圈</td>
+</tr>
+<tr>
+<td>06</td>
+<td>Write Single Register</td>
+<td>写单个寄存器</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Write Multiple Coils</td>
+<td>写多个线圈</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Write Multiple Registers</td>
+<td>写多个寄存器</td>
+</tr>
+</tbody>
+</table>
+<h3 id="modbus-rtu">Modbus RTU帧格式</h3>
+<pre><code class="language-text">[从站地址][功能码][数据][CRC校验]
+  1字节    1字节   N字节   2字节
+</code></pre>
+<p><strong>示例</strong>：读取从站1的保持寄存器40001-40002（地址0-1）</p>
+<pre><code class="language-text">请求: 01 03 00 00 00 02 C4 0B
+      |  |  |     |     |
+      |  |  |     |     CRC校验
+      |  |  |     读取2个寄存器
+      |  |  起始地址0x0000
+      |  功能码03（读保持寄存器）
+      从站地址1
+
+响应: 01 03 04 00 64 00 C8 FA 8D
+      |  |  |  |           |
+      |  |  |  数据值      CRC校验
+      |  |  字节数4
+      |  功能码03
+      从站地址1
+</code></pre>
+<h3 id="modbus-tcp">Modbus TCP帧格式</h3>
+<pre><code class="language-text">[MBAP报头][功能码][数据]
+  7字节     1字节   N字节
+
+MBAP报头:
+[事务ID][协议ID][长度][单元ID]
+ 2字节   2字节   2字节  1字节
+</code></pre>
+<p><strong>示例</strong>：读取保持寄存器</p>
+<pre><code class="language-text">请求: 00 01 00 00 00 06 01 03 00 00 00 02
+      |     |     |     |  |  |     |
+      |     |     |     |  |  |     读取2个寄存器
+      |     |     |     |  |  起始地址
+      |     |     |     |  功能码03
+      |     |     |     单元ID
+      |     |     后续字节数
+      |     协议ID(0x0000)
+      事务ID
+
+响应: 00 01 00 00 00 07 01 03 04 00 64 00 C8
+      |     |     |     |  |  |  数据值
+      |     |     |     |  |  字节数
+      |     |     |     |  功能码
+      |     |     |     单元ID
+      |     |     后续字节数
+      |     协议ID
+      事务ID
+</code></pre>
+<h2 id="1stm32-modbus-rtu">步骤1：STM32 Modbus RTU从站实现</h2>
+<h3 id="11">1.1 硬件连接</h3>
+<h4 id="rs485">RS485电路连接</h4>
+<table>
+<thead>
+<tr>
+<th>STM32引脚</th>
+<th>RS485模块</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PA9 (TX)</td>
+<td>DI</td>
+<td>发送数据</td>
+</tr>
+<tr>
+<td>PA10 (RX)</td>
+<td>RO</td>
+<td>接收数据</td>
+</tr>
+<tr>
+<td>PA8</td>
+<td>DE/RE</td>
+<td>方向控制</td>
+</tr>
+<tr>
+<td>3.3V</td>
+<td>VCC</td>
+<td>电源</td>
+</tr>
+<tr>
+<td>GND</td>
+<td>GND</td>
+<td>地</td>
+</tr>
+</tbody>
+</table>
+<p><strong>RS485总线连接</strong>：
+- A端子连接所有设备的A端
+- B端子连接所有设备的B端
+- 总线两端需要120Ω终端电阻</p>
+<h3 id="12-stm32cubemx">1.2 STM32CubeMX配置</h3>
+<h4 id="uart1">配置UART1</h4>
+<ol>
+<li>打开STM32CubeMX，选择STM32F103C8T6</li>
+<li>配置UART1：
+   - Mode: Asynchronous
+   - Baud Rate: 9600
+   - Word Length: 8 Bits
+   - Parity: None
+   - Stop Bits: 1</li>
+<li>配置GPIO PA8为输出（RS485方向控制）</li>
+<li>生成代码</li>
+</ol>
+<h3 id="13-freemodbus">1.3 集成FreeModbus库</h3>
+<h4 id="freemodbus">下载FreeModbus</h4>
+<pre><code class="language-bash">git clone https://github.com/armink/FreeModbus_Slave-Master-RTT-STM32.git
+</code></pre>
+<h4 id="_8">添加源文件到项目</h4>
+<p>将以下文件添加到项目：
+- <code>modbus/rtu/mbrtu.c</code>
+- <code>modbus/functions/mbfunccoils.c</code>
+- <code>modbus/functions/mbfuncdisc.c</code>
+- <code>modbus/functions/mbfuncholding.c</code>
+- <code>modbus/functions/mbfuncinput.c</code>
+- <code>modbus/functions/mbutils.c</code>
+- <code>modbus/mb.c</code>
+- <code>port/portevent.c</code>
+- <code>port/portserial.c</code>
+- <code>port/porttimer.c</code></p>
+<h3 id="14">1.4 移植代码</h3>
+<h4 id="mbconfigh">配置mbconfig.h</h4>
+<pre><code class="language-c">/* ----------------------- Defines ------------------------------------------*/
+#define MB_RTU_ENABLED                  (1)     // 启用RTU模式
+#define MB_ASCII_ENABLED                (0)     // 禁用ASCII模式
+#define MB_TCP_ENABLED                  (0)     // 禁用TCP模式
+
+#define MB_SLAVE_RTU_ENABLED            (1)     // 启用从站模式
+#define MB_SLAVE_ASCII_ENABLED          (0)
+#define MB_MASTER_RTU_ENABLED           (0)     // 禁用主站模式
+#define MB_MASTER_ASCII_ENABLED         (0)
+
+#define MB_FUNC_READ_COILS_ENABLED      (1)     // 功能码01
+#define MB_FUNC_READ_DISCRETE_INPUTS_ENABLED (1) // 功能码02
+#define MB_FUNC_READ_HOLDING_ENABLED    (1)     // 功能码03
+#define MB_FUNC_READ_INPUT_ENABLED      (1)     // 功能码04
+#define MB_FUNC_WRITE_COIL_ENABLED      (1)     // 功能码05
+#define MB_FUNC_WRITE_SINGLE_REGISTER_ENABLED (1) // 功能码06
+#define MB_FUNC_WRITE_MULTIPLE_COILS_ENABLED (1) // 功能码15
+#define MB_FUNC_WRITE_MULTIPLE_REGISTERS_ENABLED (1) // 功能码16
+</code></pre>
+<h4 id="_9">实现串口发送接收</h4>
+<p>在<code>portserial.c</code>中实现：</p>
+<pre><code class="language-c">#include &quot;usart.h&quot;
+
+// RS485方向控制引脚
+#define RS485_DE_PIN    GPIO_PIN_8
+#define RS485_DE_PORT   GPIOA
+
+// 设置为发送模式
+#define RS485_TX_EN()   HAL_GPIO_WritePin(RS485_DE_PORT, RS485_DE_PIN, GPIO_PIN_SET)
+// 设置为接收模式
+#define RS485_RX_EN()   HAL_GPIO_WritePin(RS485_DE_PORT, RS485_DE_PIN, GPIO_PIN_RESET)
+
+BOOL xMBPortSerialInit(UCHAR ucPORT, ULONG ulBaudRate, UCHAR ucDataBits, eMBParity eParity)
+{
+    // UART已在CubeMX中配置，这里只需要启用接收中断
+    HAL_UART_Receive_IT(&amp;huart1, &amp;ucRxByte, 1);
+    RS485_RX_EN();  // 默认接收模式
+    return TRUE;
+}
+
+void vMBPortSerialEnable(BOOL xRxEnable, BOOL xTxEnable)
+{
+    if (xRxEnable) {
+        RS485_RX_EN();
+        HAL_UART_Receive_IT(&amp;huart1, &amp;ucRxByte, 1);
+    } else {
+        HAL_UART_AbortReceive_IT(&amp;huart1);
+    }
+
+    if (xTxEnable) {
+        RS485_TX_EN();
+    }
+}
+
+BOOL xMBPortSerialPutByte(CHAR ucByte)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t*)&amp;ucByte, 1, 100);
+    return TRUE;
+}
+
+BOOL xMBPortSerialGetByte(CHAR * pucByte)
+{
+    *pucByte = ucRxByte;
+    return TRUE;
+}
+
+// UART接收中断回调
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart-&gt;Instance == USART1) {
+        pxMBFrameCBByteReceived();  // 通知Modbus有新字节
+        HAL_UART_Receive_IT(&amp;huart1, &amp;ucRxByte, 1);
+    }
+}
+</code></pre>
+<h4 id="_10">实现定时器</h4>
+<p>在<code>porttimer.c</code>中实现：</p>
+<pre><code class="language-c">#include &quot;tim.h&quot;
+
+BOOL xMBPortTimersInit(USHORT usTim1Timerout50us)
+{
+    // 使用TIM2，配置为50us中断
+    // 计算ARR值: (72MHz / 预分频) * 50us - 1
+    __HAL_TIM_SET_AUTORELOAD(&amp;htim2, usTim1Timerout50us - 1);
+    return TRUE;
+}
+
+void vMBPortTimersEnable(void)
+{
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+}
+
+void vMBPortTimersDisable(void)
+{
+    HAL_TIM_Base_Stop_IT(&amp;htim2);
+}
+
+// 定时器中断回调
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim-&gt;Instance == TIM2) {
+        pxMBPortCBTimerExpired();  // 通知Modbus定时器超时
+    }
+}
+</code></pre>
+<h3 id="15">1.5 实现寄存器回调函数</h3>
+<h4 id="_11">定义寄存器数据</h4>
+<pre><code class="language-c">// 保持寄存器（可读写）
+#define REG_HOLDING_START   0
+#define REG_HOLDING_NREGS   10
+static USHORT usRegHoldingBuf[REG_HOLDING_NREGS] = {
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+};
+
+// 输入寄存器（只读）
+#define REG_INPUT_START     0
+#define REG_INPUT_NREGS     5
+static USHORT usRegInputBuf[REG_INPUT_NREGS] = {
+    0, 0, 0, 0, 0  // 将存储传感器数据
+};
+
+// 线圈（可读写）
+#define REG_COILS_START     0
+#define REG_COILS_SIZE      8
+static UCHAR ucRegCoilsBuf[REG_COILS_SIZE / 8] = {0};
+
+// 离散输入（只读）
+#define REG_DISCRETE_START  0
+#define REG_DISCRETE_SIZE   8
+static UCHAR ucRegDiscreteBuf[REG_DISCRETE_SIZE / 8] = {0};
+</code></pre>
+<h4 id="_12">实现保持寄存器回调</h4>
+<pre><code class="language-c">eMBErrorCode eMBRegHoldingCB(UCHAR * pucRegBuffer, USHORT usAddress, 
+                              USHORT usNRegs, eMBRegisterMode eMode)
+{
+    eMBErrorCode eStatus = MB_ENOERR;
+    USHORT iRegIndex;
+
+    // 检查地址范围
+    if ((usAddress &gt;= REG_HOLDING_START) &amp;&amp;
+        (usAddress + usNRegs &lt;= REG_HOLDING_START + REG_HOLDING_NREGS)) {
+
+        iRegIndex = usAddress - REG_HOLDING_START;
+
+        switch (eMode) {
+            case MB_REG_READ:
+                // 读取寄存器
+                while (usNRegs &gt; 0) {
+                    *pucRegBuffer++ = (UCHAR)(usRegHoldingBuf[iRegIndex] &gt;&gt; 8);
+                    *pucRegBuffer++ = (UCHAR)(usRegHoldingBuf[iRegIndex] &amp; 0xFF);
+                    iRegIndex++;
+                    usNRegs--;
+                }
+                break;
+
+            case MB_REG_WRITE:
+                // 写入寄存器
+                while (usNRegs &gt; 0) {
+                    usRegHoldingBuf[iRegIndex] = *pucRegBuffer++ &lt;&lt; 8;
+                    usRegHoldingBuf[iRegIndex] |= *pucRegBuffer++;
+                    iRegIndex++;
+                    usNRegs--;
+                }
+                break;
+        }
+    } else {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
+}
+</code></pre>
+<h4 id="_13">实现输入寄存器回调</h4>
+<pre><code class="language-c">eMBErrorCode eMBRegInputCB(UCHAR * pucRegBuffer, USHORT usAddress, USHORT usNRegs)
+{
+    eMBErrorCode eStatus = MB_ENOERR;
+    USHORT iRegIndex;
+
+    if ((usAddress &gt;= REG_INPUT_START) &amp;&amp;
+        (usAddress + usNRegs &lt;= REG_INPUT_START + REG_INPUT_NREGS)) {
+
+        iRegIndex = usAddress - REG_INPUT_START;
+
+        while (usNRegs &gt; 0) {
+            *pucRegBuffer++ = (UCHAR)(usRegInputBuf[iRegIndex] &gt;&gt; 8);
+            *pucRegBuffer++ = (UCHAR)(usRegInputBuf[iRegIndex] &amp; 0xFF);
+            iRegIndex++;
+            usNRegs--;
+        }
+    } else {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
+}
+</code></pre>
+<h4 id="_14">实现线圈回调</h4>
+<pre><code class="language-c">eMBErrorCode eMBRegCoilsCB(UCHAR * pucRegBuffer, USHORT usAddress, 
+                            USHORT usNCoils, eMBRegisterMode eMode)
+{
+    eMBErrorCode eStatus = MB_ENOERR;
+    USHORT iNCoils = usNCoils;
+    USHORT usBitOffset;
+
+    if ((usAddress &gt;= REG_COILS_START) &amp;&amp;
+        (usAddress + usNCoils &lt;= REG_COILS_START + REG_COILS_SIZE)) {
+
+        usBitOffset = usAddress - REG_COILS_START;
+
+        switch (eMode) {
+            case MB_REG_READ:
+                while (iNCoils &gt; 0) {
+                    *pucRegBuffer++ = xMBUtilGetBits(ucRegCoilsBuf, usBitOffset,
+                        (UCHAR)(iNCoils &gt; 8 ? 8 : iNCoils));
+                    iNCoils -= (iNCoils &gt; 8) ? 8 : iNCoils;
+                    usBitOffset += 8;
+                }
+                break;
+
+            case MB_REG_WRITE:
+                while (iNCoils &gt; 0) {
+                    xMBUtilSetBits(ucRegCoilsBuf, usBitOffset,
+                        (UCHAR)(iNCoils &gt; 8 ? 8 : iNCoils), *pucRegBuffer++);
+                    iNCoils -= (iNCoils &gt; 8) ? 8 : iNCoils;
+                    usBitOffset += 8;
+                }
+                break;
+        }
+    } else {
+        eStatus = MB_ENOREG;
+    }
+
+    return eStatus;
+}
+</code></pre>
+<h3 id="16">1.6 主程序实现</h3>
+<pre><code class="language-c">#include &quot;mb.h&quot;
+
+// Modbus从站地址
+#define MB_SLAVE_ADDR   1
+
+int main(void)
+{
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_TIM2_Init();
+
+    // 初始化Modbus RTU从站
+    // 参数: 从站地址, 串口号, 波特率, 校验位
+    eMBInit(MB_RTU, MB_SLAVE_ADDR, 0, 9600, MB_PAR_NONE);
+
+    // 启用Modbus
+    eMBEnable();
+
+    while (1)
+    {
+        // Modbus轮询处理
+        eMBPoll();
+
+        // 更新传感器数据到输入寄存器
+        // 这里使用模拟数据，实际应用中读取真实传感器
+        usRegInputBuf[0] = 250;  // 温度 * 10 (25.0°C)
+        usRegInputBuf[1] = 650;  // 湿度 * 10 (65.0%)
+        usRegInputBuf[2] = HAL_GetTick() / 1000;  // 运行时间（秒）
+
+        // 根据线圈状态控制LED
+        if (xMBUtilGetBits(ucRegCoilsBuf, 0, 1)) {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);  // LED亮
+        } else {
+            HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_SET);    // LED灭
+        }
+
+        HAL_Delay(10);
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>eMBInit()</code>：初始化Modbus协议栈
+- <code>eMBEnable()</code>：启用Modbus通信
+- <code>eMBPoll()</code>：必须在主循环中定期调用，处理Modbus通信
+- 定期更新输入寄存器的传感器数据
+- 根据线圈状态控制输出</p>
+<h2 id="2modbus-poll">步骤2：使用Modbus Poll测试</h2>
+<h3 id="21-modbus-poll">2.1 配置Modbus Poll</h3>
+<ol>
+<li>打开Modbus Poll软件</li>
+<li>创建新连接：
+   - Connection -&gt; Connect
+   - Connection: Serial Port
+   - Port: 选择USB转RS485的COM口
+   - Baud: 9600
+   - Parity: None
+   - Data Bits: 8
+   - Stop Bits: 1</li>
+<li>配置从站地址：
+   - Setup -&gt; Read/Write Definition
+   - Slave ID: 1
+   - Function: 03 (Read Holding Registers)
+   - Address: 0
+   - Quantity: 10</li>
+</ol>
+<h3 id="22">2.2 测试读取保持寄存器</h3>
+<ol>
+<li>点击"Poll"按钮开始轮询</li>
+<li>应该看到10个寄存器的值：100, 200, 300...1000</li>
+<li>双击某个寄存器值进行修改</li>
+<li>观察STM32是否接收到新值</li>
+</ol>
+<h3 id="23">2.3 测试读取输入寄存器</h3>
+<ol>
+<li>Setup -&gt; Read/Write Definition</li>
+<li>Function: 04 (Read Input Registers)</li>
+<li>Address: 0</li>
+<li>Quantity: 3</li>
+<li>应该看到温度、湿度和运行时间数据</li>
+</ol>
+<h3 id="24">2.4 测试线圈控制</h3>
+<ol>
+<li>Setup -&gt; Read/Write Definition</li>
+<li>Function: 01 (Read Coils)</li>
+<li>Address: 0</li>
+<li>Quantity: 8</li>
+<li>双击线圈0，设置为1</li>
+<li>观察STM32的LED是否点亮</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 能够成功读取所有类型的寄存器
+- 能够写入保持寄存器和线圈
+- LED根据线圈状态变化</p>
+<h2 id="3esp32-modbus-tcp">步骤3：ESP32 Modbus TCP服务器</h2>
+<h3 id="31-arduino">3.1 Arduino实现</h3>
+<h4 id="modbustcp">安装ModbusTCP库</h4>
+<p>在Arduino IDE中：
+- 工具 -&gt; 管理库
+- 搜索"ModbusTCP"
+- 安装"ModbusTCP-ESP32"</p>
+<h4 id="_15">基础代码框架</h4>
+<pre><code class="language-c">#include &lt;WiFi.h&gt;
+#include &lt;ModbusTCP.h&gt;
+
+// WiFi配置
+const char* ssid = &quot;你的WiFi名称&quot;;
+const char* password = &quot;你的WiFi密码&quot;;
+
+// Modbus TCP服务器
+ModbusTCP mb;
+
+// 寄存器定义
+#define COIL_START      0
+#define COIL_COUNT      10
+#define HREG_START      0
+#define HREG_COUNT      10
+#define IREG_START      0
+#define IREG_COUNT      5
+
+void setup() {
+    Serial.begin(115200);
+
+    // 连接WiFi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+    }
+    Serial.println(&quot;\nWiFi连接成功&quot;);
+    Serial.print(&quot;IP地址: &quot;);
+    Serial.println(WiFi.localIP());
+
+    // 启动Modbus TCP服务器
+    mb.server();
+
+    // 添加寄存器
+    for (int i = 0; i &lt; HREG_COUNT; i++) {
+        mb.addHreg(HREG_START + i, i * 100);
+    }
+    for (int i = 0; i &lt; IREG_COUNT; i++) {
+        mb.addIreg(IREG_START + i, 0);
+    }
+    for (int i = 0; i &lt; COIL_COUNT; i++) {
+        mb.addCoil(COIL_START + i, false);
+    }
+
+    Serial.println(&quot;Modbus TCP服务器已启动&quot;);
+}
+
+void loop() {
+    // 处理Modbus请求
+    mb.task();
+
+    // 更新传感器数据到输入寄存器
+    static unsigned long lastUpdate = 0;
+    if (millis() - lastUpdate &gt; 1000) {
+        lastUpdate = millis();
+
+        // 模拟传感器数据
+        float temperature = 20.0 + random(0, 100) / 10.0;
+        float humidity = 50.0 + random(0, 300) / 10.0;
+
+        mb.Ireg(IREG_START + 0, (uint16_t)(temperature * 10));
+        mb.Ireg(IREG_START + 1, (uint16_t)(humidity * 10));
+        mb.Ireg(IREG_START + 2, millis() / 1000);
+    }
+
+    // 根据线圈状态控制LED
+    if (mb.Coil(COIL_START)) {
+        digitalWrite(LED_BUILTIN, HIGH);
+    } else {
+        digitalWrite(LED_BUILTIN, LOW);
+    }
+
+    delay(10);
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>mb.server()</code>：启动Modbus TCP服务器（默认端口502）
+- <code>mb.addHreg()</code>：添加保持寄存器
+- <code>mb.addIreg()</code>：添加输入寄存器
+- <code>mb.addCoil()</code>：添加线圈
+- <code>mb.task()</code>：处理Modbus请求，必须在loop中调用
+- <code>mb.Ireg()</code>：读写输入寄存器
+- <code>mb.Coil()</code>：读写线圈</p>
+<h3 id="32-esp-idf">3.2 ESP-IDF实现</h3>
+<h4 id="menuconfig">配置menuconfig</h4>
+<pre><code class="language-bash">idf.py menuconfig
+</code></pre>
+<p>在Component config -&gt; Modbus configuration中：
+- 启用Modbus TCP
+- 配置最大连接数
+- 配置端口号（默认502）</p>
+<h4 id="_16">主程序代码</h4>
+<pre><code class="language-c">#include &quot;esp_modbus_slave.h&quot;
+#include &quot;mbcontroller.h&quot;
+
+// Modbus寄存器映射
+#define MB_REG_HOLDING_START    0
+#define MB_REG_HOLDING_SIZE     10
+#define MB_REG_INPUT_START      0
+#define MB_REG_INPUT_SIZE       5
+#define MB_REG_COILS_START      0
+#define MB_REG_COILS_SIZE       10
+
+// 寄存器数据
+static uint16_t holding_reg_area[MB_REG_HOLDING_SIZE] = {
+    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+};
+static uint16_t input_reg_area[MB_REG_INPUT_SIZE] = {0};
+static uint8_t coils_area[MB_REG_COILS_SIZE / 8 + 1] = {0};
+
+// Modbus寄存器描述符
+static const mb_register_area_descriptor_t reg_area[] = {
+    {
+        MB_PARAM_HOLDING,
+        MB_REG_HOLDING_START,
+        MB_REG_HOLDING_SIZE,
+        (void*)holding_reg_area
+    },
+    {
+        MB_PARAM_INPUT,
+        MB_REG_INPUT_START,
+        MB_REG_INPUT_SIZE,
+        (void*)input_reg_area
+    },
+    {
+        MB_PARAM_COIL,
+        MB_REG_COILS_START,
+        MB_REG_COILS_SIZE,
+        (void*)coils_area
+    }
+};
+
+void modbus_tcp_slave_init(void)
+{
+    mb_communication_info_t comm_info = {
+        .ip_port = 502,
+        .ip_addr_type = MB_IPV4,
+        .ip_mode = MB_MODE_TCP,
+        .ip_addr = NULL,
+        .ip_netif_ptr = NULL
+    };
+
+    // 初始化Modbus控制器
+    ESP_ERROR_CHECK(mbc_slave_init_tcp(&amp;comm_info));
+
+    // 设置寄存器区域
+    ESP_ERROR_CHECK(mbc_slave_set_descriptor(reg_area, 
+        sizeof(reg_area) / sizeof(reg_area[0])));
+
+    // 启动Modbus
+    ESP_ERROR_CHECK(mbc_slave_start());
+
+    ESP_LOGI(TAG, &quot;Modbus TCP从站已启动&quot;);
+}
+
+void app_main(void)
+{
+    // 初始化WiFi
+    wifi_init_sta();
+
+    // 初始化Modbus
+    modbus_tcp_slave_init();
+
+    while (1) {
+        // 更新传感器数据
+        input_reg_area[0] = 250;  // 温度
+        input_reg_area[1] = 650;  // 湿度
+        input_reg_area[2] = esp_timer_get_time() / 1000000;  // 运行时间
+
+        // 检查寄存器变化
+        mb_event_group_t event = mbc_slave_check_event(MB_READ_WRITE_MASK);
+        if (event &amp; MB_EVENT_HOLDING_REG_WR) {
+            ESP_LOGI(TAG, &quot;保持寄存器被写入&quot;);
+        }
+        if (event &amp; MB_EVENT_COILS_WR) {
+            ESP_LOGI(TAG, &quot;线圈被写入&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<h2 id="4modbus-tcp">步骤4：Modbus TCP客户端测试</h2>
+<h3 id="41-modbus-poll">4.1 使用Modbus Poll测试</h3>
+<ol>
+<li>打开Modbus Poll</li>
+<li>Connection -&gt; Connect</li>
+<li>Connection: Modbus TCP/IP</li>
+<li>IP Address: ESP32的IP地址</li>
+<li>Port: 502</li>
+<li>Slave ID: 1（或255表示任意）</li>
+<li>配置读取功能和地址</li>
+<li>点击Poll开始测试</li>
+</ol>
+<h3 id="42-python">4.2 使用Python测试</h3>
+<p>安装pymodbus库：</p>
+<pre><code class="language-bash">pip install pymodbus
+</code></pre>
+<h4 id="_17">读取寄存器</h4>
+<pre><code class="language-python">from pymodbus.client import ModbusTcpClient
+
+# 连接到Modbus TCP服务器
+client = ModbusTcpClient('192.168.1.100', port=502)
+client.connect()
+
+# 读取保持寄存器
+result = client.read_holding_registers(address=0, count=10, slave=1)
+if not result.isError():
+    print(&quot;保持寄存器:&quot;, result.registers)
+
+# 读取输入寄存器
+result = client.read_input_registers(address=0, count=5, slave=1)
+if not result.isError():
+    print(&quot;输入寄存器:&quot;, result.registers)
+    print(f&quot;温度: {result.registers[0] / 10.0}°C&quot;)
+    print(f&quot;湿度: {result.registers[1] / 10.0}%&quot;)
+
+# 读取线圈
+result = client.read_coils(address=0, count=10, slave=1)
+if not result.isError():
+    print(&quot;线圈状态:&quot;, result.bits)
+
+client.close()
+</code></pre>
+<h4 id="_18">写入寄存器</h4>
+<pre><code class="language-python">from pymodbus.client import ModbusTcpClient
+
+client = ModbusTcpClient('192.168.1.100', port=502)
+client.connect()
+
+# 写单个保持寄存器
+client.write_register(address=0, value=999, slave=1)
+
+# 写多个保持寄存器
+client.write_registers(address=0, values=[111, 222, 333], slave=1)
+
+# 写单个线圈
+client.write_coil(address=0, value=True, slave=1)
+
+# 写多个线圈
+client.write_coils(address=0, values=[True, False, True, False], slave=1)
+
+client.close()
+</code></pre>
+<h2 id="5modbus">步骤5：Modbus主站实现</h2>
+<h3 id="51-arduino-modbus">5.1 Arduino Modbus主站</h3>
+<h4 id="modbusmaster">安装ModbusMaster库</h4>
+<pre><code class="language-bash"># 在Arduino IDE中安装ModbusMaster库
+</code></pre>
+<h4 id="_19">主站代码</h4>
+<pre><code class="language-c">#include &lt;ModbusMaster.h&gt;
+
+// Modbus主站对象
+ModbusMaster node;
+
+// RS485方向控制
+#define MAX485_DE   4
+#define MAX485_RE   5
+
+void preTransmission() {
+    digitalWrite(MAX485_RE, HIGH);
+    digitalWrite(MAX485_DE, HIGH);
+}
+
+void postTransmission() {
+    digitalWrite(MAX485_RE, LOW);
+    digitalWrite(MAX485_DE, LOW);
+}
+
+void setup() {
+    Serial.begin(115200);
+    Serial2.begin(9600);  // Modbus串口
+
+    pinMode(MAX485_RE, OUTPUT);
+    pinMode(MAX485_DE, OUTPUT);
+    digitalWrite(MAX485_RE, LOW);
+    digitalWrite(MAX485_DE, LOW);
+
+    // 初始化Modbus主站
+    node.begin(1, Serial2);  // 从站地址1
+    node.preTransmission(preTransmission);
+    node.postTransmission(postTransmission);
+
+    Serial.println(&quot;Modbus主站已启动&quot;);
+}
+
+void loop() {
+    uint8_t result;
+    uint16_t data[10];
+
+    // 读取保持寄存器
+    result = node.readHoldingRegisters(0, 10);
+    if (result == node.ku8MBSuccess) {
+        Serial.println(&quot;保持寄存器:&quot;);
+        for (int i = 0; i &lt; 10; i++) {
+            data[i] = node.getResponseBuffer(i);
+            Serial.printf(&quot;  [%d] = %d\n&quot;, i, data[i]);
+        }
+    } else {
+        Serial.printf(&quot;读取失败，错误码: 0x%02X\n&quot;, result);
+    }
+
+    delay(1000);
+
+    // 读取输入寄存器
+    result = node.readInputRegisters(0, 3);
+    if (result == node.ku8MBSuccess) {
+        float temp = node.getResponseBuffer(0) / 10.0;
+        float humi = node.getResponseBuffer(1) / 10.0;
+        uint16_t time = node.getResponseBuffer(2);
+        Serial.printf(&quot;温度: %.1f°C, 湿度: %.1f%%, 运行时间: %ds\n&quot;, 
+                      temp, humi, time);
+    }
+
+    delay(1000);
+
+    // 写单个寄存器
+    result = node.writeSingleRegister(0, 1234);
+    if (result == node.ku8MBSuccess) {
+        Serial.println(&quot;写入成功&quot;);
+    }
+
+    delay(1000);
+
+    // 控制线圈
+    static bool ledState = false;
+    ledState = !ledState;
+    result = node.writeSingleCoil(0, ledState);
+    if (result == node.ku8MBSuccess) {
+        Serial.printf(&quot;LED状态: %s\n&quot;, ledState ? &quot;ON&quot; : &quot;OFF&quot;);
+    }
+
+    delay(2000);
+}
+</code></pre>
+<h3 id="52-esp32-modbus-tcp">5.2 ESP32 Modbus TCP主站</h3>
+<pre><code class="language-c">#include &lt;WiFi.h&gt;
+#include &lt;ModbusTCP.h&gt;
+
+const char* ssid = &quot;你的WiFi名称&quot;;
+const char* password = &quot;你的WiFi密码&quot;;
+
+// Modbus TCP客户端
+ModbusTCP mb;
+
+// 从站IP地址
+IPAddress remote(192, 168, 1, 100);
+
+void setup() {
+    Serial.begin(115200);
+
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+    }
+    Serial.println(&quot;\nWiFi连接成功&quot;);
+
+    // 连接到Modbus TCP从站
+    mb.client();
+
+    Serial.println(&quot;Modbus TCP主站已启动&quot;);
+}
+
+void loop() {
+    // 连接到从站
+    if (!mb.isConnected(remote)) {
+        mb.connect(remote);
+        Serial.println(&quot;连接到从站...&quot;);
+        delay(1000);
+        return;
+    }
+
+    // 读取保持寄存器
+    if (mb.readHreg(remote, 0, 10)) {
+        Serial.println(&quot;保持寄存器:&quot;);
+        for (int i = 0; i &lt; 10; i++) {
+            Serial.printf(&quot;  [%d] = %d\n&quot;, i, mb.Hreg(i));
+        }
+    }
+
+    delay(1000);
+
+    // 读取输入寄存器
+    if (mb.readIreg(remote, 0, 3)) {
+        float temp = mb.Ireg(0) / 10.0;
+        float humi = mb.Ireg(1) / 10.0;
+        uint16_t time = mb.Ireg(2);
+        Serial.printf(&quot;温度: %.1f°C, 湿度: %.1f%%, 运行时间: %ds\n&quot;, 
+                      temp, humi, time);
+    }
+
+    delay(1000);
+
+    // 写入寄存器
+    mb.writeHreg(remote, 0, 5678);
+
+    delay(1000);
+
+    // 控制线圈
+    static bool ledState = false;
+    ledState = !ledState;
+    mb.writeCoil(remote, 0, ledState);
+    Serial.printf(&quot;LED状态: %s\n&quot;, ledState ? &quot;ON&quot; : &quot;OFF&quot;);
+
+    delay(2000);
+}
+</code></pre>
+<h2 id="6">步骤6：实际应用案例</h2>
+<h3 id="61">6.1 多传感器数据采集系统</h3>
+<h4 id="_20">系统架构</h4>
+<pre><code class="language-text">[传感器1] --\
+[传感器2] ----&gt; [STM32 Modbus从站] --RS485--&gt; [ESP32 Modbus主站] --WiFi--&gt; [云平台]
+[传感器3] --/
+</code></pre>
+<h4 id="stm32">STM32从站代码（多传感器）</h4>
+<pre><code class="language-c">#include &quot;dht11.h&quot;
+#include &quot;adc.h&quot;
+
+// 寄存器映射
+// 输入寄存器0-9: 传感器数据
+// 保持寄存器0-9: 配置参数
+// 线圈0-7: 控制输出
+
+void updateSensorData(void)
+{
+    // 读取DHT11温湿度
+    DHT11_Data_TypeDef dht11_data;
+    DHT11_Read_TempAndHumidity(&amp;dht11_data);
+    usRegInputBuf[0] = dht11_data.temp_int * 10 + dht11_data.temp_deci;
+    usRegInputBuf[1] = dht11_data.humi_int * 10 + dht11_data.humi_deci;
+
+    // 读取ADC光照传感器
+    uint16_t adc_value = HAL_ADC_GetValue(&amp;hadc1);
+    usRegInputBuf[2] = adc_value;
+
+    // 读取土壤湿度传感器
+    uint16_t soil_moisture = HAL_ADC_GetValue(&amp;hadc2);
+    usRegInputBuf[3] = soil_moisture;
+
+    // 系统状态
+    usRegInputBuf[4] = HAL_GetTick() / 1000;  // 运行时间
+    usRegInputBuf[5] = 1;  // 设备在线标志
+}
+
+void controlOutputs(void)
+{
+    // 根据线圈状态控制继电器
+    if (xMBUtilGetBits(ucRegCoilsBuf, 0, 1)) {
+        HAL_GPIO_WritePin(RELAY1_GPIO_Port, RELAY1_Pin, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(RELAY1_GPIO_Port, RELAY1_Pin, GPIO_PIN_RESET);
+    }
+
+    if (xMBUtilGetBits(ucRegCoilsBuf, 1, 1)) {
+        HAL_GPIO_WritePin(RELAY2_GPIO_Port, RELAY2_Pin, GPIO_PIN_SET);
+    } else {
+        HAL_GPIO_WritePin(RELAY2_GPIO_Port, RELAY2_Pin, GPIO_PIN_RESET);
+    }
+}
+
+int main(void)
+{
+    // ... 初始化代码 ...
+
+    while (1)
+    {
+        eMBPoll();
+        updateSensorData();
+        controlOutputs();
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h3 id="62-esp32modbus-rtumodbus-tcp">6.2 ESP32网关（Modbus RTU转Modbus TCP）</h3>
+<pre><code class="language-c">#include &lt;WiFi.h&gt;
+#include &lt;ModbusTCP.h&gt;
+#include &lt;ModbusMaster.h&gt;
+
+// WiFi配置
+const char* ssid = &quot;你的WiFi名称&quot;;
+const char* password = &quot;你的WiFi密码&quot;;
+
+// Modbus TCP服务器
+ModbusTCP mbTCP;
+
+// Modbus RTU主站
+ModbusMaster mbRTU;
+
+// RS485控制
+#define MAX485_DE   4
+#define MAX485_RE   5
+
+void preTransmission() {
+    digitalWrite(MAX485_RE, HIGH);
+    digitalWrite(MAX485_DE, HIGH);
+}
+
+void postTransmission() {
+    digitalWrite(MAX485_RE, LOW);
+    digitalWrite(MAX485_DE, LOW);
+}
+
+void setup() {
+    Serial.begin(115200);
+    Serial2.begin(9600);  // Modbus RTU
+
+    // RS485控制引脚
+    pinMode(MAX485_RE, OUTPUT);
+    pinMode(MAX485_DE, OUTPUT);
+    digitalWrite(MAX485_RE, LOW);
+    digitalWrite(MAX485_DE, LOW);
+
+    // 连接WiFi
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+    }
+    Serial.println(&quot;\nWiFi连接成功&quot;);
+    Serial.print(&quot;IP地址: &quot;);
+    Serial.println(WiFi.localIP());
+
+    // 初始化Modbus TCP服务器
+    mbTCP.server();
+    for (int i = 0; i &lt; 20; i++) {
+        mbTCP.addHreg(i, 0);
+        mbTCP.addIreg(i, 0);
+    }
+
+    // 初始化Modbus RTU主站
+    mbRTU.begin(1, Serial2);  // 从站地址1
+    mbRTU.preTransmission(preTransmission);
+    mbRTU.postTransmission(postTransmission);
+
+    Serial.println(&quot;Modbus网关已启动&quot;);
+}
+
+void loop() {
+    // 处理Modbus TCP请求
+    mbTCP.task();
+
+    // 定期从RTU从站读取数据
+    static unsigned long lastRead = 0;
+    if (millis() - lastRead &gt; 1000) {
+        lastRead = millis();
+
+        // 读取RTU从站的输入寄存器
+        uint8_t result = mbRTU.readInputRegisters(0, 10);
+        if (result == mbRTU.ku8MBSuccess) {
+            // 将数据复制到TCP服务器的输入寄存器
+            for (int i = 0; i &lt; 10; i++) {
+                mbTCP.Ireg(i, mbRTU.getResponseBuffer(i));
+            }
+        }
+
+        // 读取RTU从站的保持寄存器
+        result = mbRTU.readHoldingRegisters(0, 10);
+        if (result == mbRTU.ku8MBSuccess) {
+            // 将数据复制到TCP服务器的保持寄存器
+            for (int i = 0; i &lt; 10; i++) {
+                mbTCP.Hreg(i, mbRTU.getResponseBuffer(i));
+            }
+        }
+    }
+
+    delay(10);
+}
+</code></pre>
+<p><strong>网关功能</strong>：
+- 接收Modbus TCP请求
+- 转发到Modbus RTU从站
+- 将RTU从站数据映射到TCP服务器
+- 实现协议转换和数据缓存</p>
+<h2 id="_21">故障排除</h2>
+<h3 id="1modbus-rtu">问题1：Modbus RTU通信失败</h3>
+<p><strong>可能原因</strong>：
+- RS485接线错误（A/B反接）
+- 波特率不匹配
+- 从站地址错误
+- 缺少终端电阻
+- 方向控制引脚配置错误</p>
+<p><strong>解决方法</strong>：
+1. 检查RS485接线，确保A-A、B-B连接
+2. 确认主从站波特率一致
+3. 验证从站地址设置
+4. 在总线两端添加120Ω终端电阻
+5. 检查DE/RE引脚控制逻辑</p>
+<h3 id="2crc">问题2：CRC校验错误</h3>
+<p><strong>可能原因</strong>：
+- 数据传输错误
+- 波特率不匹配
+- 电磁干扰
+- 线缆质量差</p>
+<p><strong>解决方法</strong>：
+1. 降低波特率（如从115200降到9600）
+2. 使用屏蔽双绞线
+3. 缩短通信距离
+4. 添加滤波电容</p>
+<h3 id="3modbus-tcp">问题3：Modbus TCP连接超时</h3>
+<p><strong>可能原因</strong>：
+- IP地址错误
+- 端口被占用
+- 防火墙阻止
+- 网络不通</p>
+<p><strong>解决方法</strong>：
+1. ping测试网络连通性
+2. 确认端口502未被占用
+3. 关闭防火墙或添加例外
+4. 检查路由器设置</p>
+<h3 id="4">问题4：寄存器读写失败</h3>
+<p><strong>可能原因</strong>：
+- 地址超出范围
+- 功能码不支持
+- 数据类型错误
+- 权限不足</p>
+<p><strong>解决方法</strong>：
+1. 检查寄存器地址范围
+2. 确认从站支持该功能码
+3. 验证数据格式（大小端）
+4. 检查读写权限设置</p>
+<h3 id="5">问题5：多从站冲突</h3>
+<p><strong>可能原因</strong>：
+- 从站地址重复
+- 响应时间过长
+- 总线负载过重</p>
+<p><strong>解决方法</strong>：
+1. 确保每个从站地址唯一
+2. 增加主站轮询间隔
+3. 减少单次读取的寄存器数量
+4. 优化从站响应速度</p>
+<h2 id="_22">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ Modbus协议的基本原理和数据模型</li>
+<li>✅ Modbus RTU和Modbus TCP的区别和应用</li>
+<li>✅ 主从通信机制和寄存器操作</li>
+<li>✅ STM32 Modbus RTU从站的完整实现</li>
+<li>✅ ESP32 Modbus TCP服务器的开发</li>
+<li>✅ Modbus主站的编程方法</li>
+<li>✅ 协议转换网关的实现</li>
+</ul>
+<p><strong>关键要点</strong>：
+- Modbus是工业自动化领域最广泛使用的通信协议
+- RTU适合现场总线，TCP适合以太网环境
+- 主从架构简单可靠，易于实现
+- 四种寄存器类型满足不同应用需求
+- CRC校验确保数据传输可靠性</p>
+<h2 id="_23">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现Modbus ASCII模式通信</li>
+<li><strong>挑战2</strong>：添加多从站轮询功能</li>
+<li><strong>挑战3</strong>：实现Modbus异常响应处理</li>
+<li><strong>挑战4</strong>：开发Web界面监控Modbus设备</li>
+<li><strong>挑战5</strong>：实现Modbus数据记录和分析</li>
+</ol>
+<h2 id="_24">完整代码</h2>
+<p>完整的项目代码可以在GitHub上找到：</p>
+<pre><code class="language-text">GitHub仓库: https://github.com/embedded-knowledge/modbus-tutorial
+</code></pre>
+<p>项目包含：
+- STM32 Modbus RTU从站完整代码
+- ESP32 Modbus TCP服务器代码
+- Modbus主站示例代码
+- 协议转换网关代码
+- Python测试脚本</p>
+<h2 id="_25">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li>CAN总线协议应用 - 学习汽车和工业总线</li>
+<li>OPC UA工业互联协议 - 学习现代工业通信</li>
+<li>MQTT协议应用开发 - 学习物联网通信</li>
+<li>Profibus/Profinet - 学习西门子工业协议</li>
+</ul>
+<h2 id="_26">参考资料</h2>
+<ol>
+<li>Modbus协议规范 - https://modbus.org/docs/Modbus_Application_Protocol_V1_1b3.pdf</li>
+<li>Modbus over Serial Line规范 - https://modbus.org/docs/Modbus_over_serial_line_V1_02.pdf</li>
+<li>FreeModbus库文档 - https://github.com/armink/FreeModbus_Slave-Master-RTT-STM32</li>
+<li>ESP-MQTT组件文档 - https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/modbus.html</li>
+<li>ModbusMaster库 - https://github.com/4-20ma/ModbusMaster</li>
+<li>pymodbus文档 - https://pymodbus.readthedocs.io/</li>
+</ol>
+<h2 id="modbus_5">常见Modbus术语</h2>
+<ul>
+<li><strong>Master（主站）</strong>：发起通信请求的设备</li>
+<li><strong>Slave（从站）</strong>：响应主站请求的设备</li>
+<li><strong>RTU</strong>：Remote Terminal Unit，远程终端单元模式</li>
+<li><strong>ASCII</strong>：American Standard Code for Information Interchange，ASCII模式</li>
+<li><strong>TCP</strong>：Transmission Control Protocol，基于TCP/IP的Modbus</li>
+<li><strong>Coil（线圈）</strong>：可读写的单bit数据，用于数字输出</li>
+<li><strong>Discrete Input（离散输入）</strong>：只读的单bit数据，用于数字输入</li>
+<li><strong>Holding Register（保持寄存器）</strong>：可读写的16bit数据</li>
+<li><strong>Input Register（输入寄存器）</strong>：只读的16bit数据</li>
+<li><strong>Function Code（功能码）</strong>：指定操作类型的代码</li>
+<li><strong>CRC</strong>：Cyclic Redundancy Check，循环冗余校验</li>
+<li><strong>MBAP</strong>：Modbus Application Protocol，Modbus应用协议头</li>
+</ul>
+<h2 id="modbus_6">Modbus功能码速查表</h2>
+<table>
+<thead>
+<tr>
+<th>功能码</th>
+<th>名称</th>
+<th>操作</th>
+<th>数据类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>Read Coils</td>
+<td>读</td>
+<td>线圈</td>
+</tr>
+<tr>
+<td>02</td>
+<td>Read Discrete Inputs</td>
+<td>读</td>
+<td>离散输入</td>
+</tr>
+<tr>
+<td>03</td>
+<td>Read Holding Registers</td>
+<td>读</td>
+<td>保持寄存器</td>
+</tr>
+<tr>
+<td>04</td>
+<td>Read Input Registers</td>
+<td>读</td>
+<td>输入寄存器</td>
+</tr>
+<tr>
+<td>05</td>
+<td>Write Single Coil</td>
+<td>写</td>
+<td>单个线圈</td>
+</tr>
+<tr>
+<td>06</td>
+<td>Write Single Register</td>
+<td>写</td>
+<td>单个保持寄存器</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Write Multiple Coils</td>
+<td>写</td>
+<td>多个线圈</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Write Multiple Registers</td>
+<td>写</td>
+<td>多个保持寄存器</td>
+</tr>
+<tr>
+<td>23</td>
+<td>Read/Write Multiple Registers</td>
+<td>读写</td>
+<td>保持寄存器</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_27">异常码说明</h2>
+<table>
+<thead>
+<tr>
+<th>异常码</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>01</td>
+<td>Illegal Function</td>
+<td>不支持的功能码</td>
+</tr>
+<tr>
+<td>02</td>
+<td>Illegal Data Address</td>
+<td>非法的数据地址</td>
+</tr>
+<tr>
+<td>03</td>
+<td>Illegal Data Value</td>
+<td>非法的数据值</td>
+</tr>
+<tr>
+<td>04</td>
+<td>Slave Device Failure</td>
+<td>从站设备故障</td>
+</tr>
+<tr>
+<td>05</td>
+<td>Acknowledge</td>
+<td>确认（需要长时间处理）</td>
+</tr>
+<tr>
+<td>06</td>
+<td>Slave Device Busy</td>
+<td>从站设备忙</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

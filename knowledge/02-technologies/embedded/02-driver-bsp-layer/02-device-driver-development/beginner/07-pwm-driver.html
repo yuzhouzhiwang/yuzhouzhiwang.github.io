@@ -1,0 +1,1841 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>PWM驱动开发：电机调速控制 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/">02-device-driver-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#pwm_1">PWM的工作原理</a></li>
+<li><a href="#stm32pwm">STM32定时器PWM功能</a></li>
+<li><a href="#pwm_2">PWM频率和分辨率</a></li>
+<li><a href="#pwm_3">PWM占空比计算</a></li>
+<li><a href="#gpio">定时器通道与GPIO映射</a></li>
+</ul>
+</li>
+<li><a href="#_3">环境准备</a><ul>
+<li><a href="#_4">硬件要求</a></li>
+<li><a href="#_5">软件要求</a></li>
+<li><a href="#_6">硬件连接</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心内容</a><ul>
+<li><a href="#1gpio">步骤1：GPIO和定时器时钟配置</a></li>
+<li><a href="#2pwm">步骤2：定时器PWM基本配置</a></li>
+<li><a href="#3pwm">步骤3：PWM占空比控制函数</a></li>
+<li><a href="#4led">步骤4：LED呼吸灯效果</a></li>
+<li><a href="#5">步骤5：直流电机速度控制</a></li>
+<li><a href="#6">步骤6：舵机角度控制</a></li>
+</ul>
+</li>
+<li><a href="#_8">实践示例</a><ul>
+<li><a href="#1rgb-led">示例1：RGB LED调色</a></li>
+<li><a href="#2">示例2：小车运动控制</a></li>
+<li><a href="#3pwm_1">示例3：PWM频率测量</a></li>
+<li><a href="#4pwm">示例4：PWM软启动</a></li>
+</ul>
+</li>
+<li><a href="#_9">深入理解</a><ul>
+<li><a href="#pwm_4">互补PWM输出</a></li>
+<li><a href="#pwm-dma">PWM DMA更新</a></li>
+<li><a href="#pwm_5">PWM输入捕获模式</a></li>
+</ul>
+</li>
+<li><a href="#_10">常见问题</a><ul>
+<li><a href="#q1-pwm">Q1: PWM输出没有波形？</a></li>
+<li><a href="#q2-pwm">Q2: PWM频率不准确？</a></li>
+<li><a href="#q3">Q3: 电机运行不平稳，有抖动？</a></li>
+<li><a href="#q4">Q4: 舵机抖动或不响应？</a></li>
+<li><a href="#q5-pwm">Q5: 多通道PWM占空比不一致？</a></li>
+</ul>
+</li>
+<li><a href="#_11">最佳实践</a><ul>
+<li><a href="#1">1. 代码模块化</a></li>
+<li><a href="#2_1">2. 参数验证</a></li>
+<li><a href="#3">3. 使用宏定义</a></li>
+<li><a href="#4">4. 添加调试功能</a></li>
+<li><a href="#5_1">5. 安全保护</a></li>
+</ul>
+</li>
+<li><a href="#_12">进阶学习</a><ul>
+<li><a href="#1-pwm">1. 高级PWM技术</a></li>
+<li><a href="#2-pwm">2. PWM与其他外设配合</a></li>
+<li><a href="#3_1">3. 电机控制算法</a></li>
+<li><a href="#4-pwm">4. PWM应用扩展</a></li>
+</ul>
+</li>
+<li><a href="#_13">学习资源</a><ul>
+<li><a href="#_14">官方文档</a></li>
+<li><a href="#_15">推荐工具</a></li>
+<li><a href="#_16">实践项目</a></li>
+</ul>
+</li>
+<li><a href="#_17">总结</a></li>
+<li><a href="#_18">延伸阅读</a></li>
+<li><a href="#_19">参考资料</a></li>
+<li><a href="#_20">练习题</a><ul>
+<li><a href="#_21">基础练习</a></li>
+<li><a href="#_22">进阶练习</a></li>
+<li><a href="#_23">综合练习</a></li>
+<li><a href="#_24">思考题</a></li>
+</ul>
+</li>
+<li><a href="#_25">实验任务</a><ul>
+<li><a href="#1led">任务1：LED调光器（必做）</a></li>
+<li><a href="#2_2">任务2：电机调速器（必做）</a></li>
+<li><a href="#3_2">任务3：舵机控制器（选做）</a></li>
+<li><a href="#4_1">任务4：智能小车（选做）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="pwm">PWM驱动开发：电机调速控制</h1>
+<h2 id="_1">概述</h2>
+<p>PWM（Pulse Width Modulation，脉宽调制）是嵌入式系统中最常用的控制技术之一。通过改变脉冲信号的占空比，PWM可以实现对电机速度、LED亮度、舵机角度等的精确控制。掌握PWM驱动开发是实现各种控制应用的基础。</p>
+<p>本教程将通过实战项目，带你深入理解PWM的工作原理和驱动开发方法，包括PWM配置、占空比调节、频率设置、多通道控制和高级应用等核心技术。</p>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解PWM的工作原理和关键参数</li>
+<li>掌握定时器PWM模式的配置方法</li>
+<li>实现单通道和多通道PWM输出</li>
+<li>控制直流电机的转速和方向</li>
+<li>实现LED呼吸灯和RGB调色</li>
+<li>理解互补PWM和死区时间的应用</li>
+<li>设计可靠的PWM驱动程序</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="pwm_1">PWM的工作原理</h3>
+<p>PWM通过快速开关信号来模拟模拟电压输出，其核心思想是通过改变高电平持续时间来控制平均功率。</p>
+<p><strong>PWM基本概念</strong>：</p>
+<pre><code>PWM信号波形：
+    _____       _____       _____
+___|     |_____|     |_____|     |_____
+   |&lt;-T-&gt;|     |&lt;-T-&gt;|     |&lt;-T-&gt;|
+   |&lt;Th&gt;|      |&lt;Th&gt;|      |&lt;Th&gt;|
+
+T  = 周期（Period）
+Th = 高电平时间（High Time）
+Tl = 低电平时间（Low Time）
+f  = 频率 = 1/T
+D  = 占空比 = Th/T × 100%
+</code></pre>
+<p><strong>占空比与输出功率</strong>：</p>
+<pre><code>占空比 0%：   ___________________  → 输出 0V
+占空比 25%：  ___   ___   ___   _  → 输出 0.825V (3.3V × 25%)
+占空比 50%：  _____   _____   ___  → 输出 1.65V (3.3V × 50%)
+占空比 75%：  _______   _______    → 输出 2.475V (3.3V × 75%)
+占空比 100%： ___________________  → 输出 3.3V
+</code></pre>
+<p><strong>PWM的优势</strong>：</p>
+<ol>
+<li><strong>效率高</strong>：开关状态功耗低，能量损失小</li>
+<li><strong>控制精确</strong>：可以实现精细的功率调节</li>
+<li><strong>实现简单</strong>：只需要数字信号，不需要DAC</li>
+<li><strong>抗干扰强</strong>：数字信号比模拟信号更稳定</li>
+<li><strong>成本低</strong>：不需要额外的模拟电路</li>
+</ol>
+<h3 id="stm32pwm">STM32定时器PWM功能</h3>
+<p>STM32的定时器可以产生PWM信号，每个定时器通道都可以独立配置为PWM输出。</p>
+<p><strong>PWM相关寄存器</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>功能</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ARR</td>
+<td>自动重载寄存器</td>
+<td>决定PWM周期</td>
+</tr>
+<tr>
+<td>CCRx</td>
+<td>捕获/比较寄存器</td>
+<td>决定占空比</td>
+</tr>
+<tr>
+<td>CCMRx</td>
+<td>捕获/比较模式寄存器</td>
+<td>配置PWM模式</td>
+</tr>
+<tr>
+<td>CCER</td>
+<td>捕获/比较使能寄存器</td>
+<td>使能输出</td>
+</tr>
+<tr>
+<td>BDTR</td>
+<td>刹车和死区寄存器</td>
+<td>高级定时器专用</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PWM模式</strong>：</p>
+<p>STM32定时器支持两种PWM模式：</p>
+<p><strong>PWM模式1（Mode 1）</strong>：
+- 向上计数时：CNT &lt; CCR时输出高电平，CNT ≥ CCR时输出低电平
+- 向下计数时：CNT &gt; CCR时输出低电平，CNT ≤ CCR时输出高电平
+- 最常用的模式</p>
+<p><strong>PWM模式2（Mode 2）</strong>：
+- 与模式1相反
+- 向上计数时：CNT &lt; CCR时输出低电平，CNT ≥ CCR时输出高电平</p>
+<p><strong>PWM模式1波形示意</strong>：</p>
+<pre><code>向上计数模式：
+CNT:  0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 0 ...
+ARR = 9, CCR = 3
+
+PWM:  ___     _______________________________
+         |___|
+      高  低电平（CNT ≥ CCR）
+
+占空比 = 3/10 = 30%
+</code></pre>
+<h3 id="pwm_2">PWM频率和分辨率</h3>
+<p>PWM的频率和分辨率是相互制约的，需要根据应用场景进行权衡。</p>
+<p><strong>频率计算公式</strong>：</p>
+<pre><code>PWM频率 = 定时器时钟频率 / [(PSC + 1) × (ARR + 1)]
+
+占空比分辨率 = ARR + 1
+
+例如：定时器时钟 = 84MHz
+PSC = 83, ARR = 999
+PWM频率 = 84MHz / (84 × 1000) = 1kHz
+分辨率 = 1000 (0.1%精度)
+</code></pre>
+<p><strong>频率与分辨率的权衡</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>应用</th>
+<th>推荐频率</th>
+<th>分辨率要求</th>
+<th>ARR设置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LED调光</td>
+<td>1-10kHz</td>
+<td>8-10位</td>
+<td>255-1023</td>
+</tr>
+<tr>
+<td>直流电机</td>
+<td>10-20kHz</td>
+<td>8-10位</td>
+<td>255-1023</td>
+</tr>
+<tr>
+<td>舵机控制</td>
+<td>50Hz</td>
+<td>高精度</td>
+<td>19999</td>
+</tr>
+<tr>
+<td>开关电源</td>
+<td>50-500kHz</td>
+<td>较低</td>
+<td>100-255</td>
+</tr>
+<tr>
+<td>音频输出</td>
+<td>44.1kHz</td>
+<td>8位</td>
+<td>255</td>
+</tr>
+</tbody>
+</table>
+<p><strong>频率选择原则</strong>：</p>
+<ol>
+<li>
+<p><strong>LED调光</strong>：
+   - 频率 &gt; 100Hz：避免人眼感知闪烁
+   - 推荐1-10kHz：平衡效果和EMI</p>
+</li>
+<li>
+<p><strong>电机控制</strong>：
+   - 频率 &gt; 20kHz：超出人耳听觉范围
+   - 推荐10-20kHz：减少噪音和发热</p>
+</li>
+<li>
+<p><strong>舵机控制</strong>：
+   - 频率 = 50Hz：标准舵机频率
+   - 脉宽范围：0.5ms-2.5ms</p>
+</li>
+<li>
+<p><strong>开关电源</strong>：
+   - 频率越高，滤波电容越小
+   - 但开关损耗也越大</p>
+</li>
+</ol>
+<h3 id="pwm_3">PWM占空比计算</h3>
+<p>占空比决定了输出的平均功率，是PWM控制的核心参数。</p>
+<p><strong>占空比计算公式</strong>：</p>
+<pre><code>占空比 = CCR / (ARR + 1) × 100%
+
+反向计算CCR：
+CCR = 占空比 × (ARR + 1) / 100
+
+例如：ARR = 999
+设置50%占空比：CCR = 0.5 × 1000 = 500
+设置75%占空比：CCR = 0.75 × 1000 = 750
+</code></pre>
+<p><strong>占空比与输出电压</strong>：</p>
+<pre><code>假设电源电压为3.3V：
+
+占空比 0%   → 平均电压 0V    → 电机停止 / LED熄灭
+占空比 25%  → 平均电压 0.825V → 电机慢速 / LED暗
+占空比 50%  → 平均电压 1.65V  → 电机中速 / LED中等亮度
+占空比 75%  → 平均电压 2.475V → 电机快速 / LED亮
+占空比 100% → 平均电压 3.3V   → 电机全速 / LED最亮
+</code></pre>
+<h3 id="gpio">定时器通道与GPIO映射</h3>
+<p>STM32的定时器通道需要映射到特定的GPIO引脚。</p>
+<p><strong>TIM3通道映射（常用）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>通道</th>
+<th>默认引脚</th>
+<th>重映射引脚</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CH1</td>
+<td>PA6</td>
+<td>PB4, PC6</td>
+<td>通道1</td>
+</tr>
+<tr>
+<td>CH2</td>
+<td>PA7</td>
+<td>PB5, PC7</td>
+<td>通道2</td>
+</tr>
+<tr>
+<td>CH3</td>
+<td>PB0</td>
+<td>PC8</td>
+<td>通道3</td>
+</tr>
+<tr>
+<td>CH4</td>
+<td>PB1</td>
+<td>PC9</td>
+<td>通道4</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TIM2通道映射</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>通道</th>
+<th>默认引脚</th>
+<th>重映射引脚</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CH1</td>
+<td>PA0</td>
+<td>PA15, PA5</td>
+</tr>
+<tr>
+<td>CH2</td>
+<td>PA1</td>
+<td>PB3</td>
+</tr>
+<tr>
+<td>CH3</td>
+<td>PA2</td>
+<td>PB10</td>
+</tr>
+<tr>
+<td>CH4</td>
+<td>PA3</td>
+<td>PB11</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TIM1通道映射（高级定时器）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>通道</th>
+<th>默认引脚</th>
+<th>互补输出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CH1</td>
+<td>PA8</td>
+<td>PB13 (CH1N)</td>
+</tr>
+<tr>
+<td>CH2</td>
+<td>PA9</td>
+<td>PB14 (CH2N)</td>
+</tr>
+<tr>
+<td>CH3</td>
+<td>PA10</td>
+<td>PB15 (CH3N)</td>
+</tr>
+<tr>
+<td>CH4</td>
+<td>PA11</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_3">环境准备</h2>
+<h3 id="_4">硬件要求</h3>
+<ul>
+<li>STM32F4系列开发板（如STM32F407VET6）</li>
+<li>直流电机（3-6V）+ L298N电机驱动模块</li>
+<li>LED灯（若干）+ 限流电阻（220Ω）</li>
+<li>舵机（SG90或MG996R）</li>
+<li>示波器或逻辑分析仪（用于观察PWM波形）</li>
+<li>面包板和杜邦线</li>
+</ul>
+<h3 id="_5">软件要求</h3>
+<ul>
+<li>Keil MDK 5.x 或 STM32CubeIDE</li>
+<li>STM32F4 HAL库或标准外设库</li>
+<li>串口调试工具</li>
+</ul>
+<h3 id="_6">硬件连接</h3>
+<pre><code>基本PWM输出（LED控制）：
+- PA6（TIM3_CH1） -&gt; LED1正极 -&gt; 220Ω电阻 -&gt; GND
+- PA7（TIM3_CH2） -&gt; LED2正极 -&gt; 220Ω电阻 -&gt; GND
+- PB0（TIM3_CH3） -&gt; LED3正极 -&gt; 220Ω电阻 -&gt; GND
+- PB1（TIM3_CH4） -&gt; LED4正极 -&gt; 220Ω电阻 -&gt; GND
+
+电机控制（L298N驱动）：
+- PA6（TIM3_CH1） -&gt; L298N IN1（速度控制）
+- PA7（TIM3_CH2） -&gt; L298N IN2（速度控制）
+- PC0（GPIO）     -&gt; L298N IN3（方向控制）
+- PC1（GPIO）     -&gt; L298N IN4（方向控制）
+- L298N OUT1/OUT2 -&gt; 电机M1
+- L298N OUT3/OUT4 -&gt; 电机M2
+- L298N +12V      -&gt; 电源正极（根据电机电压）
+- L298N GND       -&gt; 电源负极和STM32 GND
+
+舵机控制：
+- PA6（TIM3_CH1） -&gt; 舵机信号线（橙色/黄色）
+- 5V              -&gt; 舵机电源线（红色）
+- GND             -&gt; 舵机地线（棕色/黑色）
+
+注意：
+1. LED需要串联限流电阻
+2. 电机驱动模块需要独立供电
+3. 舵机电源和STM32共地
+4. 大功率负载需要使用外部驱动电路
+</code></pre>
+<h2 id="_7">核心内容</h2>
+<h3 id="1gpio">步骤1：GPIO和定时器时钟配置</h3>
+<p>首先需要配置GPIO为复用功能，并使能定时器时钟。</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+
+/**
+ * @brief  配置TIM3的GPIO引脚
+ * @param  无
+ * @retval 无
+ */
+void TIM3_GPIO_Init(void) {
+    // 1. 使能GPIOA和GPIOB时钟
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN;
+
+    // 2. 配置PA6和PA7为复用功能
+    // MODER: 10 = 复用功能
+    GPIOA-&gt;MODER &amp;= ~((0x03 &lt;&lt; (6 * 2)) | (0x03 &lt;&lt; (7 * 2)));
+    GPIOA-&gt;MODER |= (0x02 &lt;&lt; (6 * 2)) | (0x02 &lt;&lt; (7 * 2));
+
+    // 3. 配置PB0和PB1为复用功能
+    GPIOB-&gt;MODER &amp;= ~((0x03 &lt;&lt; (0 * 2)) | (0x03 &lt;&lt; (1 * 2)));
+    GPIOB-&gt;MODER |= (0x02 &lt;&lt; (0 * 2)) | (0x02 &lt;&lt; (1 * 2));
+
+    // 4. 配置输出类型为推挽输出
+    GPIOA-&gt;OTYPER &amp;= ~((1 &lt;&lt; 6) | (1 &lt;&lt; 7));
+    GPIOB-&gt;OTYPER &amp;= ~((1 &lt;&lt; 0) | (1 &lt;&lt; 1));
+
+    // 5. 配置输出速度为高速
+    GPIOA-&gt;OSPEEDR |= (0x03 &lt;&lt; (6 * 2)) | (0x03 &lt;&lt; (7 * 2));
+    GPIOB-&gt;OSPEEDR |= (0x03 &lt;&lt; (0 * 2)) | (0x03 &lt;&lt; (1 * 2));
+
+    // 6. 配置为无上拉下拉
+    GPIOA-&gt;PUPDR &amp;= ~((0x03 &lt;&lt; (6 * 2)) | (0x03 &lt;&lt; (7 * 2)));
+    GPIOB-&gt;PUPDR &amp;= ~((0x03 &lt;&lt; (0 * 2)) | (0x03 &lt;&lt; (1 * 2)));
+
+    // 7. 配置复用功能为TIM3（AF2）
+    // AFR[0]控制引脚0-7，AFR[1]控制引脚8-15
+    GPIOA-&gt;AFR[0] &amp;= ~((0x0F &lt;&lt; (6 * 4)) | (0x0F &lt;&lt; (7 * 4)));
+    GPIOA-&gt;AFR[0] |= (0x02 &lt;&lt; (6 * 4)) | (0x02 &lt;&lt; (7 * 4));  // AF2 = TIM3
+
+    GPIOB-&gt;AFR[0] &amp;= ~((0x0F &lt;&lt; (0 * 4)) | (0x0F &lt;&lt; (1 * 4)));
+    GPIOB-&gt;AFR[0] |= (0x02 &lt;&lt; (0 * 4)) | (0x02 &lt;&lt; (1 * 4));  // AF2 = TIM3
+}
+</code></pre>
+<p><strong>代码说明</strong>：</p>
+<ol>
+<li>
+<p><strong>复用功能配置</strong>：
+   - MODER = 10：配置为复用功能模式
+   - AFR：选择具体的复用功能（TIM3 = AF2）</p>
+</li>
+<li>
+<p><strong>输出特性配置</strong>：
+   - OTYPER = 0：推挽输出（驱动能力强）
+   - OSPEEDR = 11：高速输出（减少边沿抖动）</p>
+</li>
+<li>
+<p><strong>复用功能编号</strong>：
+   - 不同引脚的复用功能编号可能不同
+   - 需要查阅数据手册确认</p>
+</li>
+</ol>
+<h3 id="2pwm">步骤2：定时器PWM基本配置</h3>
+<p>配置定时器的基本参数和PWM模式。</p>
+<pre><code class="language-c">/**
+ * @brief  配置TIM3为PWM模式
+ * @param  freq: PWM频率（Hz）
+ * @param  resolution: 占空比分辨率（ARR+1）
+ * @retval 无
+ */
+void TIM3_PWM_Init(uint32_t freq, uint16_t resolution) {
+    // 1. 使能TIM3时钟（APB1总线）
+    RCC-&gt;APB1ENR |= RCC_APB1ENR_TIM3EN;
+
+    // 2. 配置GPIO
+    TIM3_GPIO_Init();
+
+    // 3. 计算预分频器值
+    // TIM3时钟 = APB1时钟 × 2 = 84MHz（当APB1分频系数≠1时）
+    // PWM频率 = TIM3时钟 / [(PSC+1) × (ARR+1)]
+    uint32_t tim_clk = 84000000;  // 84MHz
+    uint32_t psc = tim_clk / (freq * resolution) - 1;
+
+    // 4. 配置定时器基本参数
+    TIM3-&gt;PSC = psc;              // 预分频器
+    TIM3-&gt;ARR = resolution - 1;   // 自动重载值
+    TIM3-&gt;CR1 = 0;                // 清除控制寄存器
+    TIM3-&gt;CR1 |= TIM_CR1_ARPE;    // 使能自动重载预装载
+
+    // 5. 配置计数模式：向上计数
+    TIM3-&gt;CR1 &amp;= ~TIM_CR1_DIR;
+    TIM3-&gt;CR1 &amp;= ~TIM_CR1_CMS;
+
+    // 6. 配置通道1为PWM模式1
+    TIM3-&gt;CCMR1 &amp;= ~TIM_CCMR1_OC1M;
+    TIM3-&gt;CCMR1 |= (0x06 &lt;&lt; 4);   // 110 = PWM模式1
+    TIM3-&gt;CCMR1 |= TIM_CCMR1_OC1PE;  // 使能预装载
+
+    // 7. 配置通道2为PWM模式1
+    TIM3-&gt;CCMR1 &amp;= ~TIM_CCMR1_OC2M;
+    TIM3-&gt;CCMR1 |= (0x06 &lt;&lt; 12);  // 110 = PWM模式1
+    TIM3-&gt;CCMR1 |= TIM_CCMR1_OC2PE;
+
+    // 8. 配置通道3为PWM模式1
+    TIM3-&gt;CCMR2 &amp;= ~TIM_CCMR2_OC3M;
+    TIM3-&gt;CCMR2 |= (0x06 &lt;&lt; 4);   // 110 = PWM模式1
+    TIM3-&gt;CCMR2 |= TIM_CCMR2_OC3PE;
+
+    // 9. 配置通道4为PWM模式1
+    TIM3-&gt;CCMR2 &amp;= ~TIM_CCMR2_OC4M;
+    TIM3-&gt;CCMR2 |= (0x06 &lt;&lt; 12);  // 110 = PWM模式1
+    TIM3-&gt;CCMR2 |= TIM_CCMR2_OC4PE;
+
+    // 10. 使能通道输出
+    TIM3-&gt;CCER |= TIM_CCER_CC1E;  // 使能通道1输出
+    TIM3-&gt;CCER |= TIM_CCER_CC2E;  // 使能通道2输出
+    TIM3-&gt;CCER |= TIM_CCER_CC3E;  // 使能通道3输出
+    TIM3-&gt;CCER |= TIM_CCER_CC4E;  // 使能通道4输出
+
+    // 11. 初始化CCR为0（占空比0%）
+    TIM3-&gt;CCR1 = 0;
+    TIM3-&gt;CCR2 = 0;
+    TIM3-&gt;CCR3 = 0;
+    TIM3-&gt;CCR4 = 0;
+
+    // 12. 生成更新事件，加载预装载值
+    TIM3-&gt;EGR |= TIM_EGR_UG;
+
+    // 13. 启动定时器
+    TIM3-&gt;CR1 |= TIM_CR1_CEN;
+}
+</code></pre>
+<p><strong>配置要点</strong>：</p>
+<ol>
+<li>
+<p><strong>PWM模式选择</strong>：
+   - 110 = PWM模式1（最常用）
+   - 111 = PWM模式2</p>
+</li>
+<li>
+<p><strong>预装载使能</strong>：
+   - ARPE：ARR预装载
+   - OCxPE：CCR预装载
+   - 防止更新时产生毛刺</p>
+</li>
+<li>
+<p><strong>通道使能</strong>：
+   - CCxE：使能通道输出
+   - CCxP：配置输出极性（0=高电平有效）</p>
+</li>
+</ol>
+<h3 id="3pwm">步骤3：PWM占空比控制函数</h3>
+<p>实现设置PWM占空比的函数。</p>
+<pre><code class="language-c">/**
+ * @brief  设置PWM占空比
+ * @param  channel: 通道号（1-4）
+ * @param  duty: 占空比（0-100）
+ * @retval 无
+ */
+void TIM3_SetPWM(uint8_t channel, uint8_t duty) {
+    // 参数检查
+    if (channel &lt; 1 || channel &gt; 4) return;
+    if (duty &gt; 100) duty = 100;
+
+    // 计算CCR值
+    uint16_t ccr = (TIM3-&gt;ARR + 1) * duty / 100;
+
+    // 设置对应通道的CCR
+    switch (channel) {
+        case 1: TIM3-&gt;CCR1 = ccr; break;
+        case 2: TIM3-&gt;CCR2 = ccr; break;
+        case 3: TIM3-&gt;CCR3 = ccr; break;
+        case 4: TIM3-&gt;CCR4 = ccr; break;
+    }
+}
+
+/**
+ * @brief  设置PWM占空比（高精度）
+ * @param  channel: 通道号（1-4）
+ * @param  ccr: CCR值（0-ARR）
+ * @retval 无
+ */
+void TIM3_SetPWM_Raw(uint8_t channel, uint16_t ccr) {
+    // 参数检查
+    if (channel &lt; 1 || channel &gt; 4) return;
+    if (ccr &gt; TIM3-&gt;ARR) ccr = TIM3-&gt;ARR;
+
+    // 设置CCR
+    switch (channel) {
+        case 1: TIM3-&gt;CCR1 = ccr; break;
+        case 2: TIM3-&gt;CCR2 = ccr; break;
+        case 3: TIM3-&gt;CCR3 = ccr; break;
+        case 4: TIM3-&gt;CCR4 = ccr; break;
+    }
+}
+
+/**
+ * @brief  获取当前占空比
+ * @param  channel: 通道号（1-4）
+ * @retval 占空比（0-100）
+ */
+uint8_t TIM3_GetPWM(uint8_t channel) {
+    uint16_t ccr = 0;
+
+    // 读取CCR值
+    switch (channel) {
+        case 1: ccr = TIM3-&gt;CCR1; break;
+        case 2: ccr = TIM3-&gt;CCR2; break;
+        case 3: ccr = TIM3-&gt;CCR3; break;
+        case 4: ccr = TIM3-&gt;CCR4; break;
+        default: return 0;
+    }
+
+    // 计算占空比
+    return (uint8_t)(ccr * 100 / (TIM3-&gt;ARR + 1));
+}
+</code></pre>
+<h3 id="4led">步骤4：LED呼吸灯效果</h3>
+<p>使用PWM实现LED呼吸灯效果。</p>
+<pre><code class="language-c">/**
+ * @brief  LED呼吸灯效果
+ * @param  channel: PWM通道
+ * @param  speed: 呼吸速度（1-10，越大越快）
+ * @retval 无
+ */
+void LED_Breathing(uint8_t channel, uint8_t speed) {
+    static uint8_t duty = 0;
+    static int8_t direction = 1;  // 1=增加，-1=减少
+
+    // 更新占空比
+    duty += direction * speed;
+
+    // 反转方向
+    if (duty &gt;= 100) {
+        duty = 100;
+        direction = -1;
+    } else if (duty &lt;= 0) {
+        duty = 0;
+        direction = 1;
+    }
+
+    // 设置PWM
+    TIM3_SetPWM(channel, duty);
+}
+
+/**
+ * @brief  主函数 - 呼吸灯示例
+ */
+int main(void) {
+    SystemInit();
+
+    // 初始化PWM：1kHz频率，1000级分辨率
+    TIM3_PWM_Init(1000, 1000);
+
+    while (1) {
+        // 通道1呼吸灯
+        LED_Breathing(1, 1);
+
+        // 延时10ms
+        for (volatile int i = 0; i &lt; 21000; i++);
+    }
+}
+</code></pre>
+<h3 id="5">步骤5：直流电机速度控制</h3>
+<p>使用PWM控制直流电机的转速和方向。</p>
+<pre><code class="language-c">/**
+ * @brief  电机方向控制GPIO初始化
+ * @param  无
+ * @retval 无
+ */
+void Motor_GPIO_Init(void) {
+    // 使能GPIOC时钟
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+
+    // 配置PC0和PC1为输出模式
+    GPIOC-&gt;MODER &amp;= ~((0x03 &lt;&lt; 0) | (0x03 &lt;&lt; 2));
+    GPIOC-&gt;MODER |= (0x01 &lt;&lt; 0) | (0x01 &lt;&lt; 2);
+
+    // 推挽输出
+    GPIOC-&gt;OTYPER &amp;= ~((1 &lt;&lt; 0) | (1 &lt;&lt; 1));
+
+    // 初始化为低电平
+    GPIOC-&gt;ODR &amp;= ~((1 &lt;&lt; 0) | (1 &lt;&lt; 1));
+}
+
+/**
+ * @brief  设置电机速度和方向
+ * @param  motor: 电机编号（1或2）
+ * @param  speed: 速度（-100到100，负数表示反转）
+ * @retval 无
+ */
+void Motor_SetSpeed(uint8_t motor, int8_t speed) {
+    uint8_t pwm_channel;
+    uint8_t dir_pin1, dir_pin2;
+
+    // 选择电机
+    if (motor == 1) {
+        pwm_channel = 1;  // TIM3_CH1
+        dir_pin1 = 0;     // PC0
+        dir_pin2 = 1;     // PC1
+    } else if (motor == 2) {
+        pwm_channel = 2;  // TIM3_CH2
+        dir_pin1 = 2;     // PC2
+        dir_pin2 = 3;     // PC3
+    } else {
+        return;
+    }
+
+    // 设置方向和速度
+    if (speed &gt; 0) {
+        // 正转
+        GPIOC-&gt;BSRR = (1 &lt;&lt; dir_pin1);        // 设置为高
+        GPIOC-&gt;BSRR = (1 &lt;&lt; (dir_pin2 + 16)); // 设置为低
+        TIM3_SetPWM(pwm_channel, speed);
+    } else if (speed &lt; 0) {
+        // 反转
+        GPIOC-&gt;BSRR = (1 &lt;&lt; (dir_pin1 + 16)); // 设置为低
+        GPIOC-&gt;BSRR = (1 &lt;&lt; dir_pin2);        // 设置为高
+        TIM3_SetPWM(pwm_channel, -speed);
+    } else {
+        // 停止
+        GPIOC-&gt;BSRR = (1 &lt;&lt; (dir_pin1 + 16)); // 设置为低
+        GPIOC-&gt;BSRR = (1 &lt;&lt; (dir_pin2 + 16)); // 设置为低
+        TIM3_SetPWM(pwm_channel, 0);
+    }
+}
+
+/**
+ * @brief  电机刹车
+ * @param  motor: 电机编号
+ * @retval 无
+ */
+void Motor_Brake(uint8_t motor) {
+    uint8_t dir_pin1, dir_pin2;
+
+    if (motor == 1) {
+        dir_pin1 = 0;
+        dir_pin2 = 1;
+    } else {
+        dir_pin1 = 2;
+        dir_pin2 = 3;
+    }
+
+    // 两个方向引脚都设为高，实现刹车
+    GPIOC-&gt;BSRR = (1 &lt;&lt; dir_pin1) | (1 &lt;&lt; dir_pin2);
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">int main(void) {
+    SystemInit();
+
+    // 初始化PWM和电机控制
+    TIM3_PWM_Init(20000, 1000);  // 20kHz PWM
+    Motor_GPIO_Init();
+
+    while (1) {
+        // 电机1正转，速度50%
+        Motor_SetSpeed(1, 50);
+        Delay_ms(2000);
+
+        // 电机1反转，速度75%
+        Motor_SetSpeed(1, -75);
+        Delay_ms(2000);
+
+        // 电机1刹车
+        Motor_Brake(1);
+        Delay_ms(1000);
+
+        // 电机1停止
+        Motor_SetSpeed(1, 0);
+        Delay_ms(1000);
+    }
+}
+</code></pre>
+<h3 id="6">步骤6：舵机角度控制</h3>
+<p>舵机需要50Hz的PWM信号，脉宽0.5ms-2.5ms对应0-180度。</p>
+<pre><code class="language-c">/**
+ * @brief  初始化舵机PWM（50Hz）
+ * @param  无
+ * @retval 无
+ */
+void Servo_Init(void) {
+    // 50Hz PWM，周期20ms
+    // TIM3时钟84MHz，PSC=83，ARR=19999
+    // PWM频率 = 84MHz / (84 × 20000) = 50Hz
+    TIM3_PWM_Init(50, 20000);
+}
+
+/**
+ * @brief  设置舵机角度
+ * @param  channel: PWM通道（1-4）
+ * @param  angle: 角度（0-180度）
+ * @retval 无
+ */
+void Servo_SetAngle(uint8_t channel, uint8_t angle) {
+    // 限制角度范围
+    if (angle &gt; 180) angle = 180;
+
+    // 计算脉宽
+    // 0度 = 0.5ms = 1000 CCR
+    // 90度 = 1.5ms = 3000 CCR
+    // 180度 = 2.5ms = 5000 CCR
+    // CCR = 1000 + angle × (5000 - 1000) / 180
+    uint16_t ccr = 1000 + (uint32_t)angle * 4000 / 180;
+
+    // 设置PWM
+    TIM3_SetPWM_Raw(channel, ccr);
+}
+
+/**
+ * @brief  舵机扫描测试
+ * @param  channel: PWM通道
+ * @retval 无
+ */
+void Servo_Sweep(uint8_t channel) {
+    uint8_t angle;
+
+    // 0度到180度
+    for (angle = 0; angle &lt;= 180; angle += 5) {
+        Servo_SetAngle(channel, angle);
+        Delay_ms(50);
+    }
+
+    // 180度到0度
+    for (angle = 180; angle &gt; 0; angle -= 5) {
+        Servo_SetAngle(channel, angle);
+        Delay_ms(50);
+    }
+}
+</code></pre>
+<h2 id="_8">实践示例</h2>
+<h3 id="1rgb-led">示例1：RGB LED调色</h3>
+<p>使用3个PWM通道控制RGB LED实现全彩调色。</p>
+<pre><code class="language-c">/**
+ * @brief  设置RGB颜色
+ * @param  red: 红色亮度（0-100）
+ * @param  green: 绿色亮度（0-100）
+ * @param  blue: 蓝色亮度（0-100）
+ * @retval 无
+ */
+void RGB_SetColor(uint8_t red, uint8_t green, uint8_t blue) {
+    TIM3_SetPWM(1, red);    // 红色 -&gt; CH1
+    TIM3_SetPWM(2, green);  // 绿色 -&gt; CH2
+    TIM3_SetPWM(3, blue);   // 蓝色 -&gt; CH3
+}
+
+/**
+ * @brief  RGB颜色渐变
+ * @param  无
+ * @retval 无
+ */
+void RGB_ColorFade(void) {
+    uint8_t i;
+
+    // 红色渐变到绿色
+    for (i = 0; i &lt;= 100; i++) {
+        RGB_SetColor(100 - i, i, 0);
+        Delay_ms(20);
+    }
+
+    // 绿色渐变到蓝色
+    for (i = 0; i &lt;= 100; i++) {
+        RGB_SetColor(0, 100 - i, i);
+        Delay_ms(20);
+    }
+
+    // 蓝色渐变到红色
+    for (i = 0; i &lt;= 100; i++) {
+        RGB_SetColor(i, 0, 100 - i);
+        Delay_ms(20);
+    }
+}
+
+/**
+ * @brief  主函数 - RGB调色示例
+ */
+int main(void) {
+    SystemInit();
+    TIM3_PWM_Init(1000, 1000);
+
+    while (1) {
+        // 彩虹渐变效果
+        RGB_ColorFade();
+
+        // 预设颜色显示
+        RGB_SetColor(100, 0, 0);    // 红色
+        Delay_ms(1000);
+        RGB_SetColor(0, 100, 0);    // 绿色
+        Delay_ms(1000);
+        RGB_SetColor(0, 0, 100);    // 蓝色
+        Delay_ms(1000);
+        RGB_SetColor(100, 100, 0);  // 黄色
+        Delay_ms(1000);
+        RGB_SetColor(100, 0, 100);  // 紫色
+        Delay_ms(1000);
+        RGB_SetColor(0, 100, 100);  // 青色
+        Delay_ms(1000);
+        RGB_SetColor(100, 100, 100);// 白色
+        Delay_ms(1000);
+    }
+}
+</code></pre>
+<h3 id="2">示例2：小车运动控制</h3>
+<p>使用PWM控制双电机小车的运动。</p>
+<pre><code class="language-c">/**
+ * @brief  小车前进
+ * @param  speed: 速度（0-100）
+ * @retval 无
+ */
+void Car_Forward(uint8_t speed) {
+    Motor_SetSpeed(1, speed);   // 左电机正转
+    Motor_SetSpeed(2, speed);   // 右电机正转
+}
+
+/**
+ * @brief  小车后退
+ * @param  speed: 速度（0-100）
+ * @retval 无
+ */
+void Car_Backward(uint8_t speed) {
+    Motor_SetSpeed(1, -speed);  // 左电机反转
+    Motor_SetSpeed(2, -speed);  // 右电机反转
+}
+
+/**
+ * @brief  小车左转
+ * @param  speed: 速度（0-100）
+ * @retval 无
+ */
+void Car_TurnLeft(uint8_t speed) {
+    Motor_SetSpeed(1, -speed);  // 左电机反转
+    Motor_SetSpeed(2, speed);   // 右电机正转
+}
+
+/**
+ * @brief  小车右转
+ * @param  speed: 速度（0-100）
+ * @retval 无
+ */
+void Car_TurnRight(uint8_t speed) {
+    Motor_SetSpeed(1, speed);   // 左电机正转
+    Motor_SetSpeed(2, -speed);  // 右电机反转
+}
+
+/**
+ * @brief  小车停止
+ * @param  无
+ * @retval 无
+ */
+void Car_Stop(void) {
+    Motor_SetSpeed(1, 0);
+    Motor_SetSpeed(2, 0);
+}
+
+/**
+ * @brief  主函数 - 小车运动示例
+ */
+int main(void) {
+    SystemInit();
+    TIM3_PWM_Init(20000, 1000);
+    Motor_GPIO_Init();
+
+    while (1) {
+        // 前进2秒
+        Car_Forward(60);
+        Delay_ms(2000);
+
+        // 停止1秒
+        Car_Stop();
+        Delay_ms(1000);
+
+        // 后退2秒
+        Car_Backward(60);
+        Delay_ms(2000);
+
+        // 停止1秒
+        Car_Stop();
+        Delay_ms(1000);
+
+        // 左转1秒
+        Car_TurnLeft(50);
+        Delay_ms(1000);
+
+        // 右转1秒
+        Car_TurnRight(50);
+        Delay_ms(1000);
+
+        // 停止
+        Car_Stop();
+        Delay_ms(2000);
+    }
+}
+</code></pre>
+<h3 id="3pwm_1">示例3：PWM频率测量</h3>
+<p>使用示波器或逻辑分析仪测量PWM频率和占空比。</p>
+<pre><code class="language-c">/**
+ * @brief  PWM测试信号生成
+ * @param  无
+ * @retval 无
+ */
+void PWM_TestSignal(void) {
+    // 生成不同频率和占空比的测试信号
+
+    // 测试1：1kHz, 50%占空比
+    TIM3_PWM_Init(1000, 1000);
+    TIM3_SetPWM(1, 50);
+    Delay_ms(5000);
+
+    // 测试2：10kHz, 25%占空比
+    TIM3_PWM_Init(10000, 1000);
+    TIM3_SetPWM(1, 25);
+    Delay_ms(5000);
+
+    // 测试3：20kHz, 75%占空比
+    TIM3_PWM_Init(20000, 1000);
+    TIM3_SetPWM(1, 75);
+    Delay_ms(5000);
+}
+</code></pre>
+<h3 id="4pwm">示例4：PWM软启动</h3>
+<p>实现电机的软启动，避免启动电流过大。</p>
+<pre><code class="language-c">/**
+ * @brief  电机软启动
+ * @param  motor: 电机编号
+ * @param  target_speed: 目标速度（0-100）
+ * @param  ramp_time: 加速时间（ms）
+ * @retval 无
+ */
+void Motor_SoftStart(uint8_t motor, uint8_t target_speed, uint16_t ramp_time) {
+    uint8_t current_speed = 0;
+    uint16_t step_delay = ramp_time / target_speed;
+
+    // 逐步增加速度
+    while (current_speed &lt; target_speed) {
+        current_speed++;
+        Motor_SetSpeed(motor, current_speed);
+        Delay_ms(step_delay);
+    }
+}
+
+/**
+ * @brief  电机软停止
+ * @param  motor: 电机编号
+ * @param  ramp_time: 减速时间（ms）
+ * @retval 无
+ */
+void Motor_SoftStop(uint8_t motor, uint16_t ramp_time) {
+    int8_t current_speed = Motor_GetSpeed(motor);
+    uint16_t step_delay = ramp_time / abs(current_speed);
+
+    // 逐步减少速度
+    while (current_speed != 0) {
+        if (current_speed &gt; 0) {
+            current_speed--;
+        } else {
+            current_speed++;
+        }
+        Motor_SetSpeed(motor, current_speed);
+        Delay_ms(step_delay);
+    }
+}
+</code></pre>
+<h2 id="_9">深入理解</h2>
+<h3 id="pwm_4">互补PWM输出</h3>
+<p>高级定时器（TIM1/TIM8）支持互补PWM输出，用于H桥电机驱动。</p>
+<pre><code class="language-c">/**
+ * @brief  配置TIM1互补PWM输出
+ * @param  无
+ * @retval 无
+ */
+void TIM1_ComplementaryPWM_Init(void) {
+    // 1. GPIO配置
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN | RCC_AHB1ENR_GPIOBEN;
+
+    // PA8: TIM1_CH1, PB13: TIM1_CH1N
+    GPIOA-&gt;MODER |= (0x02 &lt;&lt; 16);  // PA8复用
+    GPIOB-&gt;MODER |= (0x02 &lt;&lt; 26);  // PB13复用
+    GPIOA-&gt;AFR[1] |= (0x01 &lt;&lt; 0);  // AF1 = TIM1
+    GPIOB-&gt;AFR[1] |= (0x01 &lt;&lt; 20); // AF1 = TIM1
+
+    // 2. 使能TIM1时钟
+    RCC-&gt;APB2ENR |= RCC_APB2ENR_TIM1EN;
+
+    // 3. 配置定时器
+    TIM1-&gt;PSC = 83;
+    TIM1-&gt;ARR = 999;
+    TIM1-&gt;CR1 |= TIM_CR1_ARPE;
+
+    // 4. 配置PWM模式
+    TIM1-&gt;CCMR1 |= (0x06 &lt;&lt; 4);    // PWM模式1
+    TIM1-&gt;CCMR1 |= TIM_CCMR1_OC1PE;
+
+    // 5. 使能主输出和互补输出
+    TIM1-&gt;CCER |= TIM_CCER_CC1E;   // 使能CH1
+    TIM1-&gt;CCER |= TIM_CCER_CC1NE;  // 使能CH1N
+
+    // 6. 配置死区时间
+    // DTG = 72，死区时间 = 72 × (1/84MHz) ≈ 0.86μs
+    TIM1-&gt;BDTR |= (72 &lt;&lt; 0);
+
+    // 7. 使能主输出
+    TIM1-&gt;BDTR |= TIM_BDTR_MOE;
+
+    // 8. 启动定时器
+    TIM1-&gt;CR1 |= TIM_CR1_CEN;
+}
+</code></pre>
+<p><strong>死区时间说明</strong>：</p>
+<pre><code>死区时间是为了防止H桥上下桥臂同时导通造成短路。
+
+无死区：
+CH1:  _____|‾‾‾‾‾|_____
+CH1N: ‾‾‾‾‾|_____|‾‾‾‾‾
+      ↑ 可能同时导通
+
+有死区：
+CH1:  _____|‾‾‾‾‾|_____
+CH1N: ‾‾‾‾‾‾|___|‾‾‾‾‾‾
+         ↑死区↑
+</code></pre>
+<h3 id="pwm-dma">PWM DMA更新</h3>
+<p>使用DMA可以实现PWM波形表输出，用于音频播放等应用。</p>
+<pre><code class="language-c">#define WAVE_SIZE 100
+uint16_t wave_table[WAVE_SIZE];
+
+/**
+ * @brief  生成正弦波表
+ * @param  无
+ * @retval 无
+ */
+void Generate_SineWave(void) {
+    for (uint16_t i = 0; i &lt; WAVE_SIZE; i++) {
+        // 生成0-ARR范围的正弦波
+        float angle = 2.0f * 3.14159f * i / WAVE_SIZE;
+        wave_table[i] = (uint16_t)((sin(angle) + 1.0f) * TIM3-&gt;ARR / 2.0f);
+    }
+}
+
+/**
+ * @brief  配置PWM DMA更新
+ * @param  无
+ * @retval 无
+ */
+void PWM_DMA_Init(void) {
+    // 1. 生成波形表
+    Generate_SineWave();
+
+    // 2. 配置DMA
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_DMA1EN;
+
+    DMA1_Stream5-&gt;CR = 0;
+    while (DMA1_Stream5-&gt;CR &amp; DMA_SxCR_EN);
+
+    DMA1_Stream5-&gt;PAR = (uint32_t)&amp;TIM3-&gt;CCR1;
+    DMA1_Stream5-&gt;M0AR = (uint32_t)wave_table;
+    DMA1_Stream5-&gt;NDTR = WAVE_SIZE;
+
+    DMA1_Stream5-&gt;CR = (5 &lt;&lt; 25) |  // Channel 5
+                       (1 &lt;&lt; 16) |  // 优先级中
+                       (1 &lt;&lt; 13) |  // 内存半字
+                       (1 &lt;&lt; 11) |  // 外设半字
+                       (1 &lt;&lt; 10) |  // 内存递增
+                       (1 &lt;&lt; 8) |   // 循环模式
+                       (1 &lt;&lt; 6);    // 内存到外设
+
+    DMA1_Stream5-&gt;CR |= DMA_SxCR_EN;
+
+    // 3. 使能TIM3 DMA请求
+    TIM3-&gt;DIER |= TIM_DIER_CC1DE;
+}
+</code></pre>
+<h3 id="pwm_5">PWM输入捕获模式</h3>
+<p>定时器可以配置为PWM输入模式，用于测量外部PWM信号。</p>
+<pre><code class="language-c">/**
+ * @brief  配置PWM输入捕获
+ * @param  无
+ * @retval 无
+ */
+void PWM_Input_Init(void) {
+    // 配置TIM3_CH1为PWM输入模式
+    // 可以同时测量频率和占空比
+
+    // 1. GPIO配置（PA6）
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+    GPIOA-&gt;MODER |= (0x02 &lt;&lt; 12);
+    GPIOA-&gt;AFR[0] |= (0x02 &lt;&lt; 24);
+
+    // 2. 定时器配置
+    RCC-&gt;APB1ENR |= RCC_APB1ENR_TIM3EN;
+    TIM3-&gt;PSC = 83;  // 1MHz计数频率
+    TIM3-&gt;ARR = 0xFFFF;
+
+    // 3. 配置CH1为输入，直接映射到TI1
+    TIM3-&gt;CCMR1 |= (0x01 &lt;&lt; 0);  // CC1S = 01
+
+    // 4. 配置CH2为输入，交叉映射到TI1
+    TIM3-&gt;CCMR1 |= (0x02 &lt;&lt; 8);  // CC2S = 10
+
+    // 5. 配置触发源为TI1FP1
+    TIM3-&gt;SMCR |= (0x05 &lt;&lt; 4);   // TS = 101
+
+    // 6. 配置从模式为复位模式
+    TIM3-&gt;SMCR |= (0x04 &lt;&lt; 0);   // SMS = 100
+
+    // 7. 使能捕获
+    TIM3-&gt;CCER |= TIM_CCER_CC1E | TIM_CCER_CC2E;
+
+    // 8. 启动定时器
+    TIM3-&gt;CR1 |= TIM_CR1_CEN;
+}
+
+/**
+ * @brief  读取PWM输入参数
+ * @param  freq: 频率指针（Hz）
+ * @param  duty: 占空比指针（0-100）
+ * @retval 无
+ */
+void PWM_Input_Read(uint32_t *freq, uint8_t *duty) {
+    uint16_t period = TIM3-&gt;CCR1;  // 周期
+    uint16_t pulse = TIM3-&gt;CCR2;   // 脉宽
+
+    if (period &gt; 0) {
+        *freq = 1000000 / period;  // 频率
+        *duty = (uint8_t)(pulse * 100 / period);  // 占空比
+    }
+}
+</code></pre>
+<h2 id="_10">常见问题</h2>
+<h3 id="q1-pwm">Q1: PWM输出没有波形？</h3>
+<p><strong>可能原因</strong>：
+1. GPIO未配置为复用功能
+2. 复用功能编号错误
+3. 通道未使能
+4. 定时器未启动
+5. CCR值为0或等于ARR</p>
+<p><strong>排查步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查GPIO配置
+printf(&quot;GPIOA MODER: 0x%08X\r\n&quot;, GPIOA-&gt;MODER);
+printf(&quot;GPIOA AFR[0]: 0x%08X\r\n&quot;, GPIOA-&gt;AFR[0]);
+
+// 2. 检查定时器配置
+printf(&quot;TIM3 CR1: 0x%04X\r\n&quot;, TIM3-&gt;CR1);
+printf(&quot;TIM3 PSC: %d\r\n&quot;, TIM3-&gt;PSC);
+printf(&quot;TIM3 ARR: %d\r\n&quot;, TIM3-&gt;ARR);
+printf(&quot;TIM3 CCR1: %d\r\n&quot;, TIM3-&gt;CCR1);
+
+// 3. 检查通道使能
+printf(&quot;TIM3 CCER: 0x%04X\r\n&quot;, TIM3-&gt;CCER);
+
+// 4. 检查定时器是否运行
+printf(&quot;TIM3 CNT: %d\r\n&quot;, TIM3-&gt;CNT);
+</code></pre>
+<h3 id="q2-pwm">Q2: PWM频率不准确？</h3>
+<p><strong>可能原因</strong>：
+1. 时钟频率计算错误
+2. PSC或ARR设置不当
+3. 系统时钟配置错误</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 重新计算并验证
+uint32_t tim_clk = 84000000;  // 确认定时器时钟
+uint32_t target_freq = 1000;  // 目标频率
+uint16_t resolution = 1000;   // 分辨率
+
+uint32_t psc = tim_clk / (target_freq * resolution) - 1;
+printf(&quot;PSC should be: %d\r\n&quot;, psc);
+
+// 实际频率
+uint32_t actual_freq = tim_clk / ((psc + 1) * (TIM3-&gt;ARR + 1));
+printf(&quot;Actual frequency: %d Hz\r\n&quot;, actual_freq);
+</code></pre>
+<h3 id="q3">Q3: 电机运行不平稳，有抖动？</h3>
+<p><strong>可能原因</strong>：
+1. PWM频率过低
+2. 电源电压不稳定
+3. 驱动电路问题
+4. 负载过大</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 提高PWM频率到20kHz
+TIM3_PWM_Init(20000, 1000);
+
+// 2. 添加软启动
+Motor_SoftStart(1, 60, 1000);
+
+// 3. 添加滤波电容（硬件）
+// 在电机两端并联0.1μF电容
+
+// 4. 检查电源电压
+// 使用示波器观察电源纹波
+</code></pre>
+<h3 id="q4">Q4: 舵机抖动或不响应？</h3>
+<p><strong>可能原因</strong>：
+1. PWM频率不是50Hz
+2. 脉宽范围不正确
+3. 电源电流不足
+4. 信号线干扰</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 确认PWM频率为50Hz
+// ARR = 19999时，周期 = 20ms = 50Hz
+TIM3_PWM_Init(50, 20000);
+
+// 2. 调整脉宽范围
+// 不同舵机的脉宽范围可能不同
+// 标准：0.5ms-2.5ms
+// 有些舵机：1ms-2ms
+void Servo_SetAngle_Custom(uint8_t channel, uint8_t angle) {
+    // 调整这些值以适应你的舵机
+    uint16_t min_pulse = 1000;  // 0度脉宽
+    uint16_t max_pulse = 5000;  // 180度脉宽
+
+    uint16_t ccr = min_pulse + (uint32_t)angle * (max_pulse - min_pulse) / 180;
+    TIM3_SetPWM_Raw(channel, ccr);
+}
+
+// 3. 使用独立电源供电
+// 舵机电流较大，不要与MCU共用电源
+</code></pre>
+<h3 id="q5-pwm">Q5: 多通道PWM占空比不一致？</h3>
+<p><strong>可能原因</strong>：
+1. 各通道CCR设置不同
+2. 输出极性配置不同
+3. 硬件负载不同</p>
+<p><strong>排查方法</strong>：</p>
+<pre><code class="language-c">// 检查所有通道配置
+void PWM_CheckChannels(void) {
+    printf(&quot;Channel 1: CCR=%d, CCER=0x%04X\r\n&quot;, 
+           TIM3-&gt;CCR1, TIM3-&gt;CCER &amp; 0x000F);
+    printf(&quot;Channel 2: CCR=%d, CCER=0x%04X\r\n&quot;, 
+           TIM3-&gt;CCR2, (TIM3-&gt;CCER &amp; 0x00F0) &gt;&gt; 4);
+    printf(&quot;Channel 3: CCR=%d, CCER=0x%04X\r\n&quot;, 
+           TIM3-&gt;CCR3, (TIM3-&gt;CCER &amp; 0x0F00) &gt;&gt; 8);
+    printf(&quot;Channel 4: CCR=%d, CCER=0x%04X\r\n&quot;, 
+           TIM3-&gt;CCR4, (TIM3-&gt;CCER &amp; 0xF000) &gt;&gt; 12);
+}
+
+// 统一设置所有通道
+void PWM_SetAll(uint8_t duty) {
+    uint16_t ccr = (TIM3-&gt;ARR + 1) * duty / 100;
+    TIM3-&gt;CCR1 = ccr;
+    TIM3-&gt;CCR2 = ccr;
+    TIM3-&gt;CCR3 = ccr;
+    TIM3-&gt;CCR4 = ccr;
+}
+</code></pre>
+<h2 id="_11">最佳实践</h2>
+<h3 id="1">1. 代码模块化</h3>
+<p>将PWM驱动封装成独立模块：</p>
+<pre><code class="language-c">// pwm_driver.h
+#ifndef __PWM_DRIVER_H
+#define __PWM_DRIVER_H
+
+#include &quot;stm32f4xx.h&quot;
+
+// PWM初始化
+void PWM_Init(TIM_TypeDef *TIMx, uint32_t freq, uint16_t resolution);
+
+// 设置占空比
+void PWM_SetDuty(TIM_TypeDef *TIMx, uint8_t channel, uint8_t duty);
+
+// 设置CCR值
+void PWM_SetCCR(TIM_TypeDef *TIMx, uint8_t channel, uint16_t ccr);
+
+// 获取占空比
+uint8_t PWM_GetDuty(TIM_TypeDef *TIMx, uint8_t channel);
+
+// 启动/停止PWM
+void PWM_Start(TIM_TypeDef *TIMx, uint8_t channel);
+void PWM_Stop(TIM_TypeDef *TIMx, uint8_t channel);
+
+#endif
+</code></pre>
+<h3 id="2_1">2. 参数验证</h3>
+<p>在函数中添加参数检查：</p>
+<pre><code class="language-c">void PWM_SetDuty(TIM_TypeDef *TIMx, uint8_t channel, uint8_t duty) {
+    // 参数检查
+    if (TIMx == NULL) return;
+    if (channel &lt; 1 || channel &gt; 4) return;
+    if (duty &gt; 100) duty = 100;
+
+    // 计算CCR
+    uint16_t ccr = (TIMx-&gt;ARR + 1) * duty / 100;
+
+    // 设置CCR
+    switch (channel) {
+        case 1: TIMx-&gt;CCR1 = ccr; break;
+        case 2: TIMx-&gt;CCR2 = ccr; break;
+        case 3: TIMx-&gt;CCR3 = ccr; break;
+        case 4: TIMx-&gt;CCR4 = ccr; break;
+    }
+}
+</code></pre>
+<h3 id="3">3. 使用宏定义</h3>
+<p>提高代码可读性和可维护性：</p>
+<pre><code class="language-c">// PWM通道定义
+#define PWM_CH1  1
+#define PWM_CH2  2
+#define PWM_CH3  3
+#define PWM_CH4  4
+
+// 电机定义
+#define MOTOR_LEFT   1
+#define MOTOR_RIGHT  2
+
+// 舵机角度定义
+#define SERVO_MIN_ANGLE  0
+#define SERVO_MAX_ANGLE  180
+#define SERVO_CENTER     90
+
+// 使用示例
+Motor_SetSpeed(MOTOR_LEFT, 60);
+Servo_SetAngle(PWM_CH1, SERVO_CENTER);
+</code></pre>
+<h3 id="4">4. 添加调试功能</h3>
+<pre><code class="language-c">/**
+ * @brief  打印PWM配置信息
+ * @param  TIMx: 定时器
+ * @retval 无
+ */
+void PWM_PrintConfig(TIM_TypeDef *TIMx) {
+    printf(&quot;=== PWM Configuration ===\r\n&quot;);
+    printf(&quot;PSC: %d\r\n&quot;, TIMx-&gt;PSC);
+    printf(&quot;ARR: %d\r\n&quot;, TIMx-&gt;ARR);
+    printf(&quot;Frequency: %d Hz\r\n&quot;, 
+           84000000 / ((TIMx-&gt;PSC + 1) * (TIMx-&gt;ARR + 1)));
+    printf(&quot;Resolution: %d\r\n&quot;, TIMx-&gt;ARR + 1);
+    printf(&quot;\r\n&quot;);
+    printf(&quot;Channel 1: CCR=%d, Duty=%d%%\r\n&quot;, 
+           TIMx-&gt;CCR1, TIMx-&gt;CCR1 * 100 / (TIMx-&gt;ARR + 1));
+    printf(&quot;Channel 2: CCR=%d, Duty=%d%%\r\n&quot;, 
+           TIMx-&gt;CCR2, TIMx-&gt;CCR2 * 100 / (TIMx-&gt;ARR + 1));
+    printf(&quot;Channel 3: CCR=%d, Duty=%d%%\r\n&quot;, 
+           TIMx-&gt;CCR3, TIMx-&gt;CCR3 * 100 / (TIMx-&gt;ARR + 1));
+    printf(&quot;Channel 4: CCR=%d, Duty=%d%%\r\n&quot;, 
+           TIMx-&gt;CCR4, TIMx-&gt;CCR4 * 100 / (TIMx-&gt;ARR + 1));
+}
+</code></pre>
+<h3 id="5_1">5. 安全保护</h3>
+<p>添加必要的安全保护机制：</p>
+<pre><code class="language-c">/**
+ * @brief  电机安全控制
+ * @param  motor: 电机编号
+ * @param  speed: 速度
+ * @retval 无
+ */
+void Motor_SetSpeed_Safe(uint8_t motor, int8_t speed) {
+    // 限制最大速度
+    #define MAX_SPEED 80
+    if (speed &gt; MAX_SPEED) speed = MAX_SPEED;
+    if (speed &lt; -MAX_SPEED) speed = -MAX_SPEED;
+
+    // 检查过流保护
+    if (Motor_IsOverCurrent(motor)) {
+        Motor_SetSpeed(motor, 0);
+        printf(&quot;Motor %d overcurrent!\r\n&quot;, motor);
+        return;
+    }
+
+    // 正常设置速度
+    Motor_SetSpeed(motor, speed);
+}
+
+/**
+ * @brief  PWM输出限制
+ * @param  channel: 通道
+ * @param  duty: 占空比
+ * @param  min: 最小占空比
+ * @param  max: 最大占空比
+ * @retval 无
+ */
+void PWM_SetDuty_Limited(uint8_t channel, uint8_t duty, 
+                         uint8_t min, uint8_t max) {
+    if (duty &lt; min) duty = min;
+    if (duty &gt; max) duty = max;
+    TIM3_SetPWM(channel, duty);
+}
+</code></pre>
+<h2 id="_12">进阶学习</h2>
+<h3 id="1-pwm">1. 高级PWM技术</h3>
+<p><strong>相位移PWM</strong>：
+- 多相电机控制
+- 降低EMI干扰
+- 提高效率</p>
+<p><strong>中心对齐PWM</strong>：
+- 对称波形
+- 减少谐波
+- 适合电机控制</p>
+<h3 id="2-pwm">2. PWM与其他外设配合</h3>
+<p><strong>PWM + ADC</strong>：
+- 电机电流检测
+- 闭环速度控制
+- 功率监测</p>
+<p><strong>PWM + 编码器</strong>：
+- 精确位置控制
+- 速度反馈
+- PID控制</p>
+<p><strong>PWM + DMA</strong>：
+- 波形表输出
+- 音频播放
+- 复杂时序生成</p>
+<h3 id="3_1">3. 电机控制算法</h3>
+<p><strong>PID控制</strong>：
+- 速度闭环控制
+- 位置闭环控制
+- 参数整定</p>
+<p><strong>FOC控制</strong>：
+- 无刷电机控制
+- 高效率
+- 低噪音</p>
+<h3 id="4-pwm">4. PWM应用扩展</h3>
+<p><strong>WS2812 LED驱动</strong>：
+- 使用PWM+DMA
+- 时序精确控制
+- 彩色LED灯带</p>
+<p><strong>红外遥控发射</strong>：
+- 38kHz载波
+- 编码调制
+- 遥控协议</p>
+<p><strong>音频输出</strong>：
+- PWM DAC
+- 音频播放
+- 音调生成</p>
+<h2 id="_13">学习资源</h2>
+<h3 id="_14">官方文档</h3>
+<ol>
+<li>
+<p><strong>STM32参考手册</strong>
+   - 定时器PWM章节
+   - 寄存器详细说明
+   - 时序图和波形</p>
+</li>
+<li>
+<p><strong>应用笔记</strong>
+   - AN4013: STM32定时器概述
+   - AN4776: 通用定时器手册
+   - AN3116: STM32电机控制</p>
+</li>
+</ol>
+<h3 id="_15">推荐工具</h3>
+<ol>
+<li>
+<p><strong>示波器</strong>
+   - 观察PWM波形
+   - 测量频率和占空比
+   - 分析信号质量</p>
+</li>
+<li>
+<p><strong>逻辑分析仪</strong>
+   - 多通道同时观察
+   - 时序分析
+   - 协议解码</p>
+</li>
+<li>
+<p><strong>电机测试平台</strong>
+   - 测试电机性能
+   - 调试控制算法
+   - 验证驱动电路</p>
+</li>
+</ol>
+<h3 id="_16">实践项目</h3>
+<ol>
+<li>
+<p><strong>智能风扇</strong>
+   - PWM调速
+   - 温度控制
+   - 难度：⭐⭐</p>
+</li>
+<li>
+<p><strong>RGB氛围灯</strong>
+   - 多通道PWM
+   - 颜色渐变
+   - 难度：⭐⭐</p>
+</li>
+<li>
+<p><strong>遥控小车</strong>
+   - 双电机控制
+   - 无线遥控
+   - 难度：⭐⭐⭐</p>
+</li>
+<li>
+<p><strong>云台控制</strong>
+   - 双轴舵机
+   - 姿态控制
+   - 难度：⭐⭐⭐</p>
+</li>
+<li>
+<p><strong>无刷电机控制</strong>
+   - 三相PWM
+   - FOC算法
+   - 难度：⭐⭐⭐⭐⭐</p>
+</li>
+</ol>
+<h2 id="_17">总结</h2>
+<p>本教程全面介绍了PWM驱动开发的核心知识和实践技能。</p>
+<p><strong>核心要点回顾</strong>：</p>
+<ol>
+<li><strong>PWM原理</strong>：通过改变占空比控制平均功率</li>
+<li><strong>频率选择</strong>：根据应用场景选择合适的PWM频率</li>
+<li><strong>占空比计算</strong>：CCR = 占空比 × (ARR + 1) / 100</li>
+<li><strong>GPIO配置</strong>：配置为复用功能，选择正确的AF编号</li>
+<li><strong>定时器配置</strong>：设置PSC、ARR、PWM模式和通道使能</li>
+<li><strong>应用场景</strong>：LED调光、电机控制、舵机控制</li>
+</ol>
+<p><strong>实践技能</strong>：
+- 单通道和多通道PWM输出
+- LED呼吸灯和RGB调色
+- 直流电机速度和方向控制
+- 舵机角度控制
+- 小车运动控制</p>
+<p><strong>最佳实践</strong>：
+- 代码模块化，提高可维护性
+- 添加参数验证，增强健壮性
+- 使用宏定义，提高可读性
+- 添加调试功能，方便问题排查
+- 实现安全保护，避免硬件损坏</p>
+<p><strong>调试技巧</strong>：
+- 使用示波器观察PWM波形
+- 检查GPIO和定时器配置
+- 验证频率和占空比计算
+- 逐步测试各个功能模块</p>
+<p>PWM是嵌入式系统中最实用的控制技术之一，掌握PWM驱动开发将为你的项目提供强大的控制能力。</p>
+<h2 id="_18">延伸阅读</h2>
+<p>推荐进一步学习的内容：</p>
+<p><strong>同模块内容</strong>：
+- <a href="01-gpio-driver.html">GPIO驱动开发：LED控制实战</a> - GPIO基础
+- <a href="05-timer-driver.html">定时器驱动基础与应用</a> - 定时器原理
+- <a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - PWM+DMA</p>
+<p><strong>相关主题</strong>：
+- <a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础概念</a>
+- <a href="../../05-clock-timer-management/intermediate/01-advanced-timer.html">通用定时器高级应用</a></p>
+<p><strong>官方文档</strong>：
+- <a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4xx参考手册</a>
+- <a href="https://www.st.com/resource/en/application_note/cd00258017.pdf">AN4013: STM32定时器概述</a></p>
+<h2 id="_19">参考资料</h2>
+<ol>
+<li>STM32F4xx参考手册 - STMicroelectronics</li>
+<li>ARM Cortex-M4权威指南 - Joseph Yiu</li>
+<li>电机控制技术 - 刘和平</li>
+<li>PWM技术及其应用 - 王兆安</li>
+<li>嵌入式系统设计与实践 - Elecia White</li>
+</ol>
+<h2 id="_20">练习题</h2>
+<h3 id="_21">基础练习</h3>
+<ol>
+<li>
+<p><strong>LED调光练习</strong>：
+   - 使用PWM实现LED亮度调节
+   - 通过按键控制亮度增减
+   - 显示当前亮度百分比</p>
+</li>
+<li>
+<p><strong>呼吸灯练习</strong>：
+   - 实现单色LED呼吸灯
+   - 可调节呼吸速度
+   - 添加暂停/继续功能</p>
+</li>
+<li>
+<p><strong>RGB调色练习</strong>：
+   - 使用3个PWM通道控制RGB LED
+   - 实现彩虹渐变效果
+   - 预设多种颜色</p>
+</li>
+</ol>
+<h3 id="_22">进阶练习</h3>
+<ol start="4">
+<li>
+<p><strong>电机控制练习</strong>：
+   - 控制直流电机转速
+   - 实现正转、反转、停止
+   - 添加软启动功能</p>
+</li>
+<li>
+<p><strong>舵机控制练习</strong>：
+   - 控制舵机角度
+   - 实现0-180度扫描
+   - 添加角度限位保护</p>
+</li>
+<li>
+<p><strong>小车控制练习</strong>：
+   - 双电机小车控制
+   - 实现前进、后退、转弯
+   - 添加速度调节功能</p>
+</li>
+</ol>
+<h3 id="_23">综合练习</h3>
+<ol start="7">
+<li>
+<p><strong>智能风扇</strong>：
+   - PWM调速控制
+   - 温度传感器反馈
+   - 自动调节转速
+   - LCD显示状态</p>
+</li>
+<li>
+<p><strong>RGB氛围灯</strong>：
+   - 多种灯光效果
+   - 颜色渐变和跳变
+   - 音乐律动模式
+   - 遥控器控制</p>
+</li>
+</ol>
+<h3 id="_24">思考题</h3>
+<ol>
+<li>
+<p>为什么电机控制的PWM频率要选择20kHz左右？</p>
+</li>
+<li>
+<p>如何选择合适的PWM频率和分辨率？</p>
+</li>
+<li>
+<p>互补PWM输出中死区时间的作用是什么？如何计算？</p>
+</li>
+<li>
+<p>PWM控制电机时，如何实现平滑的加减速？</p>
+</li>
+<li>
+<p>如何使用PWM实现音频输出？需要注意什么？</p>
+</li>
+</ol>
+<h2 id="_25">实验任务</h2>
+<h3 id="1led">任务1：LED调光器（必做）</h3>
+<p><strong>要求</strong>：
+- 使用PWM控制LED亮度
+- 通过按键调节亮度（0-100%）
+- 串口显示当前亮度
+- 实现呼吸灯模式</p>
+<h3 id="2_2">任务2：电机调速器（必做）</h3>
+<p><strong>要求</strong>：
+- 控制直流电机转速
+- 支持正转和反转
+- 速度可调（0-100%）
+- 实现软启动和软停止</p>
+<h3 id="3_2">任务3：舵机控制器（选做）</h3>
+<p><strong>要求</strong>：
+- 控制舵机角度（0-180度）
+- 通过串口输入角度值
+- 实现角度扫描功能
+- 添加角度限位保护</p>
+<h3 id="4_1">任务4：智能小车（选做）</h3>
+<p><strong>要求</strong>：
+- 双电机差速控制
+- 实现前进、后退、左转、右转
+- 速度可调
+- 蓝牙遥控</p>
+<p><strong>评分标准</strong>：
+- 代码规范性（20分）
+- 功能完整性（30分）
+- 控制精度（30分）
+- 创新性和扩展性（20分）</p>
+<hr />
+<p><strong>下一步学习建议</strong>：</p>
+<p>完成本教程后，建议按以下顺序继续学习：</p>
+<ol>
+<li><a href="08-watchdog-driver.html">看门狗驱动与系统可靠性</a> - 系统保护</li>
+<li><a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - PWM+DMA应用</li>
+<li><a href="../../05-clock-timer-management/intermediate/01-advanced-timer.html">通用定时器高级应用</a> - 高级PWM技术</li>
+</ol>
+<p><strong>学习路线图</strong>：</p>
+<pre><code>PWM驱动 → LED控制 → 电机控制 → 舵机控制 → 复杂控制系统
+         ↓
+      RGB调色 → 氛围灯 → 显示系统
+         ↓
+      音频输出 → 音乐播放 → 语音合成
+</code></pre>
+<p>祝你学习顺利！如有问题，欢迎在社区讨论。</p>
+<hr />
+<p><strong>文档信息</strong>：
+- 最后更新：2024-01-15
+- 版本：v1.0
+- 作者：嵌入式知识平台
+- 许可：CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

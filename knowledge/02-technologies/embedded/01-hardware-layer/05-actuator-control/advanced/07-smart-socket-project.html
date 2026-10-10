@@ -1,0 +1,2457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>WiFi智能插座项目：远程控制与能耗监测 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#_3">交流电功率测量理论</a><ul>
+<li><a href="#_4">基本电量定义</a></li>
+<li><a href="#true-rms">真有效值（True RMS）测量</a></li>
+<li><a href="#_5">功率因数与谐波失真</a></li>
+</ul>
+</li>
+<li><a href="#_6">电气安全标准概述</a><ul>
+<li><a href="#iec-60884">IEC 60884 — 家用插头插座标准</a></li>
+<li><a href="#ul-498">UL 498 — 美国插座标准</a></li>
+<li><a href="#gb-2099">GB 2099 — 中国插座标准</a></li>
+</ul>
+</li>
+<li><a href="#_7">系统架构总览</a></li>
+</ul>
+</li>
+<li><a href="#_8">核心内容</a><ul>
+<li><a href="#hlw8012bl0937">HLW8012/BL0937 能量计量芯片</a><ul>
+<li><a href="#_9">芯片概述与选型</a></li>
+<li><a href="#hlw8012">HLW8012 工作原理</a></li>
+<li><a href="#_10">硬件连接电路</a></li>
+<li><a href="#esp8266">ESP8266 驱动代码</a></li>
+</ul>
+</li>
+<li><a href="#ota-mqtt">OTA 固件升级（MQTT触发）</a><ul>
+<li><a href="#ota">OTA 升级流程</a></li>
+<li><a href="#esp8266-ota">ESP8266 OTA 实现</a></li>
+</ul>
+</li>
+<li><a href="#web-captive-portal">本地 Web 配置界面（Captive Portal）</a><ul>
+<li><a href="#_11">配网与配置流程</a></li>
+<li><a href="#web">Web 服务器实现</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_12">深入原理</a><ul>
+<li><a href="#_13">零点检测与相位角调光</a><ul>
+<li><a href="#_14">零点检测原理</a></li>
+<li><a href="#_15">零点检测电路</a></li>
+<li><a href="#_16">相位角调光实现</a></li>
+</ul>
+</li>
+<li><a href="#thd">电能质量监测（THD 与谐波分析）</a><ul>
+<li><a href="#_17">谐波分析原理</a></li>
+<li><a href="#thd-esp8266">简化 THD 计算（ESP8266 实现）</a></li>
+<li><a href="#_18">电能质量等级评估</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_19">完整项目实战</a><ul>
+<li><a href="#_20">项目规格与物料清单</a></li>
+<li><a href="#pcb">PCB 布局指南</a></li>
+<li><a href="#_21">完整固件实现</a></li>
+<li><a href="#_22">性能调优</a><ul>
+<li><a href="#wifi_1">WiFi 功耗优化</a></li>
+<li><a href="#mqtt">MQTT 消息优化</a></li>
+</ul>
+</li>
+<li><a href="#_23">完整项目集成测试</a><ul>
+<li><a href="#_24">功能测试清单</a></li>
+<li><a href="#_25">安全测试</a></li>
+<li><a href="#_26">长期稳定性测试</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_27">常见问题与调试</a><ul>
+<li><a href="#wifi_2">WiFi 连接问题</a><ul>
+<li><a href="#1wifi">问题1：WiFi 连接失败或频繁断线</a></li>
+<li><a href="#2">问题2：配网模式无法进入</a></li>
+</ul>
+</li>
+<li><a href="#_28">继电器控制问题</a><ul>
+<li><a href="#3">问题3：继电器抖动或无法吸合</a></li>
+</ul>
+</li>
+<li><a href="#hlw8012_1">HLW8012 测量问题</a><ul>
+<li><a href="#4">问题4：功率/电流测量不准确</a></li>
+<li><a href="#5acs712">问题5：ACS712 电流传感器噪声大</a></li>
+</ul>
+</li>
+<li><a href="#ota_1">OTA 升级问题</a><ul>
+<li><a href="#6ota">问题6：OTA 升级失败</a></li>
+</ul>
+</li>
+<li><a href="#_29">电能质量监测问题</a><ul>
+<li><a href="#7thd">问题7：THD 计算结果异常</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_30">测试与验证</a><ul>
+<li><a href="#_31">单元测试</a></li>
+<li><a href="#_32">集成测试</a></li>
+</ul>
+</li>
+<li><a href="#_33">延伸阅读</a><ul>
+<li><a href="#_34">内部链接</a></li>
+<li><a href="#_35">外部资源</a></li>
+</ul>
+</li>
+<li><a href="#_36">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="wifi">WiFi智能插座项目：远程控制与能耗监测</h1>
+<h2 id="_1">概述</h2>
+<p>本文从零构建一个生产级WiFi智能插座，覆盖从交流电测量理论到完整固件实现的全栈知识。读者将学习：</p>
+<table>
+<thead>
+<tr>
+<th>学习目标</th>
+<th>涉及技术</th>
+<th>难度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>交流电功率测量原理</td>
+<td>真有效值(True RMS)、功率因数、无功功率</td>
+<td>★★★★</td>
+</tr>
+<tr>
+<td>专用能量计量芯片</td>
+<td>HLW8012/BL0937 脉冲输出计量</td>
+<td>★★★★</td>
+</tr>
+<tr>
+<td>OTA固件升级</td>
+<td>MQTT触发 + HTTP下载 + 分区切换</td>
+<td>★★★★</td>
+</tr>
+<tr>
+<td>零点检测调光</td>
+<td>相位角控制 + TRIAC驱动</td>
+<td>★★★★★</td>
+</tr>
+<tr>
+<td>电能质量监测</td>
+<td>谐波失真(THD)、功率因数校正</td>
+<td>★★★★★</td>
+</tr>
+<tr>
+<td>完整项目集成</td>
+<td>能耗监测 + 定时 + OTA + 本地Web配置</td>
+<td>★★★★★</td>
+</tr>
+</tbody>
+</table>
+<p><strong>前置知识</strong>：
+- <a href="../beginner/04-relay-control.html">继电器控制基础</a>
+- <a href="../../../06-communication-networking/01-wireless-communication/intermediate/03-mqtt-protocol.html">MQTT协议详解</a>
+- C/C++ 基础，Arduino/ESP-IDF 开发环境</p>
+<p><strong>安全警告</strong>：本项目涉及220V/110V交流高压，必须做好绝缘隔离。建议先在低压仿真环境充分测试，再接入市电。所有高压部分须符合当地电气安全法规。</p>
+<h2 id="_2">背景知识</h2>
+<h3 id="_3">交流电功率测量理论</h3>
+<h4 id="_4">基本电量定义</h4>
+<p>交流电路中的功率分析比直流复杂得多，需要理解三种功率的概念：</p>
+<pre><code>交流电路功率三角形：
+
+        S (视在功率, VA)
+       /|
+      / |
+     /  |
+    /θ  |
+   /    |
+  P-----Q
+有功功率  无功功率
+(W)      (VAR)
+
+关系式：
+  S² = P² + Q²
+  P = S × cos(θ)   [有功功率，实际消耗]
+  Q = S × sin(θ)   [无功功率，储能/释放]
+  cos(θ) = PF      [功率因数 Power Factor]
+</code></pre>
+<p><strong>有功功率 P（Active Power，单位：W）</strong>：
+- 实际被负载消耗转化为热能、机械能的功率
+- P = U_rms × I_rms × cos(θ)
+- 纯电阻负载：cos(θ)=1，P=S</p>
+<p><strong>无功功率 Q（Reactive Power，单位：VAR）</strong>：
+- 电感/电容与电源之间交换但不消耗的功率
+- 感性负载（电机、变压器）：Q &gt; 0，电流滞后电压
+- 容性负载（电容补偿）：Q &lt; 0，电流超前电压</p>
+<p><strong>视在功率 S（Apparent Power，单位：VA）</strong>：
+- S = U_rms × I_rms
+- 决定供电设备（变压器、导线）的容量需求</p>
+<p><strong>功率因数 PF（Power Factor）</strong>：
+- PF = P / S = cos(θ)（纯正弦波情况下）
+- 非线性负载（开关电源、变频器）：PF = P / S ≠ cos(θ)，需考虑谐波</p>
+<h4 id="true-rms">真有效值（True RMS）测量</h4>
+<p><strong>为什么需要 True RMS？</strong></p>
+<p>普通万用表使用"平均值校正法"测量交流，仅对纯正弦波准确。现代电子设备（开关电源、LED驱动器、变频空调）产生非正弦电流波形，必须用 True RMS 方法：</p>
+<pre><code>True RMS 数学定义：
+
+         ┌─────────────────────────────┐
+         │         1  T              │
+I_rms = │ ─── × ∫  i²(t) dt        │
+         │         T  0              │
+         └─────────────────────────────┘
+
+离散采样实现：
+         ┌──────────────────────────────────┐
+         │      1   N-1              │
+I_rms = │ ─── × Σ  i²[k]           │
+         │      N   k=0             │
+         └──────────────────────────────────┘
+
+其中 N 为一个完整工频周期内的采样点数
+工频50Hz，采样率10kHz → N=200点/周期
+</code></pre>
+<p><strong>采样率要求</strong>：
+- 奈奎斯特定理：采样率 ≥ 2 × 最高谐波频率
+- 测量到第19次谐波（950Hz）：采样率 ≥ 2kHz
+- 实际推荐：10kHz（覆盖到第100次谐波）</p>
+<p><strong>ADC 精度影响</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>ADC位数</th>
+<th>分辨率</th>
+<th>电流测量精度（20A量程）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10-bit</td>
+<td>1/1024</td>
+<td>±20mA（±0.1%）</td>
+</tr>
+<tr>
+<td>12-bit</td>
+<td>1/4096</td>
+<td>±5mA（±0.025%）</td>
+</tr>
+<tr>
+<td>16-bit</td>
+<td>1/65536</td>
+<td>±0.3mA（±0.0015%）</td>
+</tr>
+</tbody>
+</table>
+<p>ESP8266 内置 10-bit ADC，对于家用插座（0.1A精度要求）已足够。</p>
+<h4 id="_5">功率因数与谐波失真</h4>
+<p><strong>位移功率因数（Displacement PF）</strong>：
+- 仅考虑基波分量的相位差
+- DPF = cos(θ₁)，θ₁为基波电压与基波电流的相位差</p>
+<p><strong>总谐波失真（THD，Total Harmonic Distortion）</strong>：</p>
+<pre><code>         ┌──────────────────────────────────────────┐
+         │  √(I₂² + I₃² + I₄² + ... + Iₙ²)       │
+THD_I = │ ─────────────────────────────────────── │
+         │              I₁                         │
+         └──────────────────────────────────────────┘
+
+I₁ = 基波电流有效值
+Iₙ = 第n次谐波电流有效值
+</code></pre>
+<p><strong>真功率因数（True PF）</strong>：
+- True PF = DPF / √(1 + THD²)
+- 开关电源典型值：THD=100%，True PF ≈ 0.7</p>
+<p><strong>谐波危害</strong>：
+- 增加线路损耗（I²R，谐波电流也产生热量）
+- 导致中性线过载（三相系统中3次谐波叠加）
+- 干扰其他设备（EMI）
+- 降低变压器效率</p>
+<h3 id="_6">电气安全标准概述</h3>
+<h4 id="iec-60884">IEC 60884 — 家用插头插座标准</h4>
+<p>IEC 60884（国际电工委员会）规定了家用和类似用途插头插座的安全要求：</p>
+<p><strong>主要技术要求</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>要求</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>额定电压</td>
+<td>最高 250V AC</td>
+</tr>
+<tr>
+<td>额定电流</td>
+<td>最高 16A（家用）</td>
+</tr>
+<tr>
+<td>绝缘电阻</td>
+<td>≥ 5MΩ（500V DC测试）</td>
+</tr>
+<tr>
+<td>介电强度</td>
+<td>2000V AC，1分钟无击穿</td>
+</tr>
+<tr>
+<td>接触电阻</td>
+<td>≤ 5mΩ（每个接触点）</td>
+</tr>
+<tr>
+<td>温升限制</td>
+<td>外壳 ≤ 35K，接线端子 ≤ 45K</td>
+</tr>
+<tr>
+<td>机械寿命</td>
+<td>≥ 5000次插拔</td>
+</tr>
+</tbody>
+</table>
+<p><strong>爬电距离与电气间隙</strong>（250V AC，污染等级2）：</p>
+<pre><code>爬电距离（Creepage Distance）：沿绝缘表面的最短路径
+电气间隙（Clearance）：通过空气的最短路径
+
+250V AC 要求：
+  爬电距离 ≥ 3.0mm（CTI ≥ 175）
+  电气间隙 ≥ 3.0mm（过电压类别 II）
+
+PCB设计中高压与低压之间必须保持足够间距！
+</code></pre>
+<h4 id="ul-498">UL 498 — 美国插座标准</h4>
+<p>UL 498（Underwriters Laboratories）是北美市场的强制认证标准：</p>
+<p><strong>与 IEC 60884 主要差异</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>IEC 60884</th>
+<th>UL 498</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>额定电压</td>
+<td>250V</td>
+<td>125V/250V</td>
+</tr>
+<tr>
+<td>额定电流</td>
+<td>16A</td>
+<td>15A/20A</td>
+</tr>
+<tr>
+<td>接地要求</td>
+<td>可选</td>
+<td>强制（NEMA 5-15）</td>
+</tr>
+<tr>
+<td>测试电压</td>
+<td>2000V</td>
+<td>1500V</td>
+</tr>
+<tr>
+<td>温升测试</td>
+<td>35K</td>
+<td>30°C</td>
+</tr>
+</tbody>
+</table>
+<h4 id="gb-2099">GB 2099 — 中国插座标准</h4>
+<p>中国强制性国家标准，基于 IEC 60884 修改：
+- GB 2099.1：家用和类似用途插头插座通用要求
+- GB 2099.3：转换器的特殊要求
+- 认证标志：CCC（中国强制认证）</p>
+<p><strong>智能插座额外要求</strong>：
+- 软件控制的继电器必须有机械互锁或独立硬件过流保护
+- 无线通信模块须通过 SRRC（无线电型号核准）
+- 数据安全：用户数据不得明文传输</p>
+<h3 id="_7">系统架构总览</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                        智能插座系统架构                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  220V AC ──┬── HLK-PM01 ──→ 5V ──→ AMS1117-3.3 ──→ 3.3V       │
+│            │   (AC/DC)                                           │
+│            │                                                     │
+│            ├── HLW8012 ──→ CF/CF1脉冲 ──→ ESP8266 GPIO         │
+│            │   (能量计量)                                        │
+│            │                                                     │
+│            ├── 零点检测电路 ──→ ESP8266 INT引脚                  │
+│            │   (过零检测)                                        │
+│            │                                                     │
+│            └── 继电器触点 ──→ 负载输出                           │
+│                    ↑                                             │
+│              ESP8266 GPIO ──→ ULN2003 ──→ 继电器线圈            │
+│                                                                   │
+│  ESP8266 ──WiFi──→ MQTT Broker ──→ 手机App/云平台               │
+│           ──HTTP──→ OTA服务器 (固件升级)                         │
+│           ──HTTP──→ 本地Web配置界面                              │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+</code></pre>
+<h2 id="_8">核心内容</h2>
+<h3 id="hlw8012bl0937">HLW8012/BL0937 能量计量芯片</h3>
+<h4 id="_9">芯片概述与选型</h4>
+<p>HLW8012 是专为智能插座设计的单相电能计量 IC，广泛用于小米、公牛等品牌智能插座。BL0937 是其国产替代品，引脚兼容。</p>
+<p><strong>主要特性对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>HLW8012</th>
+<th>BL0937</th>
+<th>ADE7953</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>测量参数</td>
+<td>电压/电流/功率</td>
+<td>电压/电流/功率</td>
+<td>电压/电流/功率/无功</td>
+</tr>
+<tr>
+<td>输出方式</td>
+<td>脉冲频率</td>
+<td>脉冲频率</td>
+<td>SPI/I2C</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>±1%</td>
+<td>±1%</td>
+<td>±0.1%</td>
+</tr>
+<tr>
+<td>工作电压</td>
+<td>5V</td>
+<td>5V</td>
+<td>3.3V</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>SOP-8</td>
+<td>SOP-8</td>
+<td>LFCSP-28</td>
+</tr>
+<tr>
+<td>价格</td>
+<td>¥1.5</td>
+<td>¥1.2</td>
+<td>¥25</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>消费级智能插座</td>
+<td>消费级智能插座</td>
+<td>工业电表</td>
+</tr>
+</tbody>
+</table>
+<h4 id="hlw8012">HLW8012 工作原理</h4>
+<pre><code>HLW8012 内部框图：
+
+        ┌─────────────────────────────────────────┐
+        │              HLW8012                    │
+        │                                         │
+VCC ───→│ VCC                                     │
+        │         ┌──────────┐                    │
+IP+ ───→│ IP+     │          │    CF  ├───→ 功率脉冲
+IP- ───→│ IP-     │  Σ-Δ ADC │    CF1 ├───→ 电流/电压脉冲
+        │         │          │        │
+VP  ───→│ VP      └──────────┘    SEL ├←── 选择输出
+        │                              │
+GND ───→│ GND                          │
+        └─────────────────────────────┘
+
+CF  引脚：功率脉冲输出，频率正比于有功功率
+CF1 引脚：电流或电压脉冲输出（由SEL引脚选择）
+SEL 引脚：HIGH=电流，LOW=电压
+</code></pre>
+<p><strong>脉冲频率与物理量的关系</strong>：</p>
+<pre><code>功率计算（CF引脚）：
+  P(W) = F_CF × K_P
+  K_P = 1 / (F_CF_ref / P_ref)  [校准系数]
+
+电流计算（CF1引脚，SEL=HIGH）：
+  I(A) = F_CF1 × K_I
+
+电压计算（CF1引脚，SEL=LOW）：
+  U(V) = F_CF1 × K_U
+
+典型参数（5V供电，参考电路）：
+  1W  → CF  约 3.4Hz
+  1A  → CF1 约 15.6Hz（SEL=HIGH）
+  1V  → CF1 约 0.97Hz（SEL=LOW）
+</code></pre>
+<h4 id="_10">硬件连接电路</h4>
+<pre><code>HLW8012 参考电路（220V AC 输入）：
+
+                    220V L线
+                       │
+              ┌────────┤
+              │        │
+           R1(1MΩ)  电流互感器CT
+           R2(1MΩ)     │
+           R3(1MΩ)  ┌──┴──┐
+              │     │     │
+              └──→ VP    IP+/IP-
+                    │     │
+                  HLW8012 │
+                    │     │
+                   GND   R_shunt(1mΩ)
+                          │
+                         GND
+
+注意：
+1. 分压电阻 R1+R2+R3 = 3MΩ，将220V分压到安全范围
+2. 电流检测使用低阻值分流电阻（1mΩ）或电流互感器
+3. 高压侧与低压侧必须保持 ≥ 3mm 爬电距离
+4. 建议在 VP 引脚加 TVS 二极管防浪涌
+</code></pre>
+<h4 id="esp8266">ESP8266 驱动代码</h4>
+<pre><code class="language-cpp">// HLW8012 驱动库（基于脉冲计数）
+// 适用：ESP8266 Arduino Core 3.x，HLW8012/BL0937
+
+#include &lt;Arduino.h&gt;
+
+// 引脚定义
+#define HLW_CF_PIN   D5   // 功率脉冲输入（中断）
+#define HLW_CF1_PIN  D6   // 电流/电压脉冲输入（中断）
+#define HLW_SEL_PIN  D7   // 选择引脚
+
+// 校准系数（出厂后需用标准负载校准）
+#define HLW_POWER_RATIO    1.0f    // 功率校准系数
+#define HLW_CURRENT_RATIO  1.0f    // 电流校准系数
+#define HLW_VOLTAGE_RATIO  1.0f    // 电压校准系数
+
+// 测量窗口（毫秒）
+#define MEASURE_WINDOW_MS  2000
+
+class HLW8012Driver {
+public:
+    volatile uint32_t cf_count  = 0;   // 功率脉冲计数
+    volatile uint32_t cf1_count = 0;   // 电流/电压脉冲计数
+    bool sel_mode = true;               // true=电流，false=电压
+
+    float power_w   = 0.0f;
+    float current_a = 0.0f;
+    float voltage_v = 0.0f;
+    float energy_kwh = 0.0f;
+
+    // 校准系数（通过已知负载校准后写入）
+    float k_power   = 12530.0f;  // Hz/W（参考值，需校准）
+    float k_current = 25740.0f;  // Hz/A
+    float k_voltage = 15420.0f;  // Hz/V
+
+    void begin() {
+        pinMode(HLW_CF_PIN,  INPUT_PULLUP);
+        pinMode(HLW_CF1_PIN, INPUT_PULLUP);
+        pinMode(HLW_SEL_PIN, OUTPUT);
+        digitalWrite(HLW_SEL_PIN, HIGH);  // 先测电流
+        sel_mode = true;
+
+        // 附加中断（上升沿计数）
+        attachInterrupt(digitalPinToInterrupt(HLW_CF_PIN),
+                        []() { instance-&gt;cf_count++; }, RISING);
+        attachInterrupt(digitalPinToInterrupt(HLW_CF1_PIN),
+                        []() { instance-&gt;cf1_count++; }, RISING);
+        instance = this;
+    }
+
+    // 每 MEASURE_WINDOW_MS 调用一次，更新测量值
+    void update() {
+        static uint32_t last_ms = 0;
+        static uint32_t last_cf = 0, last_cf1 = 0;
+        static float last_power = 0;
+
+        uint32_t now = millis();
+        uint32_t dt  = now - last_ms;
+        if (dt &lt; MEASURE_WINDOW_MS) return;
+
+        // 读取计数差值（关中断保证原子性）
+        noInterrupts();
+        uint32_t cf_delta  = cf_count  - last_cf;
+        uint32_t cf1_delta = cf1_count - last_cf1;
+        last_cf  = cf_count;
+        last_cf1 = cf1_count;
+        interrupts();
+
+        float dt_s = dt / 1000.0f;
+
+        // 计算功率（CF引脚）
+        float cf_hz = cf_delta / dt_s;
+        power_w = (cf_hz &gt; 0.5f) ? (cf_hz / k_power * HLW_POWER_RATIO) : 0.0f;
+
+        // 计算电流或电压（CF1引脚）
+        float cf1_hz = cf1_delta / dt_s;
+        if (sel_mode) {
+            // 当前测电流
+            current_a = (cf1_hz &gt; 0.5f) ? (cf1_hz / k_current * HLW_CURRENT_RATIO) : 0.0f;
+            // 切换到测电压
+            sel_mode = false;
+            digitalWrite(HLW_SEL_PIN, LOW);
+        } else {
+            // 当前测电压
+            voltage_v = (cf1_hz &gt; 0.5f) ? (cf1_hz / k_voltage * HLW_VOLTAGE_RATIO) : 0.0f;
+            // 切换回测电流
+            sel_mode = true;
+            digitalWrite(HLW_SEL_PIN, HIGH);
+        }
+
+        // 累计电能（kWh）
+        energy_kwh += power_w * (dt_s / 3600.0f) / 1000.0f;
+
+        // 计算功率因数（需要同时有电压和电流）
+        // PF = P / (U × I)
+        float apparent = voltage_v * current_a;
+        float pf = (apparent &gt; 1.0f) ? (power_w / apparent) : 0.0f;
+        pf = constrain(pf, 0.0f, 1.0f);
+
+        last_ms = now;
+        last_power = power_w;
+    }
+
+    // 校准：使用已知功率的纯电阻负载（如白炽灯）
+    // known_power_w: 已知功率（W），known_voltage_v: 已知电压（V）
+    void calibrate(float known_power_w, float known_voltage_v) {
+        // 测量原始频率
+        uint32_t start = millis();
+        uint32_t cf_start = cf_count;
+        delay(5000);  // 采集5秒
+        float cf_hz = (cf_count - cf_start) / 5.0f;
+        k_power = cf_hz / known_power_w;
+        Serial.printf(&quot;校准完成: k_power=%.1f Hz/W\n&quot;, k_power);
+    }
+
+    float get_power_factor() {
+        float apparent = voltage_v * current_a;
+        return (apparent &gt; 1.0f) ? constrain(power_w / apparent, 0.0f, 1.0f) : 0.0f;
+    }
+
+    static HLW8012Driver* instance;
+};
+
+HLW8012Driver* HLW8012Driver::instance = nullptr;
+HLW8012Driver hlw;
+</code></pre>
+<h3 id="ota-mqtt">OTA 固件升级（MQTT触发）</h3>
+<h4 id="ota">OTA 升级流程</h4>
+<pre><code>OTA 升级状态机：
+
+  IDLE ──→ [收到MQTT OTA命令] ──→ DOWNLOADING
+    ↑                                    │
+    │                              [下载固件]
+    │                                    │
+    │                              [校验MD5]
+    │                                    │
+    │                         ┌──────────┴──────────┐
+    │                         │                     │
+    │                    [校验通过]            [校验失败]
+    │                         │                     │
+    │                    FLASHING              IDLE(报错)
+    │                         │
+    │                   [写入Flash]
+    │                         │
+    └──────────────── [重启完成] ←── REBOOTING
+</code></pre>
+<h4 id="esp8266-ota">ESP8266 OTA 实现</h4>
+<pre><code class="language-cpp">// OTA 固件升级模块
+// 依赖：ESP8266HTTPUpdate 库（Arduino Core 内置）
+
+#include &lt;ESP8266HTTPUpdate.h&gt;
+#include &lt;ESP8266WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+
+// OTA 状态
+enum OTAState {
+    OTA_IDLE,
+    OTA_DOWNLOADING,
+    OTA_SUCCESS,
+    OTA_FAILED
+};
+
+OTAState ota_state = OTA_IDLE;
+String   ota_url   = &quot;&quot;;
+String   ota_md5   = &quot;&quot;;
+
+// MQTT 命令格式：
+// Topic: socket/node001/ota
+// Payload: {&quot;url&quot;:&quot;http://192.168.1.100/firmware.bin&quot;,&quot;md5&quot;:&quot;abc123...&quot;,&quot;version&quot;:&quot;2.1.0&quot;}
+
+void handle_ota_command(const JsonDocument&amp; doc) {
+    if (ota_state != OTA_IDLE) {
+        Serial.println(&quot;[OTA] 升级进行中，忽略新命令&quot;);
+        return;
+    }
+    ota_url = doc[&quot;url&quot;].as&lt;String&gt;();
+    ota_md5 = doc[&quot;md5&quot;].as&lt;String&gt;();
+    ota_state = OTA_DOWNLOADING;
+    Serial.printf(&quot;[OTA] 开始升级: %s\n&quot;, ota_url.c_str());
+}
+
+// 在主循环中调用（非阻塞触发，实际下载在此函数内阻塞）
+void process_ota() {
+    if (ota_state != OTA_DOWNLOADING) return;
+
+    // 发布升级开始通知
+    mqtt.publish(&quot;socket/node001/ota_status&quot;,
+                 &quot;{\&quot;status\&quot;:\&quot;downloading\&quot;}&quot;);
+
+    // 设置 MD5 校验
+    if (ota_md5.length() == 32) {
+        ESPhttpUpdate.setMD5(ota_md5.c_str());
+    }
+
+    // 注册回调
+    ESPhttpUpdate.onStart([]() {
+        Serial.println(&quot;[OTA] 开始下载...&quot;);
+    });
+    ESPhttpUpdate.onProgress([](int cur, int total) {
+        Serial.printf(&quot;[OTA] 进度: %d/%d bytes\n&quot;, cur, total);
+    });
+    ESPhttpUpdate.onEnd([]() {
+        Serial.println(&quot;[OTA] 下载完成，准备重启&quot;);
+    });
+    ESPhttpUpdate.onError([](int err) {
+        Serial.printf(&quot;[OTA] 错误: %d\n&quot;, err);
+    });
+
+    // 执行升级（阻塞直到完成或失败）
+    t_httpUpdate_return ret = ESPhttpUpdate.update(wifiClient, ota_url);
+
+    switch (ret) {
+        case HTTP_UPDATE_FAILED:
+            ota_state = OTA_FAILED;
+            {
+                char msg[128];
+                snprintf(msg, sizeof(msg),
+                         &quot;{\&quot;status\&quot;:\&quot;failed\&quot;,\&quot;error\&quot;:\&quot;%s\&quot;}&quot;,
+                         ESPhttpUpdate.getLastErrorString().c_str());
+                mqtt.publish(&quot;socket/node001/ota_status&quot;, msg);
+            }
+            break;
+
+        case HTTP_UPDATE_NO_UPDATES:
+            ota_state = OTA_IDLE;
+            mqtt.publish(&quot;socket/node001/ota_status&quot;,
+                         &quot;{\&quot;status\&quot;:\&quot;no_update\&quot;}&quot;);
+            break;
+
+        case HTTP_UPDATE_OK:
+            ota_state = OTA_SUCCESS;
+            mqtt.publish(&quot;socket/node001/ota_status&quot;,
+                         &quot;{\&quot;status\&quot;:\&quot;success\&quot;,\&quot;rebooting\&quot;:true}&quot;);
+            delay(500);
+            ESP.restart();  // 重启加载新固件
+            break;
+    }
+}
+</code></pre>
+<h3 id="web-captive-portal">本地 Web 配置界面（Captive Portal）</h3>
+<h4 id="_11">配网与配置流程</h4>
+<pre><code>首次配置流程（Captive Portal）：
+
+用户操作                    ESP8266 行为
+─────────────────────────────────────────────────────
+1. 长按配置按钮3秒     →  进入AP模式
+                           SSID: SmartSocket_XXXX
+                           IP:   192.168.4.1
+
+2. 手机连接AP          →  DNS劫持所有域名到192.168.4.1
+                           浏览器自动弹出配置页面
+
+3. 填写WiFi/MQTT配置   →  保存到EEPROM/SPIFFS
+   点击&quot;保存并重启&quot;
+
+4. ESP8266重启         →  连接配置的WiFi
+                           连接MQTT Broker
+                           正常工作模式
+</code></pre>
+<h4 id="web">Web 服务器实现</h4>
+<pre><code class="language-cpp">// 本地 Web 配置服务器
+// 依赖：ESP8266WebServer, DNSServer（Arduino Core 内置）
+
+#include &lt;ESP8266WebServer.h&gt;
+#include &lt;DNSServer.h&gt;
+#include &lt;EEPROM.h&gt;
+
+ESP8266WebServer webServer(80);
+DNSServer        dnsServer;
+
+// 配置数据结构（存储在 EEPROM）
+struct Config {
+    char magic[4];        // &quot;CFG\0&quot; 标识有效配置
+    char wifi_ssid[32];
+    char wifi_pass[64];
+    char mqtt_host[64];
+    uint16_t mqtt_port;
+    char mqtt_user[32];
+    char mqtt_pass[32];
+    char device_id[16];
+    float overload_a;     // 过载阈值（A）
+    uint8_t checksum;     // 简单校验和
+};
+
+Config cfg;
+
+// 配置页面 HTML（内嵌，无需文件系统）
+const char CONFIG_HTML[] PROGMEM = R&quot;rawliteral(
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+  &lt;meta charset=&quot;UTF-8&quot;&gt;
+  &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1&quot;&gt;
+  &lt;title&gt;智能插座配置&lt;/title&gt;
+  &lt;style&gt;
+    body { font-family: Arial; max-width: 400px; margin: 20px auto; padding: 0 20px; }
+    input { width: 100%; padding: 8px; margin: 5px 0 15px; box-sizing: border-box; }
+    button { width: 100%; padding: 10px; background: #4CAF50; color: white; border: none; cursor: pointer; }
+    h2 { color: #333; }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+  &lt;h2&gt;智能插座配置&lt;/h2&gt;
+  &lt;form action=&quot;/save&quot; method=&quot;POST&quot;&gt;
+    &lt;label&gt;WiFi名称:&lt;/label&gt;
+    &lt;input name=&quot;ssid&quot; value=&quot;%SSID%&quot; required&gt;
+    &lt;label&gt;WiFi密码:&lt;/label&gt;
+    &lt;input name=&quot;pass&quot; type=&quot;password&quot; value=&quot;%PASS%&quot;&gt;
+    &lt;label&gt;MQTT服务器:&lt;/label&gt;
+    &lt;input name=&quot;mqtt_host&quot; value=&quot;%MQTT_HOST%&quot; required&gt;
+    &lt;label&gt;MQTT端口:&lt;/label&gt;
+    &lt;input name=&quot;mqtt_port&quot; type=&quot;number&quot; value=&quot;%MQTT_PORT%&quot;&gt;
+    &lt;label&gt;MQTT用户名:&lt;/label&gt;
+    &lt;input name=&quot;mqtt_user&quot; value=&quot;%MQTT_USER%&quot;&gt;
+    &lt;label&gt;MQTT密码:&lt;/label&gt;
+    &lt;input name=&quot;mqtt_pass&quot; type=&quot;password&quot; value=&quot;%MQTT_PASS%&quot;&gt;
+    &lt;label&gt;设备ID:&lt;/label&gt;
+    &lt;input name=&quot;device_id&quot; value=&quot;%DEVICE_ID%&quot;&gt;
+    &lt;label&gt;过载阈值(A):&lt;/label&gt;
+    &lt;input name=&quot;overload&quot; type=&quot;number&quot; step=&quot;0.1&quot; value=&quot;%OVERLOAD%&quot;&gt;
+    &lt;button type=&quot;submit&quot;&gt;保存并重启&lt;/button&gt;
+  &lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+)rawliteral&quot;;
+
+void start_config_portal() {
+    // 启动 AP 模式
+    char ap_ssid[32];
+    snprintf(ap_ssid, sizeof(ap_ssid), &quot;SmartSocket_%06X&quot;,
+             (uint32_t)(ESP.getChipId() &amp; 0xFFFFFF));
+    WiFi.softAP(ap_ssid, &quot;12345678&quot;);
+    Serial.printf(&quot;[AP] SSID: %s, IP: %s\n&quot;,
+                  ap_ssid, WiFi.softAPIP().toString().c_str());
+
+    // DNS 劫持（Captive Portal）
+    dnsServer.start(53, &quot;*&quot;, WiFi.softAPIP());
+
+    // 注册路由
+    webServer.on(&quot;/&quot;, HTTP_GET, []() {
+        String html = FPSTR(CONFIG_HTML);
+        html.replace(&quot;%SSID%&quot;,      cfg.wifi_ssid);
+        html.replace(&quot;%PASS%&quot;,      cfg.wifi_pass);
+        html.replace(&quot;%MQTT_HOST%&quot;, cfg.mqtt_host);
+        html.replace(&quot;%MQTT_PORT%&quot;, String(cfg.mqtt_port));
+        html.replace(&quot;%MQTT_USER%&quot;, cfg.mqtt_user);
+        html.replace(&quot;%MQTT_PASS%&quot;, cfg.mqtt_pass);
+        html.replace(&quot;%DEVICE_ID%&quot;, cfg.device_id);
+        html.replace(&quot;%OVERLOAD%&quot;,  String(cfg.overload_a, 1));
+        webServer.send(200, &quot;text/html&quot;, html);
+    });
+
+    webServer.on(&quot;/save&quot;, HTTP_POST, []() {
+        strlcpy(cfg.wifi_ssid,  webServer.arg(&quot;ssid&quot;).c_str(),     sizeof(cfg.wifi_ssid));
+        strlcpy(cfg.wifi_pass,  webServer.arg(&quot;pass&quot;).c_str(),     sizeof(cfg.wifi_pass));
+        strlcpy(cfg.mqtt_host,  webServer.arg(&quot;mqtt_host&quot;).c_str(),sizeof(cfg.mqtt_host));
+        cfg.mqtt_port = webServer.arg(&quot;mqtt_port&quot;).toInt();
+        strlcpy(cfg.mqtt_user,  webServer.arg(&quot;mqtt_user&quot;).c_str(),sizeof(cfg.mqtt_user));
+        strlcpy(cfg.mqtt_pass,  webServer.arg(&quot;mqtt_pass&quot;).c_str(),sizeof(cfg.mqtt_pass));
+        strlcpy(cfg.device_id,  webServer.arg(&quot;device_id&quot;).c_str(),sizeof(cfg.device_id));
+        cfg.overload_a = webServer.arg(&quot;overload&quot;).toFloat();
+        memcpy(cfg.magic, &quot;CFG&quot;, 4);
+        save_config();
+        webServer.send(200, &quot;text/html&quot;,
+                       &quot;&lt;h2&gt;配置已保存，设备将在3秒后重启...&lt;/h2&gt;&quot;);
+        delay(3000);
+        ESP.restart();
+    });
+
+    // 捕获所有未知路径（Captive Portal 重定向）
+    webServer.onNotFound([]() {
+        webServer.sendHeader(&quot;Location&quot;, &quot;http://192.168.4.1/&quot;);
+        webServer.send(302, &quot;text/plain&quot;, &quot;&quot;);
+    });
+
+    webServer.begin();
+}
+
+void save_config() {
+    // 计算校验和
+    uint8_t sum = 0;
+    uint8_t* p = (uint8_t*)&amp;cfg;
+    for (size_t i = 0; i &lt; sizeof(cfg) - 1; i++) sum += p[i];
+    cfg.checksum = sum;
+
+    EEPROM.begin(sizeof(Config));
+    EEPROM.put(0, cfg);
+    EEPROM.commit();
+    EEPROM.end();
+}
+
+bool load_config() {
+    EEPROM.begin(sizeof(Config));
+    EEPROM.get(0, cfg);
+    EEPROM.end();
+
+    // 验证魔数和校验和
+    if (memcmp(cfg.magic, &quot;CFG&quot;, 4) != 0) return false;
+    uint8_t sum = 0;
+    uint8_t* p = (uint8_t*)&amp;cfg;
+    for (size_t i = 0; i &lt; sizeof(cfg) - 1; i++) sum += p[i];
+    return (sum == cfg.checksum);
+}
+</code></pre>
+<h2 id="_12">深入原理</h2>
+<h3 id="_13">零点检测与相位角调光</h3>
+<h4 id="_14">零点检测原理</h4>
+<p>相位角调光（Phase-Angle Dimming）通过在交流电每个半周期的特定时刻触发 TRIAC（双向可控硅），控制负载获得的有效电压，从而调节亮度或功率。</p>
+<pre><code>相位角调光波形图：
+
+全功率（α=0°）：
+  ┌──────────────────────────────────────────────────────┐
+  │  正弦波                                              │
+  │     ╭──────╮              ╭──────╮                  │
+  │    ╱        ╲            ╱        ╲                  │
+  │───╱──────────╲──────────╱──────────╲────────────────│
+  │              ╲        ╱            ╲        ╱        │
+  │               ╲──────╯              ╲──────╯         │
+  └──────────────────────────────────────────────────────┘
+
+50%功率（α=90°）：
+  ┌──────────────────────────────────────────────────────┐
+  │  正弦波（仅后半段导通）                               │
+  │     ╭──────╮              ╭──────╮                  │
+  │    ╱   ↑   ╲            ╱   ↑   ╲                  │
+  │───╱  α=90° ╲──────────╱  α=90° ╲────────────────│
+  │              ╲        ╱            ╲        ╱        │
+  │               ╲──────╯              ╲──────╯         │
+  │  ████████████████████████████████████████████████    │
+  │  ↑导通区域（阴影部分）                               │
+  └──────────────────────────────────────────────────────┘
+
+有效功率与触发角关系：
+  P(α) = P_max × (1 - α/π + sin(2α)/(2π))
+  α=0°  → P=100%
+  α=90° → P=50%
+  α=180°→ P=0%
+</code></pre>
+<h4 id="_15">零点检测电路</h4>
+<pre><code>零点检测电路（光耦隔离）：
+
+220V L ──┬── R1(100kΩ) ──┬── R2(100kΩ) ──┐
+         │               │               │
+         │              D1(1N4148)       │
+         │               │               │
+220V N ──┴───────────────┴──────────────→ PC817光耦阳极
+                                          │
+                                         LED
+                                          │
+                                         GND(高压侧)
+
+PC817光耦集电极 ──→ 3.3V（通过10kΩ上拉）
+PC817光耦发射极 ──→ GND（低压侧）
+PC817光耦集电极 ──→ ESP8266 GPIO（中断引脚）
+
+工作原理：
+- 交流电过零时，光耦 LED 电流最小，输出高电平
+- 交流电峰值时，光耦 LED 电流最大，输出低电平
+- 每个过零点产生一个上升沿中断
+- 50Hz交流：每秒100个过零点（正负各50个）
+</code></pre>
+<h4 id="_16">相位角调光实现</h4>
+<pre><code class="language-cpp">// 相位角调光控制器
+// 注意：调光仅适用于白炽灯、卤素灯、部分调光LED
+// 不适用于：开关电源、电机（需使用专用调速器）
+
+#include &lt;Arduino.h&gt;
+
+#define ZC_PIN     D2   // 零点检测输入（中断）
+#define TRIAC_PIN  D3   // TRIAC 触发输出
+
+// 调光参数
+volatile uint8_t  dimmer_level = 100;  // 0-100%
+volatile bool     zc_detected  = false;
+volatile uint32_t zc_time_us   = 0;
+
+// 零点检测中断服务程序
+ICACHE_RAM_ATTR void zc_isr() {
+    zc_time_us = micros();
+    zc_detected = true;
+}
+
+// 定时器中断：在正确时刻触发 TRIAC
+// 50Hz交流：半周期 = 10000μs
+// 触发延迟 = (1 - level/100) × 10000μs
+void setup_dimmer() {
+    pinMode(ZC_PIN,    INPUT_PULLUP);
+    pinMode(TRIAC_PIN, OUTPUT);
+    digitalWrite(TRIAC_PIN, LOW);
+
+    attachInterrupt(digitalPinToInterrupt(ZC_PIN), zc_isr, RISING);
+}
+
+void process_dimmer() {
+    if (!zc_detected) return;
+    zc_detected = false;
+
+    if (dimmer_level == 0) {
+        digitalWrite(TRIAC_PIN, LOW);
+        return;
+    }
+    if (dimmer_level &gt;= 100) {
+        // 全功率：直接触发
+        digitalWrite(TRIAC_PIN, HIGH);
+        delayMicroseconds(100);
+        digitalWrite(TRIAC_PIN, LOW);
+        return;
+    }
+
+    // 计算触发延迟（μs）
+    // level=100 → delay=0μs（立即触发）
+    // level=50  → delay=5000μs（半周期后触发）
+    // level=0   → delay=10000μs（不触发）
+    uint32_t delay_us = (uint32_t)((100 - dimmer_level) * 100);  // 0-10000μs
+
+    // 等待到触发时刻
+    uint32_t target = zc_time_us + delay_us;
+    while (micros() &lt; target) {
+        yield();  // 允许 ESP8266 处理 WiFi 任务
+    }
+
+    // 触发 TRIAC（脉冲宽度 100μs）
+    digitalWrite(TRIAC_PIN, HIGH);
+    delayMicroseconds(100);
+    digitalWrite(TRIAC_PIN, LOW);
+}
+
+// 设置调光级别（0-100%）
+void set_dimmer_level(uint8_t level) {
+    dimmer_level = constrain(level, 0, 100);
+}
+</code></pre>
+<p><strong>重要限制</strong>：
+- 相位角调光会产生大量谐波，THD 可达 100%+
+- 不适合容性/感性负载（开关电源、电机）
+- 建议仅用于纯电阻负载（白炽灯、电热丝）
+- 调光 LED 需要专门的"可调光"型号</p>
+<h3 id="thd">电能质量监测（THD 与谐波分析）</h3>
+<h4 id="_17">谐波分析原理</h4>
+<pre><code>谐波分析（离散傅里叶变换 DFT）：
+
+采集 N 个样本（覆盖整数个工频周期）：
+  x[0], x[1], ..., x[N-1]
+
+DFT 计算第 k 次谐波幅值：
+         N-1
+  X[k] = Σ  x[n] × e^(-j2πkn/N)
+         n=0
+
+谐波幅值：|X[k]| = √(Re²[k] + Im²[k])
+谐波相位：∠X[k] = arctan(Im[k] / Re[k])
+
+对于50Hz基波，N=200点（10kHz采样率）：
+  k=1  → 50Hz  基波
+  k=3  → 150Hz 3次谐波
+  k=5  → 250Hz 5次谐波
+  k=7  → 350Hz 7次谐波
+  ...
+</code></pre>
+<h4 id="thd-esp8266">简化 THD 计算（ESP8266 实现）</h4>
+<pre><code class="language-cpp">// 简化谐波分析（仅计算到第7次谐波）
+// 使用 Goertzel 算法（比完整 FFT 更高效）
+
+#define SAMPLE_RATE_HZ  10000   // 10kHz 采样率
+#define FUNDAMENTAL_HZ  50      // 工频 50Hz
+#define N_SAMPLES       200     // 一个工频周期的样本数
+
+// Goertzel 算法计算单个频率的幅值
+float goertzel_magnitude(int16_t* samples, int n, int target_freq, int sample_rate) {
+    float k = (float)target_freq * n / sample_rate;
+    float omega = 2.0f * M_PI * k / n;
+    float coeff = 2.0f * cosf(omega);
+
+    float s0 = 0, s1 = 0, s2 = 0;
+    for (int i = 0; i &lt; n; i++) {
+        s0 = samples[i] + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s0;
+    }
+
+    float real = s1 - s2 * cosf(omega);
+    float imag = s2 * sinf(omega);
+    return sqrtf(real * real + imag * imag) / (n / 2.0f);
+}
+
+struct PowerQuality {
+    float fundamental_a;    // 基波电流（A）
+    float harmonics[7];     // 2-8次谐波幅值（A）
+    float thd_percent;      // 总谐波失真（%）
+    float true_pf;          // 真功率因数
+    float displacement_pf;  // 位移功率因数
+};
+
+PowerQuality analyze_power_quality(int16_t* current_samples, int n) {
+    PowerQuality pq = {};
+
+    // 计算基波和各次谐波
+    pq.fundamental_a = goertzel_magnitude(current_samples, n,
+                                          FUNDAMENTAL_HZ, SAMPLE_RATE_HZ);
+
+    float harmonic_sum_sq = 0;
+    for (int h = 2; h &lt;= 8; h++) {
+        pq.harmonics[h-2] = goertzel_magnitude(current_samples, n,
+                                                h * FUNDAMENTAL_HZ, SAMPLE_RATE_HZ);
+        harmonic_sum_sq += pq.harmonics[h-2] * pq.harmonics[h-2];
+    }
+
+    // THD 计算
+    if (pq.fundamental_a &gt; 0.01f) {
+        pq.thd_percent = 100.0f * sqrtf(harmonic_sum_sq) / pq.fundamental_a;
+    }
+
+    // 真功率因数（考虑谐波）
+    // True PF = 1 / sqrt(1 + (THD/100)^2) × DPF
+    float thd_ratio = pq.thd_percent / 100.0f;
+    pq.true_pf = pq.displacement_pf / sqrtf(1.0f + thd_ratio * thd_ratio);
+
+    return pq;
+}
+
+// 电能质量报告（通过 MQTT 上报）
+void report_power_quality(const PowerQuality&amp; pq) {
+    StaticJsonDocument&lt;512&gt; doc;
+    doc[&quot;fundamental_a&quot;] = serialized(String(pq.fundamental_a, 3));
+    doc[&quot;thd_percent&quot;]   = serialized(String(pq.thd_percent, 1));
+    doc[&quot;true_pf&quot;]       = serialized(String(pq.true_pf, 3));
+
+    JsonArray harmonics = doc.createNestedArray(&quot;harmonics&quot;);
+    for (int i = 0; i &lt; 7; i++) {
+        harmonics.add(serialized(String(pq.harmonics[i], 3)));
+    }
+
+    char buf[512];
+    serializeJson(doc, buf);
+    mqtt.publish(&quot;socket/node001/power_quality&quot;, buf);
+}
+</code></pre>
+<h4 id="_18">电能质量等级评估</h4>
+<pre><code>IEC 61000-3-2 谐波电流限值（A类设备，16A以下）：
+
+次数  限值(A)   典型开关电源  典型白炽灯
+─────────────────────────────────────────
+3     2.30      1.5A          0.01A
+5     1.14      0.8A          0.01A
+7     0.77      0.4A          0.01A
+9     0.40      0.2A          0.01A
+11    0.33      0.1A          0.01A
+13    0.21      0.05A         0.01A
+
+评估结论：
+  THD &lt; 5%   → 优秀（纯电阻负载）
+  THD 5-20%  → 良好（高效LED灯）
+  THD 20-50% → 一般（普通开关电源）
+  THD &gt; 50%  → 差（劣质充电器、调光器）
+</code></pre>
+<h2 id="_19">完整项目实战</h2>
+<h3 id="_20">项目规格与物料清单</h3>
+<p><strong>项目目标</strong>：制作一个生产级WiFi智能插座，具备能耗监测、定时控制、OTA升级和本地Web配置功能。</p>
+<p><strong>完整物料清单（BOM）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>序号</th>
+<th>器件</th>
+<th>型号/规格</th>
+<th>数量</th>
+<th>参考价格</th>
+<th>采购渠道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>主控模块</td>
+<td>ESP8266 NodeMCU v3</td>
+<td>1</td>
+<td>¥12</td>
+<td>淘宝/立创</td>
+</tr>
+<tr>
+<td>2</td>
+<td>能量计量IC</td>
+<td>HLW8012 SOP-8</td>
+<td>1</td>
+<td>¥1.5</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>3</td>
+<td>继电器</td>
+<td>HF32F-G 5V 10A</td>
+<td>1</td>
+<td>¥3</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>4</td>
+<td>继电器驱动</td>
+<td>ULN2003A SOP-16</td>
+<td>1</td>
+<td>¥0.5</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>5</td>
+<td>AC/DC电源</td>
+<td>HLK-PM01 5V/600mA</td>
+<td>1</td>
+<td>¥8</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>6</td>
+<td>LDO稳压</td>
+<td>AMS1117-3.3 SOT-223</td>
+<td>1</td>
+<td>¥0.3</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>7</td>
+<td>零点检测光耦</td>
+<td>PC817 SOP-4</td>
+<td>1</td>
+<td>¥0.3</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>8</td>
+<td>分压电阻</td>
+<td>1MΩ 1/4W × 3</td>
+<td>3</td>
+<td>¥0.1</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>9</td>
+<td>限流电阻</td>
+<td>100kΩ 1/4W</td>
+<td>2</td>
+<td>¥0.1</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>10</td>
+<td>滤波电容</td>
+<td>100μF/16V 电解</td>
+<td>2</td>
+<td>¥0.5</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>11</td>
+<td>去耦电容</td>
+<td>100nF 0805 × 10</td>
+<td>10</td>
+<td>¥0.5</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>12</td>
+<td>TVS二极管</td>
+<td>P6KE250A</td>
+<td>1</td>
+<td>¥1</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>13</td>
+<td>状态LED</td>
+<td>红/绿 3mm × 2</td>
+<td>2</td>
+<td>¥0.2</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>14</td>
+<td>按键</td>
+<td>6×6mm 轻触开关</td>
+<td>1</td>
+<td>¥0.2</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>15</td>
+<td>PCB</td>
+<td>双面板 50×80mm</td>
+<td>1</td>
+<td>¥5</td>
+<td>嘉立创</td>
+</tr>
+<tr>
+<td>16</td>
+<td>外壳</td>
+<td>86型插座面板</td>
+<td>1</td>
+<td>¥15</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>≈¥48</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="pcb">PCB 布局指南</h3>
+<pre><code>PCB 分区布局（俯视图）：
+
+┌─────────────────────────────────────────────────────────┐
+│                    PCB 50×80mm                          │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────────────────────┐    │
+│  │   高压区域   │  │         低压区域              │    │
+│  │  (220V AC)   │  │       (3.3V/5V DC)            │    │
+│  │              │  │                               │    │
+│  │  HLK-PM01    │  │  ESP8266    HLW8012           │    │
+│  │  继电器      │  │  NodeMCU    能量计量           │    │
+│  │  TVS二极管   │  │                               │    │
+│  │              │  │  ULN2003    AMS1117           │    │
+│  │  ← 3mm间距 →│  │  继电器驱动  LDO              │    │
+│  └──────────────┘  └──────────────────────────────┘    │
+│                                                         │
+│  ← 高压区爬电距离 ≥ 3mm，建议开槽隔离 →                │
+│                                                         │
+│  接地平面：低压 GND 与高压 GND 单点连接（安全地）       │
+└─────────────────────────────────────────────────────────┘
+
+关键布局规则：
+1. 高压区与低压区之间开 V 形槽（增加爬电距离）
+2. HLW8012 分压电阻靠近 VP 引脚放置
+3. 去耦电容紧靠 IC 电源引脚
+4. 继电器线圈并联续流二极管（1N4007）
+5. 零点检测光耦放在高低压边界处
+</code></pre>
+<h3 id="_21">完整固件实现</h3>
+<pre><code class="language-cpp">// 智能插座完整固件
+// 硬件：ESP8266 NodeMCU v3
+// 依赖库：
+//   - PubSubClient 2.8.0 (MQTT)
+//   - ArduinoJson 6.21.0
+//   - ESP8266HTTPUpdate (内置)
+//   - ESP8266WebServer (内置)
+//   - NTPClient 3.2.1 (时间同步)
+
+#include &lt;Arduino.h&gt;
+#include &lt;ESP8266WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+#include &lt;ArduinoJson.h&gt;
+#include &lt;ESP8266HTTPUpdate.h&gt;
+#include &lt;ESP8266WebServer.h&gt;
+#include &lt;DNSServer.h&gt;
+#include &lt;NTPClient.h&gt;
+#include &lt;WiFiUdp.h&gt;
+#include &lt;EEPROM.h&gt;
+#include &lt;Ticker.h&gt;
+
+// ─── 引脚定义 ───────────────────────────────────────────
+#define RELAY_PIN    D1   // 继电器（低电平触发）
+#define LED_R_PIN    D4   // 红色LED（低电平亮）
+#define LED_G_PIN    D0   // 绿色LED（低电平亮）
+#define BTN_PIN      D3   // 配置按键（低电平按下）
+#define HLW_CF_PIN   D5   // HLW8012 功率脉冲
+#define HLW_CF1_PIN  D6   // HLW8012 电流/电压脉冲
+#define HLW_SEL_PIN  D7   // HLW8012 选择引脚
+#define ZC_PIN       D2   // 零点检测
+
+// ─── 全局对象 ────────────────────────────────────────────
+WiFiClient       wifiClient;
+PubSubClient     mqtt(wifiClient);
+ESP8266WebServer webServer(80);
+DNSServer        dnsServer;
+WiFiUDP          ntpUDP;
+NTPClient        timeClient(ntpUDP, &quot;pool.ntp.org&quot;, 28800);  // UTC+8
+Ticker           reportTicker;
+Ticker           timerTicker;
+
+// ─── 状态变量 ────────────────────────────────────────────
+bool     relay_state    = false;
+bool     config_mode    = false;
+uint32_t boot_time_ms   = 0;
+
+// ─── HLW8012 测量数据 ────────────────────────────────────
+volatile uint32_t hlw_cf_count  = 0;
+volatile uint32_t hlw_cf1_count = 0;
+bool     hlw_sel_mode   = true;   // true=电流，false=电压
+float    meas_power_w   = 0;
+float    meas_current_a = 0;
+float    meas_voltage_v = 220.0f; // 默认220V（无电压测量时）
+float    meas_energy_kwh = 0;
+float    meas_pf        = 0;
+
+// HLW8012 校准系数（出厂校准后存入EEPROM）
+float k_power   = 12530.0f;
+float k_current = 25740.0f;
+float k_voltage = 15420.0f;
+
+// ─── 定时任务 ────────────────────────────────────────────
+struct TimerTask {
+    uint8_t  hour, minute;
+    bool     action;
+    bool     enabled;
+    uint8_t  weekdays;  // bit0=周日...bit6=周六
+};
+#define MAX_TIMERS 8
+TimerTask timers[MAX_TIMERS] = {};
+
+// ─── 配置结构 ────────────────────────────────────────────
+struct Config {
+    char     magic[4];
+    char     wifi_ssid[32];
+    char     wifi_pass[64];
+    char     mqtt_host[64];
+    uint16_t mqtt_port;
+    char     mqtt_user[32];
+    char     mqtt_pass[32];
+    char     device_id[16];
+    float    overload_a;
+    float    k_power;
+    float    k_current;
+    float    k_voltage;
+    TimerTask timers[MAX_TIMERS];
+    uint8_t  checksum;
+} cfg;
+
+// ─── MQTT 主题 ───────────────────────────────────────────
+char TOPIC_CTRL[64];
+char TOPIC_STATUS[64];
+char TOPIC_ALERT[64];
+char TOPIC_OTA[64];
+char TOPIC_POWER_QUALITY[64];
+
+// ─── 中断服务程序 ────────────────────────────────────────
+ICACHE_RAM_ATTR void hlw_cf_isr()  { hlw_cf_count++;  }
+ICACHE_RAM_ATTR void hlw_cf1_isr() { hlw_cf1_count++; }
+
+// ─── 继电器控制 ──────────────────────────────────────────
+void relay_set(bool on) {
+    relay_state = on;
+    digitalWrite(RELAY_PIN, on ? LOW : HIGH);
+    digitalWrite(LED_G_PIN, on ? LOW : HIGH);
+    // 保存状态
+    EEPROM.write(sizeof(Config), on ? 1 : 0);
+    EEPROM.commit();
+}
+
+// ─── HLW8012 更新 ────────────────────────────────────────
+void hlw_update() {
+    static uint32_t last_ms  = 0;
+    static uint32_t last_cf  = 0;
+    static uint32_t last_cf1 = 0;
+
+    uint32_t now = millis();
+    uint32_t dt  = now - last_ms;
+    if (dt &lt; 2000) return;
+
+    noInterrupts();
+    uint32_t cf_d  = hlw_cf_count  - last_cf;
+    uint32_t cf1_d = hlw_cf1_count - last_cf1;
+    last_cf  = hlw_cf_count;
+    last_cf1 = hlw_cf1_count;
+    interrupts();
+
+    float dt_s = dt / 1000.0f;
+    float cf_hz  = cf_d  / dt_s;
+    float cf1_hz = cf1_d / dt_s;
+
+    meas_power_w = (cf_hz &gt; 0.5f) ? (cf_hz / k_power) : 0.0f;
+
+    if (hlw_sel_mode) {
+        meas_current_a = (cf1_hz &gt; 0.5f) ? (cf1_hz / k_current) : 0.0f;
+        hlw_sel_mode = false;
+        digitalWrite(HLW_SEL_PIN, LOW);
+    } else {
+        meas_voltage_v = (cf1_hz &gt; 0.5f) ? (cf1_hz / k_voltage) : 220.0f;
+        hlw_sel_mode = true;
+        digitalWrite(HLW_SEL_PIN, HIGH);
+    }
+
+    // 累计电能
+    meas_energy_kwh += meas_power_w * (dt_s / 3600.0f) / 1000.0f;
+
+    // 功率因数
+    float apparent = meas_voltage_v * meas_current_a;
+    meas_pf = (apparent &gt; 1.0f) ? constrain(meas_power_w / apparent, 0.0f, 1.0f) : 0.0f;
+
+    last_ms = now;
+}
+
+// ─── 过载保护 ────────────────────────────────────────────
+void check_overload() {
+    static uint32_t overload_start = 0;
+    if (!relay_state) { overload_start = 0; return; }
+
+    if (meas_current_a &gt; cfg.overload_a) {
+        if (overload_start == 0) overload_start = millis();
+        else if (millis() - overload_start &gt; 2000) {
+            relay_set(false);
+            overload_start = 0;
+            digitalWrite(LED_R_PIN, LOW);  // 红灯亮表示故障
+
+            StaticJsonDocument&lt;128&gt; doc;
+            doc[&quot;type&quot;]    = &quot;overload&quot;;
+            doc[&quot;current&quot;] = serialized(String(meas_current_a, 2));
+            doc[&quot;limit&quot;]   = cfg.overload_a;
+            char buf[128];
+            serializeJson(doc, buf);
+            mqtt.publish(TOPIC_ALERT, buf);
+        }
+    } else {
+        overload_start = 0;
+        digitalWrite(LED_R_PIN, HIGH);  // 红灯灭
+    }
+}
+
+// ─── 定时任务检查 ────────────────────────────────────────
+void check_timers() {
+    if (!timeClient.isTimeSet()) return;
+    int hour    = timeClient.getHours();
+    int minute  = timeClient.getMinutes();
+    int weekday = timeClient.getDay();  // 0=周日
+
+    for (int i = 0; i &lt; MAX_TIMERS; i++) {
+        if (!timers[i].enabled) continue;
+        if (!(timers[i].weekdays &amp; (1 &lt;&lt; weekday))) continue;
+        if (timers[i].hour == hour &amp;&amp; timers[i].minute == minute) {
+            // 防止同一分钟内重复触发
+            static uint32_t last_trigger[MAX_TIMERS] = {};
+            uint32_t now = millis();
+            if (now - last_trigger[i] &gt; 60000) {
+                relay_set(timers[i].action);
+                last_trigger[i] = now;
+            }
+        }
+    }
+}
+
+// ─── 状态上报 ────────────────────────────────────────────
+void report_status() {
+    if (!mqtt.connected()) return;
+
+    StaticJsonDocument&lt;384&gt; doc;
+    doc[&quot;state&quot;]    = relay_state;
+    doc[&quot;current&quot;]  = serialized(String(meas_current_a, 2));
+    doc[&quot;voltage&quot;]  = serialized(String(meas_voltage_v, 1));
+    doc[&quot;power&quot;]    = serialized(String(meas_power_w, 1));
+    doc[&quot;energy&quot;]   = serialized(String(meas_energy_kwh, 4));
+    doc[&quot;pf&quot;]       = serialized(String(meas_pf, 3));
+    doc[&quot;uptime&quot;]   = (millis() - boot_time_ms) / 1000;
+    doc[&quot;rssi&quot;]     = WiFi.RSSI();
+    doc[&quot;ip&quot;]       = WiFi.localIP().toString();
+
+    char buf[384];
+    serializeJson(doc, buf);
+    mqtt.publish(TOPIC_STATUS, buf, true);  // 保留消息
+}
+
+// ─── MQTT 消息处理 ───────────────────────────────────────
+void on_mqtt_message(char* topic, byte* payload, unsigned int len) {
+    StaticJsonDocument&lt;512&gt; doc;
+    if (deserializeJson(doc, payload, len) != DeserializationError::Ok) return;
+
+    if (strcmp(topic, TOPIC_CTRL) == 0) {
+        const char* cmd = doc[&quot;cmd&quot;];
+        if      (!cmd)                    return;
+        else if (strcmp(cmd, &quot;on&quot;)     == 0) relay_set(true);
+        else if (strcmp(cmd, &quot;off&quot;)    == 0) relay_set(false);
+        else if (strcmp(cmd, &quot;toggle&quot;) == 0) relay_set(!relay_state);
+        else if (strcmp(cmd, &quot;query&quot;)  == 0) report_status();
+        else if (strcmp(cmd, &quot;reset_energy&quot;) == 0) meas_energy_kwh = 0;
+        else if (strcmp(cmd, &quot;set_timer&quot;) == 0) {
+            int id = doc[&quot;id&quot;] | -1;
+            if (id &gt;= 0 &amp;&amp; id &lt; MAX_TIMERS) {
+                timers[id].hour     = doc[&quot;hour&quot;]     | 0;
+                timers[id].minute   = doc[&quot;minute&quot;]   | 0;
+                timers[id].action   = doc[&quot;action&quot;]   | false;
+                timers[id].weekdays = doc[&quot;weekdays&quot;] | 0x7F;
+                timers[id].enabled  = true;
+                memcpy(cfg.timers, timers, sizeof(timers));
+                save_config();
+            }
+        }
+    } else if (strcmp(topic, TOPIC_OTA) == 0) {
+        handle_ota_command(doc);
+    }
+}
+
+// ─── MQTT 重连 ───────────────────────────────────────────
+void mqtt_reconnect() {
+    if (mqtt.connected()) return;
+    static uint32_t last_attempt = 0;
+    if (millis() - last_attempt &lt; 5000) return;
+    last_attempt = millis();
+
+    // 遗嘱消息（设备离线时自动发布）
+    char will_msg[64];
+    snprintf(will_msg, sizeof(will_msg),
+             &quot;{\&quot;state\&quot;:\&quot;offline\&quot;,\&quot;id\&quot;:\&quot;%s\&quot;}&quot;, cfg.device_id);
+
+    if (mqtt.connect(cfg.device_id, cfg.mqtt_user, cfg.mqtt_pass,
+                     TOPIC_STATUS, 1, true, will_msg)) {
+        mqtt.subscribe(TOPIC_CTRL);
+        mqtt.subscribe(TOPIC_OTA);
+        // 上线通知
+        char online_msg[64];
+        snprintf(online_msg, sizeof(online_msg),
+                 &quot;{\&quot;state\&quot;:\&quot;online\&quot;,\&quot;id\&quot;:\&quot;%s\&quot;}&quot;, cfg.device_id);
+        mqtt.publish(TOPIC_STATUS, online_msg, true);
+        Serial.println(&quot;[MQTT] 已连接&quot;);
+    }
+}
+
+// ─── 初始化 ──────────────────────────────────────────────
+void setup() {
+    Serial.begin(115200);
+    boot_time_ms = millis();
+
+    // GPIO 初始化
+    pinMode(RELAY_PIN,   OUTPUT);
+    pinMode(LED_R_PIN,   OUTPUT);
+    pinMode(LED_G_PIN,   OUTPUT);
+    pinMode(BTN_PIN,     INPUT_PULLUP);
+    pinMode(HLW_CF_PIN,  INPUT_PULLUP);
+    pinMode(HLW_CF1_PIN, INPUT_PULLUP);
+    pinMode(HLW_SEL_PIN, OUTPUT);
+    digitalWrite(RELAY_PIN, HIGH);   // 继电器默认断开
+    digitalWrite(LED_R_PIN, HIGH);   // LED 默认灭
+    digitalWrite(LED_G_PIN, HIGH);
+    digitalWrite(HLW_SEL_PIN, HIGH); // 先测电流
+
+    // 加载配置
+    if (!load_config()) {
+        // 无有效配置，进入配置模式
+        Serial.println(&quot;[CFG] 无配置，进入AP配置模式&quot;);
+        config_mode = true;
+        start_config_portal();
+        return;
+    }
+
+    // 恢复上次继电器状态
+    EEPROM.begin(sizeof(Config) + 1);
+    bool saved_state = EEPROM.read(sizeof(Config));
+    relay_set(saved_state);
+
+    // 复制定时任务
+    memcpy(timers, cfg.timers, sizeof(timers));
+
+    // 设置 MQTT 主题
+    snprintf(TOPIC_CTRL,          sizeof(TOPIC_CTRL),
+             &quot;socket/%s/control&quot;, cfg.device_id);
+    snprintf(TOPIC_STATUS,        sizeof(TOPIC_STATUS),
+             &quot;socket/%s/status&quot;,  cfg.device_id);
+    snprintf(TOPIC_ALERT,         sizeof(TOPIC_ALERT),
+             &quot;socket/%s/alert&quot;,   cfg.device_id);
+    snprintf(TOPIC_OTA,           sizeof(TOPIC_OTA),
+             &quot;socket/%s/ota&quot;,     cfg.device_id);
+    snprintf(TOPIC_POWER_QUALITY, sizeof(TOPIC_POWER_QUALITY),
+             &quot;socket/%s/power_quality&quot;, cfg.device_id);
+
+    // 连接 WiFi
+    WiFi.begin(cfg.wifi_ssid, cfg.wifi_pass);
+    Serial.printf(&quot;[WiFi] 连接 %s ...\n&quot;, cfg.wifi_ssid);
+    uint32_t wifi_start = millis();
+    while (WiFi.status() != WL_CONNECTED &amp;&amp; millis() - wifi_start &lt; 15000) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.printf(&quot;\n[WiFi] 已连接，IP: %s\n&quot;,
+                      WiFi.localIP().toString().c_str());
+    } else {
+        Serial.println(&quot;\n[WiFi] 连接失败，进入配置模式&quot;);
+        config_mode = true;
+        start_config_portal();
+        return;
+    }
+
+    // NTP 时间同步
+    timeClient.begin();
+    timeClient.update();
+
+    // MQTT 初始化
+    mqtt.setServer(cfg.mqtt_host, cfg.mqtt_port);
+    mqtt.setCallback(on_mqtt_message);
+    mqtt.setBufferSize(512);
+    mqtt_reconnect();
+
+    // HLW8012 中断
+    attachInterrupt(digitalPinToInterrupt(HLW_CF_PIN),  hlw_cf_isr,  RISING);
+    attachInterrupt(digitalPinToInterrupt(HLW_CF1_PIN), hlw_cf1_isr, RISING);
+
+    // 定时上报（每10秒）
+    reportTicker.attach(10, report_status);
+    // 定时任务检查（每分钟）
+    timerTicker.attach(60, check_timers);
+
+    Serial.println(&quot;[INIT] 初始化完成&quot;);
+}
+
+// ─── 主循环 ──────────────────────────────────────────────
+void loop() {
+    if (config_mode) {
+        dnsServer.processNextRequest();
+        webServer.handleClient();
+        return;
+    }
+
+    // 长按按键3秒进入配置模式
+    static uint32_t btn_press_ms = 0;
+    if (digitalRead(BTN_PIN) == LOW) {
+        if (btn_press_ms == 0) btn_press_ms = millis();
+        else if (millis() - btn_press_ms &gt; 3000) {
+            Serial.println(&quot;[BTN] 长按，进入配置模式&quot;);
+            config_mode = true;
+            start_config_portal();
+            return;
+        }
+    } else {
+        if (btn_press_ms &gt; 0 &amp;&amp; millis() - btn_press_ms &lt; 1000) {
+            // 短按：切换继电器
+            relay_set(!relay_state);
+        }
+        btn_press_ms = 0;
+    }
+
+    // MQTT 维护
+    if (!mqtt.connected()) mqtt_reconnect();
+    mqtt.loop();
+
+    // HLW8012 测量更新
+    hlw_update();
+
+    // 过载保护
+    check_overload();
+
+    // OTA 处理
+    process_ota();
+
+    // NTP 每小时同步一次
+    static uint32_t last_ntp = 0;
+    if (millis() - last_ntp &gt; 3600000) {
+        timeClient.update();
+        last_ntp = millis();
+    }
+}
+</code></pre>
+<h3 id="_22">性能调优</h3>
+<h4 id="wifi_1">WiFi 功耗优化</h4>
+<pre><code class="language-cpp">// 降低 WiFi 发射功率（减少干扰，降低功耗）
+WiFi.setOutputPower(17.5);  // 默认20.5dBm，降至17.5dBm
+
+// 启用 Modem Sleep（MQTT 空闲时降低功耗）
+// 注意：Modem Sleep 会增加 MQTT 延迟
+WiFi.setSleepMode(WIFI_MODEM_SLEEP);
+
+// 固定 IP（避免 DHCP 延迟）
+IPAddress ip(192, 168, 1, 100);
+IPAddress gateway(192, 168, 1, 1);
+IPAddress subnet(255, 255, 255, 0);
+WiFi.config(ip, gateway, subnet);
+</code></pre>
+<h4 id="mqtt">MQTT 消息优化</h4>
+<pre><code class="language-cpp">// 使用 QoS 0 减少握手开销（状态上报不需要可靠传输）
+mqtt.publish(TOPIC_STATUS, buf, false);  // QoS 0，不保留
+
+// 使用 QoS 1 保证控制命令可靠（继电器控制需要确认）
+// PubSubClient 默认 QoS 0，控制命令建议在应用层加确认
+
+// 批量上报（减少 MQTT 连接次数）
+// 将多个测量值合并到一个 JSON 消息
+</code></pre>
+<h3 id="_23">完整项目集成测试</h3>
+<h4 id="_24">功能测试清单</h4>
+<table>
+<thead>
+<tr>
+<th>测试项</th>
+<th>测试步骤</th>
+<th>预期结果</th>
+<th>通过标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1. 基本开关</td>
+<td>MQTT发送 <code>{"cmd":"on"}</code></td>
+<td>继电器吸合，绿灯亮</td>
+<td>延迟 &lt; 500ms</td>
+</tr>
+<tr>
+<td>2. 能耗测量</td>
+<td>接入100W白炽灯</td>
+<td>功率显示 95-105W</td>
+<td>误差 &lt; 5%</td>
+</tr>
+<tr>
+<td>3. 过载保护</td>
+<td>接入超过阈值负载</td>
+<td>2秒后自动断开，红灯亮</td>
+<td>保护动作正常</td>
+</tr>
+<tr>
+<td>4. 定时任务</td>
+<td>设置定时开关</td>
+<td>到时自动执行</td>
+<td>时间误差 &lt; 1分钟</td>
+</tr>
+<tr>
+<td>5. OTA升级</td>
+<td>发送OTA命令</td>
+<td>下载并重启，版本更新</td>
+<td>升级成功率 &gt; 95%</td>
+</tr>
+<tr>
+<td>6. 配网功能</td>
+<td>长按按键3秒</td>
+<td>进入AP模式，手机可连接</td>
+<td>配置页面正常显示</td>
+</tr>
+<tr>
+<td>7. 断电记忆</td>
+<td>断电后重新上电</td>
+<td>恢复断电前状态</td>
+<td>状态保持一致</td>
+</tr>
+<tr>
+<td>8. WiFi重连</td>
+<td>路由器重启</td>
+<td>自动重连</td>
+<td>重连时间 &lt; 30秒</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_25">安全测试</h4>
+<pre><code>电气安全测试（必须由专业人员使用专业设备进行）：
+
+1. 绝缘电阻测试：
+   - 测试仪器：兆欧表（500V DC）
+   - 测试点：高压侧 ↔ 低压侧
+   - 合格标准：≥ 5MΩ
+
+2. 介电强度测试：
+   - 测试仪器：耐压测试仪
+   - 测试电压：2000V AC，持续1分钟
+   - 合格标准：无击穿、无闪络
+
+3. 接触电阻测试：
+   - 测试仪器：微欧计
+   - 测试点：继电器触点
+   - 合格标准：≤ 5mΩ
+
+4. 温升测试：
+   - 测试条件：额定负载，连续运行2小时
+   - 测试点：外壳、接线端子、继电器
+   - 合格标准：外壳温升 ≤ 35K，端子温升 ≤ 45K
+
+5. EMC测试（可选，认证必需）：
+   - 传导骚扰：EN 55014-1
+   - 辐射骚扰：EN 55014-1
+   - 抗扰度：EN 55014-2
+</code></pre>
+<h4 id="_26">长期稳定性测试</h4>
+<pre><code>老化测试方案：
+
+测试时长：7×24小时（168小时）
+测试负载：额定功率的80%（如10A插座接8A负载）
+测试周期：
+  - 每小时开关一次（模拟日常使用）
+  - 每6小时记录一次温度、功率、电流
+  - 每24小时检查一次继电器触点
+
+监测指标：
+  ✓ 继电器动作次数：≥ 168次
+  ✓ 测量精度漂移：&lt; 2%
+  ✓ WiFi断线次数：&lt; 5次
+  ✓ MQTT消息丢失率：&lt; 0.1%
+  ✓ 外壳最高温度：&lt; 60°C
+  ✓ 继电器触点电阻增长：&lt; 10%
+
+合格标准：
+  - 所有监测指标在范围内
+  - 无自动重启
+  - 无功能异常
+</code></pre>
+<h2 id="_27">常见问题与调试</h2>
+<h3 id="wifi_2">WiFi 连接问题</h3>
+<h4 id="1wifi">问题1：WiFi 连接失败或频繁断线</h4>
+<p><strong>症状</strong>：
+- 串口输出 <code>[WiFi] 连接失败</code>
+- 设备反复重启
+- MQTT 消息延迟或丢失</p>
+<p><strong>可能原因与解决方案</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>原因</th>
+<th>诊断方法</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>信号弱</td>
+<td>检查 RSSI &lt; -75dBm</td>
+<td>移近路由器或增加中继器</td>
+</tr>
+<tr>
+<td>信道拥挤</td>
+<td>使用 WiFi 分析仪</td>
+<td>路由器切换到1/6/11信道</td>
+</tr>
+<tr>
+<td>DHCP 冲突</td>
+<td>检查路由器日志</td>
+<td>设置静态 IP</td>
+</tr>
+<tr>
+<td>功耗不足</td>
+<td>测量 3.3V 电压</td>
+<td>更换更大容量电源模块</td>
+</tr>
+<tr>
+<td>天线问题</td>
+<td>对比其他 ESP8266</td>
+<td>更换模块或外接天线</td>
+</tr>
+</tbody>
+</table>
+<p><strong>调试代码</strong>：</p>
+<pre><code class="language-cpp">// WiFi 诊断信息
+void wifi_diagnostics() {
+    Serial.printf(&quot;[WiFi] SSID: %s\n&quot;, WiFi.SSID().c_str());
+    Serial.printf(&quot;[WiFi] RSSI: %d dBm\n&quot;, WiFi.RSSI());
+    Serial.printf(&quot;[WiFi] Channel: %d\n&quot;, WiFi.channel());
+    Serial.printf(&quot;[WiFi] IP: %s\n&quot;, WiFi.localIP().toString().c_str());
+    Serial.printf(&quot;[WiFi] Gateway: %s\n&quot;, WiFi.gatewayIP().toString().c_str());
+    Serial.printf(&quot;[WiFi] DNS: %s\n&quot;, WiFi.dnsIP().toString().c_str());
+    Serial.printf(&quot;[WiFi] MAC: %s\n&quot;, WiFi.macAddress().c_str());
+}
+
+// WiFi 事件监听
+WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected&amp; evt) {
+    Serial.printf(&quot;[WiFi] 断开连接，原因: %d\n&quot;, evt.reason);
+    // 原因代码：
+    // 2  = AUTH_EXPIRE（认证超时）
+    // 3  = AUTH_LEAVE（主动断开）
+    // 4  = ASSOC_EXPIRE（关联超时）
+    // 8  = ASSOC_LEAVE（AP 踢出）
+    // 15 = 4WAY_HANDSHAKE_TIMEOUT（握手超时）
+    // 201= NO_AP_FOUND（找不到AP）
+});
+</code></pre>
+<h4 id="2">问题2：配网模式无法进入</h4>
+<p><strong>症状</strong>：
+- 长按按键3秒无反应
+- 手机搜不到 AP</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-cpp">// 强制进入配网模式（调试用）
+// 在 setup() 开头添加：
+if (digitalRead(BTN_PIN) == LOW) {
+    delay(100);
+    if (digitalRead(BTN_PIN) == LOW) {
+        Serial.println(&quot;[DEBUG] 强制进入配网模式&quot;);
+        config_mode = true;
+        start_config_portal();
+        while(1) {
+            dnsServer.processNextRequest();
+            webServer.handleClient();
+            yield();
+        }
+    }
+}
+
+// 或者通过串口命令触发
+if (Serial.available()) {
+    char c = Serial.read();
+    if (c == 'C' || c == 'c') {
+        config_mode = true;
+        start_config_portal();
+    }
+}
+</code></pre>
+<h3 id="_28">继电器控制问题</h3>
+<h4 id="3">问题3：继电器抖动或无法吸合</h4>
+<p><strong>症状</strong>：
+- 继电器发出"嗒嗒"声
+- 继电器吸合后立即释放
+- 负载无法正常工作</p>
+<p><strong>可能原因</strong>：</p>
+<pre><code>1. 驱动电流不足：
+   - ULN2003 输出电流 &lt; 继电器线圈电流
+   - 解决：更换大电流驱动（如 ULN2803）或使用 MOSFET
+
+2. 电源纹波过大：
+   - 5V 电源带载能力不足
+   - 解决：在继电器线圈并联 100μF 电容
+
+3. 续流二极管缺失或反接：
+   - 线圈断电时产生反向电动势
+   - 解决：检查 1N4007 二极管方向（阴极接 VCC）
+
+4. GPIO 输出电平错误：
+   - 低电平触发继电器，但 GPIO 输出高电平
+   - 解决：检查代码逻辑，确保 digitalWrite(RELAY_PIN, LOW) 吸合
+</code></pre>
+<p><strong>测试代码</strong>：</p>
+<pre><code class="language-cpp">// 继电器测试程序（独立运行）
+void relay_test() {
+    Serial.println(&quot;[TEST] 继电器测试开始&quot;);
+    for (int i = 0; i &lt; 10; i++) {
+        Serial.printf(&quot;[TEST] 第 %d 次吸合\n&quot;, i+1);
+        digitalWrite(RELAY_PIN, LOW);   // 吸合
+        delay(1000);
+        Serial.printf(&quot;[TEST] 第 %d 次释放\n&quot;, i+1);
+        digitalWrite(RELAY_PIN, HIGH);  // 释放
+        delay(1000);
+    }
+    Serial.println(&quot;[TEST] 继电器测试完成&quot;);
+}
+</code></pre>
+<h3 id="hlw8012_1">HLW8012 测量问题</h3>
+<h4 id="4">问题4：功率/电流测量不准确</h4>
+<p><strong>症状</strong>：
+- 测量值偏差 &gt; 10%
+- 空载时显示非零功率
+- 电压显示异常</p>
+<p><strong>校准步骤</strong>：</p>
+<pre><code class="language-cpp">// HLW8012 校准程序
+// 需要：标准功率计、纯电阻负载（如100W白炽灯）
+
+void hlw_calibration() {
+    Serial.println(&quot;[CAL] HLW8012 校准开始&quot;);
+    Serial.println(&quot;[CAL] 请接入已知功率的纯电阻负载（如100W白炽灯）&quot;);
+    Serial.println(&quot;[CAL] 使用标准功率计测量实际功率&quot;);
+    Serial.println(&quot;[CAL] 输入实际功率值（W）：&quot;);
+
+    while (!Serial.available()) delay(100);
+    float actual_power = Serial.parseFloat();
+
+    Serial.println(&quot;[CAL] 采集5秒数据...&quot;);
+    uint32_t cf_start = hlw_cf_count;
+    delay(5000);
+    uint32_t cf_end = hlw_cf_count;
+    float cf_hz = (cf_end - cf_start) / 5.0f;
+
+    k_power = cf_hz / actual_power;
+    cfg.k_power = k_power;
+    save_config();
+
+    Serial.printf(&quot;[CAL] 校准完成！k_power = %.1f Hz/W\n&quot;, k_power);
+    Serial.printf(&quot;[CAL] 测量频率: %.1f Hz\n&quot;, cf_hz);
+    Serial.printf(&quot;[CAL] 实际功率: %.1f W\n&quot;, actual_power);
+}
+
+// 在 setup() 中添加串口命令触发
+if (Serial.available() &amp;&amp; Serial.read() == 'K') {
+    hlw_calibration();
+}
+</code></pre>
+<p><strong>常见测量误差来源</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>误差来源</th>
+<th>影响</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>分压电阻误差</td>
+<td>电压测量偏差</td>
+<td>使用 1% 精度电阻</td>
+</tr>
+<tr>
+<td>温度漂移</td>
+<td>长期运行精度下降</td>
+<td>定期重新校准</td>
+</tr>
+<tr>
+<td>非线性负载</td>
+<td>功率因数 &lt; 1</td>
+<td>使用真有效值测量</td>
+</tr>
+<tr>
+<td>电源纹波</td>
+<td>测量抖动</td>
+<td>加强滤波电容</td>
+</tr>
+<tr>
+<td>PCB 布线</td>
+<td>高频干扰</td>
+<td>缩短 HLW8012 到采样点距离</td>
+</tr>
+</tbody>
+</table>
+<h4 id="5acs712">问题5：ACS712 电流传感器噪声大</h4>
+<p><strong>症状</strong>：
+- 电流读数跳动 ± 0.5A
+- 空载时显示 0.2-0.3A</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-cpp">// ACS712 软件滤波（移动平均）
+#define ACS712_PIN A0
+#define ACS712_SAMPLES 50
+
+float read_acs712_current() {
+    long sum = 0;
+    for (int i = 0; i &lt; ACS712_SAMPLES; i++) {
+        sum += analogRead(ACS712_PIN);
+        delayMicroseconds(100);
+    }
+    float avg = sum / (float)ACS712_SAMPLES;
+
+    // ACS712-20A：2.5V = 0A，灵敏度 100mV/A
+    // ESP8266 ADC：0-1V → 0-1023
+    float voltage = avg * (1.0f / 1023.0f);  // 0-1V
+    float current = (voltage - 0.5f) / 0.1f;  // (V - Vref) / 灵敏度
+
+    // 死区处理（&lt; 0.1A 视为 0）
+    if (fabs(current) &lt; 0.1f) current = 0.0f;
+
+    return current;
+}
+
+// 硬件改进：
+// 1. ACS712 输出端并联 0.1μF 电容（滤除高频噪声）
+// 2. 使用差分放大器（如 INA240）替代 ACS712
+// 3. 增加 RC 低通滤波器（R=10kΩ, C=1μF, fc=16Hz）
+</code></pre>
+<h3 id="ota_1">OTA 升级问题</h3>
+<h4 id="6ota">问题6：OTA 升级失败</h4>
+<p><strong>症状</strong>：
+- 下载卡在某个百分比
+- 提示 "MD5 校验失败"
+- 升级后无法启动</p>
+<p><strong>调试方法</strong>：</p>
+<pre><code class="language-cpp">// OTA 详细日志
+ESPhttpUpdate.onProgress([](int cur, int total) {
+    static int last_percent = -1;
+    int percent = (cur * 100) / total;
+    if (percent != last_percent) {
+        Serial.printf(&quot;[OTA] 进度: %d%% (%d/%d bytes)\n&quot;,
+                      percent, cur, total);
+        last_percent = percent;
+    }
+});
+
+ESPhttpUpdate.onError([](int err) {
+    Serial.printf(&quot;[OTA] 错误代码: %d\n&quot;, err);
+    Serial.printf(&quot;[OTA] 错误信息: %s\n&quot;,
+                  ESPhttpUpdate.getLastErrorString().c_str());
+    // 错误代码：
+    // -1 = HTTP_UPDATE_FAILED
+    // -2 = HTTP_UPDATE_NO_UPDATES
+    // -3 = HTTP_UPDATE_NO_PARTITION
+});
+</code></pre>
+<p><strong>常见失败原因</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>错误</th>
+<th>原因</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MD5 校验失败</td>
+<td>固件损坏或传输错误</td>
+<td>重新生成 MD5，检查网络</td>
+</tr>
+<tr>
+<td>分区不足</td>
+<td>固件大小 &gt; OTA 分区</td>
+<td>减小固件或使用 minimal SPIFFS</td>
+</tr>
+<tr>
+<td>下载超时</td>
+<td>网络不稳定</td>
+<td>增加超时时间或使用本地服务器</td>
+</tr>
+<tr>
+<td>启动失败</td>
+<td>固件与硬件不匹配</td>
+<td>检查编译目标板型</td>
+</tr>
+</tbody>
+</table>
+<pre><code class="language-cpp">// 增加 OTA 超时时间
+ESPhttpUpdate.setTimeout(60000);  // 60秒
+
+// 使用本地 HTTP 服务器（Python）
+// python -m http.server 8000
+// OTA URL: http://192.168.1.100:8000/firmware.bin
+</code></pre>
+<h3 id="_29">电能质量监测问题</h3>
+<h4 id="7thd">问题7：THD 计算结果异常</h4>
+<p><strong>症状</strong>：
+- THD 显示 &gt; 200%
+- 谐波幅值大于基波</p>
+<p><strong>可能原因</strong>：</p>
+<pre><code>1. 采样率不足：
+   - 10kHz 采样率无法捕捉高次谐波
+   - 解决：降低分析的最高谐波次数（如仅到第7次）
+
+2. 采样窗口不对齐：
+   - 采样点数不是工频周期的整数倍
+   - 解决：确保 N = 采样率 / 工频（如 10000/50 = 200）
+
+3. ADC 噪声：
+   - ESP8266 ADC 精度有限（10-bit）
+   - 解决：使用外部 ADC（如 ADS1115，16-bit）
+
+4. 算法错误：
+   - Goertzel 算法参数错误
+   - 解决：使用经过验证的 FFT 库（如 arduinoFFT）
+</code></pre>
+<p><strong>验证方法</strong>：</p>
+<pre><code class="language-cpp">// 使用纯正弦波测试（如白炽灯）
+// 预期结果：THD &lt; 5%，仅基波有明显幅值
+
+void test_thd_with_resistive_load() {
+    Serial.println(&quot;[TEST] 请接入纯电阻负载（白炽灯）&quot;);
+    delay(5000);
+
+    // 采集数据
+    int16_t samples[N_SAMPLES];
+    for (int i = 0; i &lt; N_SAMPLES; i++) {
+        samples[i] = analogRead(A0);
+        delayMicroseconds(100);  // 10kHz 采样
+    }
+
+    // 分析
+    PowerQuality pq = analyze_power_quality(samples, N_SAMPLES);
+
+    Serial.printf(&quot;[TEST] 基波: %.3f A\n&quot;, pq.fundamental_a);
+    Serial.printf(&quot;[TEST] THD: %.1f%%\n&quot;, pq.thd_percent);
+    Serial.println(&quot;[TEST] 各次谐波:&quot;);
+    for (int h = 2; h &lt;= 8; h++) {
+        Serial.printf(&quot;  %d次: %.3f A\n&quot;, h, pq.harmonics[h-2]);
+    }
+
+    // 预期：白炽灯 THD &lt; 5%，2-8次谐波 &lt; 0.01A
+}
+</code></pre>
+<h2 id="_30">测试与验证</h2>
+<h3 id="_31">单元测试</h3>
+<pre><code class="language-cpp">// 单元测试框架（使用 AUnit 库）
+#include &lt;AUnit.h&gt;
+
+test(HLW8012_PowerCalculation) {
+    // 模拟 CF 脉冲频率
+    float cf_hz = 3400.0f;  // 对应 1W（假设 k_power=3400）
+    float power = cf_hz / 3400.0f;
+    assertEqual(power, 1.0f);
+}
+
+test(OverloadProtection) {
+    meas_current_a = 15.0f;  // 超过阈值
+    cfg.overload_a = 10.0f;
+    check_overload();
+    delay(2100);  // 等待2秒保护动作
+    check_overload();
+    assertFalse(relay_state);  // 继电器应断开
+}
+
+test(TimerTask) {
+    timers[0].hour = 10;
+    timers[0].minute = 30;
+    timers[0].action = true;
+    timers[0].enabled = true;
+    timers[0].weekdays = 0x7F;  // 每天
+
+    // 模拟时间到达
+    // （需要 mock NTPClient）
+    check_timers();
+    assertTrue(relay_state);
+}
+
+void setup() {
+    Serial.begin(115200);
+    while (!Serial);
+}
+
+void loop() {
+    aunit::TestRunner::run();
+}
+</code></pre>
+<h3 id="_32">集成测试</h3>
+<pre><code class="language-python"># MQTT 集成测试脚本（Python）
+# 依赖：pip install paho-mqtt
+
+import paho.mqtt.client as mqtt
+import json
+import time
+
+BROKER = &quot;192.168.1.100&quot;
+DEVICE_ID = &quot;node001&quot;
+
+def on_connect(client, userdata, flags, rc):
+    print(f&quot;[MQTT] 已连接，返回码: {rc}&quot;)
+    client.subscribe(f&quot;socket/{DEVICE_ID}/status&quot;)
+
+def on_message(client, userdata, msg):
+    print(f&quot;[MQTT] 收到消息: {msg.topic}&quot;)
+    payload = json.loads(msg.payload)
+    print(json.dumps(payload, indent=2, ensure_ascii=False))
+
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
+client.connect(BROKER, 1883, 60)
+client.loop_start()
+
+# 测试用例
+def test_relay_control():
+    print(&quot;\n[TEST] 测试继电器控制&quot;)
+    client.publish(f&quot;socket/{DEVICE_ID}/control&quot;, json.dumps({&quot;cmd&quot;: &quot;on&quot;}))
+    time.sleep(2)
+    client.publish(f&quot;socket/{DEVICE_ID}/control&quot;, json.dumps({&quot;cmd&quot;: &quot;off&quot;}))
+    time.sleep(2)
+    print(&quot;[TEST] 继电器控制测试完成&quot;)
+
+def test_timer():
+    print(&quot;\n[TEST] 测试定时任务&quot;)
+    timer = {
+        &quot;cmd&quot;: &quot;set_timer&quot;,
+        &quot;id&quot;: 0,
+        &quot;hour&quot;: 14,
+        &quot;minute&quot;: 30,
+        &quot;action&quot;: True,
+        &quot;weekdays&quot;: 0x7F
+    }
+    client.publish(f&quot;socket/{DEVICE_ID}/control&quot;, json.dumps(timer))
+    print(&quot;[TEST] 定时任务已设置&quot;)
+
+def test_ota():
+    print(&quot;\n[TEST] 测试 OTA 升级&quot;)
+    ota_cmd = {
+        &quot;url&quot;: &quot;http://192.168.1.100:8000/firmware.bin&quot;,
+        &quot;md5&quot;: &quot;abc123...&quot;,
+        &quot;version&quot;: &quot;2.1.0&quot;
+    }
+    client.publish(f&quot;socket/{DEVICE_ID}/ota&quot;, json.dumps(ota_cmd))
+    print(&quot;[TEST] OTA 命令已发送&quot;)
+
+# 运行测试
+try:
+    test_relay_control()
+    time.sleep(5)
+    test_timer()
+    time.sleep(5)
+    # test_ota()  # 谨慎使用
+    time.sleep(60)
+except KeyboardInterrupt:
+    print(&quot;\n[TEST] 测试中断&quot;)
+finally:
+    client.loop_stop()
+    client.disconnect()
+</code></pre>
+<h2 id="_33">延伸阅读</h2>
+<h3 id="_34">内部链接</h3>
+<ul>
+<li><a href="../beginner/04-relay-control.html">继电器控制基础</a> — 继电器工作原理与驱动电路</li>
+<li><a href="../../../06-communication-networking/01-wireless-communication/intermediate/03-mqtt-protocol.html">MQTT协议详解</a> — MQTT QoS、遗嘱消息、TLS加密</li>
+<li><a href="../../../07-cloud-backend/03-data-analysis-visualization/beginner/03-data-visualization.html">数据可视化</a> — Grafana仪表盘设计</li>
+<li><a href="./08-automation-system.html">自动化控制系统</a> — Modbus RTU 工业控制</li>
+<li><a href="./09-environment-control.html">环境监控系统</a> — 多传感器融合与规则引擎</li>
+</ul>
+<h3 id="_35">外部资源</h3>
+<p><strong>芯片数据手册</strong>：
+- <a href="https://www.hlktech.net/index.php?id=181">HLW8012 Datasheet</a> — 能量计量芯片完整规格
+- <a href="http://www.belling.com.cn/media/file_object/bel_product/BL0937/datasheet/BL0937_V1.02_cn.pdf">BL0937 Datasheet</a> — 国产替代方案
+- <a href="https://www.espressif.com/sites/default/files/documentation/esp8266-technical_reference_en.pdf">ESP8266 Technical Reference</a> — ESP8266 完整技术手册</p>
+<p><strong>标准文档</strong>：
+- <a href="https://webstore.iec.ch/publication/3790">IEC 60884-1:2002</a> — 家用插头插座标准
+- <a href="https://webstore.iec.ch/publication/28164">IEC 61000-3-2:2018</a> — 谐波电流限值
+- <a href="http://www.gb688.cn/bzgk/gb/newGbInfo?hcno=0F2F5A0E6F3F8F8F8F8F8F8F8F8F8F8F">GB 2099.1-2008</a> — 中国插座标准</p>
+<p><strong>开源项目</strong>：
+- <a href="https://github.com/arendst/Tasmota">Tasmota</a> — 开源智能插座固件（支持 HLW8012）
+- <a href="https://esphome.io/">ESPHome</a> — 声明式 ESP 固件框架
+- <a href="https://tasmota.github.io/docs/devices/Sonoff-Pow/">Sonoff-Tasmota</a> — Sonoff Pow 智能插座固件</p>
+<p><strong>技术文章</strong>：
+- <a href="https://www.fluke.com/en-us/learn/blog/digital-multimeters/true-rms">True RMS vs Average RMS</a> — Fluke 官方解释
+- <a href="https://www.ti.com/lit/an/slua479a/slua479a.pdf">Power Factor Correction</a> — TI 功率因数校正应用笔记
+- <a href="https://arduino-esp8266.readthedocs.io/en/latest/ota_updates/readme.html">ESP8266 OTA Updates</a> — 官方 OTA 文档</p>
+<h2 id="_36">参考资料</h2>
+<ol>
+<li><strong>IEC 60884-1:2002</strong> — Plugs and socket-outlets for household and similar purposes</li>
+<li><strong>UL 498</strong> — Standard for Safety Attachment Plugs and Receptacles</li>
+<li><strong>GB 2099.1-2008</strong> — 家用和类似用途插头插座 第1部分：通用要求</li>
+<li><strong>IEC 61000-3-2:2018</strong> — Electromagnetic compatibility (EMC) – Part 3-2: Limits for harmonic current emissions</li>
+<li><strong>HLW8012 Datasheet</strong> — Single Phase Energy Metering IC, Hilink Electronics</li>
+<li><strong>ESP8266 Technical Reference</strong> — Espressif Systems, v1.7, 2020</li>
+<li><strong>IEEE Std 1459-2010</strong> — IEEE Standard Definitions for the Measurement of Electric Power Quantities Under Sinusoidal, Nonsinusoidal, Balanced, or Unbalanced Conditions</li>
+<li><strong>MQTT Version 5.0</strong> — OASIS Standard, 2019</li>
+<li><strong>Arduino ESP8266 Core Documentation</strong> — https://arduino-esp8266.readthedocs.io/</li>
+<li><strong>Tasmota Documentation</strong> — https://tasmota.github.io/docs/</li>
+</ol>
+<hr />
+<p><strong>版本历史</strong>：
+- v2.0 (2026-03-10)：完整重写，新增 HLW8012 能量计量、OTA 升级、零点检测调光、电能质量监测、完整项目实战和故障排查
+- v1.0 (2025-12-15)：初始版本，基础 WiFi 继电器控制</p>
+<p><strong>作者</strong>：嵌入式知识平台<br />
+<strong>许可</strong>：CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

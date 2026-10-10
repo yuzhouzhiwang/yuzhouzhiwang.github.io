@@ -1,0 +1,2009 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>键值数据库(KV Database)实现：轻量级数据存储方案 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/">06-database-data-management</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#kv">KV数据库概述</a><ul>
+<li><a href="#kv_1">什么是KV数据库</a></li>
+<li><a href="#kv_2">KV数据库架构</a></li>
+<li><a href="#kv-vs">KV数据库 vs 关系型数据库</a></li>
+</ul>
+</li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">电路连接</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1：定义数据结构</a><ul>
+<li><a href="#11">1.1 基本数据结构</a></li>
+<li><a href="#12">1.2 哈希函数</a></li>
+</ul>
+</li>
+<li><a href="#2">步骤2：实现基本操作</a><ul>
+<li><a href="#21">2.1 初始化和清理</a></li>
+<li><a href="#22">2.2 插入/更新操作</a></li>
+<li><a href="#23">2.3 查询操作</a></li>
+<li><a href="#24">2.4 删除操作</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：实现数据持久化</a><ul>
+<li><a href="#31">3.1 保存到文件</a></li>
+<li><a href="#32">3.2 从文件加载</a></li>
+<li><a href="#33">3.3 自动保存机制</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：实用工具函数</a><ul>
+<li><a href="#41">4.1 遍历所有键值对</a></li>
+<li><a href="#42">4.2 批量操作</a></li>
+<li><a href="#43">4.3 辅助函数</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：性能优化</a><ul>
+<li><a href="#51">5.1 统计信息</a></li>
+<li><a href="#52">5.2 缓存优化</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：完整应用示例</a><ul>
+<li><a href="#61">6.1 配置管理系统</a></li>
+<li><a href="#62">6.2 传感器数据缓存</a></li>
+<li><a href="#63">6.3 主程序集成</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7：高级特性</a><ul>
+<li><a href="#71">7.1 数据压缩</a></li>
+<li><a href="#72">7.2 数据加密</a></li>
+<li><a href="#73">7.3 事务支持</a></li>
+</ul>
+</li>
+<li><a href="#_7">故障排除</a><ul>
+<li><a href="#1_1">问题1：哈希冲突过多</a></li>
+<li><a href="#2_1">问题2：内存不足</a></li>
+<li><a href="#3_1">问题3：数据丢失</a></li>
+<li><a href="#4_1">问题4：查询速度慢</a></li>
+<li><a href="#5_1">问题5：文件损坏</a></li>
+</ul>
+</li>
+<li><a href="#_8">性能测试</a><ul>
+<li><a href="#_9">测试代码</a></li>
+</ul>
+</li>
+<li><a href="#_10">总结</a></li>
+<li><a href="#_11">进阶挑战</a></li>
+<li><a href="#_12">完整代码</a></li>
+<li><a href="#_13">下一步</a></li>
+<li><a href="#_14">参考资料</a></li>
+<li><a href="#_15">常见问题</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="kv-database">键值数据库(KV Database)实现：轻量级数据存储方案</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解键值数据库的原理和应用场景</li>
+<li>[ ] 掌握KV数据库的核心数据结构</li>
+<li>[ ] 实现基本的增删改查操作</li>
+<li>[ ] 掌握哈希表索引技术</li>
+<li>[ ] 理解数据持久化机制</li>
+<li>[ ] 实现数据压缩和优化</li>
+<li>[ ] 完成一个完整的KV存储系统</li>
+<li>[ ] 掌握性能优化技巧</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟悉C语言编程
+- 了解数据结构（哈希表、链表）
+- 理解文件系统的基本概念
+- 掌握指针和内存管理
+- 了解Flash存储特性</p>
+<p><strong>技能要求</strong>：
+- 能够编写嵌入式C代码
+- 会使用文件系统API
+- 熟悉基本的数据操作
+- 能够使用调试工具
+- 了解内存优化技巧</p>
+<p><strong>开发环境</strong>：
+- STM32或ESP32开发板
+- SPI Flash或SD卡存储
+- Keil MDK或STM32CubeIDE
+- 串口调试工具</p>
+<h2 id="kv">KV数据库概述</h2>
+<h3 id="kv_1">什么是KV数据库</h3>
+<p>键值数据库（Key-Value Database）是一种NoSQL数据库，使用简单的键值对存储数据。它是最简单、最快速的数据库类型之一，特别适合嵌入式系统。</p>
+<p><strong>核心特性</strong>：</p>
+<ol>
+<li>
+<p><strong>简单高效</strong>
+   - 只有键值对，没有复杂的表结构
+   - O(1)时间复杂度的查询
+   - 内存占用小
+   - 适合快速读写</p>
+</li>
+<li>
+<p><strong>灵活性强</strong>
+   - 值可以是任意类型
+   - 无需预定义模式
+   - 易于扩展
+   - 支持动态添加字段</p>
+</li>
+<li>
+<p><strong>高性能</strong>
+   - 基于哈希表的快速索引
+   - 内存缓存机制
+   - 批量操作支持
+   - 异步写入优化</p>
+</li>
+<li>
+<p><strong>持久化</strong>
+   - 数据持久化到Flash/SD卡
+   - 支持定期快照
+   - 写前日志（WAL）
+   - 断电保护</p>
+</li>
+</ol>
+<h3 id="kv_2">KV数据库架构</h3>
+<p><strong>系统架构图</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│    应用层 (Application)                          │
+│    kv_put(), kv_get(), kv_delete()              │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    API层                                         │
+│    参数验证、错误处理、接口封装                  │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    缓存层 (Cache)                                │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 内存哈希表   │  │ LRU缓存      │          │
+│    └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    索引层 (Index)                                │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 哈希索引     │  │ 位置映射     │          │
+│    └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    存储层 (Storage)                              │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 数据文件     │  │ 日志文件     │          │
+│    └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    文件系统层                                    │
+│    FAT32, LittleFS, SPIFFS                      │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="kv-vs">KV数据库 vs 关系型数据库</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>KV数据库</th>
+<th>关系型数据库</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据模型</td>
+<td>键值对</td>
+<td>表、行、列</td>
+</tr>
+<tr>
+<td>查询方式</td>
+<td>按键查询</td>
+<td>SQL查询</td>
+</tr>
+<tr>
+<td>性能</td>
+<td>极快</td>
+<td>较慢</td>
+</tr>
+<tr>
+<td>复杂查询</td>
+<td>不支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>事务</td>
+<td>简单</td>
+<td>完整ACID</td>
+</tr>
+<tr>
+<td>内存占用</td>
+<td>极低</td>
+<td>较高</td>
+</tr>
+<tr>
+<td>代码大小</td>
+<td>小</td>
+<td>大</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>配置存储、缓存</td>
+<td>复杂数据关系</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 配置参数存储 → KV数据库
+- 简单数据缓存 → KV数据库
+- 复杂查询需求 → 关系型数据库
+- 数据关系复杂 → 关系型数据库</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32F4或ESP32</td>
+<td>STM32F407VG</td>
+</tr>
+<tr>
+<td>SPI Flash</td>
+<td>1</td>
+<td>外部存储</td>
+<td>W25Q128 (16MB)</td>
+</tr>
+<tr>
+<td>SD卡</td>
+<td>1</td>
+<td>可选，大容量存储</td>
+<td>8GB Class 10</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>连接模块</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<p><strong>必需软件</strong>：
+- STM32CubeIDE 或 Arduino IDE（ESP32）
+- 文件系统库（FATFS或LittleFS）
+- 串口调试助手</p>
+<h3 id="_6">电路连接</h3>
+<p><strong>SPI Flash连接示意图</strong>：</p>
+<pre><code>STM32F407              W25Q128 Flash
+  PA5 (SCK)  ────────► CLK
+  PA6 (MISO) ◄──────── DO
+  PA7 (MOSI) ────────► DI
+  PA4 (CS)   ────────► CS
+  3.3V       ────────► VCC
+  GND        ────────► GND
+</code></pre>
+<h2 id="1">步骤1：定义数据结构</h2>
+<h3 id="11">1.1 基本数据结构</h3>
+<p>创建文件 <code>kv_database.h</code>：</p>
+<pre><code class="language-c">#ifndef KV_DATABASE_H
+#define KV_DATABASE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;string.h&gt;
+
+// 配置参数
+#define KV_MAX_KEY_LEN      32      // 最大键长度
+#define KV_MAX_VALUE_LEN    256     // 最大值长度
+#define KV_HASH_TABLE_SIZE  128     // 哈希表大小
+#define KV_MAX_ENTRIES      512     // 最大条目数
+#define KV_CACHE_SIZE       32      // 缓存大小
+
+// 错误码
+typedef enum {
+    KV_OK = 0,              // 成功
+    KV_ERR_NOT_FOUND,       // 键不存在
+    KV_ERR_NO_SPACE,        // 空间不足
+    KV_ERR_INVALID_KEY,     // 无效的键
+    KV_ERR_INVALID_VALUE,   // 无效的值
+    KV_ERR_IO,              // I/O错误
+    KV_ERR_CORRUPTED,       // 数据损坏
+} kv_error_t;
+
+// 键值对条目
+typedef struct {
+    char key[KV_MAX_KEY_LEN];           // 键
+    uint8_t value[KV_MAX_VALUE_LEN];    // 值
+    uint16_t value_len;                 // 值长度
+    uint32_t timestamp;                 // 时间戳
+    bool valid;                         // 是否有效
+} kv_entry_t;
+
+// 哈希表节点
+typedef struct kv_node {
+    kv_entry_t entry;       // 键值对
+    struct kv_node *next;   // 链表指针（处理冲突）
+} kv_node_t;
+
+// KV数据库对象
+typedef struct {
+    kv_node_t *hash_table[KV_HASH_TABLE_SIZE];  // 哈希表
+    uint32_t entry_count;                       // 条目数量
+    bool dirty;                                 // 是否有未保存的修改
+    char db_file[64];                           // 数据库文件路径
+} kv_database_t;
+
+// API函数
+kv_error_t kv_init(kv_database_t *db, const char *filename);
+kv_error_t kv_deinit(kv_database_t *db);
+kv_error_t kv_put(kv_database_t *db, const char *key, const void *value, uint16_t value_len);
+kv_error_t kv_get(kv_database_t *db, const char *key, void *value, uint16_t *value_len);
+kv_error_t kv_delete(kv_database_t *db, const char *key);
+kv_error_t kv_exists(kv_database_t *db, const char *key, bool *exists);
+kv_error_t kv_save(kv_database_t *db);
+kv_error_t kv_load(kv_database_t *db);
+kv_error_t kv_clear(kv_database_t *db);
+uint32_t kv_count(kv_database_t *db);
+
+#endif // KV_DATABASE_H
+</code></pre>
+<p><strong>数据结构说明</strong>：
+- <code>kv_entry_t</code>: 存储单个键值对
+- <code>kv_node_t</code>: 哈希表节点，支持链表解决冲突
+- <code>kv_database_t</code>: 数据库主对象，包含哈希表和元数据</p>
+<h3 id="12">1.2 哈希函数</h3>
+<p>创建文件 <code>kv_database.c</code>：</p>
+<pre><code class="language-c">#include &quot;kv_database.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+/**
+ * @brief  计算字符串的哈希值（DJB2算法）
+ * @param  key: 键字符串
+ * @retval 哈希值
+ */
+static uint32_t kv_hash(const char *key)
+{
+    uint32_t hash = 5381;
+    int c;
+
+    while ((c = *key++)) {
+        hash = ((hash &lt;&lt; 5) + hash) + c;  // hash * 33 + c
+    }
+
+    return hash % KV_HASH_TABLE_SIZE;
+}
+
+/**
+ * @brief  验证键的有效性
+ * @param  key: 键字符串
+ * @retval true:有效, false:无效
+ */
+static bool kv_validate_key(const char *key)
+{
+    if (!key || key[0] == '\0') {
+        return false;
+    }
+
+    size_t len = strlen(key);
+    if (len &gt;= KV_MAX_KEY_LEN) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief  验证值的有效性
+ * @param  value: 值数据
+ * @param  value_len: 值长度
+ * @retval true:有效, false:无效
+ */
+static bool kv_validate_value(const void *value, uint16_t value_len)
+{
+    if (!value || value_len == 0 || value_len &gt; KV_MAX_VALUE_LEN) {
+        return false;
+    }
+
+    return true;
+}
+</code></pre>
+<p><strong>哈希函数说明</strong>：
+- 使用DJB2算法，简单高效
+- 取模运算映射到哈希表范围
+- 冲突通过链表法解决</p>
+<h2 id="2">步骤2：实现基本操作</h2>
+<h3 id="21">2.1 初始化和清理</h3>
+<pre><code class="language-c">/**
+ * @brief  初始化KV数据库
+ * @param  db: 数据库对象
+ * @param  filename: 数据库文件名
+ * @retval 错误码
+ */
+kv_error_t kv_init(kv_database_t *db, const char *filename)
+{
+    if (!db || !filename) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 清零哈希表
+    memset(db-&gt;hash_table, 0, sizeof(db-&gt;hash_table));
+
+    // 初始化元数据
+    db-&gt;entry_count = 0;
+    db-&gt;dirty = false;
+    strncpy(db-&gt;db_file, filename, sizeof(db-&gt;db_file) - 1);
+    db-&gt;db_file[sizeof(db-&gt;db_file) - 1] = '\0';
+
+    printf(&quot;KV Database initialized: %s\n&quot;, filename);
+
+    // 尝试加载已有数据
+    kv_load(db);
+
+    return KV_OK;
+}
+
+/**
+ * @brief  清理KV数据库
+ * @param  db: 数据库对象
+ * @retval 错误码
+ */
+kv_error_t kv_deinit(kv_database_t *db)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 保存未保存的修改
+    if (db-&gt;dirty) {
+        kv_save(db);
+    }
+
+    // 释放所有节点
+    for (int i = 0; i &lt; KV_HASH_TABLE_SIZE; i++) {
+        kv_node_t *node = db-&gt;hash_table[i];
+        while (node) {
+            kv_node_t *next = node-&gt;next;
+            free(node);
+            node = next;
+        }
+        db-&gt;hash_table[i] = NULL;
+    }
+
+    db-&gt;entry_count = 0;
+    db-&gt;dirty = false;
+
+    printf(&quot;KV Database deinitialized\n&quot;);
+
+    return KV_OK;
+}
+</code></pre>
+<h3 id="22">2.2 插入/更新操作</h3>
+<pre><code class="language-c">/**
+ * @brief  插入或更新键值对
+ * @param  db: 数据库对象
+ * @param  key: 键
+ * @param  value: 值
+ * @param  value_len: 值长度
+ * @retval 错误码
+ */
+kv_error_t kv_put(kv_database_t *db, const char *key, const void *value, uint16_t value_len)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 验证参数
+    if (!kv_validate_key(key)) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    if (!kv_validate_value(value, value_len)) {
+        return KV_ERR_INVALID_VALUE;
+    }
+
+    // 计算哈希值
+    uint32_t hash = kv_hash(key);
+
+    // 查找是否已存在
+    kv_node_t *node = db-&gt;hash_table[hash];
+    kv_node_t *prev = NULL;
+
+    while (node) {
+        if (strcmp(node-&gt;entry.key, key) == 0) {
+            // 键已存在，更新值
+            memcpy(node-&gt;entry.value, value, value_len);
+            node-&gt;entry.value_len = value_len;
+            node-&gt;entry.timestamp = HAL_GetTick();  // 或使用RTC
+            node-&gt;entry.valid = true;
+
+            db-&gt;dirty = true;
+
+            printf(&quot;KV Updated: %s\n&quot;, key);
+            return KV_OK;
+        }
+        prev = node;
+        node = node-&gt;next;
+    }
+
+    // 键不存在，创建新节点
+    if (db-&gt;entry_count &gt;= KV_MAX_ENTRIES) {
+        return KV_ERR_NO_SPACE;
+    }
+
+    kv_node_t *new_node = (kv_node_t*)malloc(sizeof(kv_node_t));
+    if (!new_node) {
+        return KV_ERR_NO_SPACE;
+    }
+
+    // 填充数据
+    strncpy(new_node-&gt;entry.key, key, KV_MAX_KEY_LEN - 1);
+    new_node-&gt;entry.key[KV_MAX_KEY_LEN - 1] = '\0';
+    memcpy(new_node-&gt;entry.value, value, value_len);
+    new_node-&gt;entry.value_len = value_len;
+    new_node-&gt;entry.timestamp = HAL_GetTick();
+    new_node-&gt;entry.valid = true;
+    new_node-&gt;next = NULL;
+
+    // 插入到哈希表
+    if (prev) {
+        prev-&gt;next = new_node;
+    } else {
+        db-&gt;hash_table[hash] = new_node;
+    }
+
+    db-&gt;entry_count++;
+    db-&gt;dirty = true;
+
+    printf(&quot;KV Inserted: %s (count: %lu)\n&quot;, key, db-&gt;entry_count);
+
+    return KV_OK;
+}
+</code></pre>
+<h3 id="23">2.3 查询操作</h3>
+<pre><code class="language-c">/**
+ * @brief  查询键值对
+ * @param  db: 数据库对象
+ * @param  key: 键
+ * @param  value: 输出值缓冲区
+ * @param  value_len: 输入输出参数，输入为缓冲区大小，输出为实际值长度
+ * @retval 错误码
+ */
+kv_error_t kv_get(kv_database_t *db, const char *key, void *value, uint16_t *value_len)
+{
+    if (!db || !value || !value_len) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 验证键
+    if (!kv_validate_key(key)) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 计算哈希值
+    uint32_t hash = kv_hash(key);
+
+    // 查找节点
+    kv_node_t *node = db-&gt;hash_table[hash];
+
+    while (node) {
+        if (strcmp(node-&gt;entry.key, key) == 0 &amp;&amp; node-&gt;entry.valid) {
+            // 找到了
+            uint16_t copy_len = node-&gt;entry.value_len;
+            if (copy_len &gt; *value_len) {
+                copy_len = *value_len;
+            }
+
+            memcpy(value, node-&gt;entry.value, copy_len);
+            *value_len = node-&gt;entry.value_len;
+
+            printf(&quot;KV Found: %s (len: %u)\n&quot;, key, node-&gt;entry.value_len);
+            return KV_OK;
+        }
+        node = node-&gt;next;
+    }
+
+    // 未找到
+    return KV_ERR_NOT_FOUND;
+}
+
+/**
+ * @brief  检查键是否存在
+ * @param  db: 数据库对象
+ * @param  key: 键
+ * @param  exists: 输出参数，是否存在
+ * @retval 错误码
+ */
+kv_error_t kv_exists(kv_database_t *db, const char *key, bool *exists)
+{
+    if (!db || !exists) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    if (!kv_validate_key(key)) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    uint32_t hash = kv_hash(key);
+    kv_node_t *node = db-&gt;hash_table[hash];
+
+    while (node) {
+        if (strcmp(node-&gt;entry.key, key) == 0 &amp;&amp; node-&gt;entry.valid) {
+            *exists = true;
+            return KV_OK;
+        }
+        node = node-&gt;next;
+    }
+
+    *exists = false;
+    return KV_OK;
+}
+</code></pre>
+<h3 id="24">2.4 删除操作</h3>
+<pre><code class="language-c">/**
+ * @brief  删除键值对
+ * @param  db: 数据库对象
+ * @param  key: 键
+ * @retval 错误码
+ */
+kv_error_t kv_delete(kv_database_t *db, const char *key)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    if (!kv_validate_key(key)) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    uint32_t hash = kv_hash(key);
+    kv_node_t *node = db-&gt;hash_table[hash];
+    kv_node_t *prev = NULL;
+
+    while (node) {
+        if (strcmp(node-&gt;entry.key, key) == 0) {
+            // 找到了，删除节点
+            if (prev) {
+                prev-&gt;next = node-&gt;next;
+            } else {
+                db-&gt;hash_table[hash] = node-&gt;next;
+            }
+
+            free(node);
+            db-&gt;entry_count--;
+            db-&gt;dirty = true;
+
+            printf(&quot;KV Deleted: %s (count: %lu)\n&quot;, key, db-&gt;entry_count);
+            return KV_OK;
+        }
+        prev = node;
+        node = node-&gt;next;
+    }
+
+    return KV_ERR_NOT_FOUND;
+}
+
+/**
+ * @brief  清空所有数据
+ * @param  db: 数据库对象
+ * @retval 错误码
+ */
+kv_error_t kv_clear(kv_database_t *db)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 释放所有节点
+    for (int i = 0; i &lt; KV_HASH_TABLE_SIZE; i++) {
+        kv_node_t *node = db-&gt;hash_table[i];
+        while (node) {
+            kv_node_t *next = node-&gt;next;
+            free(node);
+            node = next;
+        }
+        db-&gt;hash_table[i] = NULL;
+    }
+
+    db-&gt;entry_count = 0;
+    db-&gt;dirty = true;
+
+    printf(&quot;KV Database cleared\n&quot;);
+
+    return KV_OK;
+}
+
+/**
+ * @brief  获取条目数量
+ * @param  db: 数据库对象
+ * @retval 条目数量
+ */
+uint32_t kv_count(kv_database_t *db)
+{
+    return db ? db-&gt;entry_count : 0;
+}
+</code></pre>
+<h2 id="3">步骤3：实现数据持久化</h2>
+<h3 id="31">3.1 保存到文件</h3>
+<pre><code class="language-c">#include &quot;ff.h&quot;  // FATFS文件系统
+
+/**
+ * @brief  保存数据库到文件
+ * @param  db: 数据库对象
+ * @retval 错误码
+ */
+kv_error_t kv_save(kv_database_t *db)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    FIL file;
+    FRESULT res;
+    UINT bw;
+
+    // 打开文件
+    res = f_open(&amp;file, db-&gt;db_file, FA_CREATE_ALWAYS | FA_WRITE);
+    if (res != FR_OK) {
+        printf(&quot;Failed to open file for writing: %d\n&quot;, res);
+        return KV_ERR_IO;
+    }
+
+    // 写入文件头
+    uint32_t magic = 0x4B564442;  // &quot;KVDB&quot;
+    uint32_t version = 1;
+    uint32_t count = db-&gt;entry_count;
+
+    f_write(&amp;file, &amp;magic, sizeof(magic), &amp;bw);
+    f_write(&amp;file, &amp;version, sizeof(version), &amp;bw);
+    f_write(&amp;file, &amp;count, sizeof(count), &amp;bw);
+
+    // 写入所有条目
+    uint32_t written = 0;
+    for (int i = 0; i &lt; KV_HASH_TABLE_SIZE; i++) {
+        kv_node_t *node = db-&gt;hash_table[i];
+        while (node) {
+            if (node-&gt;entry.valid) {
+                // 写入条目
+                f_write(&amp;file, &amp;node-&gt;entry, sizeof(kv_entry_t), &amp;bw);
+                if (bw != sizeof(kv_entry_t)) {
+                    f_close(&amp;file);
+                    return KV_ERR_IO;
+                }
+                written++;
+            }
+            node = node-&gt;next;
+        }
+    }
+
+    // 关闭文件
+    f_close(&amp;file);
+
+    db-&gt;dirty = false;
+
+    printf(&quot;KV Database saved: %lu entries\n&quot;, written);
+
+    return KV_OK;
+}
+</code></pre>
+<h3 id="32">3.2 从文件加载</h3>
+<pre><code class="language-c">/**
+ * @brief  从文件加载数据库
+ * @param  db: 数据库对象
+ * @retval 错误码
+ */
+kv_error_t kv_load(kv_database_t *db)
+{
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    FIL file;
+    FRESULT res;
+    UINT br;
+
+    // 打开文件
+    res = f_open(&amp;file, db-&gt;db_file, FA_READ);
+    if (res != FR_OK) {
+        printf(&quot;Database file not found, starting fresh\n&quot;);
+        return KV_OK;  // 文件不存在不算错误
+    }
+
+    // 读取文件头
+    uint32_t magic, version, count;
+
+    f_read(&amp;file, &amp;magic, sizeof(magic), &amp;br);
+    if (br != sizeof(magic) || magic != 0x4B564442) {
+        printf(&quot;Invalid database file format\n&quot;);
+        f_close(&amp;file);
+        return KV_ERR_CORRUPTED;
+    }
+
+    f_read(&amp;file, &amp;version, sizeof(version), &amp;br);
+    f_read(&amp;file, &amp;count, sizeof(count), &amp;br);
+
+    printf(&quot;Loading KV Database: version=%lu, count=%lu\n&quot;, version, count);
+
+    // 读取所有条目
+    for (uint32_t i = 0; i &lt; count; i++) {
+        kv_entry_t entry;
+
+        f_read(&amp;file, &amp;entry, sizeof(kv_entry_t), &amp;br);
+        if (br != sizeof(kv_entry_t)) {
+            printf(&quot;Failed to read entry %lu\n&quot;, i);
+            break;
+        }
+
+        // 插入到哈希表
+        if (entry.valid) {
+            kv_put(db, entry.key, entry.value, entry.value_len);
+        }
+    }
+
+    // 关闭文件
+    f_close(&amp;file);
+
+    db-&gt;dirty = false;
+
+    printf(&quot;KV Database loaded: %lu entries\n&quot;, db-&gt;entry_count);
+
+    return KV_OK;
+}
+</code></pre>
+<h3 id="33">3.3 自动保存机制</h3>
+<pre><code class="language-c">/**
+ * @brief  定期自动保存（在主循环中调用）
+ * @param  db: 数据库对象
+ * @param  interval_ms: 保存间隔（毫秒）
+ * @retval 错误码
+ */
+kv_error_t kv_auto_save(kv_database_t *db, uint32_t interval_ms)
+{
+    static uint32_t last_save_time = 0;
+    uint32_t current_time = HAL_GetTick();
+
+    if (!db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 检查是否需要保存
+    if (db-&gt;dirty &amp;&amp; (current_time - last_save_time &gt;= interval_ms)) {
+        kv_error_t err = kv_save(db);
+        if (err == KV_OK) {
+            last_save_time = current_time;
+            printf(&quot;Auto-saved at %lu ms\n&quot;, current_time);
+        }
+        return err;
+    }
+
+    return KV_OK;
+}
+</code></pre>
+<h2 id="4">步骤4：实用工具函数</h2>
+<h3 id="41">4.1 遍历所有键值对</h3>
+<pre><code class="language-c">/**
+ * @brief  遍历回调函数类型
+ */
+typedef void (*kv_foreach_callback_t)(const char *key, const void *value, 
+                                      uint16_t value_len, void *user_data);
+
+/**
+ * @brief  遍历所有键值对
+ * @param  db: 数据库对象
+ * @param  callback: 回调函数
+ * @param  user_data: 用户数据
+ * @retval 错误码
+ */
+kv_error_t kv_foreach(kv_database_t *db, kv_foreach_callback_t callback, void *user_data)
+{
+    if (!db || !callback) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    for (int i = 0; i &lt; KV_HASH_TABLE_SIZE; i++) {
+        kv_node_t *node = db-&gt;hash_table[i];
+        while (node) {
+            if (node-&gt;entry.valid) {
+                callback(node-&gt;entry.key, node-&gt;entry.value, 
+                        node-&gt;entry.value_len, user_data);
+            }
+            node = node-&gt;next;
+        }
+    }
+
+    return KV_OK;
+}
+
+/**
+ * @brief  打印所有键值对（示例回调）
+ */
+static void print_kv_callback(const char *key, const void *value, 
+                             uint16_t value_len, void *user_data)
+{
+    printf(&quot;  %s = &quot;, key);
+
+    // 尝试作为字符串打印
+    bool is_string = true;
+    const uint8_t *data = (const uint8_t*)value;
+    for (int i = 0; i &lt; value_len; i++) {
+        if (data[i] &lt; 32 || data[i] &gt; 126) {
+            is_string = false;
+            break;
+        }
+    }
+
+    if (is_string) {
+        printf(&quot;\&quot;%.*s\&quot;\n&quot;, value_len, (const char*)value);
+    } else {
+        printf(&quot;[&quot;);
+        for (int i = 0; i &lt; value_len &amp;&amp; i &lt; 16; i++) {
+            printf(&quot;%02X &quot;, data[i]);
+        }
+        if (value_len &gt; 16) {
+            printf(&quot;...&quot;);
+        }
+        printf(&quot;] (%u bytes)\n&quot;, value_len);
+    }
+}
+
+/**
+ * @brief  打印数据库内容
+ * @param  db: 数据库对象
+ */
+void kv_print_all(kv_database_t *db)
+{
+    if (!db) {
+        return;
+    }
+
+    printf(&quot;\n=== KV Database Contents ===\n&quot;);
+    printf(&quot;Total entries: %lu\n&quot;, db-&gt;entry_count);
+    printf(&quot;----------------------------\n&quot;);
+
+    kv_foreach(db, print_kv_callback, NULL);
+
+    printf(&quot;============================\n\n&quot;);
+}
+</code></pre>
+<h3 id="42">4.2 批量操作</h3>
+<pre><code class="language-c">/**
+ * @brief  批量插入
+ * @param  db: 数据库对象
+ * @param  keys: 键数组
+ * @param  values: 值数组
+ * @param  value_lens: 值长度数组
+ * @param  count: 数量
+ * @retval 成功插入的数量
+ */
+uint32_t kv_put_batch(kv_database_t *db, const char **keys, 
+                     const void **values, const uint16_t *value_lens, 
+                     uint32_t count)
+{
+    if (!db || !keys || !values || !value_lens) {
+        return 0;
+    }
+
+    uint32_t success_count = 0;
+
+    for (uint32_t i = 0; i &lt; count; i++) {
+        if (kv_put(db, keys[i], values[i], value_lens[i]) == KV_OK) {
+            success_count++;
+        }
+    }
+
+    return success_count;
+}
+
+/**
+ * @brief  批量删除
+ * @param  db: 数据库对象
+ * @param  keys: 键数组
+ * @param  count: 数量
+ * @retval 成功删除的数量
+ */
+uint32_t kv_delete_batch(kv_database_t *db, const char **keys, uint32_t count)
+{
+    if (!db || !keys) {
+        return 0;
+    }
+
+    uint32_t success_count = 0;
+
+    for (uint32_t i = 0; i &lt; count; i++) {
+        if (kv_delete(db, keys[i]) == KV_OK) {
+            success_count++;
+        }
+    }
+
+    return success_count;
+}
+</code></pre>
+<h3 id="43">4.3 辅助函数</h3>
+<pre><code class="language-c">/**
+ * @brief  存储整数值
+ */
+kv_error_t kv_put_int(kv_database_t *db, const char *key, int32_t value)
+{
+    return kv_put(db, key, &amp;value, sizeof(value));
+}
+
+/**
+ * @brief  读取整数值
+ */
+kv_error_t kv_get_int(kv_database_t *db, const char *key, int32_t *value)
+{
+    uint16_t len = sizeof(*value);
+    return kv_get(db, key, value, &amp;len);
+}
+
+/**
+ * @brief  存储字符串值
+ */
+kv_error_t kv_put_string(kv_database_t *db, const char *key, const char *value)
+{
+    return kv_put(db, key, value, strlen(value));
+}
+
+/**
+ * @brief  读取字符串值
+ */
+kv_error_t kv_get_string(kv_database_t *db, const char *key, char *value, uint16_t max_len)
+{
+    uint16_t len = max_len;
+    kv_error_t err = kv_get(db, key, value, &amp;len);
+    if (err == KV_OK &amp;&amp; len &lt; max_len) {
+        value[len] = '\0';  // 添加字符串结束符
+    }
+    return err;
+}
+
+/**
+ * @brief  存储浮点数值
+ */
+kv_error_t kv_put_float(kv_database_t *db, const char *key, float value)
+{
+    return kv_put(db, key, &amp;value, sizeof(value));
+}
+
+/**
+ * @brief  读取浮点数值
+ */
+kv_error_t kv_get_float(kv_database_t *db, const char *key, float *value)
+{
+    uint16_t len = sizeof(*value);
+    return kv_get(db, key, value, &amp;len);
+}
+</code></pre>
+<h2 id="5">步骤5：性能优化</h2>
+<h3 id="51">5.1 统计信息</h3>
+<pre><code class="language-c">/**
+ * @brief  数据库统计信息
+ */
+typedef struct {
+    uint32_t total_entries;         // 总条目数
+    uint32_t hash_collisions;       // 哈希冲突数
+    uint32_t max_chain_length;      // 最大链表长度
+    float load_factor;              // 负载因子
+    uint32_t memory_usage;          // 内存占用（字节）
+} kv_stats_t;
+
+/**
+ * @brief  获取统计信息
+ * @param  db: 数据库对象
+ * @param  stats: 输出统计信息
+ * @retval 错误码
+ */
+kv_error_t kv_get_stats(kv_database_t *db, kv_stats_t *stats)
+{
+    if (!db || !stats) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    memset(stats, 0, sizeof(kv_stats_t));
+
+    stats-&gt;total_entries = db-&gt;entry_count;
+
+    // 统计冲突和链表长度
+    for (int i = 0; i &lt; KV_HASH_TABLE_SIZE; i++) {
+        kv_node_t *node = db-&gt;hash_table[i];
+        uint32_t chain_length = 0;
+
+        while (node) {
+            chain_length++;
+            node = node-&gt;next;
+        }
+
+        if (chain_length &gt; 1) {
+            stats-&gt;hash_collisions += (chain_length - 1);
+        }
+
+        if (chain_length &gt; stats-&gt;max_chain_length) {
+            stats-&gt;max_chain_length = chain_length;
+        }
+    }
+
+    // 计算负载因子
+    stats-&gt;load_factor = (float)db-&gt;entry_count / KV_HASH_TABLE_SIZE;
+
+    // 估算内存占用
+    stats-&gt;memory_usage = sizeof(kv_database_t) + 
+                         db-&gt;entry_count * sizeof(kv_node_t);
+
+    return KV_OK;
+}
+
+/**
+ * @brief  打印统计信息
+ */
+void kv_print_stats(kv_database_t *db)
+{
+    kv_stats_t stats;
+
+    if (kv_get_stats(db, &amp;stats) != KV_OK) {
+        return;
+    }
+
+    printf(&quot;\n=== KV Database Statistics ===\n&quot;);
+    printf(&quot;Total entries:     %lu\n&quot;, stats.total_entries);
+    printf(&quot;Hash collisions:   %lu\n&quot;, stats.hash_collisions);
+    printf(&quot;Max chain length:  %lu\n&quot;, stats.max_chain_length);
+    printf(&quot;Load factor:       %.2f\n&quot;, stats.load_factor);
+    printf(&quot;Memory usage:      %lu bytes (%.2f KB)\n&quot;, 
+           stats.memory_usage, stats.memory_usage / 1024.0f);
+    printf(&quot;==============================\n\n&quot;);
+}
+</code></pre>
+<h3 id="52">5.2 缓存优化</h3>
+<pre><code class="language-c">/**
+ * @brief  LRU缓存节点
+ */
+typedef struct lru_node {
+    char key[KV_MAX_KEY_LEN];
+    uint8_t value[KV_MAX_VALUE_LEN];
+    uint16_t value_len;
+    struct lru_node *prev;
+    struct lru_node *next;
+} lru_node_t;
+
+/**
+ * @brief  LRU缓存
+ */
+typedef struct {
+    lru_node_t *head;
+    lru_node_t *tail;
+    uint32_t size;
+    uint32_t capacity;
+} lru_cache_t;
+
+/**
+ * @brief  初始化LRU缓存
+ */
+static void lru_init(lru_cache_t *cache, uint32_t capacity)
+{
+    cache-&gt;head = NULL;
+    cache-&gt;tail = NULL;
+    cache-&gt;size = 0;
+    cache-&gt;capacity = capacity;
+}
+
+/**
+ * @brief  从缓存获取值
+ */
+static bool lru_get(lru_cache_t *cache, const char *key, 
+                   void *value, uint16_t *value_len)
+{
+    lru_node_t *node = cache-&gt;head;
+
+    while (node) {
+        if (strcmp(node-&gt;key, key) == 0) {
+            // 找到了，移到头部
+            if (node != cache-&gt;head) {
+                // 从当前位置移除
+                if (node-&gt;prev) node-&gt;prev-&gt;next = node-&gt;next;
+                if (node-&gt;next) node-&gt;next-&gt;prev = node-&gt;prev;
+                if (node == cache-&gt;tail) cache-&gt;tail = node-&gt;prev;
+
+                // 移到头部
+                node-&gt;next = cache-&gt;head;
+                node-&gt;prev = NULL;
+                cache-&gt;head-&gt;prev = node;
+                cache-&gt;head = node;
+            }
+
+            // 复制值
+            memcpy(value, node-&gt;value, node-&gt;value_len);
+            *value_len = node-&gt;value_len;
+
+            return true;
+        }
+        node = node-&gt;next;
+    }
+
+    return false;
+}
+
+/**
+ * @brief  添加到缓存
+ */
+static void lru_put(lru_cache_t *cache, const char *key, 
+                   const void *value, uint16_t value_len)
+{
+    // 检查是否已存在
+    lru_node_t *node = cache-&gt;head;
+    while (node) {
+        if (strcmp(node-&gt;key, key) == 0) {
+            // 更新值
+            memcpy(node-&gt;value, value, value_len);
+            node-&gt;value_len = value_len;
+            return;
+        }
+        node = node-&gt;next;
+    }
+
+    // 创建新节点
+    lru_node_t *new_node = (lru_node_t*)malloc(sizeof(lru_node_t));
+    if (!new_node) return;
+
+    strncpy(new_node-&gt;key, key, KV_MAX_KEY_LEN - 1);
+    new_node-&gt;key[KV_MAX_KEY_LEN - 1] = '\0';
+    memcpy(new_node-&gt;value, value, value_len);
+    new_node-&gt;value_len = value_len;
+
+    // 插入到头部
+    new_node-&gt;next = cache-&gt;head;
+    new_node-&gt;prev = NULL;
+
+    if (cache-&gt;head) {
+        cache-&gt;head-&gt;prev = new_node;
+    }
+    cache-&gt;head = new_node;
+
+    if (!cache-&gt;tail) {
+        cache-&gt;tail = new_node;
+    }
+
+    cache-&gt;size++;
+
+    // 检查容量
+    if (cache-&gt;size &gt; cache-&gt;capacity) {
+        // 移除尾部节点
+        lru_node_t *old_tail = cache-&gt;tail;
+        cache-&gt;tail = old_tail-&gt;prev;
+        if (cache-&gt;tail) {
+            cache-&gt;tail-&gt;next = NULL;
+        }
+        free(old_tail);
+        cache-&gt;size--;
+    }
+}
+</code></pre>
+<h2 id="6">步骤6：完整应用示例</h2>
+<h3 id="61">6.1 配置管理系统</h3>
+<pre><code class="language-c">/**
+ * @brief  配置管理示例
+ */
+void config_manager_example(void)
+{
+    kv_database_t db;
+    kv_error_t err;
+
+    // 初始化数据库
+    err = kv_init(&amp;db, &quot;0:/config.db&quot;);
+    if (err != KV_OK) {
+        printf(&quot;Failed to initialize database\n&quot;);
+        return;
+    }
+
+    // 存储配置参数
+    kv_put_string(&amp;db, &quot;device_name&quot;, &quot;STM32_Sensor&quot;);
+    kv_put_int(&amp;db, &quot;sample_rate&quot;, 1000);
+    kv_put_float(&amp;db, &quot;threshold&quot;, 25.5f);
+    kv_put_string(&amp;db, &quot;wifi_ssid&quot;, &quot;MyNetwork&quot;);
+    kv_put_string(&amp;db, &quot;wifi_password&quot;, &quot;MyPassword123&quot;);
+
+    // 保存到文件
+    kv_save(&amp;db);
+
+    printf(&quot;Configuration saved\n&quot;);
+
+    // 读取配置
+    char device_name[32];
+    int32_t sample_rate;
+    float threshold;
+
+    kv_get_string(&amp;db, &quot;device_name&quot;, device_name, sizeof(device_name));
+    kv_get_int(&amp;db, &quot;sample_rate&quot;, &amp;sample_rate);
+    kv_get_float(&amp;db, &quot;threshold&quot;, &amp;threshold);
+
+    printf(&quot;Device Name: %s\n&quot;, device_name);
+    printf(&quot;Sample Rate: %ld Hz\n&quot;, sample_rate);
+    printf(&quot;Threshold: %.2f\n&quot;, threshold);
+
+    // 打印所有配置
+    kv_print_all(&amp;db);
+
+    // 清理
+    kv_deinit(&amp;db);
+}
+</code></pre>
+<h3 id="62">6.2 传感器数据缓存</h3>
+<pre><code class="language-c">/**
+ * @brief  传感器数据缓存示例
+ */
+void sensor_cache_example(void)
+{
+    kv_database_t db;
+
+    kv_init(&amp;db, &quot;0:/sensor_cache.db&quot;);
+
+    // 模拟传感器数据
+    typedef struct {
+        float temperature;
+        float humidity;
+        uint32_t timestamp;
+    } sensor_data_t;
+
+    // 存储最新的传感器数据
+    for (int i = 0; i &lt; 10; i++) {
+        sensor_data_t data;
+        data.temperature = 20.0f + i * 0.5f;
+        data.humidity = 50.0f + i * 2.0f;
+        data.timestamp = HAL_GetTick();
+
+        char key[32];
+        snprintf(key, sizeof(key), &quot;sensor_%d&quot;, i);
+
+        kv_put(&amp;db, key, &amp;data, sizeof(data));
+
+        HAL_Delay(100);
+    }
+
+    // 读取并显示
+    printf(&quot;\nSensor Data Cache:\n&quot;);
+    for (int i = 0; i &lt; 10; i++) {
+        char key[32];
+        sensor_data_t data;
+        uint16_t len = sizeof(data);
+
+        snprintf(key, sizeof(key), &quot;sensor_%d&quot;, i);
+
+        if (kv_get(&amp;db, key, &amp;data, &amp;len) == KV_OK) {
+            printf(&quot;  %s: T=%.2f°C, H=%.2f%%, Time=%lu\n&quot;,
+                   key, data.temperature, data.humidity, data.timestamp);
+        }
+    }
+
+    // 统计信息
+    kv_print_stats(&amp;db);
+
+    kv_deinit(&amp;db);
+}
+</code></pre>
+<h3 id="63">6.3 主程序集成</h3>
+<pre><code class="language-c">/**
+ * @brief  主程序
+ */
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化外设
+    MX_GPIO_Init();
+    MX_SPI1_Init();
+    MX_USART1_UART_Init();
+    MX_FATFS_Init();
+
+    printf(&quot;KV Database Demo Starting...\n&quot;);
+
+    // 运行示例
+    config_manager_example();
+    sensor_cache_example();
+
+    // 主循环
+    kv_database_t db;
+    kv_init(&amp;db, &quot;0:/app.db&quot;);
+
+    uint32_t counter = 0;
+
+    while (1) {
+        // 定期更新数据
+        if (counter % 100 == 0) {
+            char key[32];
+            snprintf(key, sizeof(key), &quot;counter&quot;);
+            kv_put_int(&amp;db, key, counter);
+
+            // 自动保存（每10秒）
+            kv_auto_save(&amp;db, 10000);
+        }
+
+        counter++;
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h2 id="7">步骤7：高级特性</h2>
+<h3 id="71">7.1 数据压缩</h3>
+<pre><code class="language-c">/**
+ * @brief  简单的RLE压缩
+ * @param  input: 输入数据
+ * @param  input_len: 输入长度
+ * @param  output: 输出缓冲区
+ * @param  output_len: 输出长度
+ * @retval 压缩后的长度
+ */
+static uint16_t kv_compress_rle(const uint8_t *input, uint16_t input_len,
+                                uint8_t *output, uint16_t output_len)
+{
+    uint16_t out_pos = 0;
+    uint16_t in_pos = 0;
+
+    while (in_pos &lt; input_len &amp;&amp; out_pos &lt; output_len - 2) {
+        uint8_t value = input[in_pos];
+        uint8_t count = 1;
+
+        // 计算重复次数
+        while (in_pos + count &lt; input_len &amp;&amp; 
+               input[in_pos + count] == value &amp;&amp; 
+               count &lt; 255) {
+            count++;
+        }
+
+        // 写入压缩数据
+        output[out_pos++] = count;
+        output[out_pos++] = value;
+
+        in_pos += count;
+    }
+
+    return out_pos;
+}
+
+/**
+ * @brief  RLE解压缩
+ */
+static uint16_t kv_decompress_rle(const uint8_t *input, uint16_t input_len,
+                                  uint8_t *output, uint16_t output_len)
+{
+    uint16_t out_pos = 0;
+    uint16_t in_pos = 0;
+
+    while (in_pos &lt; input_len - 1 &amp;&amp; out_pos &lt; output_len) {
+        uint8_t count = input[in_pos++];
+        uint8_t value = input[in_pos++];
+
+        for (uint8_t i = 0; i &lt; count &amp;&amp; out_pos &lt; output_len; i++) {
+            output[out_pos++] = value;
+        }
+    }
+
+    return out_pos;
+}
+</code></pre>
+<h3 id="72">7.2 数据加密</h3>
+<pre><code class="language-c">/**
+ * @brief  简单的XOR加密
+ * @param  data: 数据
+ * @param  len: 长度
+ * @param  key: 密钥
+ */
+static void kv_encrypt_xor(uint8_t *data, uint16_t len, uint8_t key)
+{
+    for (uint16_t i = 0; i &lt; len; i++) {
+        data[i] ^= key;
+    }
+}
+
+/**
+ * @brief  存储加密数据
+ */
+kv_error_t kv_put_encrypted(kv_database_t *db, const char *key, 
+                           const void *value, uint16_t value_len, 
+                           uint8_t encrypt_key)
+{
+    uint8_t encrypted[KV_MAX_VALUE_LEN];
+
+    if (value_len &gt; KV_MAX_VALUE_LEN) {
+        return KV_ERR_INVALID_VALUE;
+    }
+
+    // 复制并加密
+    memcpy(encrypted, value, value_len);
+    kv_encrypt_xor(encrypted, value_len, encrypt_key);
+
+    return kv_put(db, key, encrypted, value_len);
+}
+
+/**
+ * @brief  读取加密数据
+ */
+kv_error_t kv_get_encrypted(kv_database_t *db, const char *key, 
+                           void *value, uint16_t *value_len, 
+                           uint8_t encrypt_key)
+{
+    kv_error_t err = kv_get(db, key, value, value_len);
+
+    if (err == KV_OK) {
+        // 解密
+        kv_encrypt_xor((uint8_t*)value, *value_len, encrypt_key);
+    }
+
+    return err;
+}
+</code></pre>
+<h3 id="73">7.3 事务支持</h3>
+<pre><code class="language-c">/**
+ * @brief  事务对象
+ */
+typedef struct {
+    kv_database_t *db;
+    kv_database_t backup;
+    bool active;
+} kv_transaction_t;
+
+/**
+ * @brief  开始事务
+ */
+kv_error_t kv_begin_transaction(kv_transaction_t *txn, kv_database_t *db)
+{
+    if (!txn || !db) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 备份当前状态
+    memcpy(&amp;txn-&gt;backup, db, sizeof(kv_database_t));
+    txn-&gt;db = db;
+    txn-&gt;active = true;
+
+    printf(&quot;Transaction started\n&quot;);
+
+    return KV_OK;
+}
+
+/**
+ * @brief  提交事务
+ */
+kv_error_t kv_commit_transaction(kv_transaction_t *txn)
+{
+    if (!txn || !txn-&gt;active) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 保存到文件
+    kv_error_t err = kv_save(txn-&gt;db);
+
+    txn-&gt;active = false;
+
+    printf(&quot;Transaction committed\n&quot;);
+
+    return err;
+}
+
+/**
+ * @brief  回滚事务
+ */
+kv_error_t kv_rollback_transaction(kv_transaction_t *txn)
+{
+    if (!txn || !txn-&gt;active) {
+        return KV_ERR_INVALID_KEY;
+    }
+
+    // 恢复备份状态
+    memcpy(txn-&gt;db, &amp;txn-&gt;backup, sizeof(kv_database_t));
+
+    txn-&gt;active = false;
+
+    printf(&quot;Transaction rolled back\n&quot;);
+
+    return KV_OK;
+}
+</code></pre>
+<h2 id="_7">故障排除</h2>
+<h3 id="1_1">问题1：哈希冲突过多</h3>
+<p><strong>可能原因</strong>：
+- 哈希表太小
+- 哈希函数分布不均
+- 数据量过大</p>
+<p><strong>解决方法</strong>：
+1. 增大哈希表大小
+   <code>c
+   #define KV_HASH_TABLE_SIZE  256  // 增大到256</code></p>
+<ol start="2">
+<li>
+<p>使用更好的哈希函数
+   <code>c
+   // MurmurHash或其他高质量哈希函数</code></p>
+</li>
+<li>
+<p>监控负载因子
+   <code>c
+   kv_stats_t stats;
+   kv_get_stats(&amp;db, &amp;stats);
+   if (stats.load_factor &gt; 0.75) {
+       // 考虑重建哈希表
+   }</code></p>
+</li>
+</ol>
+<h3 id="2_1">问题2：内存不足</h3>
+<p><strong>可能原因</strong>：
+- 条目数量过多
+- 值长度过大
+- 内存泄漏</p>
+<p><strong>解决方法</strong>：
+1. 限制条目数量
+   <code>c
+   if (db-&gt;entry_count &gt;= KV_MAX_ENTRIES) {
+       // 删除最旧的条目
+       kv_delete_oldest(&amp;db);
+   }</code></p>
+<ol start="2">
+<li>
+<p>减小值长度限制
+   <code>c
+   #define KV_MAX_VALUE_LEN  128  // 减小到128字节</code></p>
+</li>
+<li>
+<p>使用内存池
+   <code>c
+   // 预分配固定大小的内存池
+   static kv_node_t node_pool[KV_MAX_ENTRIES];</code></p>
+</li>
+<li>
+<p>检查内存泄漏
+   <code>c
+   // 确保每个malloc都有对应的free
+   // 使用内存分析工具</code></p>
+</li>
+</ol>
+<h3 id="3_1">问题3：数据丢失</h3>
+<p><strong>可能原因</strong>：
+- 未及时保存
+- 文件系统错误
+- 断电</p>
+<p><strong>解决方法</strong>：
+1. 启用自动保存
+   <code>c
+   // 在主循环中
+   kv_auto_save(&amp;db, 5000);  // 每5秒保存</code></p>
+<ol start="2">
+<li>
+<p>使用写前日志（WAL）
+   <code>c
+   // 先写日志，再修改数据
+   kv_write_log(&amp;db, operation);
+   kv_apply_operation(&amp;db, operation);</code></p>
+</li>
+<li>
+<p>实现断电保护
+   <code>c
+   // 使用双缓冲或校验和</code></p>
+</li>
+</ol>
+<h3 id="4_1">问题4：查询速度慢</h3>
+<p><strong>可能原因</strong>：
+- 链表过长
+- 缓存未命中
+- 频繁的文件I/O</p>
+<p><strong>解决方法</strong>：
+1. 优化哈希表大小
+   <code>c
+   // 保持负载因子在0.5-0.75之间</code></p>
+<ol start="2">
+<li>
+<p>启用LRU缓存
+   <code>c
+   lru_cache_t cache;
+   lru_init(&amp;cache, 32);</code></p>
+</li>
+<li>
+<p>批量操作
+   <code>c
+   // 使用批量读写减少I/O次数
+   kv_put_batch(&amp;db, keys, values, lens, count);</code></p>
+</li>
+</ol>
+<h3 id="5_1">问题5：文件损坏</h3>
+<p><strong>可能原因</strong>：
+- 写入中断
+- 存储介质故障
+- 文件系统错误</p>
+<p><strong>解决方法</strong>：
+1. 添加校验和
+   <code>c
+   uint32_t crc = calculate_crc32(data, len);
+   f_write(&amp;file, &amp;crc, sizeof(crc), &amp;bw);</code></p>
+<ol start="2">
+<li>
+<p>使用备份文件
+   <code>c
+   kv_save(&amp;db);  // 保存到主文件
+   kv_backup(&amp;db, "backup.db");  // 备份</code></p>
+</li>
+<li>
+<p>验证文件完整性
+   <code>c
+   if (kv_verify_file(&amp;db) != KV_OK) {
+       kv_restore_from_backup(&amp;db);
+   }</code></p>
+</li>
+</ol>
+<h2 id="_8">性能测试</h2>
+<h3 id="_9">测试代码</h3>
+<pre><code class="language-c">/**
+ * @brief  性能测试
+ */
+void kv_performance_test(void)
+{
+    kv_database_t db;
+    uint32_t start_tick, end_tick;
+
+    kv_init(&amp;db, &quot;0:/perf_test.db&quot;);
+
+    // 测试1：插入性能
+    printf(&quot;\n=== Insert Performance Test ===\n&quot;);
+    start_tick = HAL_GetTick();
+
+    for (int i = 0; i &lt; 1000; i++) {
+        char key[32];
+        int32_t value = i;
+        snprintf(key, sizeof(key), &quot;key_%d&quot;, i);
+        kv_put_int(&amp;db, key, value);
+    }
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Inserted 1000 entries in %lu ms\n&quot;, end_tick - start_tick);
+    printf(&quot;Average: %.2f ms per insert\n&quot;, 
+           (end_tick - start_tick) / 1000.0f);
+
+    // 测试2：查询性能
+    printf(&quot;\n=== Query Performance Test ===\n&quot;);
+    start_tick = HAL_GetTick();
+
+    for (int i = 0; i &lt; 1000; i++) {
+        char key[32];
+        int32_t value;
+        snprintf(key, sizeof(key), &quot;key_%d&quot;, i);
+        kv_get_int(&amp;db, key, &amp;value);
+    }
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Queried 1000 entries in %lu ms\n&quot;, end_tick - start_tick);
+    printf(&quot;Average: %.2f ms per query\n&quot;, 
+           (end_tick - start_tick) / 1000.0f);
+
+    // 测试3：保存性能
+    printf(&quot;\n=== Save Performance Test ===\n&quot;);
+    start_tick = HAL_GetTick();
+
+    kv_save(&amp;db);
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Saved 1000 entries in %lu ms\n&quot;, end_tick - start_tick);
+
+    // 测试4：加载性能
+    printf(&quot;\n=== Load Performance Test ===\n&quot;);
+    kv_clear(&amp;db);
+
+    start_tick = HAL_GetTick();
+
+    kv_load(&amp;db);
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Loaded 1000 entries in %lu ms\n&quot;, end_tick - start_tick);
+
+    // 打印统计信息
+    kv_print_stats(&amp;db);
+
+    kv_deinit(&amp;db);
+}
+</code></pre>
+<p><strong>预期结果</strong>：</p>
+<pre><code>=== Insert Performance Test ===
+Inserted 1000 entries in 150 ms
+Average: 0.15 ms per insert
+
+=== Query Performance Test ===
+Queried 1000 entries in 80 ms
+Average: 0.08 ms per query
+
+=== Save Performance Test ===
+Saved 1000 entries in 500 ms
+
+=== Load Performance Test ===
+Loaded 1000 entries in 450 ms
+
+=== KV Database Statistics ===
+Total entries:     1000
+Hash collisions:   120
+Max chain length:  8
+Load factor:       7.81
+Memory usage:      32768 bytes (32.00 KB)
+==============================
+</code></pre>
+<h2 id="_10">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ 键值数据库的原理和应用场景</li>
+<li>✅ 哈希表和链表的数据结构实现</li>
+<li>✅ 基本的增删改查操作</li>
+<li>✅ 数据持久化到文件系统</li>
+<li>✅ 性能优化技巧（缓存、索引）</li>
+<li>✅ 高级特性（压缩、加密、事务）</li>
+<li>✅ 完整的配置管理系统实现</li>
+<li>✅ 性能测试和故障排除</li>
+</ul>
+<h2 id="_11">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1</strong>：实现过期时间（TTL）
+   - 为每个键值对添加过期时间
+   - 自动清理过期数据
+   - 支持续期操作</p>
+</li>
+<li>
+<p><strong>挑战2</strong>：实现数据同步
+   - 多个设备之间同步数据
+   - 冲突解决策略
+   - 增量同步</p>
+</li>
+<li>
+<p><strong>挑战3</strong>：实现更高级的索引
+   - 支持范围查询
+   - 支持前缀匹配
+   - 实现B树索引</p>
+</li>
+<li>
+<p><strong>挑战4</strong>：实现数据迁移
+   - 支持数据导入导出
+   - 版本兼容性
+   - 数据格式转换</p>
+</li>
+</ol>
+<h2 id="_12">完整代码</h2>
+<p>完整的项目代码可以在这里下载：[GitHub链接]</p>
+<p><strong>项目结构</strong>：</p>
+<pre><code>kv_database/
+├── Core/
+│   ├── Src/
+│   │   ├── main.c
+│   │   └── ...
+│   └── Inc/
+│       └── ...
+├── Middlewares/
+│   ├── KV_Database/
+│   │   ├── kv_database.c
+│   │   ├── kv_database.h
+│   │   └── kv_utils.c
+│   └── FATFS/
+│       └── ...
+└── README.md
+</code></pre>
+<h2 id="_13">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="./01-sqlite-basics.html">SQLite嵌入式数据库</a> - 学习更强大的关系型数据库</li>
+<li><a href="../intermediate/01-time-series-database.html">时序数据库应用</a> - 学习时间序列数据处理</li>
+<li><a href="../intermediate/02-data-sync-backup.html">数据同步与备份策略</a> - 学习数据可靠性保证</li>
+</ul>
+<h2 id="_14">参考资料</h2>
+<ol>
+<li>
+<p><strong>技术文章</strong>
+   - Redis设计与实现
+   - LevelDB源码分析
+   - 哈希表实现原理</p>
+</li>
+<li>
+<p><strong>开源项目</strong>
+   - Redis: https://redis.io/
+   - LevelDB: https://github.com/google/leveldb
+   - RocksDB: https://rocksdb.org/</p>
+</li>
+<li>
+<p><strong>书籍推荐</strong>
+   - 《数据结构与算法分析》
+   - 《数据库系统概念》
+   - 《高性能MySQL》</p>
+</li>
+<li>
+<p><strong>相关标准</strong>
+   - NoSQL数据库设计模式
+   - 键值存储最佳实践</p>
+</li>
+</ol>
+<h2 id="_15">常见问题</h2>
+<p><strong>Q1: KV数据库适合什么场景？</strong></p>
+<p>A: KV数据库适合：
+- 配置参数存储
+- 会话数据缓存
+- 简单的数据持久化
+- 快速查找场景
+- 资源受限的嵌入式系统</p>
+<p>不适合：
+- 复杂的关系查询
+- 需要事务的场景
+- 大量范围查询
+- 需要SQL的应用</p>
+<p><strong>Q2: 如何选择哈希表大小？</strong></p>
+<p>A: 建议：
+- 根据预期数据量选择
+- 保持负载因子在0.5-0.75
+- 使用质数作为大小
+- 考虑内存限制
+- 可以动态调整</p>
+<p><strong>Q3: 如何处理哈希冲突？</strong></p>
+<p>A: 常用方法：
+- 链表法（本教程使用）
+- 开放寻址法
+- 双重哈希
+- 布谷鸟哈希</p>
+<p><strong>Q4: 如何保证数据安全？</strong></p>
+<p>A: 建议：
+- 定期自动保存
+- 使用写前日志
+- 实现校验和验证
+- 定期备份
+- 断电保护机制</p>
+<p><strong>Q5: 性能如何优化？</strong></p>
+<p>A: 优化方法：
+- 使用LRU缓存
+- 批量操作
+- 异步写入
+- 内存池管理
+- 减少文件I/O</p>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言！</p>
+<p><strong>版本历史</strong>：
+- v1.0 (2024-01-15): 初始版本，完整的KV数据库教程</p>
+<p><strong>贡献者</strong>：嵌入式知识平台内容团队</p>
+<p><strong>许可证</strong>：本教程采用 CC BY-SA 4.0 许可协议</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>时间片轮询调度算法：实现简单的多任务调度 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/01-bare-metal-programming/">01-bare-metal-programming</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/01-bare-metal-programming/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">什么是时间片？</a></li>
+<li><a href="#_5">为什么需要时间片调度？</a></li>
+<li><a href="#_6">轮询调度的特点</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心内容</a><ul>
+<li><a href="#_8">时间片调度的基本原理</a><ul>
+<li><a href="#_9">调度流程</a></li>
+</ul>
+</li>
+<li><a href="#_10">基础实现：简单的时间片调度器</a><ul>
+<li><a href="#1">方法1：函数指针数组实现</a></li>
+<li><a href="#2tcb">方法2：任务控制块（TCB）实现</a></li>
+</ul>
+</li>
+<li><a href="#_11">任务切换机制</a><ul>
+<li><a href="#1_1">1. 时间片到期检测</a></li>
+<li><a href="#2">2. 任务上下文保存</a></li>
+<li><a href="#3">3. 任务选择策略</a></li>
+</ul>
+</li>
+<li><a href="#_12">优先级处理</a><ul>
+<li><a href="#1_2">方法1：不同的时间片长度</a></li>
+<li><a href="#2_1">方法2：优先级队列</a></li>
+<li><a href="#3_1">方法3：动态优先级调整</a></li>
+</ul>
+</li>
+<li><a href="#_13">性能分析</a><ul>
+<li><a href="#1_3">1. 响应时间分析</a></li>
+<li><a href="#2-cpu">2. CPU利用率</a></li>
+<li><a href="#3_2">3. 时间片长度选择</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_14">实践示例</a><ul>
+<li><a href="#1led">示例1：LED和按键的多任务系统</a></li>
+<li><a href="#2_2">示例2：带优先级的数据采集系统</a></li>
+</ul>
+</li>
+<li><a href="#_15">深入理解</a><ul>
+<li><a href="#_16">调度开销分析</a></li>
+<li><a href="#rtos">与RTOS的对比</a></li>
+<li><a href="#_17">常见陷阱和最佳实践</a><ul>
+<li><a href="#1_4">陷阱1：任务阻塞</a></li>
+<li><a href="#2_3">陷阱2：共享资源竞争</a></li>
+<li><a href="#3_3">陷阱3：时间片过短</a></li>
+<li><a href="#_18">最佳实践</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_19">常见问题</a><ul>
+<li><a href="#q1">Q1: 时间片调度和超级循环有什么区别？</a></li>
+<li><a href="#q2">Q2: 如何选择合适的时间片长度？</a></li>
+<li><a href="#q3">Q3: 时间片调度能实现真正的多任务吗？</a></li>
+<li><a href="#q4">Q4: 如何调试时间片调度系统？</a></li>
+</ul>
+</li>
+<li><a href="#_20">总结</a></li>
+<li><a href="#_21">延伸阅读</a></li>
+<li><a href="#_22">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">时间片轮询调度算法：实现简单的多任务调度</h1>
+<h2 id="_2">概述</h2>
+<p>时间片轮询调度（Time Slice Round-Robin Scheduling）是一种简单而有效的任务调度算法，它为每个任务分配固定的执行时间，让多个任务轮流执行，从而在裸机环境下实现"多任务"的效果。完成本文学习后，你将能够：</p>
+<ul>
+<li>理解时间片调度的基本概念和工作原理</li>
+<li>掌握轮询调度算法的实现方法</li>
+<li>学会设计和实现任务切换机制</li>
+<li>了解如何处理任务优先级</li>
+<li>能够分析调度系统的性能特征</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">什么是时间片？</h3>
+<p><strong>时间片（Time Slice）</strong> 是分配给每个任务的固定执行时间。就像轮流使用操场，每个班级有固定的时间段，时间到了就换下一个班级。</p>
+<p><strong>核心概念</strong>：
+- <strong>时间片长度</strong>：每个任务连续执行的时间，通常为1-100ms
+- <strong>时间片用完</strong>：当前任务的时间片耗尽，需要切换到下一个任务
+- <strong>任务轮转</strong>：所有任务按顺序轮流获得CPU时间</p>
+<h3 id="_5">为什么需要时间片调度？</h3>
+<p>在裸机程序中，我们经常遇到需要"同时"执行多个任务的情况：</p>
+<p><strong>问题场景</strong>：</p>
+<pre><code class="language-c">// 没有调度的代码：任务阻塞
+while(1) {
+    ReadSensor();      // 可能需要100ms
+    UpdateDisplay();   // 可能需要50ms
+    CheckButton();     // 需要及时响应
+    ProcessData();     // 可能需要200ms
+}
+</code></pre>
+<p><strong>问题分析</strong>：
+- 如果ReadSensor()阻塞100ms，其他任务都要等待
+- CheckButton()无法及时响应用户操作
+- 任务执行时间不均衡，影响系统响应性</p>
+<p><strong>使用时间片调度后</strong>：</p>
+<pre><code class="language-c">// 每个任务最多执行10ms
+Task1() { ReadSensor(); }      // 分多次完成
+Task2() { UpdateDisplay(); }   // 分多次完成
+Task3() { CheckButton(); }     // 快速响应
+Task4() { ProcessData(); }     // 分多次完成
+
+// 调度器每10ms切换一次任务
+// Task1 → Task2 → Task3 → Task4 → Task1 → ...
+</code></pre>
+<h3 id="_6">轮询调度的特点</h3>
+<p><strong>优点</strong>：
+- 简单易实现，代码量小
+- 公平性好，每个任务都能获得执行机会
+- 响应性可预测，最大延迟 = 任务数 × 时间片长度
+- 不需要复杂的优先级管理</p>
+<p><strong>缺点</strong>：
+- 所有任务优先级相同，无法区分重要性
+- 时间片固定，不够灵活
+- 任务切换有开销
+- 不适合实时性要求极高的场景</p>
+<h2 id="_7">核心内容</h2>
+<h3 id="_8">时间片调度的基本原理</h3>
+<p>时间片调度的核心思想是：<strong>将CPU时间分成固定长度的时间片，让每个任务轮流执行一个时间片</strong>。</p>
+<h4 id="_9">调度流程</h4>
+<pre><code>[任务1执行] → 时间片到 → [任务2执行] → 时间片到 → [任务3执行] → 时间片到 → [任务1执行] → ...
+    10ms                      10ms                      10ms                      10ms
+</code></pre>
+<p><strong>关键步骤</strong>：
+1. <strong>初始化</strong>：设置时间片长度，创建任务列表
+2. <strong>启动调度</strong>：从第一个任务开始执行
+3. <strong>时间片计时</strong>：使用定时器跟踪当前任务的执行时间
+4. <strong>任务切换</strong>：时间片到期时，保存当前任务状态，切换到下一个任务
+5. <strong>循环执行</strong>：重复步骤3-4</p>
+<h3 id="_10">基础实现：简单的时间片调度器</h3>
+<p>让我们从最简单的实现开始，逐步构建一个完整的调度系统。</p>
+<h4 id="1">方法1：函数指针数组实现</h4>
+<p>这是最简单的实现方式，适合任务数量固定的场景：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 任务函数类型定义
+typedef void (*TaskFunction_t)(void);
+
+// 任务定义
+#define MAX_TASKS 4
+#define TIME_SLICE_MS 10  // 时间片长度：10ms
+
+// 任务函数数组
+TaskFunction_t task_list[MAX_TASKS];
+uint8_t task_count = 0;
+uint8_t current_task = 0;
+
+// 时间片计数器
+volatile uint32_t time_slice_counter = 0;
+
+// 注册任务
+void Scheduler_RegisterTask(TaskFunction_t task) {
+    if(task_count &lt; MAX_TASKS) {
+        task_list[task_count++] = task;
+    }
+}
+
+// SysTick中断（1ms）
+void SysTick_Handler(void) {
+    time_slice_counter++;
+}
+
+// 调度器主循环
+void Scheduler_Run(void) {
+    uint32_t last_switch_time = 0;
+
+    while(1) {
+        // 检查是否需要切换任务
+        if((time_slice_counter - last_switch_time) &gt;= TIME_SLICE_MS) {
+            last_switch_time = time_slice_counter;
+
+            // 切换到下一个任务
+            current_task = (current_task + 1) % task_count;
+        }
+
+        // 执行当前任务
+        if(task_count &gt; 0) {
+            task_list[current_task]();
+        }
+    }
+}
+
+// 示例任务
+void Task_LED(void) {
+    static uint32_t counter = 0;
+    counter++;
+    if(counter &gt;= 50) {  // 500ms
+        counter = 0;
+        LED_Toggle();
+    }
+}
+
+void Task_Button(void) {
+    if(Button_IsPressed()) {
+        HandleButtonPress();
+    }
+}
+
+void Task_Sensor(void) {
+    static uint32_t counter = 0;
+    counter++;
+    if(counter &gt;= 100) {  // 1000ms
+        counter = 0;
+        ReadSensor();
+    }
+}
+
+void Task_Display(void) {
+    UpdateDisplay();
+}
+
+// 主函数
+int main(void) {
+    SystemInit();
+    SysTick_Init();  // 配置1ms中断
+
+    // 注册任务
+    Scheduler_RegisterTask(Task_LED);
+    Scheduler_RegisterTask(Task_Button);
+    Scheduler_RegisterTask(Task_Sensor);
+    Scheduler_RegisterTask(Task_Display);
+
+    // 启动调度器
+    Scheduler_Run();
+
+    return 0;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <strong>任务注册</strong>：使用函数指针数组存储任务
+- <strong>时间片计时</strong>：使用SysTick中断提供1ms时基
+- <strong>任务切换</strong>：时间片到期时，切换到下一个任务
+- <strong>任务执行</strong>：每次循环执行当前任务一次</p>
+<p><strong>关键点</strong>：
+- 每个任务函数应该快速返回，不能阻塞
+- 任务内部使用计数器实现定时功能
+- 时间片长度影响系统响应性和开销</p>
+<h4 id="2tcb">方法2：任务控制块（TCB）实现</h4>
+<p>使用任务控制块可以存储更多任务信息，实现更灵活的调度：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 任务状态
+typedef enum {
+    TASK_STATE_READY,      // 就绪
+    TASK_STATE_RUNNING,    // 运行
+    TASK_STATE_SUSPENDED   // 挂起
+} TaskState_t;
+
+// 任务控制块
+typedef struct {
+    TaskFunction_t function;    // 任务函数
+    TaskState_t state;          // 任务状态
+    uint32_t time_slice;        // 时间片长度（ms）
+    uint32_t elapsed_time;      // 已执行时间（ms）
+    uint32_t total_time;        // 总执行时间（统计）
+    uint32_t run_count;         // 运行次数（统计）
+    char name[16];              // 任务名称
+} TaskControlBlock_t;
+
+// 任务列表
+#define MAX_TASKS 8
+TaskControlBlock_t task_table[MAX_TASKS];
+uint8_t task_count = 0;
+uint8_t current_task_index = 0;
+
+// 系统时钟（1ms）
+volatile uint32_t system_ticks = 0;
+
+// SysTick中断
+void SysTick_Handler(void) {
+    system_ticks++;
+}
+
+// 创建任务
+bool Scheduler_CreateTask(TaskFunction_t function, 
+                          uint32_t time_slice,
+                          const char *name) {
+    if(task_count &gt;= MAX_TASKS) {
+        return false;
+    }
+
+    TaskControlBlock_t *task = &amp;task_table[task_count];
+    task-&gt;function = function;
+    task-&gt;state = TASK_STATE_READY;
+    task-&gt;time_slice = time_slice;
+    task-&gt;elapsed_time = 0;
+    task-&gt;total_time = 0;
+    task-&gt;run_count = 0;
+    strncpy(task-&gt;name, name, sizeof(task-&gt;name) - 1);
+
+    task_count++;
+    return true;
+}
+
+// 挂起任务
+void Scheduler_SuspendTask(uint8_t task_id) {
+    if(task_id &lt; task_count) {
+        task_table[task_id].state = TASK_STATE_SUSPENDED;
+    }
+}
+
+// 恢复任务
+void Scheduler_ResumeTask(uint8_t task_id) {
+    if(task_id &lt; task_count) {
+        task_table[task_id].state = TASK_STATE_READY;
+    }
+}
+
+// 获取下一个就绪任务
+uint8_t Scheduler_GetNextTask(void) {
+    uint8_t start = current_task_index;
+
+    do {
+        current_task_index = (current_task_index + 1) % task_count;
+
+        if(task_table[current_task_index].state == TASK_STATE_READY) {
+            return current_task_index;
+        }
+    } while(current_task_index != start);
+
+    return 0xFF;  // 没有就绪任务
+}
+
+// 调度器运行
+void Scheduler_Run(void) {
+    uint32_t last_tick = system_ticks;
+
+    while(1) {
+        // 计算时间增量
+        uint32_t current_tick = system_ticks;
+        uint32_t delta = current_tick - last_tick;
+        last_tick = current_tick;
+
+        if(task_count == 0) {
+            continue;
+        }
+
+        TaskControlBlock_t *current_task = &amp;task_table[current_task_index];
+
+        // 更新当前任务的执行时间
+        current_task-&gt;elapsed_time += delta;
+        current_task-&gt;total_time += delta;
+
+        // 检查时间片是否用完
+        if(current_task-&gt;elapsed_time &gt;= current_task-&gt;time_slice) {
+            // 时间片用完，切换任务
+            current_task-&gt;elapsed_time = 0;
+            current_task-&gt;state = TASK_STATE_READY;
+
+            // 获取下一个任务
+            uint8_t next_task = Scheduler_GetNextTask();
+            if(next_task != 0xFF) {
+                current_task_index = next_task;
+                current_task = &amp;task_table[current_task_index];
+            }
+        }
+
+        // 执行当前任务
+        if(current_task-&gt;state == TASK_STATE_READY) {
+            current_task-&gt;state = TASK_STATE_RUNNING;
+            current_task-&gt;run_count++;
+
+            // 调用任务函数
+            current_task-&gt;function();
+
+            // 任务执行完毕，恢复就绪状态
+            if(current_task-&gt;state == TASK_STATE_RUNNING) {
+                current_task-&gt;state = TASK_STATE_READY;
+            }
+        }
+    }
+}
+
+// 打印任务统计信息
+void Scheduler_PrintStats(void) {
+    printf(&quot;Task Statistics:\n&quot;);
+    printf(&quot;%-16s %8s %12s %10s\n&quot;, &quot;Name&quot;, &quot;State&quot;, &quot;Total Time&quot;, &quot;Run Count&quot;);
+
+    for(uint8_t i = 0; i &lt; task_count; i++) {
+        TaskControlBlock_t *task = &amp;task_table[i];
+        printf(&quot;%-16s %8d %12lu %10lu\n&quot;,
+               task-&gt;name,
+               task-&gt;state,
+               task-&gt;total_time,
+               task-&gt;run_count);
+    }
+}
+</code></pre>
+<p><strong>改进说明</strong>：
+- <strong>任务控制块</strong>：存储任务的完整信息
+- <strong>任务状态管理</strong>：支持就绪、运行、挂起状态
+- <strong>灵活的时间片</strong>：每个任务可以有不同的时间片长度
+- <strong>统计功能</strong>：记录任务执行时间和次数
+- <strong>任务挂起/恢复</strong>：可以动态控制任务的执行</p>
+<h3 id="_11">任务切换机制</h3>
+<p>任务切换是调度器的核心功能，需要考虑以下几个方面：</p>
+<h4 id="1_1">1. 时间片到期检测</h4>
+<pre><code class="language-c">// 方法1：轮询检测
+void Scheduler_Loop(void) {
+    while(1) {
+        if(IsTimeSliceExpired()) {
+            SwitchToNextTask();
+        }
+        ExecuteCurrentTask();
+    }
+}
+
+// 方法2：中断驱动
+void Timer_IRQHandler(void) {
+    // 时间片到期中断
+    time_slice_expired = true;
+}
+
+void Scheduler_Loop(void) {
+    while(1) {
+        if(time_slice_expired) {
+            time_slice_expired = false;
+            SwitchToNextTask();
+        }
+        ExecuteCurrentTask();
+    }
+}
+</code></pre>
+<h4 id="2">2. 任务上下文保存</h4>
+<p>在简单的协作式调度中，任务主动返回，不需要保存上下文：</p>
+<pre><code class="language-c">// 协作式任务（主动返回）
+void Task_Example(void) {
+    // 执行一小段工作
+    DoSomeWork();
+
+    // 主动返回，让出CPU
+    return;
+}
+</code></pre>
+<p>在抢占式调度中，需要保存任务的执行状态（寄存器、栈指针等）。这在裸机环境下较为复杂，通常需要汇编代码支持。</p>
+<h4 id="3">3. 任务选择策略</h4>
+<pre><code class="language-c">// 轮询选择（Round-Robin）
+uint8_t SelectNextTask_RoundRobin(void) {
+    uint8_t next = (current_task + 1) % task_count;
+
+    // 跳过挂起的任务
+    while(task_table[next].state == TASK_STATE_SUSPENDED) {
+        next = (next + 1) % task_count;
+    }
+
+    return next;
+}
+
+// 优先级选择（带优先级的轮询）
+uint8_t SelectNextTask_Priority(void) {
+    // 首先查找高优先级任务
+    for(uint8_t i = 0; i &lt; task_count; i++) {
+        if(task_table[i].priority == PRIORITY_HIGH &amp;&amp;
+           task_table[i].state == TASK_STATE_READY) {
+            return i;
+        }
+    }
+
+    // 然后查找普通优先级任务
+    for(uint8_t i = 0; i &lt; task_count; i++) {
+        if(task_table[i].priority == PRIORITY_NORMAL &amp;&amp;
+           task_table[i].state == TASK_STATE_READY) {
+            return i;
+        }
+    }
+
+    return 0;  // 默认返回空闲任务
+}
+</code></pre>
+<h3 id="_12">优先级处理</h3>
+<p>虽然基本的时间片调度不考虑优先级，但我们可以通过以下方法引入优先级：</p>
+<h4 id="1_2">方法1：不同的时间片长度</h4>
+<pre><code class="language-c">// 高优先级任务获得更长的时间片
+Scheduler_CreateTask(Task_Important, 20, &quot;Important&quot;);  // 20ms
+Scheduler_CreateTask(Task_Normal, 10, &quot;Normal&quot;);        // 10ms
+Scheduler_CreateTask(Task_Low, 5, &quot;Low&quot;);               // 5ms
+</code></pre>
+<h4 id="2_1">方法2：优先级队列</h4>
+<pre><code class="language-c">typedef enum {
+    PRIORITY_HIGH = 0,
+    PRIORITY_NORMAL = 1,
+    PRIORITY_LOW = 2,
+    PRIORITY_LEVELS = 3
+} TaskPriority_t;
+
+// 每个优先级一个任务队列
+TaskControlBlock_t *priority_queues[PRIORITY_LEVELS][MAX_TASKS];
+uint8_t queue_sizes[PRIORITY_LEVELS] = {0};
+
+// 调度时优先选择高优先级队列
+uint8_t SelectNextTask_WithPriority(void) {
+    // 从高到低遍历优先级
+    for(uint8_t prio = 0; prio &lt; PRIORITY_LEVELS; prio++) {
+        if(queue_sizes[prio] &gt; 0) {
+            // 在该优先级队列中轮询
+            return GetNextTaskFromQueue(prio);
+        }
+    }
+    return 0xFF;  // 无任务
+}
+</code></pre>
+<h4 id="3_1">方法3：动态优先级调整</h4>
+<pre><code class="language-c">// 防止低优先级任务饥饿
+void Scheduler_AdjustPriority(void) {
+    for(uint8_t i = 0; i &lt; task_count; i++) {
+        TaskControlBlock_t *task = &amp;task_table[i];
+
+        // 如果任务长时间未执行，提升优先级
+        if(task-&gt;wait_time &gt; STARVATION_THRESHOLD) {
+            if(task-&gt;priority &lt; PRIORITY_HIGH) {
+                task-&gt;priority--;  // 提升优先级
+            }
+        }
+
+        // 任务执行后，恢复原始优先级
+        if(task-&gt;state == TASK_STATE_RUNNING) {
+            task-&gt;priority = task-&gt;base_priority;
+            task-&gt;wait_time = 0;
+        } else {
+            task-&gt;wait_time++;
+        }
+    }
+}
+</code></pre>
+<h3 id="_13">性能分析</h3>
+<p>理解调度系统的性能特征对于优化设计非常重要。</p>
+<h4 id="1_3">1. 响应时间分析</h4>
+<p><strong>最坏情况响应时间</strong>：</p>
+<pre><code>最大响应延迟 = (任务数 - 1) × 时间片长度
+</code></pre>
+<p><strong>示例</strong>：
+- 4个任务，每个时间片10ms
+- 最坏情况：某个任务刚执行完，需要等待其他3个任务
+- 最大延迟 = 3 × 10ms = 30ms</p>
+<p><strong>优化方法</strong>：
+- 减少任务数量
+- 缩短时间片长度
+- 使用优先级调度</p>
+<h4 id="2-cpu">2. CPU利用率</h4>
+<pre><code class="language-c">// 计算CPU利用率
+typedef struct {
+    uint32_t total_time;      // 总时间
+    uint32_t idle_time;       // 空闲时间
+    uint32_t task_time;       // 任务执行时间
+    uint32_t switch_time;     // 切换开销时间
+} CPUStats_t;
+
+CPUStats_t cpu_stats = {0};
+
+float GetCPUUtilization(void) {
+    if(cpu_stats.total_time == 0) {
+        return 0.0f;
+    }
+
+    float utilization = (float)(cpu_stats.task_time) / cpu_stats.total_time * 100.0f;
+    return utilization;
+}
+
+float GetSwitchOverhead(void) {
+    if(cpu_stats.total_time == 0) {
+        return 0.0f;
+    }
+
+    float overhead = (float)(cpu_stats.switch_time) / cpu_stats.total_time * 100.0f;
+    return overhead;
+}
+</code></pre>
+<h4 id="3_2">3. 时间片长度选择</h4>
+<p>时间片长度的选择需要权衡：</p>
+<p><strong>时间片太短</strong>：
+- 优点：响应快，任务切换频繁
+- 缺点：切换开销大，CPU利用率低</p>
+<p><strong>时间片太长</strong>：
+- 优点：切换开销小，CPU利用率高
+- 缺点：响应慢，类似超级循环</p>
+<p><strong>推荐值</strong>：
+- 简单系统：10-50ms
+- 中等复杂度：5-20ms
+- 高响应要求：1-10ms</p>
+<p><strong>计算公式</strong>：</p>
+<pre><code>时间片长度 = 最大可接受延迟 / 任务数
+</code></pre>
+<h2 id="_14">实践示例</h2>
+<h3 id="1led">示例1：LED和按键的多任务系统</h3>
+<p>实现一个包含LED闪烁、按键检测和串口通信的多任务系统：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;stdio.h&gt;
+
+// 系统配置
+#define TIME_SLICE_MS 10
+#define MAX_TASKS 4
+
+// 全局变量
+volatile uint32_t system_ticks = 0;
+TaskControlBlock_t task_table[MAX_TASKS];
+uint8_t task_count = 0;
+uint8_t current_task = 0;
+
+// SysTick中断（1ms）
+void SysTick_Handler(void) {
+    system_ticks++;
+}
+
+// 任务1：LED闪烁
+void Task_LED_Blink(void) {
+    static uint32_t last_toggle = 0;
+
+    if((system_ticks - last_toggle) &gt;= 500) {
+        last_toggle = system_ticks;
+        LED_Toggle();
+    }
+}
+
+// 任务2：按键检测
+void Task_Button_Check(void) {
+    static uint8_t button_state = 0;
+    static uint32_t debounce_timer = 0;
+
+    bool button_pressed = Button_Read();
+
+    switch(button_state) {
+        case 0:  // 空闲
+            if(button_pressed) {
+                debounce_timer = system_ticks;
+                button_state = 1;
+            }
+            break;
+
+        case 1:  // 消抖
+            if((system_ticks - debounce_timer) &gt;= 20) {
+                if(button_pressed) {
+                    // 按键确认
+                    OnButtonPressed();
+                    button_state = 2;
+                } else {
+                    button_state = 0;
+                }
+            }
+            break;
+
+        case 2:  // 等待释放
+            if(!button_pressed) {
+                debounce_timer = system_ticks;
+                button_state = 3;
+            }
+            break;
+
+        case 3:  // 释放消抖
+            if((system_ticks - debounce_timer) &gt;= 20) {
+                if(!button_pressed) {
+                    button_state = 0;
+                }
+            }
+            break;
+    }
+}
+
+// 任务3：串口通信
+void Task_UART_Process(void) {
+    // 检查接收缓冲区
+    if(UART_DataAvailable()) {
+        uint8_t data = UART_ReadByte();
+        ProcessReceivedData(data);
+    }
+
+    // 检查发送缓冲区
+    if(UART_TxReady() &amp;&amp; HasDataToSend()) {
+        uint8_t data = GetNextByteToSend();
+        UART_SendByte(data);
+    }
+}
+
+// 任务4：系统监控
+void Task_System_Monitor(void) {
+    static uint32_t last_report = 0;
+
+    if((system_ticks - last_report) &gt;= 1000) {
+        last_report = system_ticks;
+
+        // 打印系统状态
+        printf(&quot;System uptime: %lu s\n&quot;, system_ticks / 1000);
+        printf(&quot;CPU usage: %.1f%%\n&quot;, GetCPUUtilization());
+
+        // 打印任务统计
+        Scheduler_PrintStats();
+    }
+}
+
+// 主函数
+int main(void) {
+    // 硬件初始化
+    SystemInit();
+    LED_Init();
+    Button_Init();
+    UART_Init();
+    SysTick_Init();
+
+    // 创建任务
+    Scheduler_CreateTask(Task_LED_Blink, 10, &quot;LED&quot;);
+    Scheduler_CreateTask(Task_Button_Check, 10, &quot;Button&quot;);
+    Scheduler_CreateTask(Task_UART_Process, 10, &quot;UART&quot;);
+    Scheduler_CreateTask(Task_System_Monitor, 10, &quot;Monitor&quot;);
+
+    // 启动调度器
+    printf(&quot;Scheduler started\n&quot;);
+    Scheduler_Run();
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例说明</strong>：
+- <strong>任务1</strong>：LED每500ms闪烁一次
+- <strong>任务2</strong>：按键检测，包含消抖处理
+- <strong>任务3</strong>：串口数据收发
+- <strong>任务4</strong>：系统监控，每秒打印统计信息</p>
+<p><strong>运行效果</strong>：
+- 所有任务"同时"运行
+- LED稳定闪烁
+- 按键响应及时（最大延迟40ms）
+- 串口通信流畅
+- 定期输出系统状态</p>
+<h3 id="2_2">示例2：带优先级的数据采集系统</h3>
+<p>实现一个数据采集系统，包含高优先级的实时采集和低优先级的数据处理：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 优先级定义
+typedef enum {
+    PRIORITY_HIGH = 0,
+    PRIORITY_NORMAL = 1,
+    PRIORITY_LOW = 2
+} Priority_t;
+
+// 扩展的任务控制块
+typedef struct {
+    TaskFunction_t function;
+    TaskState_t state;
+    Priority_t priority;
+    uint32_t time_slice;
+    uint32_t elapsed_time;
+    char name[16];
+} TaskControlBlock_Ex_t;
+
+// 数据缓冲区
+#define BUFFER_SIZE 128
+uint16_t data_buffer[BUFFER_SIZE];
+volatile uint8_t write_index = 0;
+volatile uint8_t read_index = 0;
+
+// 任务1：高优先级 - ADC采样
+void Task_ADC_Sample(void) {
+    // 读取ADC
+    uint16_t adc_value = ADC_Read();
+
+    // 写入缓冲区
+    data_buffer[write_index] = adc_value;
+    write_index = (write_index + 1) % BUFFER_SIZE;
+
+    // 检查缓冲区溢出
+    if(write_index == read_index) {
+        // 缓冲区满，记录错误
+        LogError(&quot;Buffer overflow&quot;);
+    }
+}
+
+// 任务2：普通优先级 - 数据处理
+void Task_Data_Process(void) {
+    // 检查是否有数据
+    if(read_index != write_index) {
+        // 读取数据
+        uint16_t data = data_buffer[read_index];
+        read_index = (read_index + 1) % BUFFER_SIZE;
+
+        // 处理数据（滤波、计算等）
+        float filtered = ApplyFilter(data);
+        float result = CalculateResult(filtered);
+
+        // 存储结果
+        StoreResult(result);
+    }
+}
+
+// 任务3：低优先级 - 数据上传
+void Task_Data_Upload(void) {
+    static uint32_t last_upload = 0;
+
+    // 每5秒上传一次
+    if((system_ticks - last_upload) &gt;= 5000) {
+        last_upload = system_ticks;
+
+        // 上传数据到云端
+        if(HasDataToUpload()) {
+            UploadData();
+        }
+    }
+}
+
+// 任务4：低优先级 - 显示更新
+void Task_Display_Update(void) {
+    static uint32_t last_update = 0;
+
+    // 每100ms更新一次显示
+    if((system_ticks - last_update) &gt;= 100) {
+        last_update = system_ticks;
+        UpdateDisplay();
+    }
+}
+
+// 带优先级的调度器
+void Scheduler_Run_WithPriority(void) {
+    uint32_t last_tick = system_ticks;
+
+    while(1) {
+        uint32_t current_tick = system_ticks;
+        uint32_t delta = current_tick - last_tick;
+        last_tick = current_tick;
+
+        // 查找最高优先级的就绪任务
+        int8_t next_task = -1;
+        Priority_t highest_priority = PRIORITY_LOW + 1;
+
+        for(uint8_t i = 0; i &lt; task_count; i++) {
+            TaskControlBlock_Ex_t *task = &amp;task_table_ex[i];
+
+            if(task-&gt;state == TASK_STATE_READY &amp;&amp;
+               task-&gt;priority &lt; highest_priority) {
+                highest_priority = task-&gt;priority;
+                next_task = i;
+            }
+        }
+
+        if(next_task &gt;= 0) {
+            TaskControlBlock_Ex_t *task = &amp;task_table_ex[next_task];
+
+            // 更新时间
+            task-&gt;elapsed_time += delta;
+
+            // 检查时间片
+            if(task-&gt;elapsed_time &gt;= task-&gt;time_slice) {
+                task-&gt;elapsed_time = 0;
+
+                // 执行任务
+                task-&gt;state = TASK_STATE_RUNNING;
+                task-&gt;function();
+                task-&gt;state = TASK_STATE_READY;
+            }
+        }
+    }
+}
+
+// 主函数
+int main(void) {
+    SystemInit();
+    ADC_Init();
+    Display_Init();
+    Network_Init();
+    SysTick_Init();
+
+    // 创建任务（优先级不同）
+    Scheduler_CreateTask_Ex(Task_ADC_Sample, 5, PRIORITY_HIGH, &quot;ADC&quot;);
+    Scheduler_CreateTask_Ex(Task_Data_Process, 10, PRIORITY_NORMAL, &quot;Process&quot;);
+    Scheduler_CreateTask_Ex(Task_Data_Upload, 20, PRIORITY_LOW, &quot;Upload&quot;);
+    Scheduler_CreateTask_Ex(Task_Display_Update, 20, PRIORITY_LOW, &quot;Display&quot;);
+
+    // 启动调度器
+    Scheduler_Run_WithPriority();
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例说明</strong>：
+- <strong>高优先级任务</strong>：ADC采样，确保数据不丢失
+- <strong>普通优先级任务</strong>：数据处理，及时处理采集的数据
+- <strong>低优先级任务</strong>：数据上传和显示更新，不影响关键任务</p>
+<p><strong>优先级效果</strong>：
+- ADC采样任务优先执行，保证实时性
+- 数据处理任务在采样间隙执行
+- 上传和显示任务在系统空闲时执行</p>
+<h2 id="_15">深入理解</h2>
+<h3 id="_16">调度开销分析</h3>
+<p>任务切换会带来一定的开销，主要包括：</p>
+<ol>
+<li>
+<p><strong>时间开销</strong>：
+   - 保存当前任务状态：几微秒到几十微秒
+   - 选择下一个任务：取决于任务数量和算法
+   - 恢复新任务状态：几微秒到几十微秒</p>
+</li>
+<li>
+<p><strong>空间开销</strong>：
+   - 任务控制块：每个任务约20-100字节
+   - 任务栈：每个任务几百字节到几KB</p>
+</li>
+</ol>
+<p><strong>测量切换开销</strong>：</p>
+<pre><code class="language-c">void MeasureSwitchOverhead(void) {
+    uint32_t start, end;
+
+    // 测量切换时间
+    start = GetCycleCount();
+    SwitchToNextTask();
+    end = GetCycleCount();
+
+    uint32_t cycles = end - start;
+    float time_us = (float)cycles / (CPU_FREQ_MHZ);
+
+    printf(&quot;Task switch overhead: %.2f us\n&quot;, time_us);
+}
+</code></pre>
+<h3 id="rtos">与RTOS的对比</h3>
+<p>时间片调度器是RTOS的简化版本，主要区别：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>时间片调度器</th>
+<th>RTOS</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任务切换</td>
+<td>协作式或简单抢占</td>
+<td>完全抢占式</td>
+</tr>
+<tr>
+<td>上下文保存</td>
+<td>简单或无</td>
+<td>完整的寄存器保存</td>
+</tr>
+<tr>
+<td>优先级</td>
+<td>简单或无</td>
+<td>多级优先级</td>
+</tr>
+<tr>
+<td>同步机制</td>
+<td>无或简单</td>
+<td>信号量、互斥量、消息队列</td>
+</tr>
+<tr>
+<td>内存管理</td>
+<td>静态分配</td>
+<td>动态内存管理</td>
+</tr>
+<tr>
+<td>代码复杂度</td>
+<td>低</td>
+<td>高</td>
+</tr>
+<tr>
+<td>资源占用</td>
+<td>小（&lt;1KB）</td>
+<td>大（几KB到几十KB）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>何时升级到RTOS</strong>：
+- 任务数量超过5-10个
+- 需要复杂的任务间通信
+- 需要严格的实时性保证
+- 需要使用第三方中间件</p>
+<h3 id="_17">常见陷阱和最佳实践</h3>
+<h4 id="1_4">陷阱1：任务阻塞</h4>
+<p><strong>错误示例</strong>：</p>
+<pre><code class="language-c">void Task_Bad(void) {
+    // 错误：阻塞等待
+    while(!DataReady()) {
+        // 等待数据
+    }
+    ProcessData();
+}
+</code></pre>
+<p><strong>正确做法</strong>：</p>
+<pre><code class="language-c">void Task_Good(void) {
+    // 使用状态机，不阻塞
+    static uint8_t state = 0;
+
+    switch(state) {
+        case 0:
+            if(DataReady()) {
+                state = 1;
+            }
+            break;
+        case 1:
+            ProcessData();
+            state = 0;
+            break;
+    }
+}
+</code></pre>
+<h4 id="2_3">陷阱2：共享资源竞争</h4>
+<p><strong>错误示例</strong>：</p>
+<pre><code class="language-c">// 全局变量，多个任务访问
+uint32_t shared_counter = 0;
+
+void Task1(void) {
+    shared_counter++;  // 不安全
+}
+
+void Task2(void) {
+    shared_counter++;  // 不安全
+}
+</code></pre>
+<p><strong>正确做法</strong>：</p>
+<pre><code class="language-c">// 方法1：关中断保护
+void Task1(void) {
+    __disable_irq();
+    shared_counter++;
+    __enable_irq();
+}
+
+// 方法2：使用标志位
+volatile bool resource_locked = false;
+
+void Task1(void) {
+    if(!resource_locked) {
+        resource_locked = true;
+        shared_counter++;
+        resource_locked = false;
+    }
+}
+</code></pre>
+<h4 id="3_3">陷阱3：时间片过短</h4>
+<p><strong>问题</strong>：</p>
+<pre><code class="language-c">// 时间片太短（1ms），切换开销大
+#define TIME_SLICE_MS 1
+
+// 如果切换开销为100us，则：
+// 开销比例 = 100us / 1000us = 10%
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 根据任务特性选择合适的时间片
+#define TIME_SLICE_MS 10  // 10ms，开销比例降至1%
+</code></pre>
+<h4 id="_18">最佳实践</h4>
+<ol>
+<li>
+<p><strong>任务设计原则</strong>：
+   - 任务函数应该快速返回
+   - 使用状态机处理复杂逻辑
+   - 避免长时间循环和阻塞</p>
+</li>
+<li>
+<p><strong>时间片选择</strong>：
+   - 根据响应要求选择
+   - 考虑切换开销
+   - 不同任务可以有不同时间片</p>
+</li>
+<li>
+<p><strong>优先级设置</strong>：
+   - 实时任务高优先级
+   - 后台任务低优先级
+   - 避免优先级反转</p>
+</li>
+<li>
+<p><strong>资源保护</strong>：
+   - 关中断保护临界区
+   - 使用标志位同步
+   - 最小化临界区长度</p>
+</li>
+<li>
+<p><strong>性能监控</strong>：
+   - 记录任务执行时间
+   - 监控CPU利用率
+   - 检测任务饥饿</p>
+</li>
+</ol>
+<h2 id="_19">常见问题</h2>
+<h3 id="q1">Q1: 时间片调度和超级循环有什么区别？</h3>
+<p><strong>A</strong>: 主要区别在于任务执行的公平性和可预测性：</p>
+<p><strong>超级循环</strong>：
+- 任务顺序执行，一个任务执行完才执行下一个
+- 如果某个任务耗时长，其他任务等待时间不确定
+- 响应时间取决于所有任务的总执行时间</p>
+<p><strong>时间片调度</strong>：
+- 每个任务最多执行固定时间
+- 所有任务轮流获得执行机会
+- 响应时间可预测：最大延迟 = (任务数-1) × 时间片</p>
+<h3 id="q2">Q2: 如何选择合适的时间片长度？</h3>
+<p><strong>A</strong>: 考虑以下因素：</p>
+<ol>
+<li>
+<p><strong>响应要求</strong>：
+   - 如果需要快速响应，选择较短的时间片（1-5ms）
+   - 如果响应要求不高，可以选择较长的时间片（20-50ms）</p>
+</li>
+<li>
+<p><strong>切换开销</strong>：
+   - 切换开销通常为几十微秒
+   - 时间片应该远大于切换开销（至少100倍）
+   - 推荐：时间片 &gt; 100 × 切换时间</p>
+</li>
+<li>
+<p><strong>任务特性</strong>：
+   - 如果任务执行时间短，时间片可以短一些
+   - 如果任务需要连续执行，时间片应该长一些</p>
+</li>
+</ol>
+<p><strong>经验公式</strong>：</p>
+<pre><code>时间片长度 = 最大可接受延迟 / 任务数量
+</code></pre>
+<h3 id="q3">Q3: 时间片调度能实现真正的多任务吗？</h3>
+<p><strong>A</strong>: 不能。时间片调度只是模拟多任务：</p>
+<ul>
+<li><strong>单核CPU</strong>：同一时刻只有一个任务在执行</li>
+<li><strong>时间分片</strong>：通过快速切换造成"同时"执行的假象</li>
+<li><strong>并发不是并行</strong>：任务是交替执行，不是真正的同时执行</li>
+</ul>
+<p>真正的多任务需要：
+- 多核CPU（硬件并行）
+- 或者使用RTOS（软件多任务）</p>
+<h3 id="q4">Q4: 如何调试时间片调度系统？</h3>
+<p><strong>A</strong>: 常用的调试方法：</p>
+<ol>
+<li><strong>任务执行跟踪</strong>：</li>
+</ol>
+<pre><code class="language-c">void Task_Example(void) {
+    GPIO_Set(DEBUG_PIN);  // 任务开始
+
+    // 任务代码
+    DoWork();
+
+    GPIO_Clear(DEBUG_PIN);  // 任务结束
+}
+// 使用逻辑分析仪观察DEBUG_PIN
+</code></pre>
+<ol start="2">
+<li><strong>串口日志</strong>：</li>
+</ol>
+<pre><code class="language-c">void Scheduler_Log(void) {
+    printf(&quot;[%lu] Task %s running\n&quot;, 
+           system_ticks, 
+           task_table[current_task].name);
+}
+</code></pre>
+<ol start="3">
+<li><strong>统计信息</strong>：</li>
+</ol>
+<pre><code class="language-c">void PrintTaskStats(void) {
+    for(uint8_t i = 0; i &lt; task_count; i++) {
+        printf(&quot;Task %s: %lu ms, %lu runs\n&quot;,
+               task_table[i].name,
+               task_table[i].total_time,
+               task_table[i].run_count);
+    }
+}
+</code></pre>
+<ol start="4">
+<li><strong>断言检查</strong>：</li>
+</ol>
+<pre><code class="language-c">void Scheduler_Check(void) {
+    // 检查任务是否超时
+    if(task_table[current_task].elapsed_time &gt; MAX_TASK_TIME) {
+        ASSERT(0);  // 任务超时
+    }
+}
+</code></pre>
+<h2 id="_20">总结</h2>
+<p>时间片轮询调度是一种简单而实用的任务调度方法，适合在裸机环境下实现基本的多任务功能：</p>
+<p><strong>核心要点</strong>：
+- <strong>时间片</strong>：为每个任务分配固定的执行时间
+- <strong>轮询调度</strong>：任务按顺序轮流执行
+- <strong>任务切换</strong>：时间片到期时切换到下一个任务
+- <strong>优先级</strong>：可以通过不同的时间片长度或优先级队列实现</p>
+<p><strong>适用场景</strong>：
+- 3-10个简单任务
+- 响应要求不是特别严格（几十毫秒级）
+- 资源受限，无法使用RTOS
+- 学习操作系统原理</p>
+<p><strong>优势</strong>：
+- 实现简单，代码量小（&lt;500行）
+- 资源占用少（&lt;1KB）
+- 响应时间可预测
+- 易于理解和调试</p>
+<p><strong>局限</strong>：
+- 不支持复杂的任务间通信
+- 优先级支持有限
+- 不适合大规模应用
+- 实时性不如RTOS</p>
+<p><strong>下一步学习</strong>：
+- 如果需要更强大的功能，学习RTOS（如FreeRTOS）
+- 如果需要更好的任务管理，学习协作式调度器
+- 如果需要更精确的时序控制，学习中断驱动架构</p>
+<h2 id="_21">延伸阅读</h2>
+<p>推荐进一步学习的资源：</p>
+<ul>
+<li><a href="../intermediate/01-cooperative-scheduler.html">协作式多任务调度器实现</a> - 学习更高级的调度方法</li>
+<li><a href="../../02-rtos-fundamentals/beginner/01-rtos-overview.html">RTOS基础</a> - 了解专业的实时操作系统</li>
+<li><a href="05-software-timer.html">软件定时器实现</a> - 实现精确的时间管理</li>
+<li><a href="03-state-machine.html">状态机设计模式实战</a> - 优化任务内部逻辑</li>
+</ul>
+<h2 id="_22">参考资料</h2>
+<ol>
+<li>"Operating Systems: Three Easy Pieces" - Remzi H. Arpaci-Dusseau</li>
+<li>"Real-Time Systems" - Jane W. S. Liu</li>
+<li>"Embedded Systems Architecture" - Tammy Noergaard</li>
+<li>FreeRTOS Documentation - https://www.freertos.org/</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>实现一个包含3个任务的时间片调度系统：LED闪烁、按键检测、串口通信</li>
+<li>为调度器添加任务挂起和恢复功能</li>
+<li>实现一个带优先级的调度器，支持高、中、低三个优先级</li>
+<li>测量你的调度器的任务切换开销，并计算CPU利用率</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="05-software-timer.html">软件定时器实现</a>，为调度系统添加更精确的时间管理功能。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>SysTick系统滴答定时器应用实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/05-clock-timer-management/">05-clock-timer-management</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/05-clock-timer-management/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#systick_1">SysTick定时器简介</a><ul>
+<li><a href="#systick_2">什么是SysTick</a></li>
+<li><a href="#systick_3">SysTick的典型应用</a></li>
+<li><a href="#systick_4">SysTick工作原理</a></li>
+</ul>
+</li>
+<li><a href="#1systick">步骤1：理解SysTick寄存器</a><ul>
+<li><a href="#11-systickctrl">1.1 SysTick控制和状态寄存器（CTRL）</a></li>
+<li><a href="#12-systickload">1.2 SysTick重装载值寄存器（LOAD）</a></li>
+<li><a href="#13-systickval">1.3 SysTick当前值寄存器（VAL）</a></li>
+</ul>
+</li>
+<li><a href="#2systick">步骤2：配置SysTick定时器</a><ul>
+<li><a href="#21">2.1 创建项目</a></li>
+<li><a href="#22">2.2 配置系统时钟</a></li>
+<li><a href="#23">2.3 基本配置函数</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：实现毫秒延时函数</a><ul>
+<li><a href="#31-1ms">3.1 配置1ms中断</a></li>
+<li><a href="#32">3.2 实现延时函数</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：建立系统时间基准</a><ul>
+<li><a href="#41">4.1 获取系统运行时间</a></li>
+<li><a href="#42">4.2 实际应用示例</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：简单任务调度</a><ul>
+<li><a href="#51-systick">5.1 基于SysTick的任务调度器</a></li>
+<li><a href="#52">5.2 任务调度示例</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：完整示例程序</a><ul>
+<li><a href="#61-led">6.1 LED闪烁示例</a></li>
+<li><a href="#62">6.2 多任务示例</a></li>
+</ul>
+</li>
+<li><a href="#_7">验证测试</a><ul>
+<li><a href="#1">测试1：基本延时功能</a></li>
+<li><a href="#2">测试2：系统时间准确性</a></li>
+<li><a href="#3_1">测试3：多任务调度</a></li>
+</ul>
+</li>
+<li><a href="#_8">故障排除</a><ul>
+<li><a href="#1_1">问题1：延时不准确</a></li>
+<li><a href="#2systick_ms">问题2：systick_ms计数器不增加</a></li>
+<li><a href="#3_2">问题3：系统运行一段时间后死机</a></li>
+<li><a href="#4delay_ms">问题4：在中断中使用delay_ms()导致死锁</a></li>
+</ul>
+</li>
+<li><a href="#_9">进阶技巧</a><ul>
+<li><a href="#1_2">技巧1：低功耗延时</a></li>
+<li><a href="#2_1">技巧2：高精度时间戳</a></li>
+<li><a href="#3_3">技巧3：软件定时器</a></li>
+<li><a href="#4_1">技巧4：性能分析</a></li>
+</ul>
+</li>
+<li><a href="#_10">注意事项</a><ul>
+<li><a href="#1-systick">1. SysTick的限制</a></li>
+<li><a href="#2-rtos">2. 与RTOS的兼容性</a></li>
+<li><a href="#3_4">3. 中断安全</a></li>
+<li><a href="#4_2">4. 时钟源选择</a></li>
+<li><a href="#5_1">5. 溢出处理</a></li>
+</ul>
+</li>
+<li><a href="#_11">总结</a></li>
+<li><a href="#_12">进阶挑战</a></li>
+<li><a href="#_13">完整代码</a></li>
+<li><a href="#_14">下一步</a></li>
+<li><a href="#_15">参考资料</a><ul>
+<li><a href="#_16">官方文档</a></li>
+<li><a href="#_17">应用笔记</a></li>
+<li><a href="#_18">在线资源</a></li>
+<li><a href="#_19">相关教程</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="systick">SysTick系统滴答定时器应用实战</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解SysTick定时器的工作原理和特点</li>
+<li>[ ] 掌握SysTick定时器的配置方法</li>
+<li>[ ] 实现精确的毫秒级延时函数</li>
+<li>[ ] 建立系统时间基准并获取运行时间</li>
+<li>[ ] 使用SysTick实现简单的任务调度</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解C语言基础（变量、函数、指针）
+- 熟悉基本的嵌入式概念
+- 了解中断的基本概念</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32CubeIDE或Keil MDK
+- 会使用基本的调试工具
+- 能够编译和下载程序到开发板</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>STM32F4系列或其他Cortex-M内核</td>
+<td>-</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>1</td>
+<td>用于演示延时效果</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>1</td>
+<td>用于下载和供电</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE v1.10+ 或 Keil MDK v5.30+</li>
+<li><strong>驱动程序</strong>：ST-Link驱动</li>
+<li><strong>辅助工具</strong>：串口调试助手（可选）</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<ol>
+<li>安装开发环境（STM32CubeIDE或Keil MDK）</li>
+<li>安装ST-Link驱动程序</li>
+<li>连接开发板并测试连接</li>
+</ol>
+<h2 id="systick_1">SysTick定时器简介</h2>
+<h3 id="systick_2">什么是SysTick</h3>
+<p>SysTick（System Tick Timer，系统滴答定时器）是ARM Cortex-M内核中的一个24位递减计数器，它是处理器核心的一部分，所有Cortex-M系列微控制器都包含这个定时器。</p>
+<p><strong>主要特点</strong>：
+- 24位递减计数器（计数范围：0 ~ 16,777,215）
+- 可配置的时钟源（处理器时钟或外部时钟）
+- 自动重装载功能
+- 产生中断的能力
+- 简单易用，无需复杂配置</p>
+<h3 id="systick_3">SysTick的典型应用</h3>
+<ol>
+<li><strong>系统时间基准</strong>：为操作系统提供时间片</li>
+<li><strong>延时函数</strong>：实现精确的毫秒级延时</li>
+<li><strong>任务调度</strong>：简单的周期性任务调度</li>
+<li><strong>性能测试</strong>：测量代码执行时间</li>
+<li><strong>超时检测</strong>：实现超时保护机制</li>
+</ol>
+<h3 id="systick_4">SysTick工作原理</h3>
+<pre><code class="language-mermaid">graph LR
+    A[时钟源] --&gt; B[24位递减计数器]
+    B --&gt; C{计数到0?}
+    C --&gt;|是| D[产生中断]
+    C --&gt;|否| B
+    D --&gt; E[重装载值]
+    E --&gt; B
+</code></pre>
+<p>SysTick定时器从重装载值开始递减计数，每个时钟周期减1，当计数到0时产生中断，然后自动重新加载重装载值，继续计数。</p>
+<h2 id="1systick">步骤1：理解SysTick寄存器</h2>
+<h3 id="11-systickctrl">1.1 SysTick控制和状态寄存器（CTRL）</h3>
+<pre><code class="language-c">// SysTick控制寄存器位定义
+#define SysTick_CTRL_ENABLE     (1 &lt;&lt; 0)  // 使能位
+#define SysTick_CTRL_TICKINT    (1 &lt;&lt; 1)  // 中断使能位
+#define SysTick_CTRL_CLKSOURCE  (1 &lt;&lt; 2)  // 时钟源选择位
+#define SysTick_CTRL_COUNTFLAG  (1 &lt;&lt; 16) // 计数标志位
+</code></pre>
+<p><strong>位功能说明</strong>：
+- <strong>ENABLE (bit 0)</strong>: 使能SysTick定时器
+  - 0 = 禁用
+  - 1 = 使能
+- <strong>TICKINT (bit 1)</strong>: 中断使能
+  - 0 = 计数到0时不产生中断
+  - 1 = 计数到0时产生中断
+- <strong>CLKSOURCE (bit 2)</strong>: 时钟源选择
+  - 0 = 外部时钟源
+  - 1 = 处理器时钟（常用）
+- <strong>COUNTFLAG (bit 16)</strong>: 计数标志
+  - 读取后自动清零
+  - 1 = 自上次读取后计数到0</p>
+<h3 id="12-systickload">1.2 SysTick重装载值寄存器（LOAD）</h3>
+<pre><code class="language-c">// 重装载值寄存器（24位）
+SysTick-&gt;LOAD = reload_value;  // 设置重装载值
+</code></pre>
+<p><strong>功能说明</strong>：
+- 24位寄存器，有效值：0x000001 ~ 0xFFFFFF
+- 当计数器减到0时，会自动从LOAD寄存器重新加载值
+- 计算公式：<code>LOAD = (时钟频率 / 中断频率) - 1</code></p>
+<h3 id="13-systickval">1.3 SysTick当前值寄存器（VAL）</h3>
+<pre><code class="language-c">// 当前值寄存器（24位）
+uint32_t current = SysTick-&gt;VAL;  // 读取当前计数值
+SysTick-&gt;VAL = 0;                 // 写入任意值清零计数器
+</code></pre>
+<p><strong>功能说明</strong>：
+- 读取：返回当前计数值
+- 写入：清零计数器和COUNTFLAG标志</p>
+<h2 id="2systick">步骤2：配置SysTick定时器</h2>
+<h3 id="21">2.1 创建项目</h3>
+<ol>
+<li>打开STM32CubeIDE</li>
+<li>创建新的STM32项目</li>
+<li>选择你的目标芯片（如STM32F407VGT6）</li>
+<li>项目名称：<code>systick_tutorial</code></li>
+</ol>
+<h3 id="22">2.2 配置系统时钟</h3>
+<p>在CubeMX配置界面：
+1. 进入Clock Configuration页面
+2. 确认系统时钟频率（如168MHz for STM32F4）
+3. 记录HCLK频率，这是SysTick的时钟源</p>
+<h3 id="23">2.3 基本配置函数</h3>
+<p>创建SysTick配置函数：</p>
+<pre><code class="language-c">/**
+ * @brief  配置SysTick定时器
+ * @param  ticks: 重装载值（时钟周期数）
+ * @retval 0: 成功, 1: 失败
+ */
+uint32_t SysTick_Config(uint32_t ticks)
+{
+    // 检查重装载值是否超出范围
+    if ((ticks - 1) &gt; SysTick_LOAD_RELOAD_Msk) {
+        return 1;  // 重装载值超出24位范围
+    }
+
+    // 设置重装载值
+    SysTick-&gt;LOAD = ticks - 1;
+
+    // 设置SysTick中断优先级（可选）
+    NVIC_SetPriority(SysTick_IRQn, (1 &lt;&lt; __NVIC_PRIO_BITS) - 1);
+
+    // 清零当前值
+    SysTick-&gt;VAL = 0;
+
+    // 配置SysTick控制寄存器
+    SysTick-&gt;CTRL = SysTick_CTRL_CLKSOURCE_Msk |  // 使用处理器时钟
+                    SysTick_CTRL_TICKINT_Msk |    // 使能中断
+                    SysTick_CTRL_ENABLE_Msk;      // 使能SysTick
+
+    return 0;  // 配置成功
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第7-9行：检查重装载值是否在24位范围内
+- 第12行：设置重装载值（减1是因为计数从0开始）
+- 第15行：设置中断优先级为最低
+- 第18行：清零当前计数值
+- 第21-23行：配置控制寄存器，使能定时器和中断</p>
+<h2 id="3">步骤3：实现毫秒延时函数</h2>
+<h3 id="31-1ms">3.1 配置1ms中断</h3>
+<p>假设系统时钟为168MHz，配置SysTick每1ms产生一次中断：</p>
+<pre><code class="language-c">// 全局变量：毫秒计数器
+static volatile uint32_t systick_ms = 0;
+
+/**
+ * @brief  初始化SysTick为1ms中断
+ * @param  None
+ * @retval None
+ */
+void SysTick_Init(void)
+{
+    // 系统时钟频率（Hz）
+    uint32_t SystemCoreClock = 168000000;  // 168MHz
+
+    // 配置SysTick为1ms中断
+    // 计算公式：ticks = (时钟频率 / 1000) = 168000
+    SysTick_Config(SystemCoreClock / 1000);
+}
+
+/**
+ * @brief  SysTick中断服务函数
+ * @param  None
+ * @retval None
+ */
+void SysTick_Handler(void)
+{
+    // 每1ms执行一次
+    systick_ms++;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第2行：定义全局毫秒计数器，使用volatile确保每次都从内存读取
+- 第16行：配置SysTick，使其每1ms产生一次中断
+- 第27行：中断服务函数中递增毫秒计数器</p>
+<h3 id="32">3.2 实现延时函数</h3>
+<pre><code class="language-c">/**
+ * @brief  毫秒延时函数
+ * @param  ms: 延时时间（毫秒）
+ * @retval None
+ */
+void delay_ms(uint32_t ms)
+{
+    uint32_t start = systick_ms;  // 记录开始时间
+
+    // 等待指定时间
+    while ((systick_ms - start) &lt; ms) {
+        // 可以在这里添加低功耗模式
+        __NOP();  // 空操作
+    }
+}
+
+/**
+ * @brief  微秒延时函数（粗略）
+ * @param  us: 延时时间（微秒）
+ * @retval None
+ * @note   精度取决于系统时钟频率
+ */
+void delay_us(uint32_t us)
+{
+    uint32_t ticks = us * (SystemCoreClock / 1000000);
+    uint32_t start = SysTick-&gt;VAL;
+    uint32_t current;
+
+    // 等待指定的时钟周期数
+    while (1) {
+        current = SysTick-&gt;VAL;
+        if (start &gt; current) {
+            if ((start - current) &gt;= ticks) break;
+        } else {
+            if ((start + SysTick-&gt;LOAD - current) &gt;= ticks) break;
+        }
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>delay_ms()</code>：基于中断的毫秒延时，精度高
+- <code>delay_us()</code>：基于计数器的微秒延时，不依赖中断</p>
+<h2 id="4">步骤4：建立系统时间基准</h2>
+<h3 id="41">4.1 获取系统运行时间</h3>
+<pre><code class="language-c">/**
+ * @brief  获取系统运行时间（毫秒）
+ * @param  None
+ * @retval 系统运行时间（ms）
+ */
+uint32_t get_tick(void)
+{
+    return systick_ms;
+}
+
+/**
+ * @brief  获取系统运行时间（秒）
+ * @param  None
+ * @retval 系统运行时间（秒）
+ */
+uint32_t get_tick_sec(void)
+{
+    return systick_ms / 1000;
+}
+
+/**
+ * @brief  计算时间差（毫秒）
+ * @param  start: 开始时间
+ * @retval 时间差（ms）
+ */
+uint32_t get_elapsed_time(uint32_t start)
+{
+    return systick_ms - start;
+}
+</code></pre>
+<h3 id="42">4.2 实际应用示例</h3>
+<pre><code class="language-c">// 示例1：测量代码执行时间
+void measure_execution_time(void)
+{
+    uint32_t start_time = get_tick();
+
+    // 执行需要测量的代码
+    some_function();
+
+    uint32_t elapsed = get_elapsed_time(start_time);
+    printf(&quot;执行时间: %lu ms\n&quot;, elapsed);
+}
+
+// 示例2：超时检测
+uint8_t wait_for_event_with_timeout(uint32_t timeout_ms)
+{
+    uint32_t start = get_tick();
+
+    while (!event_occurred()) {
+        // 检查是否超时
+        if (get_elapsed_time(start) &gt; timeout_ms) {
+            return 0;  // 超时
+        }
+    }
+
+    return 1;  // 事件发生
+}
+
+// 示例3：周期性任务
+void periodic_task_example(void)
+{
+    static uint32_t last_time = 0;
+    uint32_t current_time = get_tick();
+
+    // 每100ms执行一次
+    if ((current_time - last_time) &gt;= 100) {
+        last_time = current_time;
+
+        // 执行周期性任务
+        read_sensor();
+        update_display();
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 示例1：测量函数执行时间，用于性能分析
+- 示例2：实现带超时的等待函数，避免死锁
+- 示例3：实现周期性任务，无需阻塞主循环</p>
+<h2 id="5">步骤5：简单任务调度</h2>
+<h3 id="51-systick">5.1 基于SysTick的任务调度器</h3>
+<pre><code class="language-c">// 任务结构体定义
+typedef struct {
+    void (*task_func)(void);  // 任务函数指针
+    uint32_t period;          // 任务周期（ms）
+    uint32_t last_run;        // 上次运行时间
+    uint8_t enabled;          // 任务使能标志
+} Task_t;
+
+// 任务列表
+#define MAX_TASKS 10
+static Task_t task_list[MAX_TASKS];
+static uint8_t task_count = 0;
+
+/**
+ * @brief  添加任务到调度器
+ * @param  task_func: 任务函数指针
+ * @param  period: 任务周期（ms）
+ * @retval 0: 成功, -1: 失败
+ */
+int8_t scheduler_add_task(void (*task_func)(void), uint32_t period)
+{
+    if (task_count &gt;= MAX_TASKS) {
+        return -1;  // 任务列表已满
+    }
+
+    task_list[task_count].task_func = task_func;
+    task_list[task_count].period = period;
+    task_list[task_count].last_run = get_tick();
+    task_list[task_count].enabled = 1;
+    task_count++;
+
+    return 0;
+}
+
+/**
+ * @brief  任务调度器主循环
+ * @param  None
+ * @retval None
+ */
+void scheduler_run(void)
+{
+    uint32_t current_time = get_tick();
+
+    // 遍历所有任务
+    for (uint8_t i = 0; i &lt; task_count; i++) {
+        // 检查任务是否使能
+        if (!task_list[i].enabled) {
+            continue;
+        }
+
+        // 检查是否到达执行时间
+        if ((current_time - task_list[i].last_run) &gt;= task_list[i].period) {
+            // 执行任务
+            task_list[i].task_func();
+
+            // 更新上次运行时间
+            task_list[i].last_run = current_time;
+        }
+    }
+}
+</code></pre>
+<h3 id="52">5.2 任务调度示例</h3>
+<pre><code class="language-c">// 任务1：LED闪烁（每500ms）
+void task_led_blink(void)
+{
+    static uint8_t led_state = 0;
+    led_state = !led_state;
+    HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, led_state);
+}
+
+// 任务2：读取传感器（每100ms）
+void task_read_sensor(void)
+{
+    float temperature = read_temperature_sensor();
+    // 处理温度数据
+}
+
+// 任务3：更新显示（每1000ms）
+void task_update_display(void)
+{
+    update_lcd_display();
+}
+
+// 主函数
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化SysTick
+    SysTick_Init();
+
+    // 添加任务到调度器
+    scheduler_add_task(task_led_blink, 500);    // 500ms周期
+    scheduler_add_task(task_read_sensor, 100);  // 100ms周期
+    scheduler_add_task(task_update_display, 1000);  // 1000ms周期
+
+    // 主循环
+    while (1) {
+        scheduler_run();  // 运行任务调度器
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 任务调度器支持多个周期性任务
+- 每个任务独立运行，互不干扰
+- 适合简单的多任务应用场景</p>
+<h2 id="6">步骤6：完整示例程序</h2>
+<h3 id="61-led">6.1 LED闪烁示例</h3>
+<pre><code class="language-c">/* main.c */
+#include &quot;main.h&quot;
+
+// 全局变量
+static volatile uint32_t systick_ms = 0;
+
+// SysTick中断服务函数
+void SysTick_Handler(void)
+{
+    systick_ms++;
+}
+
+// 延时函数
+void delay_ms(uint32_t ms)
+{
+    uint32_t start = systick_ms;
+    while ((systick_ms - start) &lt; ms);
+}
+
+// 获取系统时间
+uint32_t get_tick(void)
+{
+    return systick_ms;
+}
+
+int main(void)
+{
+    // HAL库初始化
+    HAL_Init();
+
+    // 配置系统时钟为168MHz
+    SystemClock_Config();
+
+    // 初始化GPIO（LED）
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    GPIO_InitStruct.Pin = GPIO_PIN_5;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &amp;GPIO_InitStruct);
+
+    // 配置SysTick为1ms中断
+    SysTick_Config(SystemCoreClock / 1000);
+
+    // 主循环
+    while (1)
+    {
+        // LED闪烁
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET);
+        delay_ms(500);  // 延时500ms
+
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+        delay_ms(500);  // 延时500ms
+    }
+}
+</code></pre>
+<h3 id="62">6.2 多任务示例</h3>
+<pre><code class="language-c">/* main.c - 多任务版本 */
+#include &quot;main.h&quot;
+#include &lt;stdio.h&gt;
+
+// 任务函数声明
+void task_led_toggle(void);
+void task_print_time(void);
+void task_heartbeat(void);
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化外设
+    MX_GPIO_Init();
+    MX_USART2_UART_Init();
+
+    // 配置SysTick
+    SysTick_Config(SystemCoreClock / 1000);
+
+    // 添加任务
+    scheduler_add_task(task_led_toggle, 500);   // LED闪烁
+    scheduler_add_task(task_print_time, 1000);  // 打印时间
+    scheduler_add_task(task_heartbeat, 100);    // 心跳检测
+
+    printf(&quot;系统启动成功!\n&quot;);
+
+    // 主循环
+    while (1)
+    {
+        scheduler_run();
+    }
+}
+
+// 任务1：LED翻转
+void task_led_toggle(void)
+{
+    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+}
+
+// 任务2：打印系统时间
+void task_print_time(void)
+{
+    uint32_t seconds = get_tick() / 1000;
+    printf(&quot;系统运行时间: %lu 秒\n&quot;, seconds);
+}
+
+// 任务3：心跳检测
+void task_heartbeat(void)
+{
+    static uint32_t count = 0;
+    count++;
+
+    if (count % 10 == 0) {
+        printf(&quot;心跳: %lu\n&quot;, count);
+    }
+}
+</code></pre>
+<p><strong>运行结果</strong>：</p>
+<pre><code>系统启动成功!
+心跳: 10
+系统运行时间: 1 秒
+心跳: 20
+心跳: 30
+系统运行时间: 2 秒
+...
+</code></pre>
+<h2 id="_7">验证测试</h2>
+<h3 id="1">测试1：基本延时功能</h3>
+<p><strong>测试步骤</strong>：
+1. 编译并下载程序到开发板
+2. 观察LED闪烁频率
+3. 使用示波器或逻辑分析仪测量实际延时</p>
+<p><strong>预期结果</strong>：
+- LED以1Hz频率闪烁（亮500ms，灭500ms）
+- 实际延时误差 &lt; 1%</p>
+<h3 id="2">测试2：系统时间准确性</h3>
+<p><strong>测试代码</strong>：</p>
+<pre><code class="language-c">void test_systick_accuracy(void)
+{
+    uint32_t start = get_tick();
+
+    // 延时10秒
+    delay_ms(10000);
+
+    uint32_t elapsed = get_elapsed_time(start);
+    printf(&quot;预期: 10000ms, 实际: %lu ms\n&quot;, elapsed);
+    printf(&quot;误差: %ld ms\n&quot;, (int32_t)elapsed - 10000);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 10秒延时误差 &lt; 10ms
+- 长时间运行不会累积误差</p>
+<h3 id="3_1">测试3：多任务调度</h3>
+<p><strong>测试步骤</strong>：
+1. 运行多任务示例程序
+2. 通过串口观察输出
+3. 验证各任务执行周期</p>
+<p><strong>预期结果</strong>：
+- 各任务按设定周期执行
+- 任务之间不会相互干扰
+- 系统运行稳定</p>
+<h2 id="_8">故障排除</h2>
+<h3 id="1_1">问题1：延时不准确</h3>
+<p><strong>可能原因</strong>：
+- 系统时钟配置错误
+- SysTick时钟源选择错误
+- 中断被禁用或优先级过低</p>
+<p><strong>解决方法</strong>：
+1. 检查SystemCoreClock变量值是否正确</p>
+<pre><code class="language-c">printf(&quot;系统时钟: %lu Hz\n&quot;, SystemCoreClock);
+</code></pre>
+<ol start="2">
+<li>确认SysTick时钟源配置</li>
+</ol>
+<pre><code class="language-c">// 确保使用处理器时钟
+SysTick-&gt;CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
+</code></pre>
+<ol start="3">
+<li>检查中断是否使能</li>
+</ol>
+<pre><code class="language-c">// 确认中断使能位已设置
+if (SysTick-&gt;CTRL &amp; SysTick_CTRL_TICKINT_Msk) {
+    printf(&quot;SysTick中断已使能\n&quot;);
+}
+</code></pre>
+<h3 id="2systick_ms">问题2：systick_ms计数器不增加</h3>
+<p><strong>可能原因</strong>：
+- SysTick_Handler()函数未被调用
+- 中断向量表配置错误
+- 全局中断被禁用</p>
+<p><strong>解决方法</strong>：
+1. 在SysTick_Handler()中添加调试代码</p>
+<pre><code class="language-c">void SysTick_Handler(void)
+{
+    systick_ms++;
+    // 添加调试输出或翻转GPIO
+    HAL_GPIO_TogglePin(DEBUG_GPIO_Port, DEBUG_Pin);
+}
+</code></pre>
+<ol start="2">
+<li>检查全局中断状态</li>
+</ol>
+<pre><code class="language-c">// 确保全局中断使能
+__enable_irq();
+</code></pre>
+<ol start="3">
+<li>验证中断向量表</li>
+</ol>
+<pre><code class="language-c">// 检查VTOR寄存器
+printf(&quot;VTOR: 0x%08lX\n&quot;, SCB-&gt;VTOR);
+</code></pre>
+<h3 id="3_2">问题3：系统运行一段时间后死机</h3>
+<p><strong>可能原因</strong>：
+- systick_ms溢出（约49.7天后）
+- 任务执行时间过长
+- 栈溢出</p>
+<p><strong>解决方法</strong>：
+1. 处理计数器溢出</p>
+<pre><code class="language-c">// 使用差值计算，自动处理溢出
+uint32_t elapsed = current_time - start_time;  // 即使溢出也正确
+</code></pre>
+<ol start="2">
+<li>优化任务执行时间</li>
+</ol>
+<pre><code class="language-c">// 确保任务快速执行
+void task_function(void)
+{
+    // 避免在任务中使用delay_ms()
+    // 避免长时间阻塞操作
+}
+</code></pre>
+<ol start="3">
+<li>增加栈空间</li>
+</ol>
+<pre><code class="language-c">// 在启动文件中增加栈大小
+Stack_Size      EQU     0x00001000  ; 4KB
+</code></pre>
+<h3 id="4delay_ms">问题4：在中断中使用delay_ms()导致死锁</h3>
+<p><strong>原因分析</strong>：
+- delay_ms()依赖SysTick中断
+- 在中断中调用会导致死锁</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 错误做法
+void EXTI0_IRQHandler(void)
+{
+    delay_ms(100);  // 错误！会死锁
+}
+
+// 正确做法
+void EXTI0_IRQHandler(void)
+{
+    // 设置标志，在主循环中处理
+    button_pressed = 1;
+}
+
+void main_loop(void)
+{
+    if (button_pressed) {
+        button_pressed = 0;
+        delay_ms(100);  // 在主循环中延时
+        // 处理按键事件
+    }
+}
+</code></pre>
+<h2 id="_9">进阶技巧</h2>
+<h3 id="1_2">技巧1：低功耗延时</h3>
+<p>在延时期间进入低功耗模式：</p>
+<pre><code class="language-c">void delay_ms_lowpower(uint32_t ms)
+{
+    uint32_t start = systick_ms;
+
+    while ((systick_ms - start) &lt; ms) {
+        // 进入睡眠模式，等待中断唤醒
+        __WFI();  // Wait For Interrupt
+    }
+}
+</code></pre>
+<h3 id="2_1">技巧2：高精度时间戳</h3>
+<p>结合SysTick计数器实现微秒级时间戳：</p>
+<pre><code class="language-c">/**
+ * @brief  获取高精度时间戳（微秒）
+ * @param  None
+ * @retval 时间戳（us）
+ */
+uint64_t get_timestamp_us(void)
+{
+    uint32_t ms, ticks;
+
+    // 读取两次确保一致性
+    do {
+        ms = systick_ms;
+        ticks = SysTick-&gt;VAL;
+    } while (ms != systick_ms);
+
+    // 计算微秒数
+    uint32_t us_per_tick = 1000000 / SystemCoreClock;
+    uint32_t us = ms * 1000 + (SysTick-&gt;LOAD - ticks) * us_per_tick;
+
+    return us;
+}
+</code></pre>
+<h3 id="3_3">技巧3：软件定时器</h3>
+<p>实现多个软件定时器：</p>
+<pre><code class="language-c">typedef struct {
+    uint32_t timeout;     // 超时时间
+    uint32_t start_time;  // 开始时间
+    uint8_t active;       // 激活标志
+} SoftTimer_t;
+
+#define MAX_TIMERS 10
+static SoftTimer_t timers[MAX_TIMERS];
+
+// 启动定时器
+void timer_start(uint8_t id, uint32_t timeout_ms)
+{
+    if (id &lt; MAX_TIMERS) {
+        timers[id].timeout = timeout_ms;
+        timers[id].start_time = get_tick();
+        timers[id].active = 1;
+    }
+}
+
+// 检查定时器是否超时
+uint8_t timer_is_timeout(uint8_t id)
+{
+    if (id &gt;= MAX_TIMERS || !timers[id].active) {
+        return 0;
+    }
+
+    if ((get_tick() - timers[id].start_time) &gt;= timers[id].timeout) {
+        timers[id].active = 0;
+        return 1;
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="4_1">技巧4：性能分析</h3>
+<p>使用SysTick进行代码性能分析：</p>
+<pre><code class="language-c">typedef struct {
+    const char *name;
+    uint32_t total_time;
+    uint32_t call_count;
+    uint32_t max_time;
+} ProfileData_t;
+
+#define MAX_PROFILES 20
+static ProfileData_t profiles[MAX_PROFILES];
+static uint8_t profile_count = 0;
+
+// 开始性能分析
+uint32_t profile_start(void)
+{
+    return get_tick();
+}
+
+// 结束性能分析
+void profile_end(const char *name, uint32_t start)
+{
+    uint32_t elapsed = get_elapsed_time(start);
+
+    // 查找或创建profile条目
+    for (uint8_t i = 0; i &lt; profile_count; i++) {
+        if (strcmp(profiles[i].name, name) == 0) {
+            profiles[i].total_time += elapsed;
+            profiles[i].call_count++;
+            if (elapsed &gt; profiles[i].max_time) {
+                profiles[i].max_time = elapsed;
+            }
+            return;
+        }
+    }
+
+    // 新建profile条目
+    if (profile_count &lt; MAX_PROFILES) {
+        profiles[profile_count].name = name;
+        profiles[profile_count].total_time = elapsed;
+        profiles[profile_count].call_count = 1;
+        profiles[profile_count].max_time = elapsed;
+        profile_count++;
+    }
+}
+
+// 使用示例
+void some_function(void)
+{
+    uint32_t start = profile_start();
+
+    // 执行代码
+    // ...
+
+    profile_end(&quot;some_function&quot;, start);
+}
+</code></pre>
+<h2 id="_10">注意事项</h2>
+<h3 id="1-systick">1. SysTick的限制</h3>
+<p><strong>24位计数器限制</strong>：
+- 最大计数值：16,777,215
+- 在168MHz时钟下，最大延时约100ms
+- 需要通过中断扩展到更长时间</p>
+<p><strong>中断优先级</strong>：
+- SysTick通常设置为最低优先级
+- 避免影响其他重要中断
+- 在RTOS中由操作系统管理</p>
+<h3 id="2-rtos">2. 与RTOS的兼容性</h3>
+<p><strong>使用RTOS时的注意事项</strong>：</p>
+<pre><code class="language-c">// 使用FreeRTOS时，不要自己配置SysTick
+// FreeRTOS会自动配置SysTick用于任务调度
+
+// 错误做法
+void main(void)
+{
+    SysTick_Config(SystemCoreClock / 1000);  // 错误！
+    osKernelStart();  // FreeRTOS会重新配置SysTick
+}
+
+// 正确做法
+void main(void)
+{
+    // 直接启动RTOS，让它配置SysTick
+    osKernelStart();
+
+    // 使用RTOS提供的延时函数
+    osDelay(1000);  // 使用RTOS的延时
+}
+</code></pre>
+<h3 id="3_4">3. 中断安全</h3>
+<p><strong>在中断中访问systick_ms</strong>：</p>
+<pre><code class="language-c">// 读取是安全的（32位变量，单次读取是原子的）
+uint32_t time = systick_ms;  // 安全
+
+// 如果需要读-改-写操作，需要保护
+void increment_counter(void)
+{
+    __disable_irq();  // 禁用中断
+    systick_ms += 100;
+    __enable_irq();   // 使能中断
+}
+</code></pre>
+<h3 id="4_2">4. 时钟源选择</h3>
+<p><strong>处理器时钟 vs 外部时钟</strong>：</p>
+<pre><code class="language-c">// 使用处理器时钟（推荐）
+SysTick-&gt;CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
+
+// 使用外部时钟（通常是处理器时钟的1/8）
+SysTick-&gt;CTRL &amp;= ~SysTick_CTRL_CLKSOURCE_Msk;
+</code></pre>
+<p><strong>选择建议</strong>：
+- 通常使用处理器时钟（更精确）
+- 外部时钟可用于低功耗场景
+- 确保时钟源稳定可靠</p>
+<h3 id="5_1">5. 溢出处理</h3>
+<p><strong>32位计数器溢出</strong>：</p>
+<pre><code class="language-c">// systick_ms会在约49.7天后溢出
+// 使用差值计算可以自动处理溢出
+
+// 正确的时间差计算（自动处理溢出）
+uint32_t elapsed = current_time - start_time;
+
+// 示例：即使溢出也能正确计算
+// start_time = 0xFFFFFFF0 (接近溢出)
+// current_time = 0x00000010 (溢出后)
+// elapsed = 0x00000010 - 0xFFFFFFF0 = 0x00000020 = 32ms (正确)
+</code></pre>
+<h2 id="_11">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ SysTick定时器的工作原理和寄存器配置</li>
+<li>✅ 如何配置SysTick产生1ms中断</li>
+<li>✅ 实现精确的毫秒级延时函数</li>
+<li>✅ 建立系统时间基准并获取运行时间</li>
+<li>✅ 使用SysTick实现简单的任务调度</li>
+<li>✅ 常见问题的排查和解决方法</li>
+<li>✅ 进阶技巧和最佳实践</li>
+</ul>
+<p><strong>关键要点</strong>：
+1. SysTick是ARM Cortex-M内核的标准定时器，所有芯片都支持
+2. 通过中断方式可以实现精确的时间基准
+3. 适合实现延时、计时和简单的任务调度
+4. 注意与RTOS的兼容性，避免冲突
+5. 正确处理计数器溢出，使用差值计算</p>
+<h2 id="_12">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1</strong>：实现一个带优先级的任务调度器
+   - 支持任务优先级
+   - 高优先级任务优先执行
+   - 同优先级任务轮流执行</p>
+</li>
+<li>
+<p><strong>挑战2</strong>：实现一个软件看门狗
+   - 使用SysTick实现超时检测
+   - 超时后自动复位系统
+   - 支持喂狗操作</p>
+</li>
+<li>
+<p><strong>挑战3</strong>：实现一个性能监控系统
+   - 监控CPU使用率
+   - 统计各任务执行时间
+   - 通过串口输出性能报告</p>
+</li>
+<li>
+<p><strong>挑战4</strong>：实现一个事件驱动框架
+   - 基于SysTick的事件调度
+   - 支持延时事件
+   - 支持周期性事件</p>
+</li>
+</ol>
+<h2 id="_13">完整代码</h2>
+<p>完整的示例代码可以在这里下载：</p>
+<ul>
+<li>基础示例代码</li>
+<li>任务调度器代码</li>
+<li>完整工程文件</li>
+</ul>
+<h2 id="_14">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="../intermediate/01-advanced-timer.html">通用定时器高级应用</a> - 学习更强大的定时器功能</li>
+<li><a href="../intermediate/02-clock-calibration.html">时钟精度优化与校准</a> - 提高时钟精度</li>
+<li>RTOS任务调度原理 - 学习专业的任务调度</li>
+</ul>
+<h2 id="_15">参考资料</h2>
+<h3 id="_16">官方文档</h3>
+<ol>
+<li>
+<p><strong>ARM Cortex-M4 Technical Reference Manual</strong>
+   - SysTick定时器详细说明
+   - 寄存器定义和配置</p>
+</li>
+<li>
+<p><strong>STM32F4xx Reference Manual</strong>
+   - 系统时钟配置
+   - 中断和异常处理</p>
+</li>
+<li>
+<p><strong>ARM Cortex-M Programming Guide</strong>
+   - 中断编程指南
+   - 系统定时器使用</p>
+</li>
+</ol>
+<h3 id="_17">应用笔记</h3>
+<ol>
+<li>
+<p><strong>AN4013: STM32 Cross-series Timer Overview</strong>
+   - 定时器对比和选择</p>
+</li>
+<li>
+<p><strong>AN4044: Floating Point Unit Demonstration</strong>
+   - 性能测试方法</p>
+</li>
+</ol>
+<h3 id="_18">在线资源</h3>
+<ol>
+<li><a href="https://developer.arm.com/ip-products/processors/cortex-m/cortex-m4">ARM Developer - Cortex-M4</a></li>
+<li><a href="https://wiki.st.com/stm32mcu/wiki/SysTick">STM32 Wiki - SysTick</a></li>
+<li><a href="https://embeddedartistry.com/blog/2017/02/20/systick-timer/">Embedded Artistry - SysTick Timer</a></li>
+</ol>
+<h3 id="_19">相关教程</h3>
+<ul>
+<li><a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础</a></li>
+<li><a href="01-clock-system.html">时钟系统架构</a></li>
+<li><a href="../../02-device-driver-development/beginner/05-timer-driver.html">定时器驱动基础</a></li>
+</ul>
+<hr />
+<p><strong>测试环境</strong>:
+- 开发板：STM32F407 Discovery
+- IDE：STM32CubeIDE v1.10
+- HAL库版本：v1.27
+- 编译器：GCC ARM 10.3</p>
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！</p>
+<p><strong>版权声明</strong>：本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

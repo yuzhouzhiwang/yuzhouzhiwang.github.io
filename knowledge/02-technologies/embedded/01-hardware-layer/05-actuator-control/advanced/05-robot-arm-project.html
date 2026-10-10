@@ -1,0 +1,1816 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>四自由度机械臂：运动学与轨迹控制 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">机器人运动学基础</a></li>
+<li><a href="#dhdenavit-hartenberg-parameters">DH参数（Denavit-Hartenberg Parameters）</a></li>
+<li><a href="#homogeneous-transformation-matrix">齐次变换矩阵（Homogeneous Transformation Matrix）</a></li>
+<li><a href="#workspace-analysis">工作空间分析（Workspace Analysis）</a></li>
+<li><a href="#_5">机械臂与其他运动系统对比</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#forward-kinematics">正运动学（Forward Kinematics）</a></li>
+<li><a href="#geometric-ik">几何法逆运动学（Geometric IK）</a></li>
+<li><a href="#_7">舵机标定与驱动</a></li>
+<li><a href="#_8">舵机扭矩计算与选型指南</a></li>
+<li><a href="#_9">轨迹规划</a><ul>
+<li><a href="#joint-space-interpolation">关节空间插补（Joint Space Interpolation）</a></li>
+<li><a href="#cartesian-linear-interpolation">笛卡尔空间直线插补（Cartesian Linear Interpolation）</a></li>
+<li><a href="#vs">关节空间 vs 笛卡尔空间对比</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_10">深入原理</a><ul>
+<li><a href="#singularity-analysis">奇异性分析（Singularity Analysis）</a></li>
+<li><a href="#joint-limit-handling">关节限位处理（Joint Limit Handling）</a></li>
+<li><a href="#collision-detection">简单碰撞检测（Collision Detection）</a></li>
+</ul>
+</li>
+<li><a href="#_11">完整项目实战：视觉引导抓取系统</a><ul>
+<li><a href="#_12">系统架构</a></li>
+<li><a href="#esp32-cam">ESP32-CAM 颜色识别模块</a></li>
+<li><a href="#stm32">STM32主控：视觉引导抓取状态机</a></li>
+<li><a href="#_13">性能调优</a></li>
+</ul>
+</li>
+<li><a href="#_14">常见问题与调试</a><ul>
+<li><a href="#1servo-jitter">问题1：舵机抖动（Servo Jitter）</a></li>
+<li><a href="#2ik-no-solution">问题2：逆运动学无解（IK No-Solution）</a></li>
+<li><a href="#3mechanical-backlash">问题3：机械间隙（Mechanical Backlash）</a></li>
+<li><a href="#4">问题4：舵机过热保护</a></li>
+<li><a href="#5">问题5：视觉坐标抖动</a></li>
+</ul>
+</li>
+<li><a href="#_15">测试与验证</a><ul>
+<li><a href="#_16">运动学正确性验证</a></li>
+<li><a href="#_17">工作空间边界测试</a></li>
+<li><a href="#_18">舵机标定验证程序</a></li>
+</ul>
+</li>
+<li><a href="#_19">延伸阅读</a></li>
+<li><a href="#_20">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">四自由度机械臂：运动学与轨迹控制</h1>
+<h2 id="_2">概述</h2>
+<p>本项目实现一个四自由度（4-DOF）串联机械臂的完整控制系统，从理论建模到实际抓取任务。读者将学习：</p>
+<table>
+<thead>
+<tr>
+<th>学习目标</th>
+<th>难度</th>
+<th>预计时间</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DH参数建模与齐次变换矩阵</td>
+<td>★★★★☆</td>
+<td>60分钟</td>
+</tr>
+<tr>
+<td>几何法正逆运动学推导</td>
+<td>★★★★☆</td>
+<td>60分钟</td>
+</tr>
+<tr>
+<td>工作空间分析与奇异性处理</td>
+<td>★★★★★</td>
+<td>45分钟</td>
+</tr>
+<tr>
+<td>关节空间与笛卡尔空间轨迹规划</td>
+<td>★★★★☆</td>
+<td>45分钟</td>
+</tr>
+<tr>
+<td>视觉引导抓取系统集成</td>
+<td>★★★★★</td>
+<td>90分钟</td>
+</tr>
+</tbody>
+</table>
+<p><strong>前置知识</strong>：三角函数、矩阵运算、STM32 PWM输出、基础C语言</p>
+<p><strong>硬件清单（BOM）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>型号</th>
+<th>数量</th>
+<th>参考价格</th>
+<th>购买渠道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控</td>
+<td>STM32F103C8T6</td>
+<td>1</td>
+<td>¥15</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>底座舵机</td>
+<td>MG996R (11kg·cm)</td>
+<td>1</td>
+<td>¥18</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>大臂舵机</td>
+<td>MG996R (11kg·cm)</td>
+<td>1</td>
+<td>¥18</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>小臂舵机</td>
+<td>MG996R (11kg·cm)</td>
+<td>1</td>
+<td>¥18</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>末端舵机</td>
+<td>SG90 (1.8kg·cm)</td>
+<td>1</td>
+<td>¥5</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>夹爪舵机</td>
+<td>SG90 (1.8kg·cm)</td>
+<td>1</td>
+<td>¥5</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>舵机电源</td>
+<td>5V/5A开关电源</td>
+<td>1</td>
+<td>¥25</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>机械臂套件</td>
+<td>铝合金4DOF（LeArm兼容）</td>
+<td>1</td>
+<td>¥120</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>摄像头（可选）</td>
+<td>OV7670 或 ESP32-CAM</td>
+<td>1</td>
+<td>¥15</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>逻辑电平转换</td>
+<td>TXS0108E</td>
+<td>1</td>
+<td>¥3</td>
+<td>立创商城</td>
+</tr>
+</tbody>
+</table>
+<p><strong>连杆参数</strong>（需根据实际机械臂测量）：</p>
+<pre><code>L0 = 80mm（底座高度，J1轴到地面）
+L1 = 105mm（大臂长度，J2轴到J3轴）
+L2 = 100mm（小臂长度，J3轴到J4轴）
+L3 = 65mm（末端长度，J4轴到夹爪中心）
+</code></pre>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">机器人运动学基础</h3>
+<p>机械臂运动学（Kinematics）研究关节角度与末端位置/姿态之间的映射关系，不涉及力和质量。分为两类：</p>
+<ul>
+<li><strong>正运动学（Forward Kinematics, FK）</strong>：已知关节角度 → 求末端位姿</li>
+<li><strong>逆运动学（Inverse Kinematics, IK）</strong>：已知末端位姿 → 求关节角度</li>
+</ul>
+<pre><code>正运动学（唯一解）：
+  [θ1, θ2, θ3, θ4] ──FK──→ [x, y, z, φ]
+
+逆运动学（可能多解或无解）：
+  [x, y, z, φ] ──IK──→ [θ1, θ2, θ3, θ4]（肘上/肘下解）
+</code></pre>
+<h3 id="dhdenavit-hartenberg-parameters">DH参数（Denavit-Hartenberg Parameters）</h3>
+<p>DH参数是描述串联机器人连杆关系的标准方法，由 Denavit 和 Hartenberg 于1955年提出。每个连杆用4个参数描述：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>符号</th>
+<th>含义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连杆长度</td>
+<td>aᵢ</td>
+<td>沿 xᵢ 轴，从 zᵢ₋₁ 到 zᵢ 的距离</td>
+</tr>
+<tr>
+<td>连杆扭角</td>
+<td>αᵢ</td>
+<td>绕 xᵢ 轴，从 zᵢ₋₁ 到 zᵢ 的转角</td>
+</tr>
+<tr>
+<td>关节偏距</td>
+<td>dᵢ</td>
+<td>沿 zᵢ₋₁ 轴，从 xᵢ₋₁ 到 xᵢ 的距离</td>
+</tr>
+<tr>
+<td>关节角度</td>
+<td>θᵢ</td>
+<td>绕 zᵢ₋₁ 轴，从 xᵢ₋₁ 到 xᵢ 的转角（<strong>变量</strong>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>4-DOF机械臂DH参数表</strong>（标准DH约定）：</p>
+<table>
+<thead>
+<tr>
+<th>关节 i</th>
+<th>aᵢ (mm)</th>
+<th>αᵢ (°)</th>
+<th>dᵢ (mm)</th>
+<th>θᵢ (变量范围)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>90</td>
+<td>L0=80</td>
+<td>θ1 (−90°~+90°)</td>
+</tr>
+<tr>
+<td>2</td>
+<td>L1=105</td>
+<td>0</td>
+<td>0</td>
+<td>θ2 (0°~135°)</td>
+</tr>
+<tr>
+<td>3</td>
+<td>L2=100</td>
+<td>0</td>
+<td>0</td>
+<td>θ3 (−135°~0°)</td>
+</tr>
+<tr>
+<td>4</td>
+<td>L3=65</td>
+<td>0</td>
+<td>0</td>
+<td>θ4 (−90°~+90°)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>DH坐标系建立规则</strong>：</p>
+<pre><code>步骤1：确定各关节旋转轴 z₀, z₁, z₂, z₃
+步骤2：确定公垂线方向作为 x 轴
+步骤3：按右手定则确定 y 轴
+步骤4：测量 a, α, d, θ 四个参数
+</code></pre>
+<h3 id="homogeneous-transformation-matrix">齐次变换矩阵（Homogeneous Transformation Matrix）</h3>
+<p>每个连杆的变换矩阵 Tᵢ₋₁ᵢ 由DH参数构造：</p>
+<pre><code>        ┌ cos θᵢ   -sin θᵢ cos αᵢ    sin θᵢ sin αᵢ   aᵢ cos θᵢ ┐
+Tᵢ₋₁ᵢ = │ sin θᵢ    cos θᵢ cos αᵢ   -cos θᵢ sin αᵢ   aᵢ sin θᵢ │
+        │    0          sin αᵢ            cos αᵢ          dᵢ    │
+        └    0             0                 0              1    ┘
+</code></pre>
+<p>末端相对于基座的变换矩阵：</p>
+<pre><code>T₀₄ = T₀₁ · T₁₂ · T₂₃ · T₃₄
+
+T₀₄ = ┌ R₃ₓ₃  p₃ₓ₁ ┐
+      └  0₁ₓ₃   1   ┘
+
+其中 R 是3×3旋转矩阵，p = [x, y, z]ᵀ 是末端位置向量
+</code></pre>
+<p><strong>C语言实现4×4矩阵乘法</strong>：</p>
+<pre><code class="language-c">// 4x4齐次变换矩阵（行主序存储）
+typedef float Mat4[4][4];
+
+// 矩阵乘法：C = A * B
+void mat4_mul(const Mat4 A, const Mat4 B, Mat4 C) {
+    Mat4 tmp = {0};
+    for (int i = 0; i &lt; 4; i++)
+        for (int j = 0; j &lt; 4; j++)
+            for (int k = 0; k &lt; 4; k++)
+                tmp[i][j] += A[i][k] * B[k][j];
+    // 避免原地修改时的别名问题
+    for (int i = 0; i &lt; 4; i++)
+        for (int j = 0; j &lt; 4; j++)
+            C[i][j] = tmp[i][j];
+}
+
+// 根据DH参数构造单个连杆变换矩阵
+// theta_deg: 关节角(度), d: 偏距(mm), a: 连杆长(mm), alpha_deg: 扭角(度)
+void dh_matrix(float theta_deg, float d, float a, float alpha_deg, Mat4 T) {
+    float th = theta_deg * M_PI / 180.0f;
+    float al = alpha_deg * M_PI / 180.0f;
+    float ct = cosf(th), st = sinf(th);
+    float ca = cosf(al), sa = sinf(al);
+
+    T[0][0] = ct;    T[0][1] = -st*ca;  T[0][2] = st*sa;   T[0][3] = a*ct;
+    T[1][0] = st;    T[1][1] =  ct*ca;  T[1][2] = -ct*sa;  T[1][3] = a*st;
+    T[2][0] = 0.0f;  T[2][1] = sa;      T[2][2] = ca;      T[2][3] = d;
+    T[3][0] = 0.0f;  T[3][1] = 0.0f;   T[3][2] = 0.0f;    T[3][3] = 1.0f;
+}
+</code></pre>
+<h3 id="workspace-analysis">工作空间分析（Workspace Analysis）</h3>
+<p>机械臂的工作空间分为两类：</p>
+<p><strong>可达工作空间（Reachable Workspace）</strong>：末端能到达的所有点的集合（至少一种姿态可达）</p>
+<p><strong>灵巧工作空间（Dexterous Workspace）</strong>：末端能以任意姿态到达的点的集合（通常是可达空间的子集）</p>
+<pre><code>4-DOF机械臂工作空间示意（侧视图，J1=0°平面）：
+
+        z
+        │    ┌──────────────────────────────┐
+   L0+  │    │  可达工作空间（环形区域）      │
+        │    │  ┌──────────────────────┐    │
+        │    │  │  灵巧工作空间（较小）  │    │
+        │    │  └──────────────────────┘    │
+   L0   ├────┼──────────────────────────────┼──── r
+        │    │                              │
+        │    └──────────────────────────────┘
+        │
+        0   |L1-L2-L3|        L1+L2+L3
+
+最大伸展半径 = L1 + L2 + L3 = 105 + 100 + 65 = 270mm
+最小收缩半径 = |L1 - L2 - L3| ≈ 0mm（可折叠）
+</code></pre>
+<p><strong>工作空间数值计算（Python验证脚本）</strong>：</p>
+<pre><code class="language-python">import numpy as np
+import matplotlib.pyplot as plt
+
+L1, L2, L3 = 105, 100, 65  # mm
+
+# 采样关节角度空间
+theta2 = np.linspace(0, 135, 50)    # 大臂
+theta3 = np.linspace(-135, 0, 50)   # 小臂
+theta4 = np.linspace(-90, 90, 20)   # 末端
+
+points = []
+for t2 in theta2:
+    for t3 in theta3:
+        for t4 in theta4:
+            a1 = np.radians(t2)
+            a2 = np.radians(t3)
+            a3 = np.radians(t4)
+            r = (L1*np.cos(a1) + L2*np.cos(a1+a2)
+                 + L3*np.cos(a1+a2+a3))
+            z = (L1*np.sin(a1) + L2*np.sin(a1+a2)
+                 + L3*np.sin(a1+a2+a3))
+            points.append((r, z))
+
+r_vals, z_vals = zip(*points)
+plt.scatter(r_vals, z_vals, s=0.1, alpha=0.3)
+plt.xlabel('水平距离 r (mm)')
+plt.ylabel('高度 z (mm)')
+plt.title('4-DOF机械臂可达工作空间（侧视图）')
+plt.axis('equal')
+plt.savefig('workspace.png', dpi=150)
+</code></pre>
+<h3 id="_5">机械臂与其他运动系统对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>4-DOF串联臂</th>
+<th>6-DOF串联臂</th>
+<th>Delta并联臂</th>
+<th>SCARA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>自由度</td>
+<td>4</td>
+<td>6</td>
+<td>3</td>
+<td>4</td>
+</tr>
+<tr>
+<td>末端姿态控制</td>
+<td>部分（1轴）</td>
+<td>完整（3轴）</td>
+<td>无旋转</td>
+<td>平面+旋转</td>
+</tr>
+<tr>
+<td>工作空间</td>
+<td>中等</td>
+<td>大</td>
+<td>小（圆柱）</td>
+<td>大（平面）</td>
+</tr>
+<tr>
+<td>奇异性</td>
+<td>少</td>
+<td>多</td>
+<td>少</td>
+<td>少</td>
+</tr>
+<tr>
+<td>控制复杂度</td>
+<td>中</td>
+<td>高</td>
+<td>中</td>
+<td>低</td>
+</tr>
+<tr>
+<td>典型应用</td>
+<td>教学/小型抓取</td>
+<td>工业焊接/装配</td>
+<td>高速分拣</td>
+<td>PCB贴片</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>¥200~500</td>
+<td>¥5000+</td>
+<td>¥1000+</td>
+<td>¥2000+</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_6">核心内容</h2>
+<h3 id="forward-kinematics">正运动学（Forward Kinematics）</h3>
+<p>基于DH矩阵的完整正运动学实现：</p>
+<pre><code class="language-c">#include &lt;math.h&gt;
+#include &lt;string.h&gt;
+
+#define L0  80.0f   // 底座高度(mm)
+#define L1  105.0f  // 大臂长度(mm)
+#define L2  100.0f  // 小臂长度(mm)
+#define L3  65.0f   // 末端长度(mm)
+#define DEG2RAD  (3.14159265358979f / 180.0f)
+#define RAD2DEG  (180.0f / 3.14159265358979f)
+
+typedef float Mat4[4][4];
+
+typedef struct {
+    float x, y, z;      // 末端位置(mm)
+    float roll;          // 绕x轴旋转(度)，本臂固定为0
+    float pitch;         // 绕y轴旋转(度)
+    float yaw;           // 绕z轴旋转(度)
+} EndEffectorPose;
+
+typedef struct {
+    float j1;  // 底座旋转(度)，范围 -90~+90
+    float j2;  // 大臂俯仰(度)，范围 0~135
+    float j3;  // 小臂俯仰(度)，范围 -135~0
+    float j4;  // 末端俯仰(度)，范围 -90~+90
+} JointAngles;
+
+// DH矩阵构造（见背景知识章节）
+static void dh_matrix(float theta_deg, float d,
+                      float a, float alpha_deg, Mat4 T) {
+    float th = theta_deg * DEG2RAD;
+    float al = alpha_deg * DEG2RAD;
+    float ct = cosf(th), st = sinf(th);
+    float ca = cosf(al), sa = sinf(al);
+    T[0][0]=ct;    T[0][1]=-st*ca; T[0][2]=st*sa;  T[0][3]=a*ct;
+    T[1][0]=st;    T[1][1]=ct*ca;  T[1][2]=-ct*sa; T[1][3]=a*st;
+    T[2][0]=0.0f;  T[2][1]=sa;     T[2][2]=ca;     T[2][3]=d;
+    T[3][0]=0.0f;  T[3][1]=0.0f;   T[3][2]=0.0f;   T[3][3]=1.0f;
+}
+
+static void mat4_mul(const Mat4 A, const Mat4 B, Mat4 C) {
+    Mat4 tmp;
+    memset(tmp, 0, sizeof(tmp));
+    for (int i = 0; i &lt; 4; i++)
+        for (int j = 0; j &lt; 4; j++)
+            for (int k = 0; k &lt; 4; k++)
+                tmp[i][j] += A[i][k] * B[k][j];
+    memcpy(C, tmp, sizeof(Mat4));
+}
+
+// 完整正运动学：输入关节角度，输出末端位姿
+EndEffectorPose forward_kinematics(const JointAngles *q) {
+    Mat4 T01, T12, T23, T34, T02, T03, T04;
+
+    // 按DH参数表构造各连杆矩阵
+    // 关节1：θ1变量，d=L0，a=0，α=90°
+    dh_matrix(q-&gt;j1, L0, 0.0f, 90.0f, T01);
+    // 关节2：θ2变量，d=0，a=L1，α=0°
+    dh_matrix(q-&gt;j2, 0.0f, L1, 0.0f, T12);
+    // 关节3：θ3变量，d=0，a=L2，α=0°
+    dh_matrix(q-&gt;j3, 0.0f, L2, 0.0f, T23);
+    // 关节4：θ4变量，d=0，a=L3，α=0°
+    dh_matrix(q-&gt;j4, 0.0f, L3, 0.0f, T34);
+
+    mat4_mul(T01, T12, T02);
+    mat4_mul(T02, T23, T03);
+    mat4_mul(T03, T34, T04);
+
+    EndEffectorPose pose;
+    pose.x = T04[0][3];
+    pose.y = T04[1][3];
+    pose.z = T04[2][3];
+    // 从旋转矩阵提取欧拉角（ZYX约定）
+    pose.yaw   = atan2f(T04[1][0], T04[0][0]) * RAD2DEG;
+    pose.pitch = atan2f(-T04[2][0],
+                  sqrtf(T04[2][1]*T04[2][1] + T04[2][2]*T04[2][2])) * RAD2DEG;
+    pose.roll  = atan2f(T04[2][1], T04[2][2]) * RAD2DEG;
+    return pose;
+}
+</code></pre>
+<h3 id="geometric-ik">几何法逆运动学（Geometric IK）</h3>
+<p>几何法利用三角形余弦定理直接求解，计算量小，适合嵌入式实时控制：</p>
+<pre><code class="language-c">// IK求解结果
+typedef struct {
+    JointAngles q;      // 关节角度解
+    int valid;          // 1=有效解，0=无解
+    int elbow_up;       // 1=肘部向上解，0=肘部向下解
+} IKResult;
+
+// 关节限位检查
+static int check_limits(const JointAngles *q) {
+    if (q-&gt;j1 &lt; -90.0f || q-&gt;j1 &gt; 90.0f)  return 0;
+    if (q-&gt;j2 &lt;   0.0f || q-&gt;j2 &gt; 135.0f) return 0;
+    if (q-&gt;j3 &lt; -135.0f|| q-&gt;j3 &gt; 0.0f)   return 0;
+    if (q-&gt;j4 &lt; -90.0f || q-&gt;j4 &gt; 90.0f)  return 0;
+    return 1;
+}
+
+// 几何法IK：给定末端位置(x,y,z)和末端姿态角end_pitch(度)
+// elbow_up=1求肘部向上解，=0求肘部向下解
+IKResult inverse_kinematics(float x, float y, float z,
+                             float end_pitch, int elbow_up) {
+    IKResult result = {.valid = 0};
+
+    // ── 步骤1：求J1（底座旋转角）──────────────────────────
+    result.q.j1 = atan2f(y, x) * RAD2DEG;
+
+    // ── 步骤2：计算腕部位置（去掉末端连杆L3的贡献）──────────
+    float r_total = sqrtf(x*x + y*y);  // 水平投影距离
+    float ep = end_pitch * DEG2RAD;
+    float wx = r_total - L3 * cosf(ep);  // 腕部水平距离
+    float wz = z - L0 - L3 * sinf(ep);  // 腕部高度（相对J2轴）
+
+    // ── 步骤3：用余弦定理求J3 ─────────────────────────────
+    float d2 = wx*wx + wz*wz;  // 腕部到J2轴距离的平方
+    float d  = sqrtf(d2);
+
+    // 可达性检查
+    float reach_max = L1 + L2;
+    float reach_min = fabsf(L1 - L2);
+    if (d &gt; reach_max + 1e-3f || d &lt; reach_min - 1e-3f) {
+        // 目标不可达
+        return result;
+    }
+    // 夹紧到合法范围（浮点误差保护）
+    float cos_j3 = (d2 - L1*L1 - L2*L2) / (2.0f * L1 * L2);
+    cos_j3 = fmaxf(-1.0f, fminf(1.0f, cos_j3));
+
+    float j3_abs = acosf(cos_j3) * RAD2DEG;  // 0~180°
+    // 肘部向上：J3为负（小臂向后折）
+    result.q.j3 = elbow_up ? -j3_abs : j3_abs;
+
+    // ── 步骤4：求J2 ──────────────────────────────────────
+    float alpha = atan2f(wz, wx);  // 腕部方向角
+    float sin_j3 = sinf(result.q.j3 * DEG2RAD);
+    float cos_j3v = cosf(result.q.j3 * DEG2RAD);
+    // 用正弦定理辅助
+    float beta = atan2f(L2 * sin_j3,
+                        L1 + L2 * cos_j3v);
+    result.q.j2 = (alpha - beta) * RAD2DEG;
+
+    // ── 步骤5：求J4（末端姿态补偿）──────────────────────────
+    result.q.j4 = end_pitch - result.q.j2 - result.q.j3;
+
+    // 关节限位检查
+    result.valid = check_limits(&amp;result.q);
+    result.elbow_up = elbow_up;
+    return result;
+}
+
+// 自动选择最优解（优先肘部向上，关节角度变化最小）
+IKResult ik_best_solution(float x, float y, float z,
+                           float end_pitch,
+                           const JointAngles *current) {
+    IKResult up   = inverse_kinematics(x, y, z, end_pitch, 1);
+    IKResult down = inverse_kinematics(x, y, z, end_pitch, 0);
+
+    if (!up.valid &amp;&amp; !down.valid) {
+        IKResult none = {.valid = 0};
+        return none;
+    }
+    if (!up.valid)   return down;
+    if (!down.valid) return up;
+
+    // 计算关节角度变化量（选变化最小的解）
+    if (current == NULL) return up;  // 默认肘部向上
+
+    float cost_up = fabsf(up.q.j1 - current-&gt;j1)
+                  + fabsf(up.q.j2 - current-&gt;j2)
+                  + fabsf(up.q.j3 - current-&gt;j3)
+                  + fabsf(up.q.j4 - current-&gt;j4);
+    float cost_down = fabsf(down.q.j1 - current-&gt;j1)
+                    + fabsf(down.q.j2 - current-&gt;j2)
+                    + fabsf(down.q.j3 - current-&gt;j3)
+                    + fabsf(down.q.j4 - current-&gt;j4);
+    return (cost_up &lt;= cost_down) ? up : down;
+}
+</code></pre>
+<h3 id="_7">舵机标定与驱动</h3>
+<pre><code class="language-c">// 舵机标定参数（根据实际安装方向调整）
+typedef struct {
+    uint16_t pulse_min;   // 最小脉宽(us)，对应min_angle
+    uint16_t pulse_max;   // 最大脉宽(us)，对应max_angle
+    float    angle_min;   // 最小角度(度)
+    float    angle_max;   // 最大角度(度)
+    float    zero_offset; // 机械零位偏移(度)
+    int8_t   direction;   // 方向：+1或-1
+} ServoCalib;
+
+// 5个舵机的标定参数（J1~J4 + 夹爪）
+ServoCalib calib[5] = {
+    {500, 2500, -90.0f,  90.0f,   0.0f, +1},  // J1 底座
+    {500, 2500,   0.0f, 135.0f,   5.0f, +1},  // J2 大臂（+5°零位偏移）
+    {500, 2500, -135.0f, 0.0f,   -3.0f, -1},  // J3 小臂（反向安装）
+    {500, 2500, -90.0f,  90.0f,   0.0f, +1},  // J4 末端
+    {500, 2500,   0.0f,  60.0f,   0.0f, +1},  // 夹爪
+};
+
+// 将关节角度转换为PWM脉宽(us)
+uint16_t angle_to_pulse(uint8_t joint, float angle) {
+    ServoCalib *c = &amp;calib[joint];
+    float adj = (angle + c-&gt;zero_offset) * c-&gt;direction;
+    adj = fmaxf(c-&gt;angle_min, fminf(c-&gt;angle_max, adj));
+    float ratio = (adj - c-&gt;angle_min) / (c-&gt;angle_max - c-&gt;angle_min);
+    return (uint16_t)(c-&gt;pulse_min + ratio * (c-&gt;pulse_max - c-&gt;pulse_min));
+}
+
+// STM32 TIM2/TIM3 PWM输出（50Hz，20ms周期）
+// CubeMX配置：TIM2, PSC=71, ARR=19999 → 50Hz @ 72MHz
+void set_servo_pulse(uint8_t ch, uint16_t pulse_us) {
+    // pulse_us范围500~2500，对应CCR值500~2500（1us/count）
+    switch (ch) {
+        case 0: TIM2-&gt;CCR1 = pulse_us; break;
+        case 1: TIM2-&gt;CCR2 = pulse_us; break;
+        case 2: TIM2-&gt;CCR3 = pulse_us; break;
+        case 3: TIM2-&gt;CCR4 = pulse_us; break;
+        case 4: TIM3-&gt;CCR1 = pulse_us; break;
+    }
+}
+
+void arm_set_joints(const JointAngles *q) {
+    set_servo_pulse(0, angle_to_pulse(0, q-&gt;j1));
+    set_servo_pulse(1, angle_to_pulse(1, q-&gt;j2));
+    set_servo_pulse(2, angle_to_pulse(2, q-&gt;j3));
+    set_servo_pulse(3, angle_to_pulse(3, q-&gt;j4));
+}
+</code></pre>
+<h3 id="_8">舵机扭矩计算与选型指南</h3>
+<p>选择舵机时需要计算各关节的负载扭矩：</p>
+<pre><code>扭矩计算公式：
+  τ = F × d = m × g × L_arm
+
+其中：
+  m    = 负载质量 + 连杆质量 (kg)
+  g    = 9.81 m/s²
+  L_arm = 力臂长度 (m)（最坏情况：连杆水平伸展）
+
+安全系数：选择额定扭矩 ≥ 计算值 × 2.0（动态载荷）
+</code></pre>
+<p><strong>各关节扭矩估算（4-DOF臂，负载200g）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>关节</th>
+<th>负载质量</th>
+<th>力臂</th>
+<th>计算扭矩</th>
+<th>推荐舵机</th>
+<th>额定扭矩</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>J4末端</td>
+<td>200g</td>
+<td>65mm</td>
+<td>0.13N·m</td>
+<td>SG90</td>
+<td>0.18N·m</td>
+</tr>
+<tr>
+<td>J3小臂</td>
+<td>350g</td>
+<td>100mm</td>
+<td>0.34N·m</td>
+<td>MG996R</td>
+<td>1.08N·m</td>
+</tr>
+<tr>
+<td>J2大臂</td>
+<td>600g</td>
+<td>105mm</td>
+<td>0.62N·m</td>
+<td>MG996R</td>
+<td>1.08N·m</td>
+</tr>
+<tr>
+<td>J1底座</td>
+<td>1200g</td>
+<td>旋转惯量</td>
+<td>0.30N·m</td>
+<td>MG996R</td>
+<td>1.08N·m</td>
+</tr>
+</tbody>
+</table>
+<p><strong>舵机选型对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>扭矩</th>
+<th>速度</th>
+<th>电压</th>
+<th>重量</th>
+<th>价格</th>
+<th>适用关节</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SG90</td>
+<td>1.8kg·cm</td>
+<td>0.1s/60°</td>
+<td>4.8V</td>
+<td>9g</td>
+<td>¥5</td>
+<td>末端/夹爪</td>
+</tr>
+<tr>
+<td>MG996R</td>
+<td>11kg·cm</td>
+<td>0.17s/60°</td>
+<td>6V</td>
+<td>55g</td>
+<td>¥18</td>
+<td>主要关节</td>
+</tr>
+<tr>
+<td>DS3218</td>
+<td>20kg·cm</td>
+<td>0.16s/60°</td>
+<td>6V</td>
+<td>60g</td>
+<td>¥35</td>
+<td>重载关节</td>
+</tr>
+<tr>
+<td>Dynamixel XL430</td>
+<td>15kg·cm</td>
+<td>0.19s/60°</td>
+<td>12V</td>
+<td>82g</td>
+<td>¥350</td>
+<td>精密控制</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_9">轨迹规划</h3>
+<h4 id="joint-space-interpolation">关节空间插补（Joint Space Interpolation）</h4>
+<p>在关节空间中插补，末端轨迹不是直线，但计算简单，不会经过奇异点：</p>
+<pre><code class="language-c">// 全局当前关节角度
+static JointAngles g_current_joints = {0, 45, -45, 0};
+
+void arm_get_current_joints(JointAngles *q) {
+    *q = g_current_joints;
+}
+
+// 关节空间S曲线插补（正弦平滑）
+void arm_move_joints(const JointAngles *target, uint32_t duration_ms) {
+    JointAngles start = g_current_joints;
+    uint32_t steps = duration_ms / 10;  // 10ms控制周期
+    if (steps == 0) steps = 1;
+
+    for (uint32_t i = 1; i &lt;= steps; i++) {
+        float t = (float)i / (float)steps;
+        // S曲线：正弦平滑，加速度连续
+        float s = (1.0f - cosf(t * 3.14159265f)) * 0.5f;
+
+        JointAngles q = {
+            .j1 = start.j1 + (target-&gt;j1 - start.j1) * s,
+            .j2 = start.j2 + (target-&gt;j2 - start.j2) * s,
+            .j3 = start.j3 + (target-&gt;j3 - start.j3) * s,
+            .j4 = start.j4 + (target-&gt;j4 - start.j4) * s,
+        };
+        arm_set_joints(&amp;q);
+        g_current_joints = q;
+        HAL_Delay(10);
+    }
+    g_current_joints = *target;
+    arm_set_joints(target);
+}
+</code></pre>
+<h4 id="cartesian-linear-interpolation">笛卡尔空间直线插补（Cartesian Linear Interpolation）</h4>
+<p>末端沿直线运动，每步调用逆运动学，适合精确路径控制：</p>
+<pre><code class="language-c">// 末端从当前位置直线运动到目标位置
+// 返回0成功，-1路径中有不可达点
+int arm_move_linear(float tx, float ty, float tz,
+                    float end_pitch, uint32_t duration_ms) {
+    EndEffectorPose start_pose = forward_kinematics(&amp;g_current_joints);
+    float start_pitch = g_current_joints.j2
+                      + g_current_joints.j3
+                      + g_current_joints.j4;
+
+    uint32_t steps = duration_ms / 10;
+    if (steps == 0) steps = 1;
+
+    for (uint32_t i = 1; i &lt;= steps; i++) {
+        float t = (float)i / (float)steps;
+        float s = (1.0f - cosf(t * 3.14159265f)) * 0.5f;
+
+        float cx = start_pose.x + (tx - start_pose.x) * s;
+        float cy = start_pose.y + (ty - start_pose.y) * s;
+        float cz = start_pose.z + (tz - start_pose.z) * s;
+        float cp = start_pitch + (end_pitch - start_pitch) * s;
+
+        IKResult ik = ik_best_solution(cx, cy, cz, cp, &amp;g_current_joints);
+        if (!ik.valid) {
+            return -1;  // 路径中有不可达点
+        }
+        arm_set_joints(&amp;ik.q);
+        g_current_joints = ik.q;
+        HAL_Delay(10);
+    }
+    return 0;
+}
+</code></pre>
+<h4 id="vs">关节空间 vs 笛卡尔空间对比</h4>
+<pre><code>关节空间插补：
+  优点：计算简单，不经过奇异点，速度均匀
+  缺点：末端轨迹弯曲，不适合需要直线路径的任务
+  适用：点到点运动，初始化，回零
+
+笛卡尔空间插补：
+  优点：末端走直线，路径可预测
+  缺点：可能经过奇异点，计算量大（每步需IK）
+  适用：抓取、焊接、涂胶等需要直线路径的任务
+
+时序对比（100步插补，STM32F103 @ 72MHz）：
+  关节空间：每步 ~5μs（纯数学运算）
+  笛卡尔空间：每步 ~45μs（含IK求解）
+  两者均满足10ms控制周期要求
+</code></pre>
+<h2 id="_10">深入原理</h2>
+<h3 id="singularity-analysis">奇异性分析（Singularity Analysis）</h3>
+<p>奇异点（Singular Configuration）是机械臂失去一个或多个自由度的构型，此时雅可比矩阵（Jacobian）行列式为零，IK无唯一解。</p>
+<p><strong>4-DOF臂的奇异构型</strong>：</p>
+<pre><code>奇异类型1：肩部奇异（Shoulder Singularity）
+  发生条件：末端目标在J1轴线上（x=0, y=0）
+  现象：J1角度无法确定（atan2(0,0)未定义）
+  检测：r = sqrt(x²+y²) &lt; ε（ε≈5mm）
+
+奇异类型2：肘部奇异（Elbow Singularity）
+  发生条件：大臂和小臂完全伸展或完全折叠
+  现象：J3=0°或J3=±180°，J2和J4有无穷多组合
+  检测：|d - (L1+L2)| &lt; ε 或 d &lt; ε
+
+奇异类型3：腕部奇异（Wrist Singularity）
+  4-DOF臂无独立腕部，此类奇异不适用
+</code></pre>
+<p><strong>奇异性检测与处理</strong>：</p>
+<pre><code class="language-c">#define SINGULARITY_THRESHOLD  5.0f  // mm
+
+typedef enum {
+    SING_NONE     = 0,
+    SING_SHOULDER = 1,
+    SING_ELBOW    = 2,
+} SingularityType;
+
+SingularityType check_singularity(float x, float y, float z,
+                                   float end_pitch) {
+    // 检查肩部奇异
+    float r = sqrtf(x*x + y*y);
+    if (r &lt; SINGULARITY_THRESHOLD) {
+        return SING_SHOULDER;
+    }
+
+    // 检查肘部奇异
+    float ep = end_pitch * DEG2RAD;
+    float wx = r - L3 * cosf(ep);
+    float wz = z - L0 - L3 * sinf(ep);
+    float d  = sqrtf(wx*wx + wz*wz);
+
+    if (fabsf(d - (L1 + L2)) &lt; SINGULARITY_THRESHOLD ||
+        d &lt; SINGULARITY_THRESHOLD) {
+        return SING_ELBOW;
+    }
+    return SING_NONE;
+}
+
+// 奇异点附近的平滑处理：微小偏移避开奇异点
+int arm_move_linear_safe(float tx, float ty, float tz,
+                          float end_pitch, uint32_t duration_ms) {
+    SingularityType sing = check_singularity(tx, ty, tz, end_pitch);
+    if (sing == SING_SHOULDER) {
+        // 肩部奇异：在目标点附近加微小偏移
+        tx += (tx &gt;= 0) ? SINGULARITY_THRESHOLD : -SINGULARITY_THRESHOLD;
+    }
+    return arm_move_linear(tx, ty, tz, end_pitch, duration_ms);
+}
+</code></pre>
+<h3 id="joint-limit-handling">关节限位处理（Joint Limit Handling）</h3>
+<pre><code class="language-c">// 关节软限位（比硬件限位留5°余量）
+typedef struct {
+    float min_soft;  // 软限位最小值
+    float max_soft;  // 软限位最大值
+    float min_hard;  // 硬件限位最小值
+    float max_hard;  // 硬件限位最大值
+} JointLimit;
+
+const JointLimit JOINT_LIMITS[4] = {
+    {-85.0f,  85.0f, -90.0f,  90.0f},  // J1
+    {  5.0f, 130.0f,   0.0f, 135.0f},  // J2
+    {-130.0f, -5.0f,-135.0f,   0.0f},  // J3
+    {-85.0f,  85.0f, -90.0f,  90.0f},  // J4
+};
+
+// 将关节角度夹紧到软限位范围
+float clamp_joint(uint8_t joint, float angle) {
+    const JointLimit *lim = &amp;JOINT_LIMITS[joint];
+    return fmaxf(lim-&gt;min_soft, fminf(lim-&gt;max_soft, angle));
+}
+
+// 检查关节角度是否在软限位内
+int joint_in_soft_limit(uint8_t joint, float angle) {
+    const JointLimit *lim = &amp;JOINT_LIMITS[joint];
+    return (angle &gt;= lim-&gt;min_soft &amp;&amp; angle &lt;= lim-&gt;max_soft);
+}
+
+// 带限位保护的关节运动
+void arm_set_joints_safe(const JointAngles *q) {
+    JointAngles safe = {
+        .j1 = clamp_joint(0, q-&gt;j1),
+        .j2 = clamp_joint(1, q-&gt;j2),
+        .j3 = clamp_joint(2, q-&gt;j3),
+        .j4 = clamp_joint(3, q-&gt;j4),
+    };
+    arm_set_joints(&amp;safe);
+    g_current_joints = safe;
+}
+</code></pre>
+<h3 id="collision-detection">简单碰撞检测（Collision Detection）</h3>
+<p>对于教学级机械臂，实现基于包围球（Bounding Sphere）的简化碰撞检测：</p>
+<pre><code class="language-c">// 连杆包围球（球心在连杆中点，半径为连杆长度/2 + 安全余量）
+typedef struct {
+    float cx, cy, cz;  // 球心坐标
+    float radius;       // 半径
+} BoundingSphere;
+
+// 计算各连杆包围球（基于正运动学中间结果）
+void compute_link_spheres(const JointAngles *q,
+                           BoundingSphere spheres[4]) {
+    // 计算各关节位置
+    Mat4 T01, T12, T23, T34, T02, T03, T04;
+    dh_matrix(q-&gt;j1, L0, 0.0f, 90.0f, T01);
+    dh_matrix(q-&gt;j2, 0.0f, L1, 0.0f, T12);
+    dh_matrix(q-&gt;j3, 0.0f, L2, 0.0f, T23);
+    dh_matrix(q-&gt;j4, 0.0f, L3, 0.0f, T34);
+
+    Mat4 T02_, T03_, T04_;
+    mat4_mul(T01, T12, T02_);
+    mat4_mul(T02_, T23, T03_);
+    mat4_mul(T03_, T34, T04_);
+
+    // 连杆1包围球（J1轴到J2轴中点）
+    spheres[0].cx = T01[0][3] * 0.5f;
+    spheres[0].cy = T01[1][3] * 0.5f;
+    spheres[0].cz = (0 + T01[2][3]) * 0.5f;
+    spheres[0].radius = L0 * 0.5f + 20.0f;
+
+    // 连杆2包围球（J2轴到J3轴中点）
+    spheres[1].cx = (T01[0][3] + T02_[0][3]) * 0.5f;
+    spheres[1].cy = (T01[1][3] + T02_[1][3]) * 0.5f;
+    spheres[1].cz = (T01[2][3] + T02_[2][3]) * 0.5f;
+    spheres[1].radius = L1 * 0.5f + 15.0f;
+
+    // 连杆3包围球
+    spheres[2].cx = (T02_[0][3] + T03_[0][3]) * 0.5f;
+    spheres[2].cy = (T02_[1][3] + T03_[1][3]) * 0.5f;
+    spheres[2].cz = (T02_[2][3] + T03_[2][3]) * 0.5f;
+    spheres[2].radius = L2 * 0.5f + 15.0f;
+
+    // 连杆4包围球
+    spheres[3].cx = (T03_[0][3] + T04_[0][3]) * 0.5f;
+    spheres[3].cy = (T03_[1][3] + T04_[1][3]) * 0.5f;
+    spheres[3].cz = (T03_[2][3] + T04_[2][3]) * 0.5f;
+    spheres[3].radius = L3 * 0.5f + 10.0f;
+}
+
+// 检查两球是否相交
+static int spheres_intersect(const BoundingSphere *a,
+                              const BoundingSphere *b) {
+    float dx = a-&gt;cx - b-&gt;cx;
+    float dy = a-&gt;cy - b-&gt;cy;
+    float dz = a-&gt;cz - b-&gt;cz;
+    float dist2 = dx*dx + dy*dy + dz*dz;
+    float r_sum = a-&gt;radius + b-&gt;radius;
+    return dist2 &lt; r_sum * r_sum;
+}
+
+// 自碰撞检测（检查非相邻连杆）
+int check_self_collision(const JointAngles *q) {
+    BoundingSphere spheres[4];
+    compute_link_spheres(q, spheres);
+
+    // 检查连杆1和连杆3（非相邻）
+    if (spheres_intersect(&amp;spheres[0], &amp;spheres[2])) return 1;
+    // 检查连杆1和连杆4
+    if (spheres_intersect(&amp;spheres[0], &amp;spheres[3])) return 1;
+    // 检查连杆2和连杆4
+    if (spheres_intersect(&amp;spheres[1], &amp;spheres[3])) return 1;
+
+    // 检查末端是否低于地面（z &lt; 0）
+    EndEffectorPose pose = forward_kinematics(q);
+    if (pose.z &lt; 0.0f) return 1;
+
+    return 0;  // 无碰撞
+}
+</code></pre>
+<h2 id="_11">完整项目实战：视觉引导抓取系统</h2>
+<h3 id="_12">系统架构</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                    视觉引导抓取系统                           │
+│                                                             │
+│  ┌──────────────┐    UART/SPI    ┌──────────────────────┐  │
+│  │  ESP32-CAM   │ ─────────────→ │   STM32F103C8T6      │  │
+│  │  OV2640摄像头 │  目标坐标(x,y) │   主控制器           │  │
+│  │  颜色识别     │               │                      │  │
+│  │  质心计算     │               │  ┌────────────────┐  │  │
+│  └──────────────┘               │  │  运动学引擎     │  │  │
+│                                 │  │  FK / IK       │  │  │
+│  ┌──────────────┐               │  │  轨迹规划      │  │  │
+│  │  上位机(可选) │ ←── UART ───  │  └────────────────┘  │  │
+│  │  Python调试  │               │                      │  │
+│  └──────────────┘               │  TIM2/TIM3 PWM×5    │  │
+│                                 └──────────┬───────────┘  │
+│                                            │               │
+│                              ┌─────────────▼────────────┐  │
+│                              │  5V/5A 舵机电源           │  │
+│                              │  J1(MG996R) J2(MG996R)   │  │
+│                              │  J3(MG996R) J4(SG90)     │  │
+│                              │  夹爪(SG90)               │  │
+│                              └──────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="esp32-cam">ESP32-CAM 颜色识别模块</h3>
+<pre><code class="language-cpp">// ESP32-CAM 颜色识别代码（Arduino框架）
+// 识别红色物体质心，通过UART发送坐标给STM32
+// 依赖：esp32-camera库（ESP-IDF内置）
+
+#include &quot;esp_camera.h&quot;
+#include &quot;Arduino.h&quot;
+
+// AI-Thinker ESP32-CAM引脚定义
+#define PWDN_GPIO_NUM  32
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM   0
+#define SIOD_GPIO_NUM  26
+#define SIOC_GPIO_NUM  27
+#define Y9_GPIO_NUM    35
+#define Y8_GPIO_NUM    34
+#define Y7_GPIO_NUM    39
+#define Y6_GPIO_NUM    36
+#define Y5_GPIO_NUM    21
+#define Y4_GPIO_NUM    19
+#define Y3_GPIO_NUM    18
+#define Y2_GPIO_NUM     5
+#define VSYNC_GPIO_NUM 25
+#define HREF_GPIO_NUM  23
+#define PCLK_GPIO_NUM  22
+
+// 颜色阈值（HSV空间，红色）
+#define H_MIN  0
+#define H_MAX  15
+#define S_MIN  100
+#define V_MIN  80
+
+// RGB转HSV（简化版）
+void rgb_to_hsv(uint8_t r, uint8_t g, uint8_t b,
+                float *h, float *s, float *v) {
+    float rf = r / 255.0f, gf = g / 255.0f, bf = b / 255.0f;
+    float cmax = fmaxf(rf, fmaxf(gf, bf));
+    float cmin = fminf(rf, fminf(gf, bf));
+    float delta = cmax - cmin;
+
+    *v = cmax;
+    *s = (cmax &gt; 0.001f) ? (delta / cmax) : 0.0f;
+
+    if (delta &lt; 0.001f) { *h = 0; return; }
+    if (cmax == rf)      *h = 60.0f * fmodf((gf-bf)/delta, 6.0f);
+    else if (cmax == gf) *h = 60.0f * ((bf-rf)/delta + 2.0f);
+    else                 *h = 60.0f * ((rf-gf)/delta + 4.0f);
+    if (*h &lt; 0) *h += 360.0f;
+}
+
+// 在RGB565帧中查找红色物体质心
+// 返回1找到目标，cx/cy为归一化坐标[-1,1]
+int find_red_object(camera_fb_t *fb, float *cx, float *cy) {
+    uint32_t sum_x = 0, sum_y = 0, count = 0;
+    uint16_t w = fb-&gt;width, h = fb-&gt;height;
+    uint16_t *pixels = (uint16_t *)fb-&gt;buf;
+
+    for (uint16_t y = 0; y &lt; h; y++) {
+        for (uint16_t x = 0; x &lt; w; x++) {
+            uint16_t px = pixels[y * w + x];
+            // RGB565解包
+            uint8_t r = (px &gt;&gt; 11) &lt;&lt; 3;
+            uint8_t g = ((px &gt;&gt; 5) &amp; 0x3F) &lt;&lt; 2;
+            uint8_t b = (px &amp; 0x1F) &lt;&lt; 3;
+
+            float hh, ss, vv;
+            rgb_to_hsv(r, g, b, &amp;hh, &amp;ss, &amp;vv);
+
+            if ((hh &lt;= H_MAX || hh &gt;= 345) &amp;&amp;  // 红色（含环绕）
+                ss * 255 &gt;= S_MIN &amp;&amp;
+                vv * 255 &gt;= V_MIN) {
+                sum_x += x;
+                sum_y += y;
+                count++;
+            }
+        }
+    }
+
+    if (count &lt; 100) return 0;  // 目标太小，忽略
+
+    // 归一化到[-1, 1]
+    *cx = ((float)sum_x / count - w * 0.5f) / (w * 0.5f);
+    *cy = ((float)sum_y / count - h * 0.5f) / (h * 0.5f);
+    return 1;
+}
+
+void setup() {
+    Serial.begin(115200);  // 与STM32通信
+
+    camera_config_t config = {};
+    config.ledc_channel = LEDC_CHANNEL_0;
+    config.ledc_timer   = LEDC_TIMER_0;
+    config.pin_d0 = Y2_GPIO_NUM; config.pin_d1 = Y3_GPIO_NUM;
+    config.pin_d2 = Y4_GPIO_NUM; config.pin_d3 = Y5_GPIO_NUM;
+    config.pin_d4 = Y6_GPIO_NUM; config.pin_d5 = Y7_GPIO_NUM;
+    config.pin_d6 = Y8_GPIO_NUM; config.pin_d7 = Y9_GPIO_NUM;
+    config.pin_xclk  = XCLK_GPIO_NUM;
+    config.pin_pclk  = PCLK_GPIO_NUM;
+    config.pin_vsync = VSYNC_GPIO_NUM;
+    config.pin_href  = HREF_GPIO_NUM;
+    config.pin_sscb_sda = SIOD_GPIO_NUM;
+    config.pin_sscb_scl = SIOC_GPIO_NUM;
+    config.pin_pwdn  = PWDN_GPIO_NUM;
+    config.pin_reset = RESET_GPIO_NUM;
+    config.xclk_freq_hz = 20000000;
+    config.pixel_format = PIXFORMAT_RGB565;
+    config.frame_size   = FRAMESIZE_QVGA;  // 320x240
+    config.fb_count     = 1;
+
+    esp_camera_init(&amp;config);
+}
+
+void loop() {
+    camera_fb_t *fb = esp_camera_fb_get();
+    if (!fb) return;
+
+    float cx, cy;
+    if (find_red_object(fb, &amp;cx, &amp;cy)) {
+        // 发送格式：&quot;V cx cy\n&quot;（V=Vision）
+        Serial.printf(&quot;V %.3f %.3f\n&quot;, cx, cy);
+    }
+    esp_camera_fb_return(fb);
+    delay(50);  // 20fps
+}
+</code></pre>
+<h3 id="stm32">STM32主控：视觉引导抓取状态机</h3>
+<pre><code class="language-c">// STM32F103 主控代码
+// 接收ESP32-CAM视觉坐标，执行视觉引导抓取
+
+#include &quot;stm32f1xx_hal.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;math.h&gt;
+
+// ── 视觉坐标到世界坐标的映射 ─────────────────────────────────
+// 相机安装在机械臂正上方，俯视工作台
+// 工作台范围：x: 100~200mm, y: -80~80mm, z: 0mm（桌面）
+#define TABLE_Z       5.0f   // 桌面高度(mm)，略高于0避免碰撞
+#define CAMERA_X_MIN  100.0f
+#define CAMERA_X_MAX  200.0f
+#define CAMERA_Y_MIN  -80.0f
+#define CAMERA_Y_MAX   80.0f
+
+void vision_to_world(float cx, float cy,
+                     float *wx, float *wy) {
+    // cx, cy 范围 [-1, 1]，映射到工作台坐标
+    *wx = CAMERA_X_MIN + (cx + 1.0f) * 0.5f
+          * (CAMERA_X_MAX - CAMERA_X_MIN);
+    *wy = CAMERA_Y_MIN + (cy + 1.0f) * 0.5f
+          * (CAMERA_Y_MAX - CAMERA_Y_MIN);
+}
+
+// ── 抓取状态机 ────────────────────────────────────────────────
+typedef enum {
+    STATE_IDLE = 0,
+    STATE_HOME,
+    STATE_SEARCH,       // 等待视觉目标
+    STATE_APPROACH,     // 移动到目标上方
+    STATE_DESCEND,      // 下降到抓取高度
+    STATE_GRASP,        // 闭合夹爪
+    STATE_LIFT,         // 提起物体
+    STATE_PLACE,        // 移动到放置位置
+    STATE_RELEASE,      // 张开夹爪
+    STATE_DONE,
+} ArmState;
+
+static ArmState g_state = STATE_IDLE;
+static float g_target_x, g_target_y;  // 视觉检测到的目标坐标
+static int   g_target_valid = 0;
+
+// 放置位置（固定）
+#define PLACE_X  -120.0f
+#define PLACE_Y   80.0f
+#define PLACE_Z   30.0f
+
+// 夹爪控制
+void gripper_close(void) {
+    set_servo_pulse(4, angle_to_pulse(4, 50));  // 50°=闭合
+    HAL_Delay(600);
+}
+void gripper_open(void) {
+    set_servo_pulse(4, angle_to_pulse(4, 0));   // 0°=张开
+    HAL_Delay(400);
+}
+
+// 主状态机（在主循环中调用）
+void arm_state_machine(void) {
+    static JointAngles home = {0, 60, -60, 0};
+
+    switch (g_state) {
+    case STATE_IDLE:
+        g_state = STATE_HOME;
+        break;
+
+    case STATE_HOME:
+        gripper_open();
+        arm_move_joints(&amp;home, 1200);
+        g_state = STATE_SEARCH;
+        break;
+
+    case STATE_SEARCH:
+        // 等待视觉模块检测到目标
+        if (g_target_valid) {
+            g_target_valid = 0;
+            g_state = STATE_APPROACH;
+        }
+        break;
+
+    case STATE_APPROACH: {
+        // 移动到目标正上方80mm处
+        float wx, wy;
+        vision_to_world(g_target_x, g_target_y, &amp;wx, &amp;wy);
+        int ret = arm_move_linear(wx, wy, TABLE_Z + 80.0f, -70.0f, 1000);
+        if (ret == 0) {
+            g_state = STATE_DESCEND;
+        } else {
+            // IK失败，回到搜索状态
+            g_state = STATE_HOME;
+        }
+        break;
+    }
+
+    case STATE_DESCEND: {
+        // 下降到抓取高度（桌面+15mm）
+        EndEffectorPose cur = forward_kinematics(&amp;g_current_joints);
+        int ret = arm_move_linear(cur.x, cur.y,
+                                   TABLE_Z + 15.0f, -80.0f, 600);
+        g_state = (ret == 0) ? STATE_GRASP : STATE_HOME;
+        break;
+    }
+
+    case STATE_GRASP:
+        gripper_close();
+        g_state = STATE_LIFT;
+        break;
+
+    case STATE_LIFT: {
+        EndEffectorPose cur = forward_kinematics(&amp;g_current_joints);
+        arm_move_linear(cur.x, cur.y, TABLE_Z + 80.0f, -70.0f, 600);
+        g_state = STATE_PLACE;
+        break;
+    }
+
+    case STATE_PLACE:
+        arm_move_linear(PLACE_X, PLACE_Y, PLACE_Z + 60.0f, -70.0f, 1200);
+        arm_move_linear(PLACE_X, PLACE_Y, PLACE_Z, -80.0f, 600);
+        g_state = STATE_RELEASE;
+        break;
+
+    case STATE_RELEASE:
+        gripper_open();
+        g_state = STATE_DONE;
+        break;
+
+    case STATE_DONE:
+        arm_move_joints(&amp;home, 1000);
+        HAL_Delay(500);
+        g_state = STATE_SEARCH;  // 继续下一次抓取
+        break;
+    }
+}
+
+// UART接收回调（解析ESP32-CAM发来的视觉坐标）
+// 格式：&quot;V cx cy\n&quot;
+void parse_vision_uart(const char *line) {
+    float cx, cy;
+    if (sscanf(line, &quot;V %f %f&quot;, &amp;cx, &amp;cy) == 2) {
+        g_target_x = cx;
+        g_target_y = cy;
+        g_target_valid = 1;
+    }
+}
+
+// 主循环
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+    MX_TIM2_Init();   // PWM输出
+    MX_TIM3_Init();
+    MX_USART1_UART_Init();  // 与ESP32-CAM通信
+
+    // 启动PWM
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_4);
+    HAL_TIM_PWM_Start(&amp;htim3, TIM_CHANNEL_1);
+
+    g_state = STATE_IDLE;
+
+    while (1) {
+        // 处理UART接收（非阻塞，使用DMA+空闲中断）
+        process_uart_rx();
+        // 执行状态机
+        arm_state_machine();
+    }
+}
+</code></pre>
+<h3 id="_13">性能调优</h3>
+<p><strong>控制周期优化</strong>：</p>
+<pre><code class="language-c">// 使用TIM6定时器中断实现精确10ms控制周期
+// 避免HAL_Delay阻塞导致的UART数据丢失
+
+volatile uint8_t g_control_tick = 0;
+
+void TIM6_IRQHandler(void) {
+    if (__HAL_TIM_GET_FLAG(&amp;htim6, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim6, TIM_FLAG_UPDATE);
+        g_control_tick = 1;
+    }
+}
+
+// 主循环改为事件驱动
+while (1) {
+    process_uart_rx();  // 始终处理UART
+    if (g_control_tick) {
+        g_control_tick = 0;
+        arm_state_machine();  // 每10ms执行一次
+    }
+}
+</code></pre>
+<p><strong>舵机平滑度优化</strong>：</p>
+<pre><code>问题：舵机在目标位置附近抖动（死区效应）
+原因：MG996R死区约5μs，对应约0.45°
+解决：
+  1. 到达目标后停止发送PWM（舵机自然保持）
+  2. 或使用数字舵机（Dynamixel）替代模拟舵机
+  3. 增加到位判断：|current - target| &lt; 1°时停止插补
+
+// 到位检测
+int joints_reached(const JointAngles *target, float threshold_deg) {
+    return (fabsf(g_current_joints.j1 - target-&gt;j1) &lt; threshold_deg &amp;&amp;
+            fabsf(g_current_joints.j2 - target-&gt;j2) &lt; threshold_deg &amp;&amp;
+            fabsf(g_current_joints.j3 - target-&gt;j3) &lt; threshold_deg &amp;&amp;
+            fabsf(g_current_joints.j4 - target-&gt;j4) &lt; threshold_deg);
+}
+</code></pre>
+<h2 id="_14">常见问题与调试</h2>
+<h3 id="1servo-jitter">问题1：舵机抖动（Servo Jitter）</h3>
+<p><strong>现象</strong>：舵机在目标位置附近持续小幅振动，无法稳定停止。</p>
+<p><strong>原因分析</strong>：</p>
+<pre><code>原因1：PWM信号干扰
+  - 舵机电源与MCU共地，大电流引起地线噪声
+  - PWM信号线过长，感应干扰
+  诊断：用示波器测量PWM信号，观察是否有毛刺
+
+原因2：控制算法问题
+  - 插补步长过小，每步变化量小于舵机死区
+  - 目标位置在两个PWM值之间反复切换
+  诊断：打印每步的pulse_us值，观察是否在两值间跳变
+
+原因3：机械问题
+  - 舵机齿轮磨损，间隙过大
+  - 连杆安装不牢固，产生共振
+  诊断：手动转动舵机输出轴，感受间隙大小
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 方案1：PWM滤波（低通滤波器）
+static uint16_t pulse_filtered[5] = {1500, 1500, 1500, 1500, 1500};
+
+void set_servo_pulse_filtered(uint8_t ch, uint16_t target) {
+    // 一阶低通滤波：α=0.3（较慢但平滑）
+    pulse_filtered[ch] = (uint16_t)(
+        0.7f * pulse_filtered[ch] + 0.3f * target);
+    set_servo_pulse(ch, pulse_filtered[ch]);
+}
+
+// 方案2：死区补偿（到位后停止更新PWM）
+#define PULSE_DEADBAND  3  // us，小于此值不更新
+
+void set_servo_pulse_deadband(uint8_t ch, uint16_t target) {
+    static uint16_t last_pulse[5] = {1500,1500,1500,1500,1500};
+    if (abs((int)target - (int)last_pulse[ch]) &gt; PULSE_DEADBAND) {
+        set_servo_pulse(ch, target);
+        last_pulse[ch] = target;
+    }
+}
+
+// 方案3：硬件滤波
+// 在PWM信号线上串联100Ω电阻 + 并联100nF电容到地
+// 截止频率 fc = 1/(2π×100×100e-9) ≈ 16kHz
+// 可滤除高频干扰，不影响50Hz PWM信号
+</code></pre>
+<h3 id="2ik-no-solution">问题2：逆运动学无解（IK No-Solution）</h3>
+<p><strong>现象</strong>：调用IK函数返回-1（无效解），机械臂无法到达目标位置。</p>
+<p><strong>原因分析与处理</strong>：</p>
+<pre><code class="language-c">// 完整的IK失败处理策略
+typedef enum {
+    IK_OK = 0,
+    IK_OUT_OF_REACH,    // 目标超出工作空间
+    IK_JOINT_LIMIT,     // 解存在但超出关节限位
+    IK_SINGULARITY,     // 目标在奇异点附近
+    IK_COLLISION,       // 解会导致碰撞
+} IKStatus;
+
+IKStatus ik_with_diagnosis(float x, float y, float z,
+                            float end_pitch,
+                            JointAngles *result) {
+    // 1. 检查奇异性
+    SingularityType sing = check_singularity(x, y, z, end_pitch);
+    if (sing != SING_NONE) {
+        // 尝试微小偏移
+        float dx = (sing == SING_SHOULDER) ? 5.0f : 0.0f;
+        IKResult ik = ik_best_solution(x + dx, y, z,
+                                        end_pitch, &amp;g_current_joints);
+        if (ik.valid) {
+            *result = ik.q;
+            return IK_OK;
+        }
+        return IK_SINGULARITY;
+    }
+
+    // 2. 尝试求解
+    IKResult ik = ik_best_solution(x, y, z, end_pitch,
+                                    &amp;g_current_joints);
+    if (!ik.valid) {
+        // 判断是超出范围还是关节限位
+        float r = sqrtf(x*x + y*y);
+        float ep = end_pitch * DEG2RAD;
+        float wx = r - L3 * cosf(ep);
+        float wz = z - L0 - L3 * sinf(ep);
+        float d  = sqrtf(wx*wx + wz*wz);
+        if (d &gt; L1 + L2 + 5.0f) return IK_OUT_OF_REACH;
+        return IK_JOINT_LIMIT;
+    }
+
+    // 3. 碰撞检测
+    if (check_self_collision(&amp;ik.q)) {
+        return IK_COLLISION;
+    }
+
+    *result = ik.q;
+    return IK_OK;
+}
+
+// 上层调用示例
+void safe_move_to(float x, float y, float z, float pitch) {
+    JointAngles target;
+    IKStatus status = ik_with_diagnosis(x, y, z, pitch, &amp;target);
+
+    switch (status) {
+    case IK_OK:
+        arm_move_joints(&amp;target, 1000);
+        break;
+    case IK_OUT_OF_REACH:
+        // 记录日志，通知上位机
+        uart_send(&quot;ERR: target out of reach\n&quot;);
+        break;
+    case IK_JOINT_LIMIT:
+        // 尝试调整末端姿态角
+        for (float dp = -10.0f; dp &lt;= 10.0f; dp += 2.0f) {
+            if (ik_with_diagnosis(x, y, z, pitch+dp,
+                                   &amp;target) == IK_OK) {
+                arm_move_joints(&amp;target, 1000);
+                return;
+            }
+        }
+        uart_send(&quot;ERR: joint limit, no solution\n&quot;);
+        break;
+    case IK_SINGULARITY:
+        uart_send(&quot;WARN: near singularity, offset applied\n&quot;);
+        break;
+    case IK_COLLISION:
+        uart_send(&quot;ERR: collision detected\n&quot;);
+        break;
+    }
+}
+</code></pre>
+<h3 id="3mechanical-backlash">问题3：机械间隙（Mechanical Backlash）</h3>
+<p><strong>现象</strong>：机械臂在改变运动方向时，末端位置有明显偏差（通常2~5mm）。</p>
+<p><strong>原因</strong>：舵机齿轮组存在间隙，换向时需要先消除间隙才能传递力矩。</p>
+<pre><code>间隙影响分析：
+  MG996R典型间隙：约1°
+  J2关节（大臂）：1°间隙 → 末端位置误差 ≈ L1×sin(1°) ≈ 1.8mm
+  J3关节（小臂）：1°间隙 → 末端位置误差 ≈ L2×sin(1°) ≈ 1.7mm
+  累积误差：可达3~5mm
+
+补偿方法：
+  1. 预加载（Preload）：始终从同一方向接近目标
+  2. 超调补偿：超过目标一定量后反向回来
+  3. 使用无间隙舵机（Dynamixel系列）
+</code></pre>
+<pre><code class="language-c">// 间隙补偿：始终从&quot;正方向&quot;接近目标
+// 如果需要减小关节角度，先减小超过backlash量，再增加到目标
+#define BACKLASH_DEG  1.5f  // 估计间隙量(度)
+
+void arm_move_joints_backlash_comp(const JointAngles *target,
+                                    uint32_t duration_ms) {
+    JointAngles pre_target = *target;
+    int need_preload = 0;
+
+    // 检查哪些关节需要反向运动
+    if (target-&gt;j2 &lt; g_current_joints.j2 - 0.5f) {
+        pre_target.j2 = target-&gt;j2 - BACKLASH_DEG;
+        need_preload = 1;
+    }
+    if (target-&gt;j3 &lt; g_current_joints.j3 - 0.5f) {
+        pre_target.j3 = target-&gt;j3 - BACKLASH_DEG;
+        need_preload = 1;
+    }
+
+    if (need_preload) {
+        // 先运动到预加载位置
+        arm_move_joints(&amp;pre_target, duration_ms * 3 / 4);
+        HAL_Delay(50);
+    }
+    // 再运动到目标位置
+    arm_move_joints(target, duration_ms / 4);
+}
+</code></pre>
+<h3 id="4">问题4：舵机过热保护</h3>
+<pre><code class="language-c">// 舵机温度监控（通过电流间接估算）
+// MG996R额定电流500mA，堵转电流2.5A
+// 使用ACS712-5A电流传感器监测总电流
+
+#define CURRENT_OVERLOAD_MA  3000  // 3A触发保护
+#define OVERLOAD_DURATION_MS  500  // 持续500ms才保护
+
+static uint32_t overload_start = 0;
+
+void check_servo_overload(void) {
+    // ACS712输出：2.5V=0A，灵敏度185mV/A（5A版本）
+    uint16_t adc = HAL_ADC_GetValue(&amp;hadc1);
+    float voltage = adc * 3.3f / 4096.0f;
+    float current_ma = (voltage - 2.5f) / 0.185f * 1000.0f;
+
+    if (current_ma &gt; CURRENT_OVERLOAD_MA) {
+        if (overload_start == 0) {
+            overload_start = HAL_GetTick();
+        } else if (HAL_GetTick() - overload_start &gt; OVERLOAD_DURATION_MS) {
+            // 触发保护：停止所有舵机
+            for (int i = 0; i &lt; 5; i++) {
+                set_servo_pulse(i, 0);  // 0=关闭PWM
+            }
+            uart_send(&quot;ERR: servo overload protection triggered\n&quot;);
+            g_state = STATE_IDLE;
+        }
+    } else {
+        overload_start = 0;
+    }
+}
+</code></pre>
+<h3 id="5">问题5：视觉坐标抖动</h3>
+<p><strong>现象</strong>：ESP32-CAM检测到的目标坐标在每帧之间跳动，导致机械臂频繁微调。</p>
+<pre><code class="language-c">// 视觉坐标滤波（卡尔曼滤波简化版）
+typedef struct {
+    float x, y;      // 状态估计
+    float p;         // 误差协方差
+    float q;         // 过程噪声
+    float r;         // 测量噪声
+} KalmanFilter1D;
+
+void kalman_init(KalmanFilter1D *kf, float q, float r) {
+    kf-&gt;x = 0; kf-&gt;y = 0;
+    kf-&gt;p = 1.0f;
+    kf-&gt;q = q;  // 典型值：0.01（目标运动慢）
+    kf-&gt;r = r;  // 典型值：0.1（摄像头噪声）
+}
+
+float kalman_update(KalmanFilter1D *kf, float measurement) {
+    // 预测
+    kf-&gt;p += kf-&gt;q;
+    // 更新
+    float k = kf-&gt;p / (kf-&gt;p + kf-&gt;r);  // 卡尔曼增益
+    kf-&gt;x += k * (measurement - kf-&gt;x);
+    kf-&gt;p *= (1.0f - k);
+    return kf-&gt;x;
+}
+
+// 使用示例
+static KalmanFilter1D kf_x, kf_y;
+
+void init_vision_filter(void) {
+    kalman_init(&amp;kf_x, 0.01f, 0.1f);
+    kalman_init(&amp;kf_y, 0.01f, 0.1f);
+}
+
+void parse_vision_uart_filtered(const char *line) {
+    float cx, cy;
+    if (sscanf(line, &quot;V %f %f&quot;, &amp;cx, &amp;cy) == 2) {
+        g_target_x = kalman_update(&amp;kf_x, cx);
+        g_target_y = kalman_update(&amp;kf_y, cy);
+        g_target_valid = 1;
+    }
+}
+</code></pre>
+<h2 id="_15">测试与验证</h2>
+<h3 id="_16">运动学正确性验证</h3>
+<pre><code class="language-c">// 验证FK和IK互为逆运算（round-trip测试）
+// 在STM32上运行，通过UART输出结果
+void test_kinematics_roundtrip(void) {
+    // 测试用例：已知关节角度
+    JointAngles test_cases[] = {
+        {0,   60, -60,  0},   // 正前方伸展
+        {45,  90, -90,  0},   // 右侧45°
+        {-30, 45, -45, 10},   // 左侧30°，末端上翘
+        {0,   30, -30, -20},  // 低位抓取
+    };
+
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+    int pass = 0;
+
+    for (int i = 0; i &lt; n; i++) {
+        JointAngles *q_orig = &amp;test_cases[i];
+
+        // FK：关节角 → 末端位置
+        EndEffectorPose pose = forward_kinematics(q_orig);
+
+        // IK：末端位置 → 关节角
+        float end_pitch = q_orig-&gt;j2 + q_orig-&gt;j3 + q_orig-&gt;j4;
+        IKResult ik = ik_best_solution(pose.x, pose.y, pose.z,
+                                        end_pitch, q_orig);
+
+        if (!ik.valid) {
+            uart_printf(&quot;FAIL case %d: IK returned invalid\n&quot;, i);
+            continue;
+        }
+
+        // 检查误差（允许0.5°误差）
+        float err = fabsf(ik.q.j1 - q_orig-&gt;j1)
+                  + fabsf(ik.q.j2 - q_orig-&gt;j2)
+                  + fabsf(ik.q.j3 - q_orig-&gt;j3)
+                  + fabsf(ik.q.j4 - q_orig-&gt;j4);
+
+        if (err &lt; 2.0f) {  // 总误差 &lt; 2°
+            uart_printf(&quot;PASS case %d: err=%.3f deg\n&quot;, i, err);
+            pass++;
+        } else {
+            uart_printf(&quot;FAIL case %d: err=%.3f deg\n&quot;, i, err);
+            uart_printf(&quot;  orig: j1=%.1f j2=%.1f j3=%.1f j4=%.1f\n&quot;,
+                q_orig-&gt;j1, q_orig-&gt;j2, q_orig-&gt;j3, q_orig-&gt;j4);
+            uart_printf(&quot;  ik:   j1=%.1f j2=%.1f j3=%.1f j4=%.1f\n&quot;,
+                ik.q.j1, ik.q.j2, ik.q.j3, ik.q.j4);
+        }
+    }
+    uart_printf(&quot;Kinematics test: %d/%d passed\n&quot;, pass, n);
+}
+</code></pre>
+<h3 id="_17">工作空间边界测试</h3>
+<pre><code class="language-c">// 测试工作空间边界附近的IK行为
+void test_workspace_boundary(void) {
+    struct { float x, y, z, pitch; const char *desc; } cases[] = {
+        {270, 0, 80, -30, &quot;最大伸展&quot;},
+        {50,  0, 80, -30, &quot;最小收缩&quot;},
+        {150, 0, 200, 0,  &quot;最高点&quot;},
+        {150, 0, -10, -80,&quot;低于桌面（应失败）&quot;},
+        {300, 0, 80, -30, &quot;超出范围（应失败）&quot;},
+    };
+
+    for (int i = 0; i &lt; 5; i++) {
+        JointAngles q;
+        IKStatus s = ik_with_diagnosis(cases[i].x, cases[i].y,
+                                        cases[i].z, cases[i].pitch, &amp;q);
+        uart_printf(&quot;[%s] status=%d\n&quot;, cases[i].desc, s);
+    }
+}
+</code></pre>
+<h3 id="_18">舵机标定验证程序</h3>
+<pre><code class="language-c">// 交互式标定程序（通过UART命令控制）
+// 命令格式：
+//   &quot;J1 45\n&quot;  → 将J1移动到45°
+//   &quot;CAL 1\n&quot;  → 进入J1标定模式
+//   &quot;ZERO\n&quot;   → 设置当前位置为零位
+
+void calibration_mode(void) {
+    char cmd[32];
+    uart_send(&quot;进入标定模式。命令：J&lt;n&gt; &lt;angle&gt; | ZERO | EXIT\n&quot;);
+
+    while (1) {
+        if (uart_readline(cmd, sizeof(cmd))) {
+            int joint; float angle;
+            if (sscanf(cmd, &quot;J%d %f&quot;, &amp;joint, &amp;angle) == 2) {
+                if (joint &gt;= 1 &amp;&amp; joint &lt;= 4) {
+                    uint16_t pulse = angle_to_pulse(joint-1, angle);
+                    set_servo_pulse(joint-1, pulse);
+                    uart_printf(&quot;J%d → %.1f° (pulse=%d)\n&quot;,
+                                joint, angle, pulse);
+                }
+            } else if (strncmp(cmd, &quot;ZERO&quot;, 4) == 0) {
+                // 将当前PWM值记录为零位
+                uart_send(&quot;零位已记录\n&quot;);
+            } else if (strncmp(cmd, &quot;EXIT&quot;, 4) == 0) {
+                break;
+            }
+        }
+    }
+}
+</code></pre>
+<h2 id="_19">延伸阅读</h2>
+<ul>
+<li><a href="02-motion-control-algorithms.html">运动控制算法</a> — 梯形/S曲线加减速，步进电机控制</li>
+<li><a href="04-smart-gimbal-project.html">智能云台项目</a> — 两轴云台，MPU6050姿态稳定，PID控制</li>
+<li><a href="06-hexapod-robot.html">六足机器人</a> — PCA9685多舵机驱动，步态规划，逆运动学</li>
+<li><a href="03-multi-axis-sync.html">多轴同步控制</a> — 多轴协调，G代码解析，直线/圆弧插补</li>
+<li><a href="../beginner/03-servo-motor-control.html">舵机控制基础</a> — PWM原理，舵机驱动，角度控制</li>
+</ul>
+<p><strong>外部参考资源</strong>：</p>
+<ul>
+<li><a href="https://moveit.ros.org/">MoveIt! 机器人运动规划框架</a> — 工业级机器人规划</li>
+<li><a href="https://petercorke.com/toolboxes/robotics-toolbox/">Peter Corke Robotics Toolbox</a> — MATLAB/Python机器人工具箱</li>
+<li><a href="https://www.hiwonder.com/">LeArm开源机械臂</a> — 本项目参考硬件平台</li>
+</ul>
+<h2 id="_20">参考资料</h2>
+<ol>
+<li>Craig, J.J. (2005). <em>Introduction to Robotics: Mechanics and Control</em> (3rd ed.). Pearson.</li>
+<li>Lynch, K.M. &amp; Park, F.C. (2017). <em>Modern Robotics: Mechanics, Planning, and Control</em>. Cambridge University Press.</li>
+<li>熊有伦 (2011). 《机器人技术基础》. 华中科技大学出版社.</li>
+<li>Spong, M.W., Hutchinson, S. &amp; Vidyasagar, M. (2006). <em>Robot Modeling and Control</em>. Wiley.</li>
+<li>MG996R舵机数据手册 — Tower Pro</li>
+<li>STM32F103参考手册 (RM0008) — STMicroelectronics</li>
+<li>ESP32-CAM技术规格书 — AI-Thinker</li>
+<li>OV2640摄像头数据手册 — OmniVision Technologies</li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1772 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>SPI驱动开发：外部Flash读写 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/">02-device-driver-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#spi">SPI通信原理</a></li>
+<li><a href="#spi_1">SPI工作模式</a></li>
+<li><a href="#w25q128-flash">W25Q128 Flash存储器</a></li>
+<li><a href="#stm32-spi">STM32 SPI寄存器</a></li>
+</ul>
+</li>
+<li><a href="#_3">环境准备</a><ul>
+<li><a href="#_4">硬件要求</a></li>
+<li><a href="#_5">软件要求</a></li>
+<li><a href="#_6">硬件连接</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心内容</a><ul>
+<li><a href="#1spi-gpio">步骤1：SPI GPIO和时钟配置</a></li>
+<li><a href="#2spi">步骤2：SPI基本配置</a></li>
+<li><a href="#3spi">步骤3：SPI数据收发函数</a></li>
+<li><a href="#4w25q128">步骤4：W25Q128基本操作</a></li>
+<li><a href="#5flash">步骤5：Flash读取操作</a></li>
+<li><a href="#6flash">步骤6：Flash擦除操作</a></li>
+<li><a href="#7flash">步骤7：Flash写入操作</a></li>
+</ul>
+</li>
+<li><a href="#_8">实践示例</a><ul>
+<li><a href="#1flash">示例1：Flash读写测试</a></li>
+<li><a href="#2flash">示例2：Flash性能测试</a></li>
+<li><a href="#3">示例3：文件系统接口</a></li>
+<li><a href="#4">示例4：数据记录应用</a></li>
+</ul>
+</li>
+<li><a href="#_9">深入理解</a><ul>
+<li><a href="#spidma">SPI与DMA结合</a></li>
+<li><a href="#flash">Flash磨损均衡</a></li>
+<li><a href="#flash_1">Flash坏块管理</a></li>
+</ul>
+</li>
+<li><a href="#_10">常见问题</a><ul>
+<li><a href="#q1-spi0xff0x00">Q1: SPI通信失败，读取的数据全是0xFF或0x00？</a></li>
+<li><a href="#q2-flash">Q2: Flash写入后读取数据不正确？</a></li>
+<li><a href="#q3-flash">Q3: Flash擦除或写入时间过长？</a></li>
+<li><a href="#q4-flash">Q4: 如何实现Flash的掉电保护？</a></li>
+</ul>
+</li>
+<li><a href="#_11">总结</a></li>
+<li><a href="#_12">延伸阅读</a></li>
+<li><a href="#_13">参考资料</a></li>
+<li><a href="#_14">练习题</a><ul>
+<li><a href="#_15">基础练习</a></li>
+<li><a href="#_16">进阶练习</a></li>
+<li><a href="#_17">综合项目</a></li>
+<li><a href="#_18">思考题</a></li>
+</ul>
+</li>
+<li><a href="#_19">实验任务</a><ul>
+<li><a href="#1flash_1">任务1：Flash读写测试（必做）</a></li>
+<li><a href="#2">任务2：数据记录功能（必做）</a></li>
+<li><a href="#3_1">任务3：文件系统移植（选做）</a></li>
+<li><a href="#4_1">任务4：固件升级（选做）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="spiflash">SPI驱动开发：外部Flash读写</h1>
+<h2 id="_1">概述</h2>
+<p>SPI（Serial Peripheral Interface，串行外设接口）是一种高速、全双工、同步的串行通信总线。它广泛应用于微控制器与外部设备（如Flash存储器、SD卡、显示屏、传感器等）之间的通信。相比I2C和UART，SPI具有更高的传输速度和更简单的协议。</p>
+<p>本教程将通过W25Q128 Flash存储器的读写操作，带你深入理解SPI驱动开发的核心技术。W25Q128是一款常用的16MB SPI Flash芯片，广泛应用于嵌入式系统中的程序存储、数据记录和文件系统。</p>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解SPI的工作原理和通信协议</li>
+<li>掌握SPI寄存器的配置方法</li>
+<li>实现SPI的主从模式通信</li>
+<li>掌握Flash存储器的读写操作</li>
+<li>实现扇区擦除和页编程</li>
+<li>为文件系统提供底层接口</li>
+<li>调试和优化SPI通信</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="spi">SPI通信原理</h3>
+<p>SPI是一种主从架构的同步串行通信协议，由一个主设备和一个或多个从设备组成。</p>
+<p><strong>SPI信号线</strong>：</p>
+<pre><code>主设备(Master)                从设备(Slave)
+    |                              |
+    |-------- SCLK ---------------&gt;|  时钟线（主设备输出）
+    |-------- MOSI ---------------&gt;|  主出从入（数据输出）
+    |&lt;------- MISO ----------------|  主入从出（数据输入）
+    |-------- CS/SS --------------&gt;|  片选信号（低电平有效）
+</code></pre>
+<table>
+<thead>
+<tr>
+<th>信号</th>
+<th>全称</th>
+<th>方向</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SCLK</td>
+<td>Serial Clock</td>
+<td>Master → Slave</td>
+<td>时钟信号，由主设备产生</td>
+</tr>
+<tr>
+<td>MOSI</td>
+<td>Master Out Slave In</td>
+<td>Master → Slave</td>
+<td>主设备发送数据</td>
+</tr>
+<tr>
+<td>MISO</td>
+<td>Master In Slave Out</td>
+<td>Slave → Master</td>
+<td>从设备发送数据</td>
+</tr>
+<tr>
+<td>CS/SS</td>
+<td>Chip Select / Slave Select</td>
+<td>Master → Slave</td>
+<td>片选信号，选中从设备</td>
+</tr>
+</tbody>
+</table>
+<p><strong>SPI通信特点</strong>：</p>
+<ol>
+<li><strong>全双工通信</strong>：可以同时发送和接收数据</li>
+<li><strong>同步通信</strong>：有时钟信号，收发双方同步</li>
+<li><strong>高速传输</strong>：速度可达几十MHz</li>
+<li><strong>主从模式</strong>：主设备控制通信时序</li>
+<li><strong>多从设备</strong>：通过不同的CS信号选择从设备</li>
+</ol>
+<h3 id="spi_1">SPI工作模式</h3>
+<p>SPI有4种工作模式，由时钟极性（CPOL）和时钟相位（CPHA）决定：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>CPOL</th>
+<th>CPHA</th>
+<th>空闲时钟</th>
+<th>采样边沿</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>0</td>
+<td>0</td>
+<td>低电平</td>
+<td>上升沿</td>
+<td>最常用</td>
+</tr>
+<tr>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>低电平</td>
+<td>下降沿</td>
+<td></td>
+</tr>
+<tr>
+<td>2</td>
+<td>1</td>
+<td>0</td>
+<td>高电平</td>
+<td>下降沿</td>
+<td></td>
+</tr>
+<tr>
+<td>3</td>
+<td>1</td>
+<td>1</td>
+<td>高电平</td>
+<td>上升沿</td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p><strong>CPOL（Clock Polarity，时钟极性）</strong>：
+- CPOL=0：空闲时SCLK为低电平
+- CPOL=1：空闲时SCLK为高电平</p>
+<p><strong>CPHA（Clock Phase，时钟相位）</strong>：
+- CPHA=0：第一个时钟边沿采样数据
+- CPHA=1：第二个时钟边沿采样数据</p>
+<p><strong>W25Q128支持模式0和模式3</strong>，本教程使用模式0（CPOL=0, CPHA=0）。</p>
+<h3 id="w25q128-flash">W25Q128 Flash存储器</h3>
+<p>W25Q128是Winbond公司生产的128Mbit（16MB）SPI Flash芯片。</p>
+<p><strong>主要特性</strong>：
+- 容量：16MB（128Mbit）
+- 电压：2.7V-3.6V
+- 速度：最高104MHz（标准读取）
+- 擦除单位：4KB扇区、32KB块、64KB块
+- 编程单位：256字节页
+- 擦写次数：100,000次
+- 数据保持：20年</p>
+<p><strong>存储器组织</strong>：</p>
+<pre><code>16MB = 256个块(64KB) = 4096个扇区(4KB) = 65536个页(256B)
+
+地址范围：0x000000 - 0xFFFFFF（24位地址）
+</code></pre>
+<p><strong>常用命令</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>命令</th>
+<th>指令码</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read Data</td>
+<td>0x03</td>
+<td>读取数据</td>
+</tr>
+<tr>
+<td>Page Program</td>
+<td>0x02</td>
+<td>页编程（写入）</td>
+</tr>
+<tr>
+<td>Sector Erase</td>
+<td>0x20</td>
+<td>扇区擦除（4KB）</td>
+</tr>
+<tr>
+<td>Block Erase 32KB</td>
+<td>0x52</td>
+<td>块擦除（32KB）</td>
+</tr>
+<tr>
+<td>Block Erase 64KB</td>
+<td>0xD8</td>
+<td>块擦除（64KB）</td>
+</tr>
+<tr>
+<td>Chip Erase</td>
+<td>0xC7</td>
+<td>整片擦除</td>
+</tr>
+<tr>
+<td>Write Enable</td>
+<td>0x06</td>
+<td>写使能</td>
+</tr>
+<tr>
+<td>Write Disable</td>
+<td>0x04</td>
+<td>写禁止</td>
+</tr>
+<tr>
+<td>Read Status Register</td>
+<td>0x05</td>
+<td>读状态寄存器</td>
+</tr>
+<tr>
+<td>Read JEDEC ID</td>
+<td>0x9F</td>
+<td>读取厂商ID</td>
+</tr>
+</tbody>
+</table>
+<h3 id="stm32-spi">STM32 SPI寄存器</h3>
+<p>STM32 SPI的主要寄存器：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>全称</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR1</td>
+<td>Control Register 1</td>
+<td>使能、模式、波特率、数据格式</td>
+</tr>
+<tr>
+<td>CR2</td>
+<td>Control Register 2</td>
+<td>DMA、中断控制</td>
+</tr>
+<tr>
+<td>SR</td>
+<td>Status Register</td>
+<td>状态标志</td>
+</tr>
+<tr>
+<td>DR</td>
+<td>Data Register</td>
+<td>数据收发</td>
+</tr>
+<tr>
+<td>CRCPR</td>
+<td>CRC Polynomial Register</td>
+<td>CRC多项式</td>
+</tr>
+<tr>
+<td>RXCRCR</td>
+<td>RX CRC Register</td>
+<td>接收CRC</td>
+</tr>
+<tr>
+<td>TXCRCR</td>
+<td>TX CRC Register</td>
+<td>发送CRC</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_3">环境准备</h2>
+<h3 id="_4">硬件要求</h3>
+<ul>
+<li>STM32F4系列开发板（如STM32F407VET6）</li>
+<li>W25Q128 SPI Flash模块</li>
+<li>杜邦线若干</li>
+<li>逻辑分析仪（可选，用于调试）</li>
+</ul>
+<h3 id="_5">软件要求</h3>
+<ul>
+<li>Keil MDK 5.x 或 STM32CubeIDE</li>
+<li>STM32F4 HAL库或标准外设库</li>
+<li>串口调试工具（用于输出调试信息）</li>
+</ul>
+<h3 id="_6">硬件连接</h3>
+<pre><code>STM32F407 &lt;---&gt; W25Q128 Flash
+
+SPI1连接：
+- PA5 (SPI1_SCK)  ---&gt; CLK
+- PA6 (SPI1_MISO) ---&gt; DO (MISO)
+- PA7 (SPI1_MOSI) ---&gt; DI (MOSI)
+- PA4 (GPIO)      ---&gt; CS (片选)
+- 3.3V            ---&gt; VCC
+- GND             ---&gt; GND
+
+注意：
+1. W25Q128工作电压为3.3V
+2. CS片选由GPIO控制，低电平有效
+3. 确保连线尽量短，减少干扰
+</code></pre>
+<h2 id="_7">核心内容</h2>
+<h3 id="1spi-gpio">步骤1：SPI GPIO和时钟配置</h3>
+<p>首先配置SPI相关的GPIO引脚和时钟。</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+
+// W25Q128 CS引脚定义
+#define W25Q_CS_PORT    GPIOA
+#define W25Q_CS_PIN     4
+
+// CS控制宏
+#define W25Q_CS_LOW()   (W25Q_CS_PORT-&gt;BSRR = (1 &lt;&lt; (W25Q_CS_PIN + 16)))
+#define W25Q_CS_HIGH()  (W25Q_CS_PORT-&gt;BSRR = (1 &lt;&lt; W25Q_CS_PIN))
+
+/**
+ * @brief  SPI1 GPIO初始化
+ * @param  无
+ * @retval 无
+ */
+void SPI1_GPIO_Init(void) {
+    // 使能GPIOA时钟
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+
+    // 配置PA5/PA6/PA7为复用功能（SPI1）
+    // PA5: SCK, PA6: MISO, PA7: MOSI
+    GPIOA-&gt;MODER &amp;= ~((0x03 &lt;&lt; (5*2)) | (0x03 &lt;&lt; (6*2)) | (0x03 &lt;&lt; (7*2)));
+    GPIOA-&gt;MODER |= (0x02 &lt;&lt; (5*2)) | (0x02 &lt;&lt; (6*2)) | (0x02 &lt;&lt; (7*2));
+
+    // 配置为推挽输出、高速、上拉
+    GPIOA-&gt;OTYPER &amp;= ~((1 &lt;&lt; 5) | (1 &lt;&lt; 6) | (1 &lt;&lt; 7));
+    GPIOA-&gt;OSPEEDR |= (0x03 &lt;&lt; (5*2)) | (0x03 &lt;&lt; (6*2)) | (0x03 &lt;&lt; (7*2));
+    GPIOA-&gt;PUPDR &amp;= ~((0x03 &lt;&lt; (5*2)) | (0x03 &lt;&lt; (6*2)) | (0x03 &lt;&lt; (7*2)));
+    GPIOA-&gt;PUPDR |= (0x01 &lt;&lt; (5*2)) | (0x01 &lt;&lt; (6*2)) | (0x01 &lt;&lt; (7*2));
+
+    // 配置复用功能为SPI1（AF5）
+    GPIOA-&gt;AFR[0] &amp;= ~((0x0F &lt;&lt; (5*4)) | (0x0F &lt;&lt; (6*4)) | (0x0F &lt;&lt; (7*4)));
+    GPIOA-&gt;AFR[0] |= (0x05 &lt;&lt; (5*4)) | (0x05 &lt;&lt; (6*4)) | (0x05 &lt;&lt; (7*4));
+
+    // 配置PA4为GPIO输出（CS片选）
+    GPIOA-&gt;MODER &amp;= ~(0x03 &lt;&lt; (4*2));
+    GPIOA-&gt;MODER |= (0x01 &lt;&lt; (4*2));  // 输出模式
+    GPIOA-&gt;OTYPER &amp;= ~(1 &lt;&lt; 4);       // 推挽输出
+    GPIOA-&gt;OSPEEDR |= (0x03 &lt;&lt; (4*2)); // 高速
+    GPIOA-&gt;PUPDR |= (0x01 &lt;&lt; (4*2));   // 上拉
+
+    // CS默认为高电平（未选中）
+    W25Q_CS_HIGH();
+}
+</code></pre>
+<h3 id="2spi">步骤2：SPI基本配置</h3>
+<p>配置SPI的工作模式、波特率等参数。</p>
+<pre><code class="language-c">/**
+ * @brief  SPI1基本配置
+ * @param  无
+ * @retval 无
+ */
+void SPI1_Config(void) {
+    // 使能SPI1时钟（在APB2总线上）
+    RCC-&gt;APB2ENR |= RCC_APB2ENR_SPI1EN;
+
+    // 禁用SPI（配置前必须禁用）
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_SPE;
+
+    // 配置CR1寄存器
+    SPI1-&gt;CR1 = 0;  // 清零
+
+    // 1. 设置为主模式
+    SPI1-&gt;CR1 |= SPI_CR1_MSTR;
+
+    // 2. 设置波特率：APB2/4 = 84MHz/4 = 21MHz
+    // BR[2:0]: 000=/2, 001=/4, 010=/8, 011=/16, 100=/32, 101=/64, 110=/128, 111=/256
+    SPI1-&gt;CR1 |= (0x01 &lt;&lt; 3);  // 001 = /4
+
+    // 3. 设置时钟极性和相位（模式0）
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_CPOL;  // CPOL=0：空闲时低电平
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_CPHA;  // CPHA=0：第一个边沿采样
+
+    // 4. 设置数据帧格式：8位
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_DFF;   // 0=8位数据帧
+
+    // 5. 设置MSB先传输
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_LSBFIRST;
+
+    // 6. 软件管理NSS（片选）
+    SPI1-&gt;CR1 |= SPI_CR1_SSM;    // 软件NSS管理
+    SPI1-&gt;CR1 |= SPI_CR1_SSI;    // 内部NSS信号为高
+
+    // 7. 配置为全双工模式
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_RXONLY;  // 全双工模式
+    SPI1-&gt;CR1 &amp;= ~SPI_CR1_BIDIMODE; // 双线双向模式
+
+    // 使能SPI
+    SPI1-&gt;CR1 |= SPI_CR1_SPE;
+}
+
+/**
+ * @brief  SPI1完整初始化
+ * @param  无
+ * @retval 无
+ */
+void SPI1_Init(void) {
+    SPI1_GPIO_Init();
+    SPI1_Config();
+}
+</code></pre>
+<p><strong>波特率计算</strong>：</p>
+<pre><code>SPI1在APB2总线上，APB2时钟为84MHz
+波特率 = APB2时钟 / 分频系数
+
+分频系数选择：
+- /2   = 42MHz（太快，可能不稳定）
+- /4   = 21MHz（推荐）
+- /8   = 10.5MHz
+- /16  = 5.25MHz
+- /32  = 2.625MHz
+- /64  = 1.3125MHz
+- /128 = 656.25KHz
+- /256 = 328.125KHz
+
+W25Q128最高支持104MHz，但实际使用建议不超过30MHz
+</code></pre>
+<h3 id="3spi">步骤3：SPI数据收发函数</h3>
+<p>实现SPI的基本数据收发功能。</p>
+<pre><code class="language-c">/**
+ * @brief  SPI发送并接收一个字节
+ * @param  data: 要发送的字节
+ * @retval 接收到的字节
+ */
+uint8_t SPI1_TransferByte(uint8_t data) {
+    // 等待发送缓冲区为空
+    while (!(SPI1-&gt;SR &amp; SPI_SR_TXE));
+
+    // 发送数据
+    SPI1-&gt;DR = data;
+
+    // 等待接收缓冲区非空
+    while (!(SPI1-&gt;SR &amp; SPI_SR_RXNE));
+
+    // 读取并返回接收到的数据
+    return (uint8_t)SPI1-&gt;DR;
+}
+
+/**
+ * @brief  SPI发送一个字节（不关心接收）
+ * @param  data: 要发送的字节
+ * @retval 无
+ */
+void SPI1_SendByte(uint8_t data) {
+    SPI1_TransferByte(data);
+}
+
+/**
+ * @brief  SPI接收一个字节（发送0xFF）
+ * @param  无
+ * @retval 接收到的字节
+ */
+uint8_t SPI1_ReceiveByte(void) {
+    return SPI1_TransferByte(0xFF);
+}
+
+/**
+ * @brief  SPI发送多个字节
+ * @param  buf: 数据缓冲区
+ * @param  len: 数据长度
+ * @retval 无
+ */
+void SPI1_SendBuffer(const uint8_t *buf, uint32_t len) {
+    for (uint32_t i = 0; i &lt; len; i++) {
+        SPI1_TransferByte(buf[i]);
+    }
+}
+
+/**
+ * @brief  SPI接收多个字节
+ * @param  buf: 数据缓冲区
+ * @param  len: 数据长度
+ * @retval 无
+ */
+void SPI1_ReceiveBuffer(uint8_t *buf, uint32_t len) {
+    for (uint32_t i = 0; i &lt; len; i++) {
+        buf[i] = SPI1_ReceiveByte();
+    }
+}
+</code></pre>
+<p><strong>SPI状态标志说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>标志位</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TXE</td>
+<td>Transmit Buffer Empty</td>
+<td>发送缓冲区为空</td>
+</tr>
+<tr>
+<td>RXNE</td>
+<td>Receive Buffer Not Empty</td>
+<td>接收缓冲区非空</td>
+</tr>
+<tr>
+<td>BSY</td>
+<td>Busy Flag</td>
+<td>SPI忙标志</td>
+</tr>
+<tr>
+<td>OVR</td>
+<td>Overrun Flag</td>
+<td>溢出错误</td>
+</tr>
+<tr>
+<td>MODF</td>
+<td>Mode Fault</td>
+<td>模式错误</td>
+</tr>
+<tr>
+<td>CRCERR</td>
+<td>CRC Error</td>
+<td>CRC错误</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4w25q128">步骤4：W25Q128基本操作</h3>
+<p>实现Flash的基本操作函数。</p>
+<pre><code class="language-c">// W25Q128命令定义
+#define W25Q_CMD_WRITE_ENABLE       0x06
+#define W25Q_CMD_WRITE_DISABLE      0x04
+#define W25Q_CMD_READ_STATUS_REG    0x05
+#define W25Q_CMD_WRITE_STATUS_REG   0x01
+#define W25Q_CMD_READ_DATA          0x03
+#define W25Q_CMD_PAGE_PROGRAM       0x02
+#define W25Q_CMD_SECTOR_ERASE       0x20
+#define W25Q_CMD_BLOCK_ERASE_32K    0x52
+#define W25Q_CMD_BLOCK_ERASE_64K    0xD8
+#define W25Q_CMD_CHIP_ERASE         0xC7
+#define W25Q_CMD_READ_JEDEC_ID      0x9F
+#define W25Q_CMD_POWER_DOWN         0xB9
+#define W25Q_CMD_RELEASE_POWER_DOWN 0xAB
+
+// 状态寄存器位定义
+#define W25Q_STATUS_BUSY            0x01  // 忙标志
+#define W25Q_STATUS_WEL             0x02  // 写使能标志
+
+/**
+ * @brief  读取W25Q128状态寄存器
+ * @param  无
+ * @retval 状态寄存器值
+ */
+uint8_t W25Q_ReadStatusReg(void) {
+    uint8_t status;
+
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_READ_STATUS_REG);
+    status = SPI1_ReceiveByte();
+    W25Q_CS_HIGH();
+
+    return status;
+}
+
+/**
+ * @brief  等待W25Q128空闲
+ * @param  无
+ * @retval 无
+ */
+void W25Q_WaitBusy(void) {
+    while (W25Q_ReadStatusReg() &amp; W25Q_STATUS_BUSY);
+}
+
+/**
+ * @brief  写使能
+ * @param  无
+ * @retval 无
+ */
+void W25Q_WriteEnable(void) {
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_WRITE_ENABLE);
+    W25Q_CS_HIGH();
+}
+
+/**
+ * @brief  写禁止
+ * @param  无
+ * @retval 无
+ */
+void W25Q_WriteDisable(void) {
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_WRITE_DISABLE);
+    W25Q_CS_HIGH();
+}
+
+/**
+ * @brief  读取JEDEC ID（厂商ID和设备ID）
+ * @param  无
+ * @retval 24位ID（高8位：厂商，中8位：类型，低8位：容量）
+ */
+uint32_t W25Q_ReadJedecID(void) {
+    uint32_t id = 0;
+
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_READ_JEDEC_ID);
+    id |= (SPI1_ReceiveByte() &lt;&lt; 16);  // 厂商ID
+    id |= (SPI1_ReceiveByte() &lt;&lt; 8);   // 设备类型
+    id |= SPI1_ReceiveByte();          // 设备容量
+    W25Q_CS_HIGH();
+
+    return id;
+}
+
+/**
+ * @brief  W25Q128初始化
+ * @param  无
+ * @retval 0=成功，1=失败
+ */
+uint8_t W25Q_Init(void) {
+    uint32_t id;
+
+    // 初始化SPI
+    SPI1_Init();
+
+    // 读取ID验证
+    id = W25Q_ReadJedecID();
+
+    // W25Q128的ID：0xEF4018
+    // 0xEF: Winbond厂商ID
+    // 0x40: 设备类型
+    // 0x18: 容量（2^24 = 16MB）
+    if (id == 0xEF4018) {
+        return 0;  // 成功
+    }
+
+    return 1;  // 失败
+}
+</code></pre>
+<h3 id="5flash">步骤5：Flash读取操作</h3>
+<p>实现Flash的数据读取功能。</p>
+<pre><code class="language-c">/**
+ * @brief  读取Flash数据
+ * @param  addr: 读取地址（24位，0x000000-0xFFFFFF）
+ * @param  buf: 数据缓冲区
+ * @param  len: 读取长度
+ * @retval 无
+ */
+void W25Q_ReadData(uint32_t addr, uint8_t *buf, uint32_t len) {
+    W25Q_CS_LOW();
+
+    // 发送读命令
+    SPI1_SendByte(W25Q_CMD_READ_DATA);
+
+    // 发送24位地址
+    SPI1_SendByte((addr &gt;&gt; 16) &amp; 0xFF);  // A23-A16
+    SPI1_SendByte((addr &gt;&gt; 8) &amp; 0xFF);   // A15-A8
+    SPI1_SendByte(addr &amp; 0xFF);          // A7-A0
+
+    // 读取数据
+    for (uint32_t i = 0; i &lt; len; i++) {
+        buf[i] = SPI1_ReceiveByte();
+    }
+
+    W25Q_CS_HIGH();
+}
+
+/**
+ * @brief  读取一个字节
+ * @param  addr: 读取地址
+ * @retval 读取的字节
+ */
+uint8_t W25Q_ReadByte(uint32_t addr) {
+    uint8_t data;
+    W25Q_ReadData(addr, &amp;data, 1);
+    return data;
+}
+</code></pre>
+<h3 id="6flash">步骤6：Flash擦除操作</h3>
+<p>Flash必须先擦除后才能写入。擦除操作将数据变为0xFF。</p>
+<pre><code class="language-c">/**
+ * @brief  扇区擦除（4KB）
+ * @param  addr: 扇区地址（必须是4KB对齐）
+ * @retval 无
+ */
+void W25Q_EraseSector(uint32_t addr) {
+    // 写使能
+    W25Q_WriteEnable();
+
+    // 等待写使能完成
+    while (!(W25Q_ReadStatusReg() &amp; W25Q_STATUS_WEL));
+
+    W25Q_CS_LOW();
+
+    // 发送擦除命令
+    SPI1_SendByte(W25Q_CMD_SECTOR_ERASE);
+
+    // 发送24位地址
+    SPI1_SendByte((addr &gt;&gt; 16) &amp; 0xFF);
+    SPI1_SendByte((addr &gt;&gt; 8) &amp; 0xFF);
+    SPI1_SendByte(addr &amp; 0xFF);
+
+    W25Q_CS_HIGH();
+
+    // 等待擦除完成
+    W25Q_WaitBusy();
+}
+
+/**
+ * @brief  块擦除（64KB）
+ * @param  addr: 块地址（必须是64KB对齐）
+ * @retval 无
+ */
+void W25Q_EraseBlock64K(uint32_t addr) {
+    W25Q_WriteEnable();
+    while (!(W25Q_ReadStatusReg() &amp; W25Q_STATUS_WEL));
+
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_BLOCK_ERASE_64K);
+    SPI1_SendByte((addr &gt;&gt; 16) &amp; 0xFF);
+    SPI1_SendByte((addr &gt;&gt; 8) &amp; 0xFF);
+    SPI1_SendByte(addr &amp; 0xFF);
+    W25Q_CS_HIGH();
+
+    W25Q_WaitBusy();
+}
+
+/**
+ * @brief  整片擦除
+ * @param  无
+ * @retval 无
+ * @note   擦除时间较长（约20-100秒）
+ */
+void W25Q_EraseChip(void) {
+    W25Q_WriteEnable();
+    while (!(W25Q_ReadStatusReg() &amp; W25Q_STATUS_WEL));
+
+    W25Q_CS_LOW();
+    SPI1_SendByte(W25Q_CMD_CHIP_ERASE);
+    W25Q_CS_HIGH();
+
+    W25Q_WaitBusy();
+}
+</code></pre>
+<p><strong>擦除时间参考</strong>：
+- 扇区擦除（4KB）：约45ms
+- 块擦除（32KB）：约120ms
+- 块擦除（64KB）：约150ms
+- 整片擦除（16MB）：约20-100秒</p>
+<h3 id="7flash">步骤7：Flash写入操作</h3>
+<p>实现Flash的页编程（写入）功能。</p>
+<pre><code class="language-c">/**
+ * @brief  页编程（最多256字节）
+ * @param  addr: 写入地址
+ * @param  buf: 数据缓冲区
+ * @param  len: 写入长度（不超过256字节）
+ * @retval 无
+ * @note   写入地址必须在同一页内，不能跨页
+ */
+void W25Q_PageProgram(uint32_t addr, const uint8_t *buf, uint32_t len) {
+    // 限制长度不超过256字节
+    if (len &gt; 256) {
+        len = 256;
+    }
+
+    // 写使能
+    W25Q_WriteEnable();
+    while (!(W25Q_ReadStatusReg() &amp; W25Q_STATUS_WEL));
+
+    W25Q_CS_LOW();
+
+    // 发送页编程命令
+    SPI1_SendByte(W25Q_CMD_PAGE_PROGRAM);
+
+    // 发送24位地址
+    SPI1_SendByte((addr &gt;&gt; 16) &amp; 0xFF);
+    SPI1_SendByte((addr &gt;&gt; 8) &amp; 0xFF);
+    SPI1_SendByte(addr &amp; 0xFF);
+
+    // 发送数据
+    for (uint32_t i = 0; i &lt; len; i++) {
+        SPI1_SendByte(buf[i]);
+    }
+
+    W25Q_CS_HIGH();
+
+    // 等待编程完成
+    W25Q_WaitBusy();
+}
+
+/**
+ * @brief  写入数据（自动处理跨页）
+ * @param  addr: 写入地址
+ * @param  buf: 数据缓冲区
+ * @param  len: 写入长度
+ * @retval 无
+ */
+void W25Q_WriteData(uint32_t addr, const uint8_t *buf, uint32_t len) {
+    uint32_t page_remain;  // 当前页剩余字节数
+    uint32_t write_len;    // 本次写入长度
+
+    page_remain = 256 - (addr % 256);  // 计算当前页剩余空间
+
+    if (len &lt;= page_remain) {
+        // 数据在同一页内
+        W25Q_PageProgram(addr, buf, len);
+    } else {
+        // 数据跨页
+        // 先写满当前页
+        W25Q_PageProgram(addr, buf, page_remain);
+        addr += page_remain;
+        buf += page_remain;
+        len -= page_remain;
+
+        // 写入剩余数据
+        while (len &gt; 0) {
+            write_len = (len &gt; 256) ? 256 : len;
+            W25Q_PageProgram(addr, buf, write_len);
+            addr += write_len;
+            buf += write_len;
+            len -= write_len;
+        }
+    }
+}
+
+/**
+ * @brief  写入一个字节
+ * @param  addr: 写入地址
+ * @param  data: 要写入的字节
+ * @retval 无
+ */
+void W25Q_WriteByte(uint32_t addr, uint8_t data) {
+    W25Q_WriteData(addr, &amp;data, 1);
+}
+</code></pre>
+<p><strong>页编程注意事项</strong>：</p>
+<ol>
+<li>
+<p><strong>页对齐</strong>：
+   - Flash以256字节为一页
+   - 页地址：0x000000, 0x000100, 0x000200, ...
+   - 写入不能跨页，否则会回卷到页首</p>
+</li>
+<li>
+<p><strong>写入前必须擦除</strong>：
+   - Flash只能从1写成0，不能从0写成1
+   - 擦除操作将所有位设置为1（0xFF）
+   - 写入操作将部分位从1变为0</p>
+</li>
+<li>
+<p><strong>写入时间</strong>：
+   - 页编程时间：约0.7ms
+   - 写使能时间：约几微秒</p>
+</li>
+</ol>
+<h2 id="_8">实践示例</h2>
+<h3 id="1flash">示例1：Flash读写测试</h3>
+<p>基本的Flash读写功能测试。</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+
+/**
+ * @brief  主函数 - Flash读写测试
+ */
+int main(void) {
+    uint8_t write_buf[256];
+    uint8_t read_buf[256];
+    uint32_t test_addr = 0x000000;
+
+    // 系统初始化
+    SystemInit();
+    UART1_Init(115200);  // 用于调试输出
+
+    // 初始化W25Q128
+    if (W25Q_Init() == 0) {
+        printf(&quot;W25Q128 Init OK\r\n&quot;);
+        printf(&quot;JEDEC ID: 0x%06X\r\n&quot;, W25Q_ReadJedecID());
+    } else {
+        printf(&quot;W25Q128 Init Failed!\r\n&quot;);
+        while (1);
+    }
+
+    // 准备测试数据
+    for (int i = 0; i &lt; 256; i++) {
+        write_buf[i] = i;
+    }
+
+    printf(&quot;\r\n=== Flash Write Test ===\r\n&quot;);
+
+    // 擦除扇区
+    printf(&quot;Erasing sector at 0x%06X...\r\n&quot;, test_addr);
+    W25Q_EraseSector(test_addr);
+    printf(&quot;Erase done\r\n&quot;);
+
+    // 写入数据
+    printf(&quot;Writing data...\r\n&quot;);
+    W25Q_WriteData(test_addr, write_buf, 256);
+    printf(&quot;Write done\r\n&quot;);
+
+    // 读取数据
+    printf(&quot;Reading data...\r\n&quot;);
+    W25Q_ReadData(test_addr, read_buf, 256);
+    printf(&quot;Read done\r\n&quot;);
+
+    // 验证数据
+    printf(&quot;\r\n=== Data Verification ===\r\n&quot;);
+    uint32_t errors = 0;
+    for (int i = 0; i &lt; 256; i++) {
+        if (write_buf[i] != read_buf[i]) {
+            printf(&quot;Error at offset %d: wrote 0x%02X, read 0x%02X\r\n&quot;,
+                   i, write_buf[i], read_buf[i]);
+            errors++;
+        }
+    }
+
+    if (errors == 0) {
+        printf(&quot;Verification PASSED!\r\n&quot;);
+    } else {
+        printf(&quot;Verification FAILED! %d errors\r\n&quot;, errors);
+    }
+
+    // 显示部分数据
+    printf(&quot;\r\n=== First 16 bytes ===\r\n&quot;);
+    for (int i = 0; i &lt; 16; i++) {
+        printf(&quot;%02X &quot;, read_buf[i]);
+    }
+    printf(&quot;\r\n&quot;);
+
+    while (1) {
+        // 主循环
+    }
+}
+</code></pre>
+<h3 id="2flash">示例2：Flash性能测试</h3>
+<p>测试Flash的读写速度。</p>
+<pre><code class="language-c">/**
+ * @brief  简单延时函数（用于计时）
+ * @param  ms: 延时毫秒数
+ * @retval 无
+ */
+void Delay_Ms(uint32_t ms) {
+    for (volatile uint32_t i = 0; i &lt; ms * 21000; i++);
+}
+
+/**
+ * @brief  获取系统滴答计数（假设SysTick已配置为1ms）
+ * @param  无
+ * @retval 当前计数值
+ */
+extern volatile uint32_t g_systick_count;
+
+/**
+ * @brief  Flash性能测试
+ */
+void FlashPerformanceTest(void) {
+    uint8_t buffer[4096];  // 4KB缓冲区
+    uint32_t start_time, end_time;
+    uint32_t test_addr = 0x010000;  // 测试地址
+
+    printf(&quot;\r\n=== Flash Performance Test ===\r\n&quot;);
+
+    // 准备测试数据
+    for (int i = 0; i &lt; 4096; i++) {
+        buffer[i] = i &amp; 0xFF;
+    }
+
+    // 测试扇区擦除速度
+    printf(&quot;\r\n1. Sector Erase Test (4KB)\r\n&quot;);
+    start_time = g_systick_count;
+    W25Q_EraseSector(test_addr);
+    end_time = g_systick_count;
+    printf(&quot;   Time: %d ms\r\n&quot;, end_time - start_time);
+
+    // 测试写入速度
+    printf(&quot;\r\n2. Write Test (4KB)\r\n&quot;);
+    start_time = g_systick_count;
+    W25Q_WriteData(test_addr, buffer, 4096);
+    end_time = g_systick_count;
+    printf(&quot;   Time: %d ms\r\n&quot;, end_time - start_time);
+    printf(&quot;   Speed: %d KB/s\r\n&quot;, 4000 / (end_time - start_time));
+
+    // 测试读取速度
+    printf(&quot;\r\n3. Read Test (4KB)\r\n&quot;);
+    start_time = g_systick_count;
+    W25Q_ReadData(test_addr, buffer, 4096);
+    end_time = g_systick_count;
+    printf(&quot;   Time: %d ms\r\n&quot;, end_time - start_time);
+    printf(&quot;   Speed: %d KB/s\r\n&quot;, 4000 / (end_time - start_time));
+}
+</code></pre>
+<h3 id="3">示例3：文件系统接口</h3>
+<p>为FATFS文件系统提供底层接口。</p>
+<pre><code class="language-c">/**
+ * @brief  Flash扇区读取（FATFS接口）
+ * @param  sector: 扇区号
+ * @param  buffer: 数据缓冲区
+ * @param  count: 扇区数量
+ * @retval 0=成功，其他=失败
+ */
+uint8_t Flash_ReadSectors(uint32_t sector, uint8_t *buffer, uint32_t count) {
+    uint32_t addr = sector * 4096;  // 扇区大小4KB
+    W25Q_ReadData(addr, buffer, count * 4096);
+    return 0;
+}
+
+/**
+ * @brief  Flash扇区写入（FATFS接口）
+ * @param  sector: 扇区号
+ * @param  buffer: 数据缓冲区
+ * @param  count: 扇区数量
+ * @retval 0=成功，其他=失败
+ */
+uint8_t Flash_WriteSectors(uint32_t sector, const uint8_t *buffer, uint32_t count) {
+    uint32_t addr;
+
+    for (uint32_t i = 0; i &lt; count; i++) {
+        addr = (sector + i) * 4096;
+
+        // 擦除扇区
+        W25Q_EraseSector(addr);
+
+        // 写入数据
+        W25Q_WriteData(addr, buffer + i * 4096, 4096);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  获取Flash信息（FATFS接口）
+ * @param  无
+ * @retval 扇区数量
+ */
+uint32_t Flash_GetSectorCount(void) {
+    // 16MB / 4KB = 4096个扇区
+    return 4096;
+}
+</code></pre>
+<h3 id="4">示例4：数据记录应用</h3>
+<p>实现一个简单的数据记录功能。</p>
+<pre><code class="language-c">#define LOG_START_ADDR  0x100000  // 日志起始地址（1MB）
+#define LOG_SECTOR_SIZE 4096
+#define LOG_MAX_RECORDS 1000
+
+typedef struct {
+    uint32_t timestamp;
+    uint16_t temperature;
+    uint16_t humidity;
+    uint8_t  status;
+    uint8_t  reserved[3];
+} LogRecord_t;  // 12字节
+
+/**
+ * @brief  写入一条日志记录
+ * @param  record: 日志记录指针
+ * @retval 0=成功，1=失败（存储满）
+ */
+uint8_t Log_WriteRecord(LogRecord_t *record) {
+    static uint32_t record_count = 0;
+    uint32_t addr;
+
+    if (record_count &gt;= LOG_MAX_RECORDS) {
+        return 1;  // 存储满
+    }
+
+    addr = LOG_START_ADDR + record_count * sizeof(LogRecord_t);
+
+    // 检查是否需要擦除新扇区
+    if ((addr % LOG_SECTOR_SIZE) == 0) {
+        W25Q_EraseSector(addr);
+    }
+
+    // 写入记录
+    W25Q_WriteData(addr, (uint8_t*)record, sizeof(LogRecord_t));
+
+    record_count++;
+    return 0;
+}
+
+/**
+ * @brief  读取日志记录
+ * @param  index: 记录索引
+ * @param  record: 日志记录指针
+ * @retval 0=成功，1=失败
+ */
+uint8_t Log_ReadRecord(uint32_t index, LogRecord_t *record) {
+    uint32_t addr;
+
+    if (index &gt;= LOG_MAX_RECORDS) {
+        return 1;
+    }
+
+    addr = LOG_START_ADDR + index * sizeof(LogRecord_t);
+    W25Q_ReadData(addr, (uint8_t*)record, sizeof(LogRecord_t));
+
+    return 0;
+}
+
+/**
+ * @brief  清空日志
+ * @param  无
+ * @retval 无
+ */
+void Log_Clear(void) {
+    uint32_t sectors = (LOG_MAX_RECORDS * sizeof(LogRecord_t) + LOG_SECTOR_SIZE - 1) / LOG_SECTOR_SIZE;
+
+    for (uint32_t i = 0; i &lt; sectors; i++) {
+        W25Q_EraseSector(LOG_START_ADDR + i * LOG_SECTOR_SIZE);
+    }
+}
+
+/**
+ * @brief  主函数 - 数据记录示例
+ */
+int main(void) {
+    LogRecord_t record;
+
+    SystemInit();
+    UART1_Init(115200);
+    W25Q_Init();
+
+    printf(&quot;Data Logger Example\r\n&quot;);
+
+    // 写入测试数据
+    for (int i = 0; i &lt; 10; i++) {
+        record.timestamp = i * 1000;
+        record.temperature = 2500 + i * 10;  // 25.00°C
+        record.humidity = 6000 + i * 5;      // 60.00%
+        record.status = 0x01;
+
+        if (Log_WriteRecord(&amp;record) == 0) {
+            printf(&quot;Record %d written\r\n&quot;, i);
+        }
+    }
+
+    // 读取并显示数据
+    printf(&quot;\r\n=== Stored Records ===\r\n&quot;);
+    for (int i = 0; i &lt; 10; i++) {
+        if (Log_ReadRecord(i, &amp;record) == 0) {
+            printf(&quot;Record %d: Time=%d, Temp=%d.%02d°C, Hum=%d.%02d%%\r\n&quot;,
+                   i, record.timestamp,
+                   record.temperature / 100, record.temperature % 100,
+                   record.humidity / 100, record.humidity % 100);
+        }
+    }
+
+    while (1);
+}
+</code></pre>
+<h2 id="_9">深入理解</h2>
+<h3 id="spidma">SPI与DMA结合</h3>
+<p>使用DMA可以大幅提高SPI的传输效率。</p>
+<pre><code class="language-c">/**
+ * @brief  配置SPI1的DMA发送
+ * @param  无
+ * @retval 无
+ */
+void SPI1_DMA_TX_Config(void) {
+    // 使能DMA2时钟
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_DMA2EN;
+
+    // 配置DMA2 Stream3 Channel3（SPI1_TX）
+    DMA2_Stream3-&gt;CR = 0;
+    while (DMA2_Stream3-&gt;CR &amp; DMA_SxCR_EN);
+
+    DMA2_Stream3-&gt;PAR = (uint32_t)&amp;SPI1-&gt;DR;
+    DMA2_Stream3-&gt;CR = (3 &lt;&lt; 25) |  // Channel 3
+                       (1 &lt;&lt; 16) |  // 中等优先级
+                       (0 &lt;&lt; 13) |  // 内存：字节
+                       (0 &lt;&lt; 11) |  // 外设：字节
+                       (1 &lt;&lt; 10) |  // 内存地址递增
+                       (1 &lt;&lt; 6);    // 内存到外设
+
+    // 使能SPI1的DMA发送
+    SPI1-&gt;CR2 |= SPI_CR2_TXDMAEN;
+}
+
+/**
+ * @brief  使用DMA发送数据
+ * @param  data: 数据指针
+ * @param  length: 数据长度
+ * @retval 无
+ */
+void SPI1_DMA_Send(const uint8_t *data, uint16_t length) {
+    while (DMA2_Stream3-&gt;CR &amp; DMA_SxCR_EN);
+
+    DMA2_Stream3-&gt;M0AR = (uint32_t)data;
+    DMA2_Stream3-&gt;NDTR = length;
+
+    DMA2-&gt;LIFCR = 0x3F &lt;&lt; 22;  // 清除标志
+    DMA2_Stream3-&gt;CR |= DMA_SxCR_EN;
+
+    // 等待传输完成
+    while (DMA2_Stream3-&gt;CR &amp; DMA_SxCR_EN);
+    while (SPI1-&gt;SR &amp; SPI_SR_BSY);
+}
+</code></pre>
+<h3 id="flash">Flash磨损均衡</h3>
+<p>Flash有擦写次数限制，需要实现磨损均衡。</p>
+<pre><code class="language-c">#define WEAR_LEVEL_BLOCKS 16  // 磨损均衡块数
+
+typedef struct {
+    uint32_t erase_count;  // 擦除次数
+    uint32_t block_addr;   // 块地址
+} WearLevelInfo_t;
+
+WearLevelInfo_t wear_level_table[WEAR_LEVEL_BLOCKS];
+
+/**
+ * @brief  选择擦除次数最少的块
+ * @param  无
+ * @retval 块索引
+ */
+uint32_t WearLevel_SelectBlock(void) {
+    uint32_t min_index = 0;
+    uint32_t min_count = wear_level_table[0].erase_count;
+
+    for (uint32_t i = 1; i &lt; WEAR_LEVEL_BLOCKS; i++) {
+        if (wear_level_table[i].erase_count &lt; min_count) {
+            min_count = wear_level_table[i].erase_count;
+            min_index = i;
+        }
+    }
+
+    return min_index;
+}
+
+/**
+ * @brief  擦除块（带磨损均衡）
+ * @param  block_index: 块索引
+ * @retval 无
+ */
+void WearLevel_EraseBlock(uint32_t block_index) {
+    uint32_t addr = wear_level_table[block_index].block_addr;
+
+    W25Q_EraseBlock64K(addr);
+    wear_level_table[block_index].erase_count++;
+
+    // 保存磨损信息到Flash
+    // ...
+}
+</code></pre>
+<h3 id="flash_1">Flash坏块管理</h3>
+<p>实现简单的坏块管理机制。</p>
+<pre><code class="language-c">#define BAD_BLOCK_MARKER 0xBAD0
+
+typedef struct {
+    uint16_t marker;       // 坏块标记
+    uint16_t block_num;    // 块号
+    uint32_t reserved;
+} BadBlockInfo_t;
+
+/**
+ * @brief  标记坏块
+ * @param  block_addr: 块地址
+ * @retval 无
+ */
+void MarkBadBlock(uint32_t block_addr) {
+    BadBlockInfo_t info;
+
+    info.marker = BAD_BLOCK_MARKER;
+    info.block_num = block_addr / (64 * 1024);
+    info.reserved = 0;
+
+    // 写入坏块标记到块的第一页
+    W25Q_WriteData(block_addr, (uint8_t*)&amp;info, sizeof(BadBlockInfo_t));
+}
+
+/**
+ * @brief  检查是否为坏块
+ * @param  block_addr: 块地址
+ * @retval 1=坏块，0=好块
+ */
+uint8_t IsBadBlock(uint32_t block_addr) {
+    BadBlockInfo_t info;
+
+    W25Q_ReadData(block_addr, (uint8_t*)&amp;info, sizeof(BadBlockInfo_t));
+
+    return (info.marker == BAD_BLOCK_MARKER) ? 1 : 0;
+}
+</code></pre>
+<h2 id="_10">常见问题</h2>
+<h3 id="q1-spi0xff0x00">Q1: SPI通信失败，读取的数据全是0xFF或0x00？</h3>
+<p><strong>可能原因</strong>：
+1. 硬件连接错误
+2. SPI配置错误
+3. 片选信号未正确控制
+4. 时钟极性/相位不匹配</p>
+<p><strong>排查步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查硬件连接
+// 使用万用表测量引脚电压
+// 使用逻辑分析仪观察波形
+
+// 2. 验证SPI配置
+printf(&quot;SPI1 CR1: 0x%04X\r\n&quot;, SPI1-&gt;CR1);
+printf(&quot;SPI1 CR2: 0x%04X\r\n&quot;, SPI1-&gt;CR2);
+
+// 3. 测试回环
+// 将MOSI和MISO短接
+uint8_t test_data = 0xA5;
+uint8_t recv_data;
+
+W25Q_CS_LOW();
+recv_data = SPI1_TransferByte(test_data);
+W25Q_CS_HIGH();
+
+if (recv_data == test_data) {
+    printf(&quot;SPI loopback test OK\r\n&quot;);
+} else {
+    printf(&quot;SPI loopback test FAIL: sent 0x%02X, received 0x%02X\r\n&quot;,
+           test_data, recv_data);
+}
+
+// 4. 检查Flash ID
+uint32_t id = W25Q_ReadJedecID();
+printf(&quot;Flash ID: 0x%06X\r\n&quot;, id);
+if (id == 0xFFFFFF || id == 0x000000) {
+    printf(&quot;Flash not responding!\r\n&quot;);
+}
+</code></pre>
+<h3 id="q2-flash">Q2: Flash写入后读取数据不正确？</h3>
+<p><strong>可能原因</strong>：
+1. 写入前未擦除
+2. 跨页写入
+3. 写使能未生效
+4. 地址计算错误</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 确保写入前擦除
+void SafeWrite(uint32_t addr, const uint8_t *data, uint32_t len) {
+    // 计算需要擦除的扇区
+    uint32_t start_sector = addr / 4096;
+    uint32_t end_sector = (addr + len - 1) / 4096;
+
+    // 擦除所有相关扇区
+    for (uint32_t sector = start_sector; sector &lt;= end_sector; sector++) {
+        W25Q_EraseSector(sector * 4096);
+    }
+
+    // 写入数据
+    W25Q_WriteData(addr, data, len);
+}
+
+// 2. 验证写入
+void VerifyWrite(uint32_t addr, const uint8_t *data, uint32_t len) {
+    uint8_t *read_buf = malloc(len);
+
+    W25Q_ReadData(addr, read_buf, len);
+
+    for (uint32_t i = 0; i &lt; len; i++) {
+        if (read_buf[i] != data[i]) {
+            printf(&quot;Verify failed at 0x%06X: wrote 0x%02X, read 0x%02X\r\n&quot;,
+                   addr + i, data[i], read_buf[i]);
+        }
+    }
+
+    free(read_buf);
+}
+</code></pre>
+<h3 id="q3-flash">Q3: Flash擦除或写入时间过长？</h3>
+<p><strong>可能原因</strong>：
+1. 波特率设置过低
+2. 未使用DMA
+3. 频繁的小数据写入</p>
+<p><strong>优化方案</strong>：</p>
+<pre><code class="language-c">// 1. 提高SPI波特率
+// 将分频系数从/8改为/4
+SPI1-&gt;CR1 &amp;= ~(0x07 &lt;&lt; 3);
+SPI1-&gt;CR1 |= (0x01 &lt;&lt; 3);  // /4 = 21MHz
+
+// 2. 批量写入
+void BatchWrite(uint32_t addr, const uint8_t *data, uint32_t len) {
+    // 一次擦除整个扇区，然后批量写入
+    uint32_t sector_addr = (addr / 4096) * 4096;
+    W25Q_EraseSector(sector_addr);
+
+    // 使用DMA批量写入
+    W25Q_WriteData(addr, data, len);
+}
+
+// 3. 使用缓存
+#define CACHE_SIZE 4096
+uint8_t write_cache[CACHE_SIZE];
+uint32_t cache_addr = 0;
+uint32_t cache_len = 0;
+
+void CachedWrite(uint32_t addr, const uint8_t *data, uint32_t len) {
+    // 如果地址连续，添加到缓存
+    if (addr == cache_addr + cache_len &amp;&amp; cache_len + len &lt;= CACHE_SIZE) {
+        memcpy(write_cache + cache_len, data, len);
+        cache_len += len;
+    } else {
+        // 刷新缓存
+        if (cache_len &gt; 0) {
+            W25Q_WriteData(cache_addr, write_cache, cache_len);
+        }
+
+        // 开始新缓存
+        cache_addr = addr;
+        memcpy(write_cache, data, len);
+        cache_len = len;
+    }
+}
+
+void FlushCache(void) {
+    if (cache_len &gt; 0) {
+        W25Q_WriteData(cache_addr, write_cache, cache_len);
+        cache_len = 0;
+    }
+}
+</code></pre>
+<h3 id="q4-flash">Q4: 如何实现Flash的掉电保护？</h3>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">#define MAGIC_NUMBER 0x12345678
+
+typedef struct {
+    uint32_t magic;
+    uint32_t data_len;
+    uint32_t crc32;
+    uint8_t  data[256];
+} SafeData_t;
+
+/**
+ * @brief  计算CRC32
+ * @param  data: 数据指针
+ * @param  len: 数据长度
+ * @retval CRC32值
+ */
+uint32_t CalcCRC32(const uint8_t *data, uint32_t len) {
+    uint32_t crc = 0xFFFFFFFF;
+
+    for (uint32_t i = 0; i &lt; len; i++) {
+        crc ^= data[i];
+        for (int j = 0; j &lt; 8; j++) {
+            if (crc &amp; 1) {
+                crc = (crc &gt;&gt; 1) ^ 0xEDB88320;
+            } else {
+                crc &gt;&gt;= 1;
+            }
+        }
+    }
+
+    return ~crc;
+}
+
+/**
+ * @brief  安全写入数据
+ * @param  addr: 写入地址
+ * @param  data: 数据指针
+ * @param  len: 数据长度
+ * @retval 0=成功，1=失败
+ */
+uint8_t SafeDataWrite(uint32_t addr, const uint8_t *data, uint32_t len) {
+    SafeData_t safe_data;
+
+    if (len &gt; 256) {
+        return 1;
+    }
+
+    // 准备数据
+    safe_data.magic = MAGIC_NUMBER;
+    safe_data.data_len = len;
+    memcpy(safe_data.data, data, len);
+    safe_data.crc32 = CalcCRC32(safe_data.data, len);
+
+    // 擦除并写入
+    W25Q_EraseSector(addr);
+    W25Q_WriteData(addr, (uint8_t*)&amp;safe_data, sizeof(SafeData_t));
+
+    return 0;
+}
+
+/**
+ * @brief  安全读取数据
+ * @param  addr: 读取地址
+ * @param  data: 数据缓冲区
+ * @param  len: 缓冲区大小
+ * @retval 实际读取长度，0=失败
+ */
+uint32_t SafeDataRead(uint32_t addr, uint8_t *data, uint32_t len) {
+    SafeData_t safe_data;
+    uint32_t crc;
+
+    // 读取数据
+    W25Q_ReadData(addr, (uint8_t*)&amp;safe_data, sizeof(SafeData_t));
+
+    // 验证魔数
+    if (safe_data.magic != MAGIC_NUMBER) {
+        return 0;
+    }
+
+    // 验证CRC
+    crc = CalcCRC32(safe_data.data, safe_data.data_len);
+    if (crc != safe_data.crc32) {
+        return 0;
+    }
+
+    // 复制数据
+    uint32_t copy_len = (safe_data.data_len &lt; len) ? safe_data.data_len : len;
+    memcpy(data, safe_data.data, copy_len);
+
+    return copy_len;
+}
+</code></pre>
+<h2 id="_11">总结</h2>
+<p>本教程通过W25Q128 Flash存储器的读写操作，全面介绍了SPI驱动开发的核心知识。让我们回顾一下要点：</p>
+<p><strong>核心知识点</strong>：
+- SPI通信原理：全双工、同步、主从模式
+- SPI工作模式：CPOL和CPHA的4种组合
+- SPI寄存器配置：CR1、CR2、SR、DR
+- Flash存储器特性：擦除单位、编程单位、地址组织</p>
+<p><strong>实践技能</strong>：
+- GPIO和SPI初始化配置
+- SPI数据收发函数实现
+- Flash读取、擦除、写入操作
+- 页编程和跨页处理
+- 文件系统底层接口</p>
+<p><strong>最佳实践</strong>：
+- 写入前必须先擦除
+- 注意页对齐和跨页问题
+- 使用DMA提高传输效率
+- 实现磨损均衡延长寿命
+- 添加CRC校验保证数据完整性</p>
+<p><strong>调试技巧</strong>：
+- 使用逻辑分析仪观察波形
+- 验证Flash ID确认通信正常
+- 回环测试验证SPI功能
+- 读写验证确保数据正确</p>
+<p>SPI是嵌入式系统中非常重要的通信接口，掌握SPI驱动开发对于使用各种外部设备至关重要。通过本教程的学习和实践，你应该能够独立完成SPI驱动的开发和调试工作。</p>
+<h2 id="_12">延伸阅读</h2>
+<p>推荐进一步学习的内容：</p>
+<p><strong>同模块内容</strong>：
+- <a href="04-i2c-driver.html">I2C驱动开发：传感器数据读取</a> - 学习I2C通信
+- <a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - 提高SPI效率
+- <a href="../intermediate/05-sdio-driver.html">SDIO驱动开发：SD卡接口</a> - 学习SD卡通信</p>
+<p><strong>相关主题</strong>：
+- <a href="01-gpio-driver.html">GPIO驱动开发：LED控制实战</a> - 复习GPIO基础
+- <a href="05-timer-driver.html">定时器驱动基础与应用</a> - 学习定时器
+- 文件系统移植与应用 - FATFS文件系统</p>
+<p><strong>Flash应用</strong>：
+- 程序在线升级（IAP）
+- 参数存储和配置管理
+- 数据记录和日志系统
+- 文件系统实现</p>
+<p><strong>官方文档</strong>：
+- <a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4xx参考手册</a> - SPI章节
+- <a href="https://www.winbond.com/resource-files/w25q128jv%20revf%2003272018%20plus.pdf">W25Q128数据手册</a>
+- <a href="https://www.nxp.com/docs/en/data-sheet/SPI.pdf">SPI协议规范</a></p>
+<p><strong>开源项目</strong>：
+- <a href="https://github.com/STMicroelectronics/STM32CubeF4">STM32 HAL库</a> - 官方SPI驱动
+- <a href="https://github.com/armink/SFUD">SFUD</a> - 串行Flash通用驱动库
+- <a href="https://github.com/littlefs-project/littlefs">LittleFS</a> - 嵌入式文件系统</p>
+<h2 id="_13">参考资料</h2>
+<ol>
+<li>STM32F4xx参考手册 - STMicroelectronics</li>
+<li>W25Q128JV数据手册 - Winbond</li>
+<li>SPI协议规范 - Motorola/NXP</li>
+<li>嵌入式系统设计与实践 - Elecia White</li>
+<li>STM32库开发实战指南 - 野火团队</li>
+</ol>
+<h2 id="_14">练习题</h2>
+<h3 id="_15">基础练习</h3>
+<ol>
+<li>
+<p><strong>SPI通信练习</strong>：
+   - 实现SPI回环测试
+   - 测试不同波特率的通信
+   - 验证4种SPI模式</p>
+</li>
+<li>
+<p><strong>Flash基本操作</strong>：
+   - 读取Flash ID
+   - 实现扇区擦除和读写
+   - 验证数据完整性</p>
+</li>
+<li>
+<p><strong>跨页写入</strong>：
+   - 实现跨页写入功能
+   - 测试边界条件
+   - 优化写入性能</p>
+</li>
+</ol>
+<h3 id="_16">进阶练习</h3>
+<ol start="4">
+<li>
+<p><strong>DMA传输</strong>：
+   - 使用DMA实现SPI发送
+   - 使用DMA实现SPI接收
+   - 测试DMA传输性能</p>
+</li>
+<li>
+<p><strong>磨损均衡</strong>：
+   - 实现简单的磨损均衡算法
+   - 统计擦除次数
+   - 测试均衡效果</p>
+</li>
+<li>
+<p><strong>文件系统</strong>：
+   - 移植FATFS到Flash
+   - 实现文件读写
+   - 测试文件系统性能</p>
+</li>
+</ol>
+<h3 id="_17">综合项目</h3>
+<ol start="7">
+<li>
+<p><strong>数据记录系统</strong>：
+   - 实现循环缓冲区记录
+   - 支持掉电保护
+   - 实现数据导出功能</p>
+</li>
+<li>
+<p><strong>配置管理系统</strong>：
+   - 实现参数存储
+   - 支持默认值恢复
+   - 实现参数版本管理</p>
+</li>
+<li>
+<p><strong>固件升级系统</strong>：
+   - 实现IAP功能
+   - 支持固件备份
+   - 实现升级失败回滚</p>
+</li>
+</ol>
+<h3 id="_18">思考题</h3>
+<ol>
+<li>
+<p>SPI相比I2C和UART有什么优缺点？在什么场景下选择SPI？</p>
+</li>
+<li>
+<p>为什么Flash必须先擦除后写入？这对软件设计有什么影响？</p>
+</li>
+<li>
+<p>如何设计一个高效的Flash缓存机制？需要考虑哪些因素？</p>
+</li>
+<li>
+<p>磨损均衡算法有哪些？各有什么优缺点？</p>
+</li>
+<li>
+<p>在RTOS环境下，如何保证Flash操作的线程安全？</p>
+</li>
+</ol>
+<h2 id="_19">实验任务</h2>
+<h3 id="1flash_1">任务1：Flash读写测试（必做）</h3>
+<p><strong>要求</strong>：
+- 实现Flash的基本读写功能
+- 验证数据完整性
+- 测试不同大小的数据块
+- 统计读写时间</p>
+<h3 id="2">任务2：数据记录功能（必做）</h3>
+<p><strong>要求</strong>：
+- 实现循环记录功能
+- 支持记录查询
+- 实现记录导出
+- 添加时间戳</p>
+<h3 id="3_1">任务3：文件系统移植（选做）</h3>
+<p><strong>要求</strong>：
+- 移植FATFS到Flash
+- 实现文件创建、读写、删除
+- 测试文件系统性能
+- 实现目录管理</p>
+<h3 id="4_1">任务4：固件升级（选做）</h3>
+<p><strong>要求</strong>：
+- 实现IAP功能
+- 支持固件校验
+- 实现升级进度显示
+- 支持升级失败恢复</p>
+<p><strong>评分标准</strong>：
+- 代码规范性（20分）
+- 功能完整性（30分）
+- 可靠性和稳定性（30分）
+- 性能和效率（20分）</p>
+<hr />
+<p><strong>下一步学习建议</strong>：</p>
+<p>完成本教程后，建议按以下顺序继续学习：</p>
+<ol>
+<li><a href="04-i2c-driver.html">I2C驱动开发：传感器数据读取</a> - 学习另一种常用总线</li>
+<li><a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - 提高传输效率</li>
+<li>文件系统移植与应用 - 实现文件管理</li>
+</ol>
+<p><strong>学习路线图</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[SPI驱动] --&gt; B[Flash操作]
+    B --&gt; C[文件系统]
+    A --&gt; D[SD卡驱动]
+    D --&gt; C
+    A --&gt; E[显示屏驱动]
+    A --&gt; F[传感器驱动]
+    B --&gt; G[IAP升级]
+    C --&gt; H[数据管理]
+</code></pre>
+<p>祝你学习顺利！如有问题，欢迎在社区讨论。</p>
+<hr />
+<p><strong>文档信息</strong>：
+- 最后更新：2024-01-15
+- 版本：v1.0
+- 作者：嵌入式知识平台
+- 许可：CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

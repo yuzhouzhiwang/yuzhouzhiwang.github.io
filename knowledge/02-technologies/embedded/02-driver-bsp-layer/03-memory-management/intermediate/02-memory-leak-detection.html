@@ -1,0 +1,1452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>内存泄漏检测与分析 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/">03-memory-management</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/03-memory-management/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a></li>
+<li><a href="#_4">准备工作</a><ul>
+<li><a href="#_5">硬件准备</a></li>
+<li><a href="#_6">软件准备</a></li>
+<li><a href="#_7">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_8">什么是内存泄漏？</a><ul>
+<li><a href="#_9">定义</a></li>
+<li><a href="#_10">内存泄漏的危害</a></li>
+<li><a href="#_11">常见泄漏原因</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1：实现基础内存追踪系统</a><ul>
+<li><a href="#11">1.1 设计追踪数据结构</a></li>
+<li><a href="#12">1.2 实现追踪函数</a></li>
+<li><a href="#13-mallocfree">1.3 包装malloc和free</a></li>
+</ul>
+</li>
+<li><a href="#2">步骤2：实现泄漏检测和报告</a><ul>
+<li><a href="#21">2.1 检测内存泄漏</a></li>
+<li><a href="#22">2.2 生成详细报告</a></li>
+<li><a href="#23">2.3 实时监控</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：常见泄漏模式分析</a><ul>
+<li><a href="#31">3.1 简单泄漏</a></li>
+<li><a href="#32">3.2 条件分支泄漏</a></li>
+<li><a href="#33">3.3 指针覆盖泄漏</a></li>
+<li><a href="#34">3.4 循环中的泄漏</a></li>
+<li><a href="#35">3.5 结构体成员泄漏</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：使用调试工具检测泄漏</a><ul>
+<li><a href="#41-gdb">4.1 使用GDB检测</a></li>
+<li><a href="#42-valgrindlinux">4.2 使用Valgrind（Linux）</a></li>
+<li><a href="#43-addresssanitizer">4.3 使用AddressSanitizer</a></li>
+<li><a href="#44">4.4 嵌入式系统的调试方法</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：预防内存泄漏的最佳实践</a><ul>
+<li><a href="#51-raiic">5.1 使用RAII模式（C++）</a></li>
+<li><a href="#52-c">5.2 使用配对函数（C）</a></li>
+<li><a href="#53">5.3 使用内存池</a></li>
+<li><a href="#54">5.4 代码审查清单</a></li>
+</ul>
+</li>
+<li><a href="#_12">测试验证</a><ul>
+<li><a href="#1_1">测试1：基本泄漏检测</a></li>
+<li><a href="#2_1">测试2：性能测试</a></li>
+<li><a href="#3_1">测试3：压力测试</a></li>
+</ul>
+</li>
+<li><a href="#_13">故障排除</a><ul>
+<li><a href="#1_2">问题1：追踪表已满</a></li>
+<li><a href="#2_2">问题2：误报泄漏</a></li>
+<li><a href="#3_2">问题3：性能影响过大</a></li>
+</ul>
+</li>
+<li><a href="#_14">实践项目：完整的内存管理系统</a><ul>
+<li><a href="#_15">项目目标</a></li>
+<li><a href="#_16">项目结构</a></li>
+<li><a href="#_17">核心代码框架</a></li>
+<li><a href="#_18">使用示例</a></li>
+</ul>
+</li>
+<li><a href="#_19">总结</a><ul>
+<li><a href="#_20">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_21">进阶挑战</a></li>
+<li><a href="#_22">完整代码</a></li>
+<li><a href="#_23">下一步</a></li>
+<li><a href="#_24">参考资料</a></li>
+<li><a href="#_25">常见问题</a><ul>
+<li><a href="#q1">Q1: 在嵌入式系统中应该使用哪种泄漏检测方法？</a></li>
+<li><a href="#q2-rtos">Q2: 如何在RTOS中检测内存泄漏？</a></li>
+<li><a href="#q3">Q3: 追踪系统会影响性能吗？</a></li>
+<li><a href="#q4">Q4: 如何处理第三方库的内存分配？</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">内存泄漏检测与分析</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解内存泄漏的概念、原因和危害</li>
+<li>[ ] 掌握多种内存泄漏检测方法和工具</li>
+<li>[ ] 实现自定义的内存追踪和监控系统</li>
+<li>[ ] 分析和定位内存泄漏的根本原因</li>
+<li>[ ] 应用最佳实践预防内存泄漏</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 理解C语言的指针和动态内存分配
+- 熟悉malloc/free的使用
+- 了解内存管理的基本概念
+- 掌握基本的调试技巧</p>
+<p><strong>技能要求</strong>：
+- 能够编写和调试C程序
+- 会使用基本的开发工具和调试器
+- 了解如何分析程序运行状态</p>
+<h2 id="_4">准备工作</h2>
+<h3 id="_5">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32/ESP32或其他嵌入式开发板</td>
+</tr>
+<tr>
+<td>调试器</td>
+<td>1</td>
+<td>ST-Link、J-Link或板载调试器</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>用于连接开发板</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE、Keil MDK或GCC工具链</li>
+<li><strong>调试工具</strong>：GDB、OpenOCD</li>
+<li><strong>分析工具</strong>：Valgrind（Linux）、AddressSanitizer（可选）</li>
+<li><strong>串口工具</strong>：用于查看调试输出</li>
+</ul>
+<h3 id="_7">环境配置</h3>
+<ol>
+<li>安装开发环境和工具链</li>
+<li>配置调试器连接</li>
+<li>准备测试项目</li>
+</ol>
+<h2 id="_8">什么是内存泄漏？</h2>
+<h3 id="_9">定义</h3>
+<p>内存泄漏是指程序在运行过程中分配了内存但未能正确释放，导致可用内存逐渐减少的现象。</p>
+<p><strong>简单示例</strong>：</p>
+<pre><code class="language-c">void memory_leak_example(void) {
+    // 分配内存
+    char* buffer = (char*)malloc(100);
+
+    // 使用内存
+    strcpy(buffer, &quot;Hello&quot;);
+
+    // 忘记释放内存 - 这就是内存泄漏！
+    // free(buffer);  // 应该调用但没有调用
+}
+
+// 每次调用这个函数都会泄漏100字节
+for (int i = 0; i &lt; 1000; i++) {
+    memory_leak_example();  // 总共泄漏100KB
+}
+</code></pre>
+<h3 id="_10">内存泄漏的危害</h3>
+<p>在嵌入式系统中，内存泄漏的危害尤其严重：</p>
+<ol>
+<li><strong>系统崩溃</strong>：可用内存耗尽导致系统无法分配新内存</li>
+<li><strong>性能下降</strong>：内存碎片化影响分配效率</li>
+<li><strong>功能失效</strong>：关键功能因内存不足而无法执行</li>
+<li><strong>不可预测</strong>：问题可能在运行数小时或数天后才出现</li>
+</ol>
+<p><strong>实际案例</strong>：</p>
+<pre><code class="language-c">// 一个真实的泄漏场景
+void process_sensor_data(void) {
+    // 每秒调用一次
+    sensor_data_t* data = (sensor_data_t*)malloc(sizeof(sensor_data_t));
+
+    read_sensor(data);
+    process_data(data);
+    send_to_server(data);
+
+    // 忘记释放！
+    // 24小时后泄漏：86400次 × sizeof(sensor_data_t)
+}
+</code></pre>
+<h3 id="_11">常见泄漏原因</h3>
+<ol>
+<li><strong>忘记释放</strong>：最常见的原因</li>
+<li><strong>异常路径</strong>：错误处理分支中忘记释放</li>
+<li><strong>循环引用</strong>：对象相互引用导致无法释放</li>
+<li><strong>指针丢失</strong>：覆盖指针前未释放原内存</li>
+<li><strong>资源管理错误</strong>：文件句柄、套接字等资源未关闭</li>
+</ol>
+<h2 id="1">步骤1：实现基础内存追踪系统</h2>
+<h3 id="11">1.1 设计追踪数据结构</h3>
+<p>首先，我们需要一个数据结构来记录每次内存分配：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+#include &lt;stddef.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+// 内存分配记录
+typedef struct {
+    void* ptr;              // 分配的内存地址
+    size_t size;            // 分配的大小
+    const char* file;       // 分配时的文件名
+    int line;               // 分配时的行号
+    uint32_t timestamp;     // 分配时间戳
+    uint8_t is_active;      // 是否仍然活跃
+} alloc_record_t;
+
+// 追踪器配置
+#define MAX_ALLOCATIONS 100
+#define ENABLE_TRACKING 1
+
+// 全局追踪数据
+static alloc_record_t g_alloc_records[MAX_ALLOCATIONS];
+static int g_alloc_count = 0;
+static uint32_t g_alloc_id = 0;
+static uint32_t g_total_allocated = 0;
+static uint32_t g_total_freed = 0;
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>alloc_record_t</code>：记录每次分配的详细信息
+- <code>MAX_ALLOCATIONS</code>：最多追踪的分配次数
+- <code>g_alloc_records</code>：存储所有分配记录的数组
+- <code>g_alloc_id</code>：唯一的分配ID，用于追踪</p>
+<h3 id="12">1.2 实现追踪函数</h3>
+<p>实现记录分配和释放的函数：</p>
+<pre><code class="language-c">// 记录内存分配
+static void track_allocation(void* ptr, size_t size, 
+                             const char* file, int line) {
+    if (!ENABLE_TRACKING || ptr == NULL) return;
+
+    // 查找空闲槽位
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        if (!g_alloc_records[i].is_active) {
+            g_alloc_records[i].ptr = ptr;
+            g_alloc_records[i].size = size;
+            g_alloc_records[i].file = file;
+            g_alloc_records[i].line = line;
+            g_alloc_records[i].timestamp = g_alloc_id++;
+            g_alloc_records[i].is_active = 1;
+
+            g_alloc_count++;
+            g_total_allocated += size;
+
+            return;
+        }
+    }
+
+    // 追踪表已满
+    printf(&quot;WARNING: Allocation tracking table full!\n&quot;);
+}
+
+// 记录内存释放
+static void track_deallocation(void* ptr) {
+    if (!ENABLE_TRACKING || ptr == NULL) return;
+
+    // 查找对应的分配记录
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        if (g_alloc_records[i].is_active &amp;&amp; 
+            g_alloc_records[i].ptr == ptr) {
+
+            g_alloc_records[i].is_active = 0;
+            g_alloc_count--;
+            g_total_freed += g_alloc_records[i].size;
+
+            return;
+        }
+    }
+
+    // 未找到记录 - 可能是重复释放或野指针
+    printf(&quot;WARNING: Freeing untracked pointer %p\n&quot;, ptr);
+}
+</code></pre>
+<h3 id="13-mallocfree">1.3 包装malloc和free</h3>
+<p>创建带追踪功能的内存分配函数：</p>
+<pre><code class="language-c">// 带追踪的malloc
+#define tracked_malloc(size) \
+    tracked_malloc_impl(size, __FILE__, __LINE__)
+
+void* tracked_malloc_impl(size_t size, const char* file, int line) {
+    void* ptr = malloc(size);
+
+    if (ptr != NULL) {
+        track_allocation(ptr, size, file, line);
+
+        #ifdef DEBUG_MEMORY
+        printf(&quot;[ALLOC] %zu bytes at %p (%s:%d)\n&quot;, 
+               size, ptr, file, line);
+        #endif
+    }
+
+    return ptr;
+}
+
+// 带追踪的free
+void tracked_free(void* ptr) {
+    if (ptr == NULL) return;
+
+    #ifdef DEBUG_MEMORY
+    printf(&quot;[FREE] %p\n&quot;, ptr);
+    #endif
+
+    track_deallocation(ptr);
+    free(ptr);
+}
+
+// 带追踪的calloc
+#define tracked_calloc(num, size) \
+    tracked_calloc_impl(num, size, __FILE__, __LINE__)
+
+void* tracked_calloc_impl(size_t num, size_t size, 
+                          const char* file, int line) {
+    void* ptr = calloc(num, size);
+
+    if (ptr != NULL) {
+        track_allocation(ptr, num * size, file, line);
+    }
+
+    return ptr;
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">void test_tracking(void) {
+    // 使用追踪版本的malloc
+    char* str1 = (char*)tracked_malloc(50);
+    char* str2 = (char*)tracked_malloc(100);
+
+    if (str1 &amp;&amp; str2) {
+        strcpy(str1, &quot;Hello&quot;);
+        strcpy(str2, &quot;World&quot;);
+
+        // 正常释放
+        tracked_free(str1);
+
+        // 忘记释放str2 - 这会被检测到
+    }
+}
+</code></pre>
+<h2 id="2">步骤2：实现泄漏检测和报告</h2>
+<h3 id="21">2.1 检测内存泄漏</h3>
+<p>实现检查函数来发现未释放的内存：</p>
+<pre><code class="language-c">// 检查内存泄漏
+void check_memory_leaks(void) {
+    int leak_count = 0;
+    size_t total_leaked = 0;
+
+    printf(&quot;\n=== Memory Leak Report ===\n&quot;);
+
+    // 遍历所有记录
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        if (g_alloc_records[i].is_active) {
+            leak_count++;
+            total_leaked += g_alloc_records[i].size;
+
+            printf(&quot;LEAK #%d:\n&quot;, leak_count);
+            printf(&quot;  Address: %p\n&quot;, g_alloc_records[i].ptr);
+            printf(&quot;  Size: %zu bytes\n&quot;, g_alloc_records[i].size);
+            printf(&quot;  Location: %s:%d\n&quot;, 
+                   g_alloc_records[i].file, 
+                   g_alloc_records[i].line);
+            printf(&quot;  Timestamp: %lu\n&quot;, g_alloc_records[i].timestamp);
+            printf(&quot;\n&quot;);
+        }
+    }
+
+    if (leak_count == 0) {
+        printf(&quot;✓ No memory leaks detected!\n&quot;);
+    } else {
+        printf(&quot;✗ Found %d memory leaks\n&quot;, leak_count);
+        printf(&quot;✗ Total leaked: %zu bytes\n&quot;, total_leaked);
+    }
+
+    printf(&quot;=========================\n\n&quot;);
+}
+
+// 获取内存统计信息
+void print_memory_stats(void) {
+    printf(&quot;\n=== Memory Statistics ===\n&quot;);
+    printf(&quot;Active allocations: %d\n&quot;, g_alloc_count);
+    printf(&quot;Total allocated: %lu bytes\n&quot;, g_total_allocated);
+    printf(&quot;Total freed: %lu bytes\n&quot;, g_total_freed);
+    printf(&quot;Net allocated: %ld bytes\n&quot;, 
+           (long)(g_total_allocated - g_total_freed));
+    printf(&quot;=========================\n\n&quot;);
+}
+</code></pre>
+<h3 id="22">2.2 生成详细报告</h3>
+<p>创建更详细的泄漏报告：</p>
+<pre><code class="language-c">// 泄漏报告结构
+typedef struct {
+    int total_leaks;
+    size_t total_bytes;
+    int leaks_by_file[10];
+    const char* file_names[10];
+    int file_count;
+} leak_report_t;
+
+// 生成泄漏报告
+void generate_leak_report(leak_report_t* report) {
+    memset(report, 0, sizeof(leak_report_t));
+
+    // 统计泄漏
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        if (g_alloc_records[i].is_active) {
+            report-&gt;total_leaks++;
+            report-&gt;total_bytes += g_alloc_records[i].size;
+
+            // 按文件统计
+            const char* file = g_alloc_records[i].file;
+            int found = 0;
+
+            for (int j = 0; j &lt; report-&gt;file_count; j++) {
+                if (strcmp(report-&gt;file_names[j], file) == 0) {
+                    report-&gt;leaks_by_file[j]++;
+                    found = 1;
+                    break;
+                }
+            }
+
+            if (!found &amp;&amp; report-&gt;file_count &lt; 10) {
+                report-&gt;file_names[report-&gt;file_count] = file;
+                report-&gt;leaks_by_file[report-&gt;file_count] = 1;
+                report-&gt;file_count++;
+            }
+        }
+    }
+}
+
+// 打印泄漏报告
+void print_leak_report(void) {
+    leak_report_t report;
+    generate_leak_report(&amp;report);
+
+    printf(&quot;\n=== Detailed Leak Report ===\n&quot;);
+    printf(&quot;Total leaks: %d\n&quot;, report.total_leaks);
+    printf(&quot;Total bytes leaked: %zu\n&quot;, report.total_bytes);
+    printf(&quot;\nLeaks by source file:\n&quot;);
+
+    for (int i = 0; i &lt; report.file_count; i++) {
+        printf(&quot;  %s: %d leaks\n&quot;, 
+               report.file_names[i], 
+               report.leaks_by_file[i]);
+    }
+
+    printf(&quot;============================\n\n&quot;);
+}
+</code></pre>
+<h3 id="23">2.3 实时监控</h3>
+<p>实现实时内存使用监控：</p>
+<pre><code class="language-c">// 内存监控配置
+#define MEMORY_WARNING_THRESHOLD 80  // 80%使用率警告
+#define MEMORY_CRITICAL_THRESHOLD 95 // 95%使用率严重警告
+
+// 监控内存使用
+void monitor_memory_usage(void) {
+    // 计算使用率
+    float usage_percent = (float)g_alloc_count * 100 / MAX_ALLOCATIONS;
+
+    if (usage_percent &gt;= MEMORY_CRITICAL_THRESHOLD) {
+        printf(&quot;CRITICAL: Memory usage at %.1f%%!\n&quot;, usage_percent);
+    } else if (usage_percent &gt;= MEMORY_WARNING_THRESHOLD) {
+        printf(&quot;WARNING: Memory usage at %.1f%%\n&quot;, usage_percent);
+    }
+
+    // 显示当前状态
+    printf(&quot;Memory: %d/%d allocations (%.1f%%)\n&quot;, 
+           g_alloc_count, MAX_ALLOCATIONS, usage_percent);
+}
+
+// 定期检查（在主循环中调用）
+void periodic_memory_check(void) {
+    static uint32_t last_check = 0;
+    uint32_t current_time = get_system_time();  // 获取系统时间
+
+    // 每10秒检查一次
+    if (current_time - last_check &gt;= 10000) {
+        monitor_memory_usage();
+        last_check = current_time;
+    }
+}
+</code></pre>
+<h2 id="3">步骤3：常见泄漏模式分析</h2>
+<h3 id="31">3.1 简单泄漏</h3>
+<p>最基本的泄漏模式：</p>
+<pre><code class="language-c">// 模式1：忘记释放
+void simple_leak(void) {
+    char* buffer = (char*)tracked_malloc(100);
+    strcpy(buffer, &quot;Data&quot;);
+    // 忘记调用 tracked_free(buffer);
+}
+
+// 检测方法
+void test_simple_leak(void) {
+    printf(&quot;Testing simple leak...\n&quot;);
+    simple_leak();
+    check_memory_leaks();  // 会检测到1个泄漏
+}
+</code></pre>
+<h3 id="32">3.2 条件分支泄漏</h3>
+<p>在错误处理路径中忘记释放：</p>
+<pre><code class="language-c">// 模式2：错误路径泄漏
+int process_data(const char* filename) {
+    char* buffer = (char*)tracked_malloc(1024);
+    if (buffer == NULL) {
+        return -1;  // 错误：这里不会泄漏
+    }
+
+    FILE* file = fopen(filename, &quot;r&quot;);
+    if (file == NULL) {
+        // 错误：忘记释放buffer！
+        return -1;
+    }
+
+    // 正常处理
+    fread(buffer, 1, 1024, file);
+    fclose(file);
+
+    tracked_free(buffer);  // 只有正常路径会释放
+    return 0;
+}
+
+// 正确的做法
+int process_data_correct(const char* filename) {
+    char* buffer = (char*)tracked_malloc(1024);
+    if (buffer == NULL) {
+        return -1;
+    }
+
+    FILE* file = fopen(filename, &quot;r&quot;);
+    if (file == NULL) {
+        tracked_free(buffer);  // 正确：在返回前释放
+        return -1;
+    }
+
+    fread(buffer, 1, 1024, file);
+    fclose(file);
+
+    tracked_free(buffer);
+    return 0;
+}
+</code></pre>
+<h3 id="33">3.3 指针覆盖泄漏</h3>
+<p>覆盖指针前未释放原内存：</p>
+<pre><code class="language-c">// 模式3：指针覆盖
+void pointer_overwrite_leak(void) {
+    char* ptr = (char*)tracked_malloc(100);
+    strcpy(ptr, &quot;First allocation&quot;);
+
+    // 错误：覆盖指针前未释放原内存
+    ptr = (char*)tracked_malloc(200);
+    strcpy(ptr, &quot;Second allocation&quot;);
+
+    tracked_free(ptr);  // 只释放了第二次分配的内存
+    // 第一次分配的100字节泄漏了！
+}
+
+// 正确的做法
+void pointer_overwrite_correct(void) {
+    char* ptr = (char*)tracked_malloc(100);
+    strcpy(ptr, &quot;First allocation&quot;);
+
+    // 正确：先释放再重新分配
+    tracked_free(ptr);
+    ptr = (char*)tracked_malloc(200);
+    strcpy(ptr, &quot;Second allocation&quot;);
+
+    tracked_free(ptr);
+}
+</code></pre>
+<h3 id="34">3.4 循环中的泄漏</h3>
+<p>在循环中重复分配而不释放：</p>
+<pre><code class="language-c">// 模式4：循环泄漏
+void loop_leak(void) {
+    for (int i = 0; i &lt; 10; i++) {
+        char* temp = (char*)tracked_malloc(50);
+        sprintf(temp, &quot;Iteration %d&quot;, i);
+        process_string(temp);
+        // 错误：每次循环都泄漏50字节
+    }
+    // 总共泄漏500字节
+}
+
+// 正确的做法
+void loop_correct(void) {
+    for (int i = 0; i &lt; 10; i++) {
+        char* temp = (char*)tracked_malloc(50);
+        sprintf(temp, &quot;Iteration %d&quot;, i);
+        process_string(temp);
+        tracked_free(temp);  // 正确：每次循环后释放
+    }
+}
+
+// 更好的做法：循环外分配
+void loop_optimized(void) {
+    char* temp = (char*)tracked_malloc(50);
+
+    for (int i = 0; i &lt; 10; i++) {
+        sprintf(temp, &quot;Iteration %d&quot;, i);
+        process_string(temp);
+    }
+
+    tracked_free(temp);  // 循环结束后释放一次
+}
+</code></pre>
+<h3 id="35">3.5 结构体成员泄漏</h3>
+<p>忘记释放结构体内部的动态分配内存：</p>
+<pre><code class="language-c">// 数据结构
+typedef struct {
+    char* name;
+    int* data;
+    size_t data_size;
+} my_struct_t;
+
+// 模式5：结构体成员泄漏
+void struct_member_leak(void) {
+    my_struct_t* obj = (my_struct_t*)tracked_malloc(sizeof(my_struct_t));
+
+    // 分配成员
+    obj-&gt;name = (char*)tracked_malloc(50);
+    obj-&gt;data = (int*)tracked_malloc(100 * sizeof(int));
+    obj-&gt;data_size = 100;
+
+    strcpy(obj-&gt;name, &quot;MyObject&quot;);
+
+    // 错误：只释放了结构体本身，成员内存泄漏
+    tracked_free(obj);
+}
+
+// 正确的做法：创建销毁函数
+my_struct_t* create_struct(void) {
+    my_struct_t* obj = (my_struct_t*)tracked_malloc(sizeof(my_struct_t));
+    if (obj == NULL) return NULL;
+
+    obj-&gt;name = (char*)tracked_malloc(50);
+    obj-&gt;data = (int*)tracked_malloc(100 * sizeof(int));
+    obj-&gt;data_size = 100;
+
+    return obj;
+}
+
+void destroy_struct(my_struct_t* obj) {
+    if (obj == NULL) return;
+
+    // 先释放成员
+    tracked_free(obj-&gt;name);
+    tracked_free(obj-&gt;data);
+
+    // 再释放结构体本身
+    tracked_free(obj);
+}
+
+// 使用示例
+void struct_correct_usage(void) {
+    my_struct_t* obj = create_struct();
+
+    // 使用对象
+    strcpy(obj-&gt;name, &quot;MyObject&quot;);
+
+    // 正确释放
+    destroy_struct(obj);
+}
+</code></pre>
+<h2 id="4">步骤4：使用调试工具检测泄漏</h2>
+<h3 id="41-gdb">4.1 使用GDB检测</h3>
+<p>GDB可以帮助追踪内存分配：</p>
+<pre><code class="language-bash"># 编译时启用调试信息
+gcc -g -O0 -o myprogram myprogram.c
+
+# 启动GDB
+gdb ./myprogram
+
+# 设置断点在malloc
+(gdb) break malloc
+(gdb) break free
+
+# 运行程序
+(gdb) run
+
+# 查看调用栈
+(gdb) backtrace
+
+# 查看内存内容
+(gdb) x/100x 0x12345678  # 查看地址的内容
+</code></pre>
+<h3 id="42-valgrindlinux">4.2 使用Valgrind（Linux）</h3>
+<p>Valgrind是强大的内存调试工具：</p>
+<pre><code class="language-bash"># 安装Valgrind
+sudo apt-get install valgrind
+
+# 运行内存检查
+valgrind --leak-check=full \
+         --show-leak-kinds=all \
+         --track-origins=yes \
+         --verbose \
+         ./myprogram
+
+# 输出示例
+==12345== HEAP SUMMARY:
+==12345==     in use at exit: 100 bytes in 1 blocks
+==12345==   total heap usage: 10 allocs, 9 frees, 1,000 bytes allocated
+==12345==
+==12345== 100 bytes in 1 blocks are definitely lost
+==12345==    at malloc (vg_replace_malloc.c:299)
+==12345==    by simple_leak (test.c:45)
+==12345==    by main (test.c:100)
+</code></pre>
+<h3 id="43-addresssanitizer">4.3 使用AddressSanitizer</h3>
+<p>AddressSanitizer是编译器内置的内存检测工具：</p>
+<pre><code class="language-bash"># 使用GCC编译
+gcc -fsanitize=address -g -O0 -o myprogram myprogram.c
+
+# 运行程序
+./myprogram
+
+# 输出示例
+=================================================================
+==12345==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 100 byte(s) in 1 object(s) allocated from:
+    #0 0x7f8b9c malloc
+    #1 0x400abc in simple_leak test.c:45
+    #2 0x400def in main test.c:100
+
+SUMMARY: AddressSanitizer: 100 byte(s) leaked in 1 allocation(s).
+</code></pre>
+<h3 id="44">4.4 嵌入式系统的调试方法</h3>
+<p>在嵌入式系统中，可以使用以下方法：</p>
+<pre><code class="language-c">// 方法1：串口输出调试信息
+void debug_print_allocation(void* ptr, size_t size, 
+                           const char* file, int line) {
+    printf(&quot;ALLOC: %p, %zu bytes at %s:%d\n&quot;, 
+           ptr, size, file, line);
+}
+
+// 方法2：使用LED指示
+void indicate_memory_status(void) {
+    float usage = (float)g_alloc_count / MAX_ALLOCATIONS;
+
+    if (usage &gt; 0.9) {
+        // 红灯：内存使用率&gt;90%
+        set_led(LED_RED, 1);
+    } else if (usage &gt; 0.7) {
+        // 黄灯：内存使用率&gt;70%
+        set_led(LED_YELLOW, 1);
+    } else {
+        // 绿灯：内存正常
+        set_led(LED_GREEN, 1);
+    }
+}
+
+// 方法3：通过UART发送统计信息
+void send_memory_stats_uart(void) {
+    char buffer[128];
+
+    snprintf(buffer, sizeof(buffer),
+             &quot;MEM: %d/%d allocs, %lu bytes\n&quot;,
+             g_alloc_count, MAX_ALLOCATIONS, 
+             g_total_allocated - g_total_freed);
+
+    uart_send_string(buffer);
+}
+</code></pre>
+<h2 id="5">步骤5：预防内存泄漏的最佳实践</h2>
+<h3 id="51-raiic">5.1 使用RAII模式（C++）</h3>
+<p>在C++中，使用RAII（Resource Acquisition Is Initialization）：</p>
+<pre><code class="language-cpp">// C++示例
+class Buffer {
+private:
+    char* data;
+    size_t size;
+
+public:
+    Buffer(size_t s) : size(s) {
+        data = new char[size];
+    }
+
+    ~Buffer() {
+        delete[] data;  // 自动释放
+    }
+
+    // 禁止拷贝
+    Buffer(const Buffer&amp;) = delete;
+    Buffer&amp; operator=(const Buffer&amp;) = delete;
+};
+
+// 使用
+void use_buffer() {
+    Buffer buf(1024);
+    // 使用buf
+    // 函数结束时自动释放，不会泄漏
+}
+</code></pre>
+<h3 id="52-c">5.2 使用配对函数（C）</h3>
+<p>在C中，使用配对的创建/销毁函数：</p>
+<pre><code class="language-c">// 配对函数模式
+typedef struct {
+    char* data;
+    size_t size;
+} buffer_t;
+
+// 创建函数
+buffer_t* buffer_create(size_t size) {
+    buffer_t* buf = (buffer_t*)tracked_malloc(sizeof(buffer_t));
+    if (buf == NULL) return NULL;
+
+    buf-&gt;data = (char*)tracked_malloc(size);
+    if (buf-&gt;data == NULL) {
+        tracked_free(buf);
+        return NULL;
+    }
+
+    buf-&gt;size = size;
+    return buf;
+}
+
+// 销毁函数
+void buffer_destroy(buffer_t* buf) {
+    if (buf == NULL) return;
+
+    tracked_free(buf-&gt;data);
+    tracked_free(buf);
+}
+
+// 使用示例
+void use_buffer_correct(void) {
+    buffer_t* buf = buffer_create(1024);
+    if (buf == NULL) return;
+
+    // 使用buffer
+    memcpy(buf-&gt;data, &quot;Hello&quot;, 6);
+
+    // 确保释放
+    buffer_destroy(buf);
+}
+</code></pre>
+<h3 id="53">5.3 使用内存池</h3>
+<p>内存池可以避免频繁的malloc/free：</p>
+<pre><code class="language-c">// 内存池方式
+#define POOL_SIZE 10
+static buffer_t buffer_pool[POOL_SIZE];
+static uint8_t pool_used[POOL_SIZE] = {0};
+
+buffer_t* buffer_alloc_from_pool(void) {
+    for (int i = 0; i &lt; POOL_SIZE; i++) {
+        if (!pool_used[i]) {
+            pool_used[i] = 1;
+            return &amp;buffer_pool[i];
+        }
+    }
+    return NULL;  // 池已满
+}
+
+void buffer_free_to_pool(buffer_t* buf) {
+    int index = buf - buffer_pool;
+    if (index &gt;= 0 &amp;&amp; index &lt; POOL_SIZE) {
+        pool_used[index] = 0;
+    }
+}
+</code></pre>
+<h3 id="54">5.4 代码审查清单</h3>
+<p>在代码审查时检查以下项目：</p>
+<pre><code class="language-c">// 审查清单
+/*
+ * 内存泄漏审查清单：
+ * 
+ * [ ] 每个malloc都有对应的free
+ * [ ] 所有错误路径都正确释放内存
+ * [ ] 循环中的分配在循环内或循环后释放
+ * [ ] 结构体销毁时释放所有成员
+ * [ ] 函数返回前释放所有局部分配
+ * [ ] 使用配对的创建/销毁函数
+ * [ ] 指针重新赋值前释放原内存
+ * [ ] 考虑使用内存池代替动态分配
+ */
+</code></pre>
+<h2 id="_12">测试验证</h2>
+<h3 id="1_1">测试1：基本泄漏检测</h3>
+<p>创建测试程序验证追踪系统：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+// 测试用例1：无泄漏
+void test_no_leak(void) {
+    printf(&quot;\n=== Test 1: No Leak ===\n&quot;);
+
+    char* str = (char*)tracked_malloc(100);
+    strcpy(str, &quot;Test string&quot;);
+    tracked_free(str);
+
+    check_memory_leaks();
+}
+
+// 测试用例2：简单泄漏
+void test_simple_leak(void) {
+    printf(&quot;\n=== Test 2: Simple Leak ===\n&quot;);
+
+    char* str = (char*)tracked_malloc(100);
+    strcpy(str, &quot;Leaked string&quot;);
+    // 故意不释放
+
+    check_memory_leaks();
+}
+
+// 测试用例3：多次泄漏
+void test_multiple_leaks(void) {
+    printf(&quot;\n=== Test 3: Multiple Leaks ===\n&quot;);
+
+    for (int i = 0; i &lt; 5; i++) {
+        char* str = (char*)tracked_malloc(50);
+        sprintf(str, &quot;Leak %d&quot;, i);
+        // 故意不释放
+    }
+
+    check_memory_leaks();
+    print_leak_report();
+}
+
+// 测试用例4：混合场景
+void test_mixed_scenario(void) {
+    printf(&quot;\n=== Test 4: Mixed Scenario ===\n&quot;);
+
+    // 正常分配和释放
+    char* str1 = (char*)tracked_malloc(100);
+    strcpy(str1, &quot;Normal&quot;);
+    tracked_free(str1);
+
+    // 泄漏
+    char* str2 = (char*)tracked_malloc(200);
+    strcpy(str2, &quot;Leaked&quot;);
+
+    // 再次正常
+    char* str3 = (char*)tracked_malloc(150);
+    strcpy(str3, &quot;Normal again&quot;);
+    tracked_free(str3);
+
+    check_memory_leaks();
+    print_memory_stats();
+}
+
+// 主测试函数
+int main(void) {
+    printf(&quot;Memory Leak Detection Test Suite\n&quot;);
+    printf(&quot;==================================\n&quot;);
+
+    test_no_leak();
+    test_simple_leak();
+    test_multiple_leaks();
+    test_mixed_scenario();
+
+    printf(&quot;\n=== Final Report ===\n&quot;);
+    print_memory_stats();
+    check_memory_leaks();
+
+    return 0;
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>Memory Leak Detection Test Suite
+==================================
+
+=== Test 1: No Leak ===
+=== Memory Leak Report ===
+✓ No memory leaks detected!
+=========================
+
+=== Test 2: Simple Leak ===
+=== Memory Leak Report ===
+LEAK #1:
+  Address: 0x12345678
+  Size: 100 bytes
+  Location: test.c:15
+  Timestamp: 1
+
+✗ Found 1 memory leaks
+✗ Total leaked: 100 bytes
+=========================
+
+=== Test 3: Multiple Leaks ===
+=== Memory Leak Report ===
+LEAK #1:
+  Address: 0x12345678
+  Size: 50 bytes
+  Location: test.c:25
+  Timestamp: 2
+...
+✗ Found 5 memory leaks
+✗ Total leaked: 250 bytes
+=========================
+</code></pre>
+<h3 id="2_1">测试2：性能测试</h3>
+<p>测试追踪系统的性能影响：</p>
+<pre><code class="language-c">#include &lt;time.h&gt;
+
+void performance_test(void) {
+    const int iterations = 1000;
+    clock_t start, end;
+    double cpu_time_used;
+
+    // 测试不带追踪的malloc
+    start = clock();
+    for (int i = 0; i &lt; iterations; i++) {
+        void* ptr = malloc(100);
+        free(ptr);
+    }
+    end = clock();
+    cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+    printf(&quot;Without tracking: %.6f seconds\n&quot;, cpu_time_used);
+
+    // 测试带追踪的malloc
+    start = clock();
+    for (int i = 0; i &lt; iterations; i++) {
+        void* ptr = tracked_malloc(100);
+        tracked_free(ptr);
+    }
+    end = clock();
+    cpu_time_used = ((double)(end - start)) / CLOCKS_PER_SEC;
+    printf(&quot;With tracking: %.6f seconds\n&quot;, cpu_time_used);
+}
+</code></pre>
+<h3 id="3_1">测试3：压力测试</h3>
+<p>测试追踪系统在高负载下的表现：</p>
+<pre><code class="language-c">void stress_test(void) {
+    printf(&quot;\n=== Stress Test ===\n&quot;);
+
+    void* ptrs[MAX_ALLOCATIONS];
+    int alloc_count = 0;
+
+    // 填满追踪表
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        ptrs[i] = tracked_malloc(64);
+        if (ptrs[i] != NULL) {
+            alloc_count++;
+        }
+    }
+
+    printf(&quot;Successfully allocated %d blocks\n&quot;, alloc_count);
+
+    // 尝试超出限制
+    void* extra = tracked_malloc(64);
+    if (extra == NULL) {
+        printf(&quot;Correctly rejected allocation beyond limit\n&quot;);
+    }
+
+    // 释放一半
+    for (int i = 0; i &lt; alloc_count / 2; i++) {
+        tracked_free(ptrs[i]);
+    }
+
+    print_memory_stats();
+
+    // 释放剩余
+    for (int i = alloc_count / 2; i &lt; alloc_count; i++) {
+        tracked_free(ptrs[i]);
+    }
+
+    check_memory_leaks();
+}
+</code></pre>
+<h2 id="_13">故障排除</h2>
+<h3 id="1_2">问题1：追踪表已满</h3>
+<p><strong>现象</strong>：</p>
+<pre><code>WARNING: Allocation tracking table full!
+</code></pre>
+<p><strong>原因</strong>：
+- 分配次数超过MAX_ALLOCATIONS
+- 有大量未释放的内存</p>
+<p><strong>解决方法</strong>：
+1. 增加MAX_ALLOCATIONS的值
+2. 检查是否有内存泄漏
+3. 使用内存池减少动态分配</p>
+<pre><code class="language-c">// 解决方案：动态扩展追踪表
+#define INITIAL_TRACKING_SIZE 100
+#define MAX_TRACKING_SIZE 1000
+
+static alloc_record_t* g_alloc_records = NULL;
+static int g_tracking_capacity = 0;
+
+void expand_tracking_table(void) {
+    int new_capacity = g_tracking_capacity * 2;
+    if (new_capacity &gt; MAX_TRACKING_SIZE) {
+        new_capacity = MAX_TRACKING_SIZE;
+    }
+
+    alloc_record_t* new_table = realloc(g_alloc_records, 
+                                        new_capacity * sizeof(alloc_record_t));
+    if (new_table != NULL) {
+        g_alloc_records = new_table;
+        g_tracking_capacity = new_capacity;
+        printf(&quot;Expanded tracking table to %d entries\n&quot;, new_capacity);
+    }
+}
+</code></pre>
+<h3 id="2_2">问题2：误报泄漏</h3>
+<p><strong>现象</strong>：
+报告了实际已释放的内存为泄漏</p>
+<p><strong>原因</strong>：
+- 使用了未追踪的free
+- 追踪系统bug
+- 指针被修改</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 添加验证机制
+void validate_tracking_system(void) {
+    int active_count = 0;
+
+    for (int i = 0; i &lt; MAX_ALLOCATIONS; i++) {
+        if (g_alloc_records[i].is_active) {
+            active_count++;
+
+            // 验证指针有效性
+            if (g_alloc_records[i].ptr == NULL) {
+                printf(&quot;ERROR: Active record with NULL pointer!\n&quot;);
+            }
+        }
+    }
+
+    if (active_count != g_alloc_count) {
+        printf(&quot;ERROR: Count mismatch! Expected %d, found %d\n&quot;,
+               g_alloc_count, active_count);
+    }
+}
+</code></pre>
+<h3 id="3_2">问题3：性能影响过大</h3>
+<p><strong>现象</strong>：
+启用追踪后程序明显变慢</p>
+<p><strong>原因</strong>：
+- 追踪开销过大
+- 频繁的内存分配</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 条件编译：仅在调试时启用
+#ifdef DEBUG_MEMORY_LEAKS
+    #define ENABLE_TRACKING 1
+#else
+    #define ENABLE_TRACKING 0
+#endif
+
+// 或使用采样追踪
+static int tracking_sample_rate = 10;  // 每10次追踪1次
+
+void track_allocation_sampled(void* ptr, size_t size, 
+                              const char* file, int line) {
+    static int counter = 0;
+
+    if (++counter &gt;= tracking_sample_rate) {
+        track_allocation(ptr, size, file, line);
+        counter = 0;
+    }
+}
+</code></pre>
+<h2 id="_14">实践项目：完整的内存管理系统</h2>
+<h3 id="_15">项目目标</h3>
+<p>创建一个生产级的内存管理和泄漏检测系统，包括：
+- 内存分配追踪
+- 泄漏检测和报告
+- 内存使用统计
+- 实时监控
+- 性能分析</p>
+<h3 id="_16">项目结构</h3>
+<pre><code>memory_manager/
+├── memory_tracker.h      # 追踪系统头文件
+├── memory_tracker.c      # 追踪系统实现
+├── memory_pool.h         # 内存池头文件
+├── memory_pool.c         # 内存池实现
+├── memory_stats.h        # 统计模块头文件
+├── memory_stats.c        # 统计模块实现
+└── test_memory.c         # 测试程序
+</code></pre>
+<h3 id="_17">核心代码框架</h3>
+<pre><code class="language-c">// memory_tracker.h
+#ifndef MEMORY_TRACKER_H
+#define MEMORY_TRACKER_H
+
+#include &lt;stddef.h&gt;
+#include &lt;stdint.h&gt;
+
+// 配置
+#define MAX_ALLOCATIONS 200
+#define ENABLE_STACK_TRACE 1
+
+// 初始化追踪系统
+void memory_tracker_init(void);
+
+// 追踪函数
+void* tracked_malloc(size_t size, const char* file, int line);
+void* tracked_calloc(size_t num, size_t size, const char* file, int line);
+void* tracked_realloc(void* ptr, size_t size, const char* file, int line);
+void tracked_free(void* ptr);
+
+// 检测和报告
+void check_memory_leaks(void);
+void print_memory_stats(void);
+void print_leak_report(void);
+
+// 监控
+void monitor_memory_usage(void);
+uint32_t get_current_usage(void);
+uint32_t get_peak_usage(void);
+
+// 宏定义
+#define MALLOC(size) tracked_malloc(size, __FILE__, __LINE__)
+#define CALLOC(n, s) tracked_calloc(n, s, __FILE__, __LINE__)
+#define REALLOC(p, s) tracked_realloc(p, s, __FILE__, __LINE__)
+#define FREE(ptr) tracked_free(ptr)
+
+#endif // MEMORY_TRACKER_H
+</code></pre>
+<h3 id="_18">使用示例</h3>
+<pre><code class="language-c">#include &quot;memory_tracker.h&quot;
+
+int main(void) {
+    // 初始化
+    memory_tracker_init();
+
+    // 使用追踪的内存分配
+    char* str1 = (char*)MALLOC(100);
+    char* str2 = (char*)MALLOC(200);
+
+    if (str1 &amp;&amp; str2) {
+        strcpy(str1, &quot;Hello&quot;);
+        strcpy(str2, &quot;World&quot;);
+
+        // 正常释放
+        FREE(str1);
+
+        // 故意泄漏str2用于测试
+    }
+
+    // 检查泄漏
+    check_memory_leaks();
+    print_memory_stats();
+
+    return 0;
+}
+</code></pre>
+<h2 id="_19">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ 内存泄漏的概念、原因和危害</li>
+<li>✅ 实现自定义的内存追踪系统</li>
+<li>✅ 检测和报告内存泄漏的方法</li>
+<li>✅ 常见的泄漏模式和解决方案</li>
+<li>✅ 使用专业工具进行内存调试</li>
+<li>✅ 预防内存泄漏的最佳实践</li>
+</ul>
+<h3 id="_20">关键要点</h3>
+<ol>
+<li>
+<p><strong>预防优于检测</strong>：
+   - 使用配对的创建/销毁函数
+   - 采用内存池减少动态分配
+   - 建立代码审查机制</p>
+</li>
+<li>
+<p><strong>及早检测</strong>：
+   - 在开发阶段启用追踪
+   - 定期运行泄漏检测
+   - 使用自动化测试</p>
+</li>
+<li>
+<p><strong>工具辅助</strong>：
+   - 使用Valgrind、AddressSanitizer等工具
+   - 实现自定义追踪系统
+   - 结合静态分析工具</p>
+</li>
+<li>
+<p><strong>持续监控</strong>：
+   - 实时监控内存使用
+   - 设置告警阈值
+   - 记录和分析趋势</p>
+</li>
+</ol>
+<h2 id="_21">进阶挑战</h2>
+<p>尝试以下挑战来深化理解：</p>
+<ol>
+<li><strong>挑战1</strong>：扩展追踪系统支持调用栈记录</li>
+<li><strong>挑战2</strong>：实现内存使用的可视化界面</li>
+<li><strong>挑战3</strong>：添加内存分配模式分析功能</li>
+<li><strong>挑战4</strong>：集成到RTOS中实现任务级内存追踪</li>
+<li><strong>挑战5</strong>：实现自动化的泄漏修复建议</li>
+</ol>
+<h2 id="_22">完整代码</h2>
+<p>完整的项目代码可以在这里下载：
+- <a href="https://github.com/embedded-knowledge/memory-leak-detection">GitHub仓库</a>
+- 示例项目</p>
+<h2 id="_23">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="../advanced/01-memory-management-system.html">高效内存管理系统设计</a> - 学习高级内存管理技术</li>
+<li><a href="../beginner/03-stack-overflow-detection.html">堆栈溢出检测与防护</a> - 了解栈保护</li>
+<li><a href="01-mmu-virtual-memory.html">MMU与虚拟内存管理</a> - 学习虚拟内存</li>
+</ul>
+<h2 id="_24">参考资料</h2>
+<ol>
+<li>"Finding Memory Leaks in Embedded Systems" - Embedded.com</li>
+<li>"Valgrind User Manual" - Valgrind官方文档</li>
+<li>"AddressSanitizer: A Fast Address Sanity Checker" - Google Research</li>
+<li>"Memory Debugging in Embedded Systems" - ARM Developer</li>
+<li>"Effective C: An Introduction to Professional C Programming" by Robert C. Seacord</li>
+</ol>
+<h2 id="_25">常见问题</h2>
+<h3 id="q1">Q1: 在嵌入式系统中应该使用哪种泄漏检测方法？</h3>
+<p><strong>A</strong>: 根据系统资源和需求选择：</p>
+<p><strong>资源充足的系统</strong>：
+- 使用完整的追踪系统
+- 启用详细的日志记录
+- 使用专业调试工具</p>
+<p><strong>资源受限的系统</strong>：
+- 使用轻量级追踪（采样）
+- 仅在开发阶段启用
+- 使用简单的计数器</p>
+<p><strong>生产环境</strong>：
+- 使用内存池避免动态分配
+- 实现简单的监控机制
+- 定期检查内存使用趋势</p>
+<h3 id="q2-rtos">Q2: 如何在RTOS中检测内存泄漏？</h3>
+<p><strong>A</strong>: RTOS环境的特殊考虑：</p>
+<pre><code class="language-c">// 任务级内存追踪
+typedef struct {
+    TaskHandle_t task;
+    uint32_t allocated;
+    uint32_t freed;
+} task_memory_t;
+
+void* task_tracked_malloc(size_t size) {
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+    void* ptr = pvPortMalloc(size);
+
+    if (ptr != NULL) {
+        // 记录到任务的内存使用
+        update_task_memory(current, size);
+    }
+
+    return ptr;
+}
+
+// 定期检查每个任务的内存使用
+void check_task_memory_leaks(void) {
+    for (each task) {
+        if (task_memory[i].allocated != task_memory[i].freed) {
+            printf(&quot;Task %s has memory leak\n&quot;, task_name);
+        }
+    }
+}
+</code></pre>
+<h3 id="q3">Q3: 追踪系统会影响性能吗？</h3>
+<p><strong>A</strong>: 会有一定影响，但可以优化：</p>
+<p><strong>性能影响</strong>：
+- 每次分配增加10-50%开销
+- 内存开销：每个分配约20-40字节</p>
+<p><strong>优化方法</strong>：
+1. 仅在调试版本启用
+2. 使用采样追踪
+3. 使用条件编译
+4. 优化数据结构</p>
+<pre><code class="language-c">// 条件编译示例
+#ifdef DEBUG_BUILD
+    #define MALLOC(s) tracked_malloc(s, __FILE__, __LINE__)
+#else
+    #define MALLOC(s) malloc(s)
+#endif
+</code></pre>
+<h3 id="q4">Q4: 如何处理第三方库的内存分配？</h3>
+<p><strong>A</strong>: 几种处理方法：</p>
+<ol>
+<li><strong>包装第三方库</strong>：</li>
+</ol>
+<pre><code class="language-c">// 包装第三方库的分配函数
+void* lib_malloc_wrapper(size_t size) {
+    void* ptr = lib_malloc(size);
+    track_allocation(ptr, size, &quot;third_party_lib&quot;, 0);
+    return ptr;
+}
+</code></pre>
+<ol start="2">
+<li><strong>使用钩子函数</strong>：</li>
+</ol>
+<pre><code class="language-c">// 如果库支持自定义分配器
+lib_set_allocator(tracked_malloc, tracked_free);
+</code></pre>
+<ol start="3">
+<li><strong>分离追踪</strong>：</li>
+</ol>
+<pre><code class="language-c">// 单独追踪第三方库的内存
+void track_library_memory(void) {
+    size_t before = get_free_memory();
+    use_third_party_library();
+    size_t after = get_free_memory();
+
+    size_t used = before - after;
+    printf(&quot;Library used %zu bytes\n&quot;, used);
+}
+</code></pre>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>实现一个支持调用栈记录的内存追踪系统</li>
+<li>创建一个内存泄漏的自动化测试套件</li>
+<li>实现按文件和函数统计内存使用的功能</li>
+<li>开发一个内存使用的可视化工具</li>
+<li>集成追踪系统到现有的嵌入式项目中</li>
+</ol>
+<p><strong>实践项目</strong>：</p>
+<p>开发一个完整的内存管理框架，包括：
+- 内存池管理
+- 泄漏检测
+- 使用统计
+- 实时监控
+- 性能分析
+- 自动化测试</p>
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题或有改进建议，欢迎在评论区留言！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

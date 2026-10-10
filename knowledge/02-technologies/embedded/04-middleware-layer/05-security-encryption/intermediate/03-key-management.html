@@ -1,0 +1,1406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>密钥管理与安全存储：保护嵌入式系统的核心机密 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/">05-security-encryption</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">为什么密钥管理如此重要</a></li>
+<li><a href="#_5">密钥管理的挑战</a></li>
+</ul>
+</li>
+<li><a href="#_6">密钥生命周期管理</a><ul>
+<li><a href="#_7">密钥生成</a><ul>
+<li><a href="#_8">随机数生成器类型</a></li>
+</ul>
+</li>
+<li><a href="#_9">密钥存储</a><ul>
+<li><a href="#_10">存储方案对比</a></li>
+<li><a href="#1">方案1：加密存储</a></li>
+<li><a href="#2otp">方案2：OTP（一次性可编程）存储</a></li>
+<li><a href="#3secure-element">方案3：安全元件（Secure Element）</a></li>
+</ul>
+</li>
+<li><a href="#_11">密钥分发</a><ul>
+<li><a href="#_12">分发方案</a></li>
+</ul>
+</li>
+<li><a href="#_13">密钥更新和轮换</a><ul>
+<li><a href="#_14">密钥轮换策略</a></li>
+</ul>
+</li>
+<li><a href="#_15">密钥销毁</a></li>
+</ul>
+</li>
+<li><a href="#_16">安全最佳实践</a><ul>
+<li><a href="#_17">密钥管理的黄金法则</a></li>
+<li><a href="#_18">常见安全陷阱</a><ul>
+<li><a href="#1_1">陷阱1：使用弱随机数生成器</a></li>
+<li><a href="#2">陷阱2：密钥重用</a></li>
+<li><a href="#3">陷阱3：不安全的密钥传输</a></li>
+<li><a href="#4">陷阱4：忘记清除密钥</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_19">实际应用场景</a><ul>
+<li><a href="#1iot">场景1：IoT设备认证</a></li>
+<li><a href="#2_1">场景2：固件加密存储</a></li>
+</ul>
+</li>
+<li><a href="#_20">总结</a></li>
+<li><a href="#_21">延伸阅读</a></li>
+<li><a href="#_22">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">密钥管理与安全存储：保护嵌入式系统的核心机密</h1>
+<h2 id="_2">概述</h2>
+<p>密钥是加密系统的核心，就像房门的钥匙一样重要。无论加密算法多么强大，如果密钥管理不当，整个系统的安全性都会受到威胁。本文将深入探讨嵌入式系统中的密钥管理策略和安全存储技术。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解密钥管理的核心概念和生命周期</li>
+<li>掌握安全的密钥生成方法和随机数生成技术</li>
+<li>了解密钥存储的各种方案及其安全性对比</li>
+<li>熟悉密钥分发和交换的安全协议</li>
+<li>掌握密钥更新和轮换的最佳实践</li>
+<li>了解硬件安全模块(HSM)和安全元件的应用</li>
+<li>能够设计和实现安全的密钥管理系统</li>
+<li>掌握密钥管理的常见安全陷阱和防范措施</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">为什么密钥管理如此重要</h3>
+<p>在密码学中有一个著名的原则：<strong>Kerckhoffs原则</strong>（Kerckhoffs's Principle）</p>
+<blockquote>
+<p>"密码系统的安全性应该依赖于密钥的保密性，而不是算法的保密性"</p>
+</blockquote>
+<p>这意味着：
+- 即使攻击者知道你使用的加密算法
+- 只要密钥保密，系统仍然是安全的
+- 但如果密钥泄露，再强的算法也无法保护数据</p>
+<p><strong>现实案例</strong>：</p>
+<pre><code>案例1：硬编码密钥泄露
+某智能门锁产品在固件中硬编码了AES密钥，
+攻击者通过逆向工程提取密钥，
+导致所有使用该产品的用户都面临安全风险。
+
+案例2：密钥存储不当
+某物联网设备将密钥明文存储在Flash中，
+攻击者通过物理访问读取Flash内容，
+获取密钥后可以伪造设备身份。
+
+案例3：密钥未及时更新
+某系统使用同一密钥多年未更新，
+攻击者通过长期监听积累足够数据，
+最终通过密码分析破解密钥。
+</code></pre>
+<h3 id="_5">密钥管理的挑战</h3>
+<p>嵌入式系统面临的特殊挑战：</p>
+<ol>
+<li>
+<p><strong>资源受限</strong>
+   - 有限的存储空间
+   - 有限的计算能力
+   - 有限的功耗预算
+   - 难以实现复杂的安全机制</p>
+</li>
+<li>
+<p><strong>物理访问风险</strong>
+   - 设备可能被物理接触
+   - Flash内容可能被读取
+   - 调试接口可能被利用
+   - 侧信道攻击风险</p>
+</li>
+<li>
+<p><strong>长生命周期</strong>
+   - 设备可能运行多年
+   - 难以进行固件更新
+   - 密钥需要长期有效
+   - 安全威胁不断演变</p>
+</li>
+<li>
+<p><strong>大规模部署</strong>
+   - 每个设备需要唯一密钥
+   - 密钥分发和管理复杂
+   - 难以追踪和撤销
+   - 批量生产的安全性</p>
+</li>
+</ol>
+<h2 id="_6">密钥生命周期管理</h2>
+<p>密钥管理是一个完整的生命周期过程：</p>
+<pre><code>密钥生命周期：
+
+┌─────────────┐
+│  密钥生成   │ ← 使用安全随机数生成器
+└──────┬──────┘
+       ↓
+┌─────────────┐
+│  密钥存储   │ ← 加密存储或硬件保护
+└──────┬──────┘
+       ↓
+┌─────────────┐
+│  密钥分发   │ ← 安全通道传输
+└──────┬──────┘
+       ↓
+┌─────────────┐
+│  密钥使用   │ ← 访问控制和审计
+└──────┬──────┘
+       ↓
+┌─────────────┐
+│  密钥更新   │ ← 定期轮换
+└──────┬──────┘
+       ↓
+┌─────────────┐
+│  密钥销毁   │ ← 安全擦除
+└─────────────┘
+</code></pre>
+<h3 id="_7">密钥生成</h3>
+<p><strong>核心原则</strong>：密钥必须具有足够的随机性和不可预测性。</p>
+<h4 id="_8">随机数生成器类型</h4>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>特点</th>
+<th>适用场景</th>
+<th>安全性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TRNG</td>
+<td>真随机数，基于物理噪声</td>
+<td>密钥生成</td>
+<td>最高</td>
+</tr>
+<tr>
+<td>PRNG</td>
+<td>伪随机数，算法生成</td>
+<td>一般应用</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>CSPRNG</td>
+<td>密码学安全的伪随机数</td>
+<td>密码学应用</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p><strong>TRNG（真随机数生成器）</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  使用硬件TRNG生成密钥
+ * @note   STM32F4系列部分型号支持硬件RNG
+ */
+#include &quot;stm32f4xx_hal.h&quot;
+
+int generate_key_with_trng(uint8_t *key, size_t key_len)
+{
+    RNG_HandleTypeDef hrng;
+
+    // 初始化硬件RNG
+    hrng.Instance = RNG;
+    if (HAL_RNG_Init(&amp;hrng) != HAL_OK) {
+        return -1;
+    }
+
+    // 生成随机密钥
+    for (size_t i = 0; i &lt; key_len; i += 4) {
+        uint32_t random;
+        if (HAL_RNG_GenerateRandomNumber(&amp;hrng, &amp;random) != HAL_OK) {
+            HAL_RNG_DeInit(&amp;hrng);
+            return -1;
+        }
+
+        // 复制到密钥缓冲区
+        size_t copy_len = (key_len - i) &lt; 4 ? (key_len - i) : 4;
+        memcpy(&amp;key[i], &amp;random, copy_len);
+    }
+
+    HAL_RNG_DeInit(&amp;hrng);
+
+    printf(&quot;Generated %zu-byte key using TRNG\n&quot;, key_len);
+    return 0;
+}
+</code></pre>
+<p><strong>CSPRNG（密码学安全的伪随机数生成器）</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  使用CSPRNG生成密钥
+ * @note   基于mbedTLS的CTR_DRBG
+ */
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+
+int generate_key_with_csprng(uint8_t *key, size_t key_len)
+{
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    const char *personalization = &quot;key_generation&quot;;
+    int ret;
+
+    // 初始化熵源和DRBG
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    // 种子化DRBG
+    ret = mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                                (const unsigned char *)personalization,
+                                strlen(personalization));
+    if (ret != 0) {
+        printf(&quot;DRBG seed failed: -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+
+    // 生成随机密钥
+    ret = mbedtls_ctr_drbg_random(&amp;ctr_drbg, key, key_len);
+    if (ret != 0) {
+        printf(&quot;Random generation failed: -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+
+    printf(&quot;Generated %zu-byte key using CSPRNG\n&quot;, key_len);
+
+cleanup:
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+    return ret;
+}
+</code></pre>
+<p><strong>密钥派生函数（KDF）</strong>：</p>
+<p>从主密钥派生子密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  使用PBKDF2从密码派生密钥
+ * @param  password: 用户密码
+ * @param  salt: 盐值（随机数）
+ * @param  iterations: 迭代次数
+ * @param  key: 输出密钥
+ */
+#include &quot;mbedtls/pkcs5.h&quot;
+
+int derive_key_from_password(const char *password,
+                             const uint8_t *salt, size_t salt_len,
+                             uint32_t iterations,
+                             uint8_t *key, size_t key_len)
+{
+    mbedtls_md_context_t md_ctx;
+    int ret;
+
+    // 初始化MD上下文
+    mbedtls_md_init(&amp;md_ctx);
+
+    // 设置哈希算法（SHA-256）
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    ret = mbedtls_md_setup(&amp;md_ctx, md_info, 1);
+    if (ret != 0) {
+        printf(&quot;MD setup failed: -0x%04x\n&quot;, -ret);
+        mbedtls_md_free(&amp;md_ctx);
+        return ret;
+    }
+
+    // 使用PBKDF2派生密钥
+    ret = mbedtls_pkcs5_pbkdf2_hmac(&amp;md_ctx,
+                                    (const unsigned char *)password, strlen(password),
+                                    salt, salt_len,
+                                    iterations,
+                                    key_len, key);
+
+    if (ret != 0) {
+        printf(&quot;PBKDF2 failed: -0x%04x\n&quot;, -ret);
+    } else {
+        printf(&quot;Derived %zu-byte key from password\n&quot;, key_len);
+        printf(&quot;Iterations: %u\n&quot;, iterations);
+    }
+
+    mbedtls_md_free(&amp;md_ctx);
+    return ret;
+}
+</code></pre>
+<p><strong>密钥生成最佳实践</strong>：</p>
+<ol>
+<li>
+<p><strong>使用硬件RNG</strong>
+   - 优先使用芯片内置的TRNG
+   - 确保RNG已正确初始化
+   - 检查RNG的健康状态</p>
+</li>
+<li>
+<p><strong>足够的熵源</strong>
+   - 使用多个熵源
+   - 混合不同来源的随机性
+   - 定期重新种子化</p>
+</li>
+<li>
+<p><strong>密钥长度</strong>
+   - AES-128: 128位密钥
+   - AES-256: 256位密钥
+   - RSA: 至少2048位
+   - ECDSA: 至少256位</p>
+</li>
+<li>
+<p><strong>避免弱密钥</strong>
+   - 不使用全0或全1
+   - 不使用简单模式
+   - 验证密钥的随机性</p>
+</li>
+</ol>
+<h3 id="_9">密钥存储</h3>
+<p>密钥存储是密钥管理中最关键的环节。</p>
+<h4 id="_10">存储方案对比</h4>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>安全性</th>
+<th>成本</th>
+<th>复杂度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>明文存储</td>
+<td>极低</td>
+<td>低</td>
+<td>低</td>
+<td>不推荐</td>
+</tr>
+<tr>
+<td>加密存储</td>
+<td>中等</td>
+<td>低</td>
+<td>中</td>
+<td>一般应用</td>
+</tr>
+<tr>
+<td>OTP存储</td>
+<td>高</td>
+<td>中</td>
+<td>中</td>
+<td>设备唯一密钥</td>
+</tr>
+<tr>
+<td>安全元件</td>
+<td>很高</td>
+<td>高</td>
+<td>高</td>
+<td>高安全应用</td>
+</tr>
+<tr>
+<td>HSM</td>
+<td>最高</td>
+<td>很高</td>
+<td>高</td>
+<td>关键基础设施</td>
+</tr>
+</tbody>
+</table>
+<h4 id="1">方案1：加密存储</h4>
+<p>使用主密钥加密存储的密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  密钥加密存储系统
+ */
+#include &quot;mbedtls/aes.h&quot;
+
+// 密钥存储结构
+typedef struct {
+    uint8_t encrypted_key[32];  // 加密后的密钥
+    uint8_t iv[16];             // 初始化向量
+    uint32_t crc;               // CRC校验
+    uint32_t version;           // 版本号
+} encrypted_key_storage_t;
+
+/**
+ * @brief  存储加密密钥到Flash
+ * @param  key: 要存储的密钥
+ * @param  key_len: 密钥长度
+ * @param  master_key: 主密钥（用于加密）
+ * @param  storage_addr: Flash存储地址
+ */
+int store_encrypted_key(const uint8_t *key, size_t key_len,
+                       const uint8_t *master_key,
+                       uint32_t storage_addr)
+{
+    encrypted_key_storage_t storage;
+    mbedtls_aes_context aes;
+    uint8_t padded_key[32] = {0};
+
+    printf(&quot;Storing encrypted key...\n&quot;);
+
+    // 准备数据
+    memcpy(padded_key, key, key_len);
+
+    // 生成随机IV
+    generate_key_with_trng(storage.iv, 16);
+
+    // 初始化AES
+    mbedtls_aes_init(&amp;aes);
+    mbedtls_aes_setkey_enc(&amp;aes, master_key, 256);
+
+    // 加密密钥
+    mbedtls_aes_crypt_cbc(&amp;aes, MBEDTLS_AES_ENCRYPT, 32,
+                         storage.iv, padded_key, storage.encrypted_key);
+
+    // 计算CRC
+    storage.crc = calculate_crc32(storage.encrypted_key, 32);
+    storage.version = 1;
+
+    // 写入Flash
+    int ret = write_to_flash(storage_addr, (uint8_t*)&amp;storage, sizeof(storage));
+
+    mbedtls_aes_free(&amp;aes);
+
+    if (ret == 0) {
+        printf(&quot;Key stored successfully at 0x%08lX\n&quot;, storage_addr);
+    }
+
+    return ret;
+}
+
+/**
+ * @brief  从Flash读取并解密密钥
+ * @param  key: 输出密钥缓冲区
+ * @param  key_len: 密钥长度
+ * @param  master_key: 主密钥（用于解密）
+ * @param  storage_addr: Flash存储地址
+ */
+int load_encrypted_key(uint8_t *key, size_t key_len,
+                      const uint8_t *master_key,
+                      uint32_t storage_addr)
+{
+    encrypted_key_storage_t storage;
+    mbedtls_aes_context aes;
+    uint8_t decrypted[32];
+
+    printf(&quot;Loading encrypted key...\n&quot;);
+
+    // 从Flash读取
+    memcpy(&amp;storage, (void*)storage_addr, sizeof(storage));
+
+    // 验证CRC
+    uint32_t calculated_crc = calculate_crc32(storage.encrypted_key, 32);
+    if (calculated_crc != storage.crc) {
+        printf(&quot;CRC mismatch - data corrupted\n&quot;);
+        return -1;
+    }
+
+    // 初始化AES
+    mbedtls_aes_init(&amp;aes);
+    mbedtls_aes_setkey_dec(&amp;aes, master_key, 256);
+
+    // 解密密钥
+    mbedtls_aes_crypt_cbc(&amp;aes, MBEDTLS_AES_DECRYPT, 32,
+                         storage.iv, storage.encrypted_key, decrypted);
+
+    // 复制到输出缓冲区
+    memcpy(key, decrypted, key_len);
+
+    mbedtls_aes_free(&amp;aes);
+
+    printf(&quot;Key loaded successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>主密钥保护</strong>：</p>
+<p>主密钥本身需要特殊保护：</p>
+<pre><code class="language-c">/**
+ * @brief  从设备唯一ID派生主密钥
+ * @note   利用芯片的唯一ID作为密钥材料
+ */
+int derive_master_key_from_uid(uint8_t *master_key)
+{
+    // 读取STM32的唯一ID（96位）
+    uint32_t uid[3];
+    uid[0] = *(uint32_t*)(UID_BASE);
+    uid[1] = *(uint32_t*)(UID_BASE + 4);
+    uid[2] = *(uint32_t*)(UID_BASE + 8);
+
+    // 添加应用特定的盐值
+    const char *app_salt = &quot;MySecureApp_v1.0&quot;;
+
+    // 使用PBKDF2派生主密钥
+    uint8_t salt[32];
+    memcpy(salt, uid, 12);
+    memcpy(salt + 12, app_salt, strlen(app_salt));
+
+    return derive_key_from_password(&quot;&quot;, salt, 32, 10000, master_key, 32);
+}
+</code></pre>
+<h4 id="2otp">方案2：OTP（一次性可编程）存储</h4>
+<p>使用芯片的OTP区域存储密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  将密钥写入OTP区域
+ * @note   OTP只能写入一次，无法修改
+ */
+int write_key_to_otp(const uint8_t *key, size_t key_len)
+{
+    // STM32F4的OTP区域地址
+    #define OTP_BASE_ADDR 0x1FFF7800
+    #define OTP_KEY_OFFSET 0x20  // 使用偏移地址
+
+    uint32_t otp_addr = OTP_BASE_ADDR + OTP_KEY_OFFSET;
+
+    printf(&quot;Writing key to OTP...\n&quot;);
+    printf(&quot;WARNING: This operation is irreversible!\n&quot;);
+
+    // 解锁Flash
+    HAL_FLASH_Unlock();
+
+    // 写入密钥到OTP
+    for (size_t i = 0; i &lt; key_len; i++) {
+        if (HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE,
+                             otp_addr + i, key[i]) != HAL_OK) {
+            printf(&quot;OTP write failed at offset %zu\n&quot;, i);
+            HAL_FLASH_Lock();
+            return -1;
+        }
+    }
+
+    // 锁定Flash
+    HAL_FLASH_Lock();
+
+    printf(&quot;Key written to OTP successfully\n&quot;);
+    printf(&quot;Address: 0x%08lX\n&quot;, otp_addr);
+
+    return 0;
+}
+
+/**
+ * @brief  从OTP区域读取密钥
+ */
+int read_key_from_otp(uint8_t *key, size_t key_len)
+{
+    #define OTP_BASE_ADDR 0x1FFF7800
+    #define OTP_KEY_OFFSET 0x20
+
+    uint32_t otp_addr = OTP_BASE_ADDR + OTP_KEY_OFFSET;
+
+    // 直接从OTP读取
+    memcpy(key, (void*)otp_addr, key_len);
+
+    printf(&quot;Key read from OTP\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>OTP存储优势</strong>：
+- 物理上不可修改
+- 抗篡改能力强
+- 适合存储设备唯一密钥
+- 不需要额外的安全芯片</p>
+<p><strong>OTP存储限制</strong>：
+- 只能写入一次
+- 容量有限（通常512字节）
+- 写入错误无法纠正
+- 需要谨慎规划使用</p>
+<h4 id="3secure-element">方案3：安全元件（Secure Element）</h4>
+<p>使用专用的安全芯片存储密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  使用ATECC608安全元件存储密钥
+ * @note   ATECC608是Microchip的安全认证芯片
+ */
+
+// ATECC608密钥槽配置
+typedef struct {
+    uint8_t slot_id;        // 密钥槽ID (0-15)
+    uint8_t key_type;       // 密钥类型
+    uint16_t key_config;    // 密钥配置
+    bool is_secret;         // 是否为私密密钥
+    bool can_generate;      // 是否可以生成密钥
+} atecc608_key_slot_t;
+
+/**
+ * @brief  在ATECC608中生成密钥
+ * @param  slot_id: 密钥槽ID
+ */
+int atecc608_generate_key(uint8_t slot_id)
+{
+    printf(&quot;Generating key in ATECC608 slot %d...\n&quot;, slot_id);
+
+    // 发送生成密钥命令
+    // 密钥在芯片内部生成，永不离开芯片
+    uint8_t cmd[] = {0x03, 0x07, 0x00, slot_id};
+
+    // 通过I2C发送命令
+    if (i2c_write(ATECC608_ADDR, cmd, sizeof(cmd)) != 0) {
+        printf(&quot;Command send failed\n&quot;);
+        return -1;
+    }
+
+    // 等待命令完成
+    HAL_Delay(50);
+
+    // 读取响应
+    uint8_t response[4];
+    if (i2c_read(ATECC608_ADDR, response, sizeof(response)) != 0) {
+        printf(&quot;Response read failed\n&quot;);
+        return -1;
+    }
+
+    if (response[0] == 0x00) {
+        printf(&quot;Key generated successfully in slot %d\n&quot;, slot_id);
+        printf(&quot;Note: Key never leaves the secure element\n&quot;);
+        return 0;
+    }
+
+    printf(&quot;Key generation failed: 0x%02X\n&quot;, response[0]);
+    return -1;
+}
+
+/**
+ * @brief  使用ATECC608中的密钥进行加密
+ * @param  slot_id: 密钥槽ID
+ * @param  data: 要加密的数据
+ * @param  encrypted: 输出加密数据
+ */
+int atecc608_encrypt(uint8_t slot_id, const uint8_t *data, uint8_t *encrypted)
+{
+    printf(&quot;Encrypting with ATECC608 slot %d...\n&quot;, slot_id);
+
+    // 构建加密命令
+    uint8_t cmd[64];
+    cmd[0] = 0x03;  // 命令码：加密
+    cmd[1] = 0x47;  // 参数
+    cmd[2] = slot_id;
+    memcpy(&amp;cmd[3], data, 32);
+
+    // 发送命令
+    if (i2c_write(ATECC608_ADDR, cmd, 35) != 0) {
+        return -1;
+    }
+
+    // 等待加密完成
+    HAL_Delay(20);
+
+    // 读取加密结果
+    if (i2c_read(ATECC608_ADDR, encrypted, 32) != 0) {
+        return -1;
+    }
+
+    printf(&quot;Encryption completed\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>安全元件的优势</strong>：</p>
+<ol>
+<li>
+<p><strong>物理隔离</strong>
+   - 密钥存储在独立芯片中
+   - 主MCU无法直接访问密钥
+   - 抗物理攻击能力强</p>
+</li>
+<li>
+<p><strong>硬件保护</strong>
+   - 防篡改检测
+   - 侧信道攻击防护
+   - 安全启动验证</p>
+</li>
+<li>
+<p><strong>密钥不出芯片</strong>
+   - 密钥在芯片内生成
+   - 加密操作在芯片内完成
+   - 密钥永不暴露</p>
+</li>
+<li>
+<p><strong>认证功能</strong>
+   - 支持设备认证
+   - 支持安全通信
+   - 符合行业标准</p>
+</li>
+</ol>
+<p><strong>常见安全元件</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>厂商</th>
+<th>接口</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ATECC608</td>
+<td>Microchip</td>
+<td>I2C</td>
+<td>低成本，易集成</td>
+</tr>
+<tr>
+<td>SE050</td>
+<td>NXP</td>
+<td>I2C/SPI</td>
+<td>功能丰富</td>
+</tr>
+<tr>
+<td>OPTIGA Trust</td>
+<td>Infineon</td>
+<td>I2C</td>
+<td>高安全等级</td>
+</tr>
+<tr>
+<td>A71CH</td>
+<td>NXP</td>
+<td>I2C</td>
+<td>IoT专用</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_11">密钥分发</h3>
+<p>密钥分发是将密钥安全地传递给需要使用它的设备或用户。</p>
+<h4 id="_12">分发方案</h4>
+<p><strong>方案1：预置密钥（Pre-shared Key）</strong></p>
+<p>在生产阶段注入密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  生产阶段密钥注入流程
+ */
+void production_key_injection(void)
+{
+    printf(&quot;=== Production Key Injection ===\n&quot;);
+
+    // 步骤1：生成设备唯一密钥
+    uint8_t device_key[32];
+    generate_key_with_trng(device_key, 32);
+
+    printf(&quot;Step 1: Generated unique device key\n&quot;);
+
+    // 步骤2：读取设备唯一ID
+    uint32_t device_id[3];
+    device_id[0] = *(uint32_t*)(UID_BASE);
+    device_id[1] = *(uint32_t*)(UID_BASE + 4);
+    device_id[2] = *(uint32_t*)(UID_BASE + 8);
+
+    printf(&quot;Step 2: Device ID: %08lX-%08lX-%08lX\n&quot;,
+           device_id[0], device_id[1], device_id[2]);
+
+    // 步骤3：将密钥写入OTP或安全元件
+    write_key_to_otp(device_key, 32);
+
+    printf(&quot;Step 3: Key written to secure storage\n&quot;);
+
+    // 步骤4：将设备ID和密钥记录到数据库
+    // 在实际生产中，这一步在生产服务器上完成
+    printf(&quot;Step 4: Record device ID and key in database\n&quot;);
+
+    // 步骤5：锁定配置，防止修改
+    lock_security_configuration();
+
+    printf(&quot;Step 5: Security configuration locked\n&quot;);
+    printf(&quot;Device provisioning completed\n&quot;);
+}
+</code></pre>
+<p><strong>方案2：密钥交换协议</strong></p>
+<p>使用Diffie-Hellman密钥交换：</p>
+<pre><code class="language-c">/**
+ * @brief  ECDH密钥交换示例
+ * @note   使用椭圆曲线Diffie-Hellman
+ */
+#include &quot;mbedtls/ecdh.h&quot;
+
+int ecdh_key_exchange_demo(void)
+{
+    mbedtls_ecdh_context ctx_cli, ctx_srv;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    unsigned char cli_to_srv[65], srv_to_cli[65];
+    unsigned char shared_secret_cli[32], shared_secret_srv[32];
+    size_t olen;
+    int ret;
+
+    printf(&quot;=== ECDH Key Exchange Demo ===\n&quot;);
+
+    // 初始化
+    mbedtls_ecdh_init(&amp;ctx_cli);
+    mbedtls_ecdh_init(&amp;ctx_srv);
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    // 种子化随机数生成器
+    const char *pers = &quot;ecdh_demo&quot;;
+    mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                         (const unsigned char *)pers, strlen(pers));
+
+    // 客户端：生成密钥对
+    printf(&quot;\nClient: Generating key pair...\n&quot;);
+    ret = mbedtls_ecdh_setup(&amp;ctx_cli, MBEDTLS_ECP_DP_SECP256R1);
+    ret = mbedtls_ecdh_make_public(&amp;ctx_cli, &amp;olen, cli_to_srv, 65,
+                                   mbedtls_ctr_drbg_random, &amp;ctr_drbg);
+    printf(&quot;Client: Public key generated (%zu bytes)\n&quot;, olen);
+
+    // 服务器：生成密钥对
+    printf(&quot;\nServer: Generating key pair...\n&quot;);
+    ret = mbedtls_ecdh_setup(&amp;ctx_srv, MBEDTLS_ECP_DP_SECP256R1);
+    ret = mbedtls_ecdh_make_public(&amp;ctx_srv, &amp;olen, srv_to_cli, 65,
+                                   mbedtls_ctr_drbg_random, &amp;ctr_drbg);
+    printf(&quot;Server: Public key generated (%zu bytes)\n&quot;, olen);
+
+    // 客户端：计算共享密钥
+    printf(&quot;\nClient: Computing shared secret...\n&quot;);
+    ret = mbedtls_ecdh_read_public(&amp;ctx_cli, srv_to_cli, olen);
+    ret = mbedtls_ecdh_calc_secret(&amp;ctx_cli, &amp;olen, shared_secret_cli, 32,
+                                   mbedtls_ctr_drbg_random, &amp;ctr_drbg);
+    printf(&quot;Client: Shared secret computed (%zu bytes)\n&quot;, olen);
+
+    // 服务器：计算共享密钥
+    printf(&quot;\nServer: Computing shared secret...\n&quot;);
+    ret = mbedtls_ecdh_read_public(&amp;ctx_srv, cli_to_srv, 65);
+    ret = mbedtls_ecdh_calc_secret(&amp;ctx_srv, &amp;olen, shared_secret_srv, 32,
+                                   mbedtls_ctr_drbg_random, &amp;ctr_drbg);
+    printf(&quot;Server: Shared secret computed (%zu bytes)\n&quot;, olen);
+
+    // 验证共享密钥是否相同
+    printf(&quot;\nVerifying shared secrets...\n&quot;);
+    if (memcmp(shared_secret_cli, shared_secret_srv, 32) == 0) {
+        printf(&quot;✓ Shared secrets match!\n&quot;);
+        printf(&quot;Shared secret: &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, shared_secret_cli[i]);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;✗ Shared secrets do not match!\n&quot;);
+    }
+
+    // 清理
+    mbedtls_ecdh_free(&amp;ctx_cli);
+    mbedtls_ecdh_free(&amp;ctx_srv);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+
+    return 0;
+}
+</code></pre>
+<p><strong>ECDH密钥交换的优势</strong>：
+- 不需要预共享密钥
+- 公钥可以在不安全信道传输
+- 抗中间人攻击（配合认证）
+- 前向保密性</p>
+<h3 id="_13">密钥更新和轮换</h3>
+<p>定期更新密钥可以降低密钥泄露的风险。</p>
+<h4 id="_14">密钥轮换策略</h4>
+<pre><code class="language-c">/**
+ * @brief  密钥轮换管理系统
+ */
+
+// 密钥版本管理
+typedef struct {
+    uint32_t version;           // 密钥版本号
+    uint32_t created_at;        // 创建时间
+    uint32_t expires_at;        // 过期时间
+    uint8_t key[32];            // 密钥数据
+    uint8_t status;             // 状态：0=活跃, 1=已过期, 2=已撤销
+} key_version_t;
+
+// 密钥管理器
+typedef struct {
+    key_version_t current_key;  // 当前密钥
+    key_version_t previous_key; // 前一个密钥（用于解密旧数据）
+    uint32_t rotation_interval; // 轮换间隔（秒）
+} key_manager_t;
+
+static key_manager_t key_mgr;
+
+/**
+ * @brief  初始化密钥管理器
+ */
+int key_manager_init(uint32_t rotation_interval)
+{
+    printf(&quot;Initializing key manager...\n&quot;);
+
+    memset(&amp;key_mgr, 0, sizeof(key_mgr));
+    key_mgr.rotation_interval = rotation_interval;
+
+    // 生成初始密钥
+    generate_key_with_trng(key_mgr.current_key.key, 32);
+    key_mgr.current_key.version = 1;
+    key_mgr.current_key.created_at = HAL_GetTick();
+    key_mgr.current_key.expires_at = key_mgr.current_key.created_at + rotation_interval;
+    key_mgr.current_key.status = 0;  // 活跃
+
+    printf(&quot;Key manager initialized\n&quot;);
+    printf(&quot;Initial key version: %lu\n&quot;, key_mgr.current_key.version);
+    printf(&quot;Rotation interval: %lu seconds\n&quot;, rotation_interval / 1000);
+
+    return 0;
+}
+
+/**
+ * @brief  检查是否需要轮换密钥
+ */
+bool key_manager_needs_rotation(void)
+{
+    uint32_t current_time = HAL_GetTick();
+    return (current_time &gt;= key_mgr.current_key.expires_at);
+}
+
+/**
+ * @brief  执行密钥轮换
+ */
+int key_manager_rotate(void)
+{
+    printf(&quot;\n=== Key Rotation ===\n&quot;);
+    printf(&quot;Current key version: %lu\n&quot;, key_mgr.current_key.version);
+
+    // 保存当前密钥为前一个密钥
+    memcpy(&amp;key_mgr.previous_key, &amp;key_mgr.current_key, sizeof(key_version_t));
+    key_mgr.previous_key.status = 1;  // 标记为已过期
+
+    printf(&quot;Previous key saved (version %lu)\n&quot;, key_mgr.previous_key.version);
+
+    // 生成新密钥
+    generate_key_with_trng(key_mgr.current_key.key, 32);
+    key_mgr.current_key.version++;
+    key_mgr.current_key.created_at = HAL_GetTick();
+    key_mgr.current_key.expires_at = key_mgr.current_key.created_at + key_mgr.rotation_interval;
+    key_mgr.current_key.status = 0;  // 活跃
+
+    printf(&quot;New key generated (version %lu)\n&quot;, key_mgr.current_key.version);
+    printf(&quot;Expires at: %lu\n&quot;, key_mgr.current_key.expires_at);
+
+    // 持久化密钥
+    store_encrypted_key(key_mgr.current_key.key, 32,
+                       master_key, KEY_STORAGE_ADDR);
+
+    printf(&quot;Key rotation completed\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  获取用于加密的密钥
+ */
+const uint8_t* key_manager_get_encryption_key(void)
+{
+    // 检查是否需要轮换
+    if (key_manager_needs_rotation()) {
+        printf(&quot;Key expired, rotating...\n&quot;);
+        key_manager_rotate();
+    }
+
+    return key_mgr.current_key.key;
+}
+
+/**
+ * @brief  获取用于解密的密钥
+ * @param  version: 密钥版本号
+ */
+const uint8_t* key_manager_get_decryption_key(uint32_t version)
+{
+    if (version == key_mgr.current_key.version) {
+        return key_mgr.current_key.key;
+    } else if (version == key_mgr.previous_key.version) {
+        // 允许使用前一个密钥解密旧数据
+        printf(&quot;Using previous key (version %lu) for decryption\n&quot;, version);
+        return key_mgr.previous_key.key;
+    } else {
+        printf(&quot;Key version %lu not available\n&quot;, version);
+        return NULL;
+    }
+}
+
+/**
+ * @brief  密钥轮换示例
+ */
+void key_rotation_example(void)
+{
+    // 初始化密钥管理器（30秒轮换间隔）
+    key_manager_init(30000);
+
+    // 模拟加密操作
+    const char *data = &quot;Sensitive data&quot;;
+    uint8_t encrypted[32];
+
+    printf(&quot;\n--- Encrypting with current key ---\n&quot;);
+    const uint8_t *enc_key = key_manager_get_encryption_key();
+    uint32_t key_version = key_mgr.current_key.version;
+
+    // 加密数据（简化示例）
+    printf(&quot;Encrypted with key version %lu\n&quot;, key_version);
+
+    // 等待密钥过期
+    printf(&quot;\nWaiting for key expiration...\n&quot;);
+    HAL_Delay(31000);
+
+    // 尝试加密，会触发密钥轮换
+    printf(&quot;\n--- Encrypting with new key ---\n&quot;);
+    enc_key = key_manager_get_encryption_key();
+
+    // 解密旧数据
+    printf(&quot;\n--- Decrypting old data ---\n&quot;);
+    const uint8_t *dec_key = key_manager_get_decryption_key(key_version);
+    if (dec_key != NULL) {
+        printf(&quot;Successfully retrieved old key for decryption\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>密钥轮换最佳实践</strong>：</p>
+<ol>
+<li>
+<p><strong>定期轮换</strong>
+   - 根据风险评估确定轮换周期
+   - 高安全应用：每天或每周
+   - 一般应用：每月或每季度
+   - 低风险应用：每年</p>
+</li>
+<li>
+<p><strong>保留旧密钥</strong>
+   - 保留前N个版本的密钥
+   - 用于解密旧数据
+   - 设置旧密钥的过期时间</p>
+</li>
+<li>
+<p><strong>平滑过渡</strong>
+   - 新旧密钥并存一段时间
+   - 逐步迁移到新密钥
+   - 避免服务中断</p>
+</li>
+<li>
+<p><strong>审计和监控</strong>
+   - 记录密钥轮换事件
+   - 监控密钥使用情况
+   - 检测异常访问</p>
+</li>
+</ol>
+<h3 id="_15">密钥销毁</h3>
+<p>密钥不再需要时，必须安全地销毁。</p>
+<pre><code class="language-c">/**
+ * @brief  安全擦除密钥
+ * @param  key: 密钥缓冲区
+ * @param  key_len: 密钥长度
+ */
+void secure_key_erase(uint8_t *key, size_t key_len)
+{
+    volatile uint8_t *p = key;
+
+    printf(&quot;Securely erasing key...\n&quot;);
+
+    // 多次覆写，防止数据恢复
+    for (int pass = 0; pass &lt; 3; pass++) {
+        // 写入0x00
+        for (size_t i = 0; i &lt; key_len; i++) {
+            p[i] = 0x00;
+        }
+
+        // 写入0xFF
+        for (size_t i = 0; i &lt; key_len; i++) {
+            p[i] = 0xFF;
+        }
+
+        // 写入随机数
+        for (size_t i = 0; i &lt; key_len; i++) {
+            p[i] = (uint8_t)(rand() &amp; 0xFF);
+        }
+    }
+
+    // 最后清零
+    for (size_t i = 0; i &lt; key_len; i++) {
+        p[i] = 0x00;
+    }
+
+    printf(&quot;Key erased securely\n&quot;);
+}
+
+/**
+ * @brief  擦除Flash中的密钥
+ * @param  address: Flash地址
+ * @param  size: 擦除大小
+ */
+int secure_flash_erase(uint32_t address, size_t size)
+{
+    printf(&quot;Erasing Flash at 0x%08lX...\n&quot;, address);
+
+    // 解锁Flash
+    HAL_FLASH_Unlock();
+
+    // 确定要擦除的扇区
+    uint32_t sector = get_flash_sector(address);
+
+    // 擦除扇区
+    FLASH_EraseInitTypeDef erase_init;
+    uint32_t sector_error;
+
+    erase_init.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase_init.Sector = sector;
+    erase_init.NbSectors = 1;
+    erase_init.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    HAL_StatusTypeDef status = HAL_FLASHEx_Erase(&amp;erase_init, &amp;sector_error);
+
+    // 锁定Flash
+    HAL_FLASH_Lock();
+
+    if (status == HAL_OK) {
+        printf(&quot;Flash erased successfully\n&quot;);
+        return 0;
+    } else {
+        printf(&quot;Flash erase failed\n&quot;);
+        return -1;
+    }
+}
+</code></pre>
+<h2 id="_16">安全最佳实践</h2>
+<h3 id="_17">密钥管理的黄金法则</h3>
+<ol>
+<li><strong>永不硬编码密钥</strong>
+   ```c
+   // ❌ 错误：硬编码密钥
+   const uint8_t key[] = {0x2b, 0x7e, 0x15, 0x16, ...};</li>
+</ol>
+<p>// ✅ 正确：从安全存储加载
+   uint8_t key[32];
+   load_key_from_secure_storage(key, 32);
+   ```</p>
+<ol start="2">
+<li><strong>永不明文存储密钥</strong>
+   ```c
+   // ❌ 错误：明文存储
+   write_to_flash(addr, key, 32);</li>
+</ol>
+<p>// ✅ 正确：加密存储
+   store_encrypted_key(key, 32, master_key, addr);
+   ```</p>
+<ol start="3">
+<li><strong>使用后立即清除密钥</strong>
+   ```c
+   // ✅ 正确的密钥使用流程
+   uint8_t key[32];
+   load_key(key, 32);</li>
+</ol>
+<p>// 使用密钥
+   encrypt_data(data, key);</p>
+<p>// 立即清除
+   secure_key_erase(key, 32);
+   ```</p>
+<ol start="4">
+<li>
+<p><strong>限制密钥访问权限</strong>
+   <code>c
+   // 使用访问控制
+   if (!check_permission(current_user, KEY_ACCESS)) {
+       printf("Access denied\n");
+       return -1;
+   }</code></p>
+</li>
+<li>
+<p><strong>记录密钥操作</strong>
+   <code>c
+   // 审计日志
+   log_key_operation("KEY_LOAD", key_id, user_id, timestamp);</code></p>
+</li>
+</ol>
+<h3 id="_18">常见安全陷阱</h3>
+<h4 id="1_1">陷阱1：使用弱随机数生成器</h4>
+<pre><code class="language-c">// ❌ 错误：使用标准rand()
+srand(time(NULL));
+for (int i = 0; i &lt; 16; i++) {
+    key[i] = rand() &amp; 0xFF;
+}
+
+// ✅ 正确：使用硬件RNG或CSPRNG
+generate_key_with_trng(key, 16);
+</code></pre>
+<h4 id="2">陷阱2：密钥重用</h4>
+<pre><code class="language-c">// ❌ 错误：所有设备使用相同密钥
+const uint8_t global_key[32] = {...};
+
+// ✅ 正确：每个设备唯一密钥
+uint8_t device_key[32];
+derive_device_key(device_id, device_key);
+</code></pre>
+<h4 id="3">陷阱3：不安全的密钥传输</h4>
+<pre><code class="language-c">// ❌ 错误：明文传输密钥
+send_over_network(key, 32);
+
+// ✅ 正确：使用密钥交换协议
+ecdh_key_exchange(&amp;shared_key);
+</code></pre>
+<h4 id="4">陷阱4：忘记清除密钥</h4>
+<pre><code class="language-c">// ❌ 错误：函数结束时密钥仍在内存中
+void encrypt_function(void) {
+    uint8_t key[32];
+    load_key(key, 32);
+    encrypt_data(data, key);
+    // 函数结束，key仍在栈上
+}
+
+// ✅ 正确：显式清除
+void encrypt_function(void) {
+    uint8_t key[32];
+    load_key(key, 32);
+    encrypt_data(data, key);
+    secure_key_erase(key, 32);  // 清除密钥
+}
+</code></pre>
+<h2 id="_19">实际应用场景</h2>
+<h3 id="1iot">场景1：IoT设备认证</h3>
+<pre><code class="language-c">/**
+ * @brief  IoT设备认证系统
+ */
+typedef struct {
+    uint8_t device_id[16];      // 设备ID
+    uint8_t device_key[32];     // 设备密钥
+    uint8_t server_cert[512];   // 服务器证书
+} iot_device_credentials_t;
+
+int iot_device_authenticate(void)
+{
+    iot_device_credentials_t creds;
+
+    printf(&quot;=== IoT Device Authentication ===\n&quot;);
+
+    // 步骤1：从安全存储加载凭证
+    printf(&quot;Step 1: Loading device credentials...\n&quot;);
+    read_key_from_otp(creds.device_key, 32);
+    load_device_id(creds.device_id, 16);
+
+    // 步骤2：建立TLS连接
+    printf(&quot;Step 2: Establishing TLS connection...\n&quot;);
+    // 使用设备密钥和证书建立安全连接
+
+    // 步骤3：发送认证请求
+    printf(&quot;Step 3: Sending authentication request...\n&quot;);
+    uint8_t challenge[32];
+    receive_challenge(challenge, 32);
+
+    // 步骤4：使用设备密钥签名挑战
+    printf(&quot;Step 4: Signing challenge...\n&quot;);
+    uint8_t signature[64];
+    sign_with_device_key(challenge, 32, creds.device_key, signature);
+
+    // 步骤5：发送签名
+    printf(&quot;Step 5: Sending signature...\n&quot;);
+    send_signature(signature, 64);
+
+    // 步骤6：接收认证结果
+    printf(&quot;Step 6: Receiving authentication result...\n&quot;);
+    if (receive_auth_result() == AUTH_SUCCESS) {
+        printf(&quot;✓ Device authenticated successfully\n&quot;);
+        return 0;
+    } else {
+        printf(&quot;✗ Authentication failed\n&quot;);
+        return -1;
+    }
+}
+</code></pre>
+<h3 id="2_1">场景2：固件加密存储</h3>
+<pre><code class="language-c">/**
+ * @brief  加密固件存储系统
+ */
+int store_encrypted_firmware(const uint8_t *firmware, size_t firmware_size)
+{
+    printf(&quot;=== Storing Encrypted Firmware ===\n&quot;);
+
+    // 步骤1：生成固件加密密钥
+    printf(&quot;Step 1: Generating firmware encryption key...\n&quot;);
+    uint8_t fw_key[32];
+    generate_key_with_trng(fw_key, 32);
+
+    // 步骤2：加密固件
+    printf(&quot;Step 2: Encrypting firmware (%zu bytes)...\n&quot;, firmware_size);
+    uint8_t *encrypted_fw = malloc(firmware_size);
+    encrypt_firmware(firmware, firmware_size, fw_key, encrypted_fw);
+
+    // 步骤3：使用设备主密钥加密固件密钥
+    printf(&quot;Step 3: Encrypting firmware key...\n&quot;);
+    uint8_t master_key[32];
+    derive_master_key_from_uid(master_key);
+
+    uint8_t encrypted_fw_key[48];  // 32字节密钥 + 16字节IV
+    encrypt_key(fw_key, 32, master_key, encrypted_fw_key);
+
+    // 步骤4：存储加密的固件和密钥
+    printf(&quot;Step 4: Storing encrypted firmware and key...\n&quot;);
+    write_to_flash(FIRMWARE_ADDR, encrypted_fw, firmware_size);
+    write_to_flash(FW_KEY_ADDR, encrypted_fw_key, 48);
+
+    // 步骤5：清除临时密钥
+    printf(&quot;Step 5: Clearing temporary keys...\n&quot;);
+    secure_key_erase(fw_key, 32);
+    secure_key_erase(master_key, 32);
+
+    free(encrypted_fw);
+
+    printf(&quot;Firmware stored securely\n&quot;);
+    return 0;
+}
+</code></pre>
+<h2 id="_20">总结</h2>
+<p>密钥管理是信息安全的基石，本文介绍了密钥管理的核心概念和最佳实践：</p>
+<p><strong>密钥生命周期</strong>：
+- 生成：使用TRNG或CSPRNG生成高质量随机密钥
+- 存储：采用加密存储、OTP或安全元件保护密钥
+- 分发：使用预置密钥或密钥交换协议安全分发
+- 更新：定期轮换密钥，保留旧版本用于解密
+- 销毁：安全擦除不再需要的密钥</p>
+<p><strong>安全原则</strong>：
+- 永不硬编码密钥
+- 永不明文存储密钥
+- 使用后立即清除密钥
+- 限制密钥访问权限
+- 记录密钥操作审计</p>
+<p><strong>技术方案</strong>：
+- 硬件RNG提供真随机数
+- 密钥派生函数从密码生成密钥
+- 安全元件提供物理隔离保护
+- ECDH实现安全的密钥交换
+- 密钥轮换降低泄露风险</p>
+<p><strong>实践建议</strong>：
+- 根据安全需求选择合适的存储方案
+- 在生产阶段注入设备唯一密钥
+- 实施密钥版本管理和轮换策略
+- 建立完善的密钥审计机制
+- 定期进行安全评估和渗透测试</p>
+<h2 id="_21">延伸阅读</h2>
+<p>推荐进一步学习的资源：</p>
+<ul>
+<li><a href="https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final">NIST密钥管理指南</a> - 权威的密钥管理标准</li>
+<li>安全启动与固件验证 - 密钥在安全启动中的应用</li>
+<li>TLS/SSL协议详解 - 密钥在安全通信中的应用</li>
+<li><a href="https://www.cryptomathic.com/news-events/blog/what-is-a-hardware-security-module-hsm">硬件安全模块(HSM)技术</a> - HSM深入介绍</li>
+</ul>
+<h2 id="_22">参考资料</h2>
+<ol>
+<li>NIST SP 800-57 - Recommendation for Key Management</li>
+<li>FIPS 140-2 - Security Requirements for Cryptographic Modules</li>
+<li>Common Criteria - Security Evaluation Standards</li>
+<li>Microchip ATECC608 Datasheet</li>
+<li>mbedTLS Documentation - https://tls.mbed.org/</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>设计一个密钥管理系统，支持密钥生成、存储、轮换和销毁</li>
+<li>实现一个基于ECDH的密钥交换协议</li>
+<li>使用安全元件（如ATECC608）实现设备认证</li>
+<li>设计一个固件加密存储方案，确保固件的机密性和完整性</li>
+<li>实现一个密钥审计系统，记录所有密钥操作</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 安全启动与固件验证，了解密钥在系统启动安全中的应用。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

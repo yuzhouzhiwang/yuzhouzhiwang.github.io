@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>固件加密与防护技术实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/01-bootloader-development/">01-bootloader-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/01-bootloader-development/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">前置知识</a></li>
+<li><a href="#_4">学习目标</a></li>
+<li><a href="#_5">准备工作</a><ul>
+<li><a href="#_6">硬件准备</a></li>
+<li><a href="#_7">软件准备</a></li>
+<li><a href="#_8">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_9">背景知识</a><ul>
+<li><a href="#_10">为什么需要固件加密</a></li>
+<li><a href="#_11">加密算法选择</a></li>
+<li><a href="#aes">AES加密原理</a></li>
+</ul>
+</li>
+<li><a href="#_12">核心内容</a><ul>
+<li><a href="#1-aes">1. AES加密实现</a><ul>
+<li><a href="#aes_1">AES加密基础函数</a></li>
+<li><a href="#aes-cbc">AES-CBC模式加密</a></li>
+<li><a href="#_13">数据填充处理</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 固件加密工具</a></li>
+<li><a href="#3-bootloader">3. Bootloader固件解密</a></li>
+<li><a href="#4-flash">4. Flash读保护机制</a><ul>
+<li><a href="#_14">读保护级别</a></li>
+<li><a href="#_15">读保护配置</a></li>
+<li><a href="#_16">写保护配置</a></li>
+</ul>
+</li>
+<li><a href="#5">5. 密钥管理</a><ul>
+<li><a href="#_17">密钥存储方案</a></li>
+<li><a href="#_18">密钥轮换</a></li>
+</ul>
+</li>
+<li><a href="#6">6. 防回滚机制</a><ul>
+<li><a href="#_19">版本号管理</a></li>
+<li><a href="#_20">单调计数器</a></li>
+</ul>
+</li>
+<li><a href="#7">7. 完整的加密启动流程</a></li>
+</ul>
+</li>
+<li><a href="#_21">实践示例</a><ul>
+<li><a href="#1">示例1：完整的固件加密和部署流程</a></li>
+<li><a href="#2aes">示例2：使用硬件AES加速</a></li>
+<li><a href="#3">示例3：混合加密方案</a></li>
+</ul>
+</li>
+<li><a href="#_22">验证与测试</a><ul>
+<li><a href="#_23">测试加密解密功能</a></li>
+<li><a href="#_24">性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_25">故障排除</a><ul>
+<li><a href="#_26">常见问题</a></li>
+</ul>
+</li>
+<li><a href="#_27">总结</a></li>
+<li><a href="#_28">延伸阅读</a></li>
+<li><a href="#_29">下一步</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">固件加密与防护技术实战</h1>
+<h2 id="_2">概述</h2>
+<p>固件加密是保护嵌入式系统知识产权和防止恶意攻击的重要手段。通过对固件进行加密，即使攻击者获取了固件文件，也无法直接读取和分析其中的代码和数据。结合Flash读保护、防回滚机制和安全密钥管理，可以构建多层次的固件防护体系。</p>
+<p>本教程将带你从零开始实现完整的固件加密和防护方案，包括：</p>
+<ul>
+<li>固件加密的基本原理和算法选择</li>
+<li>AES加密算法的实现和应用</li>
+<li>Flash读保护和写保护机制</li>
+<li>防回滚和版本控制</li>
+<li>密钥的安全生成、存储和管理</li>
+<li>加密固件的启动流程</li>
+</ul>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解固件加密的核心原理和重要性</li>
+<li>掌握AES加密算法的使用方法</li>
+<li>实现固件的加密和解密功能</li>
+<li>配置Flash保护机制防止固件泄露</li>
+<li>设计安全的密钥管理方案</li>
+<li>构建完整的固件防护系统</li>
+</ul>
+<h2 id="_3">前置知识</h2>
+<p>在开始本教程之前，你需要：</p>
+<ul>
+<li>理解Bootloader的基本概念和工作原理</li>
+<li>熟悉C语言编程和指针操作</li>
+<li>了解基本的密码学概念（对称加密、非对称加密）</li>
+<li>掌握Flash存储器的操作方法</li>
+<li>了解安全启动的基本原理</li>
+</ul>
+<h2 id="_4">学习目标</h2>
+<p>通过本教程，你将学会：</p>
+<ol>
+<li>选择合适的加密算法保护固件</li>
+<li>实现AES-128/256加密和解密</li>
+<li>配置STM32的Flash读保护机制</li>
+<li>实现防回滚和版本管理</li>
+<li>安全地生成、存储和使用密钥</li>
+<li>构建加密固件的完整启动流程</li>
+</ol>
+<h2 id="_5">准备工作</h2>
+<h3 id="_6">硬件准备</h3>
+<ul>
+<li>STM32开发板（本教程使用STM32F407）</li>
+<li>USB转串口模块（用于调试输出）</li>
+<li>ST-Link调试器（用于固件烧录）</li>
+<li>杜邦线若干</li>
+</ul>
+<h3 id="_7">软件准备</h3>
+<ul>
+<li>Keil MDK或STM32CubeIDE开发环境</li>
+<li>STM32CubeMX配置工具</li>
+<li>Python 3.x（用于固件加密工具）</li>
+<li>pycryptodome库（Python加密库）</li>
+</ul>
+<pre><code class="language-bash"># 安装Python加密库
+pip install pycryptodome
+</code></pre>
+<h3 id="_8">环境配置</h3>
+<ol>
+<li>安装并配置STM32开发环境</li>
+<li>创建新的STM32项目</li>
+<li>配置UART用于调试输出</li>
+<li>配置系统时钟和基本外设</li>
+</ol>
+<h2 id="_9">背景知识</h2>
+<h3 id="_10">为什么需要固件加密</h3>
+<p>在嵌入式系统中，固件包含了产品的核心算法和商业机密。如果固件被轻易读取，会带来严重后果：</p>
+<p><strong>常见威胁</strong>：</p>
+<ol>
+<li><strong>知识产权泄露</strong>：竞争对手可以逆向工程，窃取核心算法</li>
+<li><strong>产品克隆</strong>：攻击者可以复制固件，制造山寨产品</li>
+<li><strong>恶意篡改</strong>：修改固件植入后门或恶意代码</li>
+<li><strong>密钥泄露</strong>：固件中的密钥和证书被提取</li>
+<li><strong>调试信息泄露</strong>：符号表和调试信息暴露系统细节</li>
+</ol>
+<p><strong>固件加密的价值</strong>：</p>
+<ul>
+<li><strong>保护知识产权</strong>：防止核心算法被窃取</li>
+<li><strong>防止产品克隆</strong>：增加复制产品的难度</li>
+<li><strong>提高安全性</strong>：即使固件被获取也无法直接使用</li>
+<li><strong>满足合规要求</strong>：符合行业安全标准</li>
+<li><strong>增强竞争力</strong>：保护技术优势</li>
+</ul>
+<h3 id="_11">加密算法选择</h3>
+<p>选择合适的加密算法需要平衡安全性、性能和资源消耗：</p>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>密钥长度</th>
+<th>安全性</th>
+<th>速度</th>
+<th>资源消耗</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AES-128</td>
+<td>128位</td>
+<td>高</td>
+<td>快</td>
+<td>低</td>
+<td>通用场景</td>
+</tr>
+<tr>
+<td>AES-256</td>
+<td>256位</td>
+<td>很高</td>
+<td>较快</td>
+<td>中等</td>
+<td>高安全要求</td>
+</tr>
+<tr>
+<td>ChaCha20</td>
+<td>256位</td>
+<td>很高</td>
+<td>很快</td>
+<td>低</td>
+<td>软件实现</td>
+</tr>
+<tr>
+<td>SM4</td>
+<td>128位</td>
+<td>高</td>
+<td>中等</td>
+<td>中等</td>
+<td>国密标准</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推荐选择</strong>：</p>
+<ul>
+<li><strong>资源受限设备</strong>：AES-128（硬件加速）</li>
+<li><strong>高安全要求</strong>：AES-256</li>
+<li><strong>纯软件实现</strong>：ChaCha20</li>
+<li><strong>国密合规</strong>：SM4</li>
+</ul>
+<h3 id="aes">AES加密原理</h3>
+<p>AES (Advanced Encryption Standard) 是目前最广泛使用的对称加密算法。</p>
+<p><strong>核心特性</strong>：</p>
+<ul>
+<li><strong>分组加密</strong>：将数据分成128位（16字节）的块</li>
+<li><strong>密钥长度</strong>：支持128、192、256位密钥</li>
+<li><strong>加密轮数</strong>：AES-128为10轮，AES-256为14轮</li>
+<li><strong>安全性高</strong>：目前没有有效的攻击方法</li>
+</ul>
+<p><strong>加密模式</strong>：</p>
+<ol>
+<li>
+<p><strong>ECB (Electronic Codebook)</strong>：
+   - 最简单的模式
+   - 相同明文产生相同密文
+   - 不推荐使用（不安全）</p>
+</li>
+<li>
+<p><strong>CBC (Cipher Block Chaining)</strong>：
+   - 每个块与前一个密文块异或
+   - 需要初始化向量(IV)
+   - 适合加密大量数据</p>
+</li>
+<li>
+<p><strong>CTR (Counter)</strong>：
+   - 将块密码转换为流密码
+   - 可以并行加密
+   - 适合随机访问</p>
+</li>
+<li>
+<p><strong>GCM (Galois/Counter Mode)</strong>：
+   - 提供加密和认证
+   - 性能好，安全性高
+   - 推荐用于现代系统</p>
+</li>
+</ol>
+<h2 id="_12">核心内容</h2>
+<h3 id="1-aes">1. AES加密实现</h3>
+<p>我们首先实现AES加密的核心功能，使用mbedTLS库提供的AES接口。</p>
+<h4 id="aes_1">AES加密基础函数</h4>
+<pre><code class="language-c">#include &quot;mbedtls/aes.h&quot;
+#include &quot;mbedtls/gcm.h&quot;
+#include &lt;string.h&gt;
+
+// AES密钥长度
+#define AES_KEY_SIZE 16  // 128位
+#define AES_BLOCK_SIZE 16  // 128位块
+
+/**
+ * @brief AES-128 ECB模式加密
+ * @param key 密钥（16字节）
+ * @param input 输入数据（16字节）
+ * @param output 输出数据（16字节）
+ * @return 0成功，-1失败
+ */
+int AES_Encrypt_ECB(const uint8_t *key, const uint8_t *input, uint8_t *output) {
+    mbedtls_aes_context aes_ctx;
+    int ret;
+
+    // 初始化AES上下文
+    mbedtls_aes_init(&amp;aes_ctx);
+
+    // 设置加密密钥
+    ret = mbedtls_aes_setkey_enc(&amp;aes_ctx, key, AES_KEY_SIZE * 8);
+    if (ret != 0) {
+        mbedtls_aes_free(&amp;aes_ctx);
+        return -1;
+    }
+
+    // 加密一个块
+    ret = mbedtls_aes_crypt_ecb(&amp;aes_ctx, MBEDTLS_AES_ENCRYPT, input, output);
+
+    // 释放资源
+    mbedtls_aes_free(&amp;aes_ctx);
+
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief AES-128 ECB模式解密
+ * @param key 密钥（16字节）
+ * @param input 输入数据（16字节）
+ * @param output 输出数据（16字节）
+ * @return 0成功，-1失败
+ */
+int AES_Decrypt_ECB(const uint8_t *key, const uint8_t *input, uint8_t *output) {
+    mbedtls_aes_context aes_ctx;
+    int ret;
+
+    // 初始化AES上下文
+    mbedtls_aes_init(&amp;aes_ctx);
+
+    // 设置解密密钥
+    ret = mbedtls_aes_setkey_dec(&amp;aes_ctx, key, AES_KEY_SIZE * 8);
+    if (ret != 0) {
+        mbedtls_aes_free(&amp;aes_ctx);
+        return -1;
+    }
+
+    // 解密一个块
+    ret = mbedtls_aes_crypt_ecb(&amp;aes_ctx, MBEDTLS_AES_DECRYPT, input, output);
+
+    // 释放资源
+    mbedtls_aes_free(&amp;aes_ctx);
+
+    return (ret == 0) ? 0 : -1;
+}
+</code></pre>
+<h4 id="aes-cbc">AES-CBC模式加密</h4>
+<p>CBC模式更安全，适合加密大量数据：</p>
+<pre><code class="language-c">/**
+ * @brief AES-128 CBC模式加密
+ * @param key 密钥（16字节）
+ * @param iv 初始化向量（16字节）
+ * @param input 输入数据
+ * @param input_len 输入数据长度（必须是16的倍数）
+ * @param output 输出数据
+ * @return 0成功，-1失败
+ */
+int AES_Encrypt_CBC(const uint8_t *key, const uint8_t *iv,
+                    const uint8_t *input, size_t input_len,
+                    uint8_t *output) {
+    mbedtls_aes_context aes_ctx;
+    uint8_t iv_copy[AES_BLOCK_SIZE];
+    int ret;
+
+    // 检查输入长度
+    if (input_len % AES_BLOCK_SIZE != 0) {
+        return -1;
+    }
+
+    // 复制IV（因为加密过程会修改它）
+    memcpy(iv_copy, iv, AES_BLOCK_SIZE);
+
+    // 初始化AES上下文
+    mbedtls_aes_init(&amp;aes_ctx);
+
+    // 设置加密密钥
+    ret = mbedtls_aes_setkey_enc(&amp;aes_ctx, key, AES_KEY_SIZE * 8);
+    if (ret != 0) {
+        mbedtls_aes_free(&amp;aes_ctx);
+        return -1;
+    }
+
+    // CBC模式加密
+    ret = mbedtls_aes_crypt_cbc(&amp;aes_ctx, MBEDTLS_AES_ENCRYPT,
+                                input_len, iv_copy, input, output);
+
+    // 释放资源
+    mbedtls_aes_free(&amp;aes_ctx);
+
+    return (ret == 0) ? 0 : -1;
+}
+
+/**
+ * @brief AES-128 CBC模式解密
+ * @param key 密钥（16字节）
+ * @param iv 初始化向量（16字节）
+ * @param input 输入数据
+ * @param input_len 输入数据长度（必须是16的倍数）
+ * @param output 输出数据
+ * @return 0成功，-1失败
+ */
+int AES_Decrypt_CBC(const uint8_t *key, const uint8_t *iv,
+                    const uint8_t *input, size_t input_len,
+                    uint8_t *output) {
+    mbedtls_aes_context aes_ctx;
+    uint8_t iv_copy[AES_BLOCK_SIZE];
+    int ret;
+
+    // 检查输入长度
+    if (input_len % AES_BLOCK_SIZE != 0) {
+        return -1;
+    }
+
+    // 复制IV
+    memcpy(iv_copy, iv, AES_BLOCK_SIZE);
+
+    // 初始化AES上下文
+    mbedtls_aes_init(&amp;aes_ctx);
+
+    // 设置解密密钥
+    ret = mbedtls_aes_setkey_dec(&amp;aes_ctx, key, AES_KEY_SIZE * 8);
+    if (ret != 0) {
+        mbedtls_aes_free(&amp;aes_ctx);
+        return -1;
+    }
+
+    // CBC模式解密
+    ret = mbedtls_aes_crypt_cbc(&amp;aes_ctx, MBEDTLS_AES_DECRYPT,
+                                input_len, iv_copy, input, output);
+
+    // 释放资源
+    mbedtls_aes_free(&amp;aes_ctx);
+
+    return (ret == 0) ? 0 : -1;
+}
+</code></pre>
+<h4 id="_13">数据填充处理</h4>
+<p>由于AES是分组加密，需要对不足16字节的数据进行填充：</p>
+<pre><code class="language-c">/**
+ * @brief PKCS7填充
+ * @param data 数据缓冲区
+ * @param data_len 实际数据长度
+ * @param buffer_size 缓冲区大小
+ * @return 填充后的长度
+ */
+size_t PKCS7_Pad(uint8_t *data, size_t data_len, size_t buffer_size) {
+    // 计算需要填充的字节数
+    size_t padding_len = AES_BLOCK_SIZE - (data_len % AES_BLOCK_SIZE);
+
+    // 检查缓冲区是否足够
+    if (data_len + padding_len &gt; buffer_size) {
+        return 0;
+    }
+
+    // 填充
+    for (size_t i = 0; i &lt; padding_len; i++) {
+        data[data_len + i] = (uint8_t)padding_len;
+    }
+
+    return data_len + padding_len;
+}
+
+/**
+ * @brief 移除PKCS7填充
+ * @param data 数据缓冲区
+ * @param data_len 数据长度
+ * @return 移除填充后的实际数据长度
+ */
+size_t PKCS7_Unpad(uint8_t *data, size_t data_len) {
+    if (data_len == 0 || data_len % AES_BLOCK_SIZE != 0) {
+        return 0;
+    }
+
+    // 读取最后一个字节（填充长度）
+    uint8_t padding_len = data[data_len - 1];
+
+    // 验证填充
+    if (padding_len == 0 || padding_len &gt; AES_BLOCK_SIZE) {
+        return 0;
+    }
+
+    // 检查所有填充字节是否正确
+    for (size_t i = data_len - padding_len; i &lt; data_len; i++) {
+        if (data[i] != padding_len) {
+            return 0;
+        }
+    }
+
+    return data_len - padding_len;
+}
+</code></pre>
+<h3 id="2">2. 固件加密工具</h3>
+<p>创建一个Python工具用于加密固件文件：</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+固件加密工具
+使用AES-128 CBC模式加密固件
+&quot;&quot;&quot;
+
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
+from Crypto.Util.Padding import pad, unpad
+import struct
+import sys
+import os
+
+class FirmwareEncryptor:
+    def __init__(self, key=None, iv=None):
+        &quot;&quot;&quot;初始化加密器&quot;&quot;&quot;
+        self.key = key if key else get_random_bytes(16)  # 128位密钥
+        self.iv = iv if iv else get_random_bytes(16)  # 128位IV
+
+    def save_key(self, key_path):
+        &quot;&quot;&quot;保存密钥到文件&quot;&quot;&quot;
+        with open(key_path, 'wb') as f:
+            f.write(self.key)
+            f.write(self.iv)
+        print(f&quot;Key saved to {key_path}&quot;)
+
+    def load_key(self, key_path):
+        &quot;&quot;&quot;从文件加载密钥&quot;&quot;&quot;
+        with open(key_path, 'rb') as f:
+            self.key = f.read(16)
+            self.iv = f.read(16)
+        print(f&quot;Key loaded from {key_path}&quot;)
+
+    def encrypt_firmware(self, firmware_path, output_path):
+        &quot;&quot;&quot;加密固件&quot;&quot;&quot;
+        # 读取固件
+        with open(firmware_path, 'rb') as f:
+            firmware_data = f.read()
+
+        print(f&quot;Original firmware size: {len(firmware_data)} bytes&quot;)
+
+        # PKCS7填充
+        padded_data = pad(firmware_data, AES.block_size)
+        print(f&quot;Padded firmware size: {len(padded_data)} bytes&quot;)
+
+        # 创建AES加密器
+        cipher = AES.new(self.key, AES.MODE_CBC, self.iv)
+
+        # 加密
+        encrypted_data = cipher.encrypt(padded_data)
+
+        # 构建加密固件格式
+        # [魔数(4字节)][原始大小(4字节)][IV(16字节)][加密数据]
+        encrypted_firmware = struct.pack('&lt;I', 0x45435246)  # &quot;FRCE&quot;
+        encrypted_firmware += struct.pack('&lt;I', len(firmware_data))
+        encrypted_firmware += self.iv
+        encrypted_firmware += encrypted_data
+
+        # 保存加密固件
+        with open(output_path, 'wb') as f:
+            f.write(encrypted_firmware)
+
+        print(f&quot;Encrypted firmware saved to {output_path}&quot;)
+        print(f&quot;Total size: {len(encrypted_firmware)} bytes&quot;)
+
+        # 打印密钥和IV（用于嵌入Bootloader）
+        print(&quot;\nKey (hex):&quot;)
+        print(' '.join(f'0x{b:02X},' for b in self.key))
+        print(&quot;\nIV (hex):&quot;)
+        print(' '.join(f'0x{b:02X},' for b in self.iv))
+
+    def decrypt_firmware(self, encrypted_path, output_path):
+        &quot;&quot;&quot;解密固件（用于验证）&quot;&quot;&quot;
+        # 读取加密固件
+        with open(encrypted_path, 'rb') as f:
+            encrypted_firmware = f.read()
+
+        # 解析格式
+        magic = struct.unpack('&lt;I', encrypted_firmware[0:4])[0]
+        if magic != 0x45435246:
+            print(&quot;Invalid encrypted firmware format&quot;)
+            return False
+
+        original_size = struct.unpack('&lt;I', encrypted_firmware[4:8])[0]
+        iv = encrypted_firmware[8:24]
+        encrypted_data = encrypted_firmware[24:]
+
+        print(f&quot;Original size: {original_size} bytes&quot;)
+        print(f&quot;Encrypted size: {len(encrypted_data)} bytes&quot;)
+
+        # 创建AES解密器
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+
+        # 解密
+        decrypted_data = cipher.decrypt(encrypted_data)
+
+        # 移除填充
+        firmware_data = unpad(decrypted_data, AES.block_size)
+
+        # 验证大小
+        if len(firmware_data) != original_size:
+            print(f&quot;Size mismatch: expected {original_size}, got {len(firmware_data)}&quot;)
+            return False
+
+        # 保存解密固件
+        with open(output_path, 'wb') as f:
+            f.write(firmware_data)
+
+        print(f&quot;Decrypted firmware saved to {output_path}&quot;)
+        return True
+
+# 使用示例
+if __name__ == '__main__':
+    if len(sys.argv) &lt; 2:
+        print(&quot;Usage:&quot;)
+        print(&quot;  Encrypt: python firmware_encryptor.py encrypt &lt;firmware.bin&gt; &lt;output.enc&gt;&quot;)
+        print(&quot;  Decrypt: python firmware_encryptor.py decrypt &lt;firmware.enc&gt; &lt;output.bin&gt;&quot;)
+        sys.exit(1)
+
+    command = sys.argv[1]
+
+    if command == 'encrypt':
+        if len(sys.argv) != 4:
+            print(&quot;Usage: python firmware_encryptor.py encrypt &lt;firmware.bin&gt; &lt;output.enc&gt;&quot;)
+            sys.exit(1)
+
+        firmware_path = sys.argv[2]
+        output_path = sys.argv[3]
+
+        # 创建加密器
+        encryptor = FirmwareEncryptor()
+
+        # 加密固件
+        encryptor.encrypt_firmware(firmware_path, output_path)
+
+        # 保存密钥
+        key_path = output_path + '.key'
+        encryptor.save_key(key_path)
+
+    elif command == 'decrypt':
+        if len(sys.argv) != 5:
+            print(&quot;Usage: python firmware_encryptor.py decrypt &lt;firmware.enc&gt; &lt;key_file&gt; &lt;output.bin&gt;&quot;)
+            sys.exit(1)
+
+        encrypted_path = sys.argv[2]
+        key_path = sys.argv[3]
+        output_path = sys.argv[4]
+
+        # 创建解密器
+        encryptor = FirmwareEncryptor()
+        encryptor.load_key(key_path)
+
+        # 解密固件
+        encryptor.decrypt_firmware(encrypted_path, output_path)
+
+    else:
+        print(f&quot;Unknown command: {command}&quot;)
+        sys.exit(1)
+</code></pre>
+<p><strong>使用方法</strong>：</p>
+<pre><code class="language-bash"># 加密固件
+python firmware_encryptor.py encrypt application.bin application.enc
+
+# 解密固件（验证）
+python firmware_encryptor.py decrypt application.enc application.enc.key application_dec.bin
+</code></pre>
+<h3 id="3-bootloader">3. Bootloader固件解密</h3>
+<p>在Bootloader中实现固件解密功能：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+#include &quot;mbedtls/aes.h&quot;
+#include &lt;string.h&gt;
+
+// 加密固件格式
+#define ENCRYPTED_MAGIC 0x45435246  // &quot;FRCE&quot;
+
+// 嵌入的AES密钥（由加密工具生成）
+const uint8_t aes_key[16] = {
+    0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+    0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+};
+
+// 加密固件信息
+typedef struct {
+    uint32_t magic;
+    uint32_t original_size;
+    uint8_t iv[16];
+    uint8_t *encrypted_data;
+    uint32_t encrypted_size;
+} EncryptedFirmware_t;
+
+/**
+ * @brief 解析加密固件
+ * @param address 加密固件地址
+ * @param info 输出的固件信息
+ * @return 0成功，-1失败
+ */
+int ParseEncryptedFirmware(uint32_t address, EncryptedFirmware_t *info) {
+    uint8_t *data = (uint8_t*)address;
+
+    // 读取魔数
+    memcpy(&amp;info-&gt;magic, data, 4);
+    if (info-&gt;magic != ENCRYPTED_MAGIC) {
+        printf(&quot;Invalid encrypted firmware magic: 0x%08X\r\n&quot;, info-&gt;magic);
+        return -1;
+    }
+
+    // 读取原始大小
+    memcpy(&amp;info-&gt;original_size, data + 4, 4);
+
+    // 读取IV
+    memcpy(info-&gt;iv, data + 8, 16);
+
+    // 加密数据指针
+    info-&gt;encrypted_data = data + 24;
+
+    // 计算加密数据大小（向上取整到16字节）
+    info-&gt;encrypted_size = ((info-&gt;original_size + 15) / 16) * 16;
+
+    printf(&quot;Encrypted firmware info:\r\n&quot;);
+    printf(&quot;  Original size: %u bytes\r\n&quot;, info-&gt;original_size);
+    printf(&quot;  Encrypted size: %u bytes\r\n&quot;, info-&gt;encrypted_size);
+
+    return 0;
+}
+
+/**
+ * @brief 解密固件到RAM
+ * @param encrypted_info 加密固件信息
+ * @param output_buffer 输出缓冲区
+ * @param buffer_size 缓冲区大小
+ * @return 0成功，-1失败
+ */
+int DecryptFirmware(EncryptedFirmware_t *encrypted_info,
+                    uint8_t *output_buffer, uint32_t buffer_size) {
+    // 检查缓冲区大小
+    if (buffer_size &lt; encrypted_info-&gt;encrypted_size) {
+        printf(&quot;Output buffer too small\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Decrypting firmware...\r\n&quot;);
+
+    // 使用AES-CBC解密
+    int ret = AES_Decrypt_CBC(
+        aes_key,
+        encrypted_info-&gt;iv,
+        encrypted_info-&gt;encrypted_data,
+        encrypted_info-&gt;encrypted_size,
+        output_buffer
+    );
+
+    if (ret != 0) {
+        printf(&quot;Decryption failed\r\n&quot;);
+        return -1;
+    }
+
+    // 移除填充
+    size_t actual_size = PKCS7_Unpad(output_buffer, encrypted_info-&gt;encrypted_size);
+    if (actual_size != encrypted_info-&gt;original_size) {
+        printf(&quot;Padding removal failed\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Firmware decrypted successfully\r\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief 就地解密固件（直接在Flash中解密）
+ * @param encrypted_info 加密固件信息
+ * @param output_address 输出地址（Flash）
+ * @return 0成功，-1失败
+ * @note 需要足够的RAM作为临时缓冲区
+ */
+int DecryptFirmwareInPlace(EncryptedFirmware_t *encrypted_info,
+                           uint32_t output_address) {
+    // 分配临时缓冲区（使用RAM）
+    #define DECRYPT_BUFFER_SIZE (16 * 1024)  // 16KB缓冲区
+    static uint8_t decrypt_buffer[DECRYPT_BUFFER_SIZE];
+
+    uint32_t remaining = encrypted_info-&gt;encrypted_size;
+    uint32_t offset = 0;
+
+    // 解锁Flash
+    FLASH_Unlock();
+
+    // 擦除目标区域
+    printf(&quot;Erasing target flash...\r\n&quot;);
+    uint32_t erase_addr = output_address;
+    uint32_t end_addr = output_address + encrypted_info-&gt;original_size;
+
+    while (erase_addr &lt; end_addr) {
+        if (!FLASH_EraseSector(erase_addr)) {
+            printf(&quot;Flash erase failed\r\n&quot;);
+            FLASH_Lock();
+            return -1;
+        }
+
+        // 移动到下一个扇区
+        uint8_t sector = FLASH_GetSector(erase_addr);
+        if (sector &lt; 4) {
+            erase_addr += 0x4000;  // 16KB
+        } else if (sector == 4) {
+            erase_addr += 0x10000;  // 64KB
+        } else {
+            erase_addr += 0x20000;  // 128KB
+        }
+    }
+
+    // 分块解密并写入Flash
+    printf(&quot;Decrypting and writing to flash...\r\n&quot;);
+
+    while (remaining &gt; 0) {
+        uint32_t chunk_size = (remaining &gt; DECRYPT_BUFFER_SIZE) ? 
+                              DECRYPT_BUFFER_SIZE : remaining;
+
+        // 解密一块数据
+        int ret = AES_Decrypt_CBC(
+            aes_key,
+            encrypted_info-&gt;iv,
+            encrypted_info-&gt;encrypted_data + offset,
+            chunk_size,
+            decrypt_buffer
+        );
+
+        if (ret != 0) {
+            printf(&quot;Decryption failed at offset %u\r\n&quot;, offset);
+            FLASH_Lock();
+            return -1;
+        }
+
+        // 写入Flash
+        uint32_t write_size = chunk_size;
+        if (offset + chunk_size &gt; encrypted_info-&gt;original_size) {
+            // 最后一块，移除填充
+            write_size = encrypted_info-&gt;original_size - offset;
+        }
+
+        if (!FLASH_WriteData(output_address + offset,
+                            (uint32_t*)decrypt_buffer,
+                            write_size / 4)) {
+            printf(&quot;Flash write failed at offset %u\r\n&quot;, offset);
+            FLASH_Lock();
+            return -1;
+        }
+
+        offset += chunk_size;
+        remaining -= chunk_size;
+
+        // 打印进度
+        uint8_t progress = (offset * 100) / encrypted_info-&gt;encrypted_size;
+        printf(&quot;Progress: %u%%\r&quot;, progress);
+    }
+
+    printf(&quot;\nDecryption complete\r\n&quot;);
+
+    // 锁定Flash
+    FLASH_Lock();
+
+    return 0;
+}
+</code></pre>
+<h3 id="4-flash">4. Flash读保护机制</h3>
+<p>STM32提供了多级Flash读保护，防止固件被读取。</p>
+<h4 id="_14">读保护级别</h4>
+<p>STM32 Flash读保护分为三个级别：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>说明</th>
+<th>调试接口</th>
+<th>Flash读取</th>
+<th>可恢复性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Level 0</td>
+<td>无保护</td>
+<td>可用</td>
+<td>可读</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Level 1</td>
+<td>调试保护</td>
+<td>禁用</td>
+<td>不可读</td>
+<td>可恢复（擦除Flash）</td>
+</tr>
+<tr>
+<td>Level 2</td>
+<td>永久保护</td>
+<td>禁用</td>
+<td>不可读</td>
+<td>不可恢复</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意</strong>：Level 2是不可逆的，一旦设置无法恢复，请谨慎使用！</p>
+<h4 id="_15">读保护配置</h4>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+
+/**
+ * @brief 获取当前读保护级别
+ * @return 0=Level0, 1=Level1, 2=Level2
+ */
+uint8_t FLASH_GetReadProtectionLevel(void) {
+    uint8_t rdp = (FLASH-&gt;OPTCR &amp; FLASH_OPTCR_RDP) &gt;&gt; 8;
+
+    if (rdp == 0xAA) {
+        return 0;  // Level 0
+    } else if (rdp == 0xCC) {
+        return 2;  // Level 2
+    } else {
+        return 1;  // Level 1
+    }
+}
+
+/**
+ * @brief 设置读保护级别1
+ * @note 设置后需要复位才能生效
+ * @warning 这会禁用调试接口！
+ */
+void FLASH_SetReadProtectionLevel1(void) {
+    // 检查当前级别
+    uint8_t current_level = FLASH_GetReadProtectionLevel();
+    if (current_level == 1) {
+        printf(&quot;Already at Level 1\r\n&quot;);
+        return;
+    }
+
+    if (current_level == 2) {
+        printf(&quot;Cannot change from Level 2\r\n&quot;);
+        return;
+    }
+
+    printf(&quot;Setting read protection to Level 1...\r\n&quot;);
+
+    // 解锁Flash和选项字节
+    FLASH_Unlock();
+    FLASH_OB_Unlock();
+
+    // 等待操作完成
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    // 设置RDP为Level 1（任何非0xAA和0xCC的值）
+    FLASH-&gt;OPTCR &amp;= ~FLASH_OPTCR_RDP;
+    FLASH-&gt;OPTCR |= (0x33 &lt;&lt; 8);  // Level 1
+
+    // 启动选项字节编程
+    FLASH-&gt;OPTCR |= FLASH_OPTCR_OPTSTRT;
+
+    // 等待完成
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    // 锁定
+    FLASH_OB_Lock();
+    FLASH_Lock();
+
+    printf(&quot;Read protection Level 1 set\r\n&quot;);
+    printf(&quot;System will reset to apply changes\r\n&quot;);
+
+    HAL_Delay(1000);
+    NVIC_SystemReset();
+}
+
+/**
+ * @brief 移除读保护（Level 1 -&gt; Level 0）
+ * @warning 这会擦除整个Flash！
+ */
+void FLASH_RemoveReadProtection(void) {
+    uint8_t current_level = FLASH_GetReadProtectionLevel();
+
+    if (current_level == 0) {
+        printf(&quot;Already at Level 0\r\n&quot;);
+        return;
+    }
+
+    if (current_level == 2) {
+        printf(&quot;Cannot remove Level 2 protection\r\n&quot;);
+        return;
+    }
+
+    printf(&quot;WARNING: Removing read protection will erase all Flash!\r\n&quot;);
+    printf(&quot;Press any key to continue or reset to cancel...\r\n&quot;);
+
+    // 等待用户确认
+    // ...
+
+    // 解锁
+    FLASH_Unlock();
+    FLASH_OB_Unlock();
+
+    // 设置RDP为Level 0
+    FLASH-&gt;OPTCR &amp;= ~FLASH_OPTCR_RDP;
+    FLASH-&gt;OPTCR |= (0xAA &lt;&lt; 8);
+
+    // 启动选项字节编程
+    FLASH-&gt;OPTCR |= FLASH_OPTCR_OPTSTRT;
+
+    // 等待完成
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    // 锁定
+    FLASH_OB_Lock();
+    FLASH_Lock();
+
+    printf(&quot;Read protection removed\r\n&quot;);
+    printf(&quot;Flash has been erased\r\n&quot;);
+
+    HAL_Delay(1000);
+    NVIC_SystemReset();
+}
+</code></pre>
+<h4 id="_16">写保护配置</h4>
+<p>除了读保护，还可以配置写保护防止特定扇区被修改：</p>
+<pre><code class="language-c">/**
+ * @brief 启用Bootloader区域写保护
+ * @note 保护Sector 0-1（Bootloader区域）
+ */
+void FLASH_EnableBootloaderWriteProtection(void) {
+    printf(&quot;Enabling Bootloader write protection...\r\n&quot;);
+
+    // 解锁
+    FLASH_Unlock();
+    FLASH_OB_Unlock();
+
+    // 读取当前写保护状态
+    uint32_t wrp = FLASH-&gt;OPTCR &amp; 0x0FFF;
+
+    // 设置Sector 0-1写保护
+    wrp &amp;= ~(FLASH_OPTCR_nWRP_0 | FLASH_OPTCR_nWRP_1);
+
+    // 更新选项字节
+    FLASH-&gt;OPTCR = (FLASH-&gt;OPTCR &amp; ~0x0FFF) | wrp;
+
+    // 启动选项字节编程
+    FLASH-&gt;OPTCR |= FLASH_OPTCR_OPTSTRT;
+
+    // 等待完成
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    // 锁定
+    FLASH_OB_Lock();
+    FLASH_Lock();
+
+    printf(&quot;Bootloader write protection enabled\r\n&quot;);
+}
+
+/**
+ * @brief 检查扇区是否被写保护
+ * @param sector 扇区号（0-11）
+ * @return 1=受保护，0=未保护
+ */
+uint8_t FLASH_IsSectorWriteProtected(uint8_t sector) {
+    if (sector &gt; 11) {
+        return 0;
+    }
+
+    uint32_t wrp = FLASH-&gt;OPTCR &amp; 0x0FFF;
+    return ((wrp &amp; (1 &lt;&lt; sector)) == 0) ? 1 : 0;
+}
+</code></pre>
+<h3 id="5">5. 密钥管理</h3>
+<p>密钥的安全管理是整个加密系统的关键。</p>
+<h4 id="_17">密钥存储方案</h4>
+<p><strong>方案1：嵌入Bootloader（最简单）</strong></p>
+<pre><code class="language-c">// 直接在代码中定义密钥
+const uint8_t aes_key[16] = {
+    0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+    0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+};
+</code></pre>
+<p><strong>优点</strong>：实现简单，无需额外存储
+<strong>缺点</strong>：密钥固定，所有设备使用相同密钥</p>
+<p><strong>方案2：使用设备唯一ID派生密钥</strong></p>
+<pre><code class="language-c">#include &quot;mbedtls/md.h&quot;
+
+/**
+ * @brief 从设备唯一ID派生密钥
+ * @param derived_key 输出的派生密钥（16字节）
+ */
+void DeriveKeyFromUID(uint8_t *derived_key) {
+    // 读取STM32唯一ID（96位）
+    uint32_t uid[3];
+    uid[0] = *(uint32_t*)0x1FFF7A10;
+    uid[1] = *(uint32_t*)0x1FFF7A14;
+    uid[2] = *(uint32_t*)0x1FFF7A18;
+
+    // 主密钥（存储在Bootloader中）
+    const uint8_t master_key[16] = {
+        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+        0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+    };
+
+    // 使用HMAC-SHA256派生密钥
+    mbedtls_md_context_t md_ctx;
+    const mbedtls_md_info_t *md_info;
+
+    mbedtls_md_init(&amp;md_ctx);
+    md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+
+    mbedtls_md_setup(&amp;md_ctx, md_info, 1);  // 1 = HMAC
+    mbedtls_md_hmac_starts(&amp;md_ctx, master_key, 16);
+    mbedtls_md_hmac_update(&amp;md_ctx, (uint8_t*)uid, 12);
+
+    uint8_t hash[32];
+    mbedtls_md_hmac_finish(&amp;md_ctx, hash);
+    mbedtls_md_free(&amp;md_ctx);
+
+    // 取前16字节作为派生密钥
+    memcpy(derived_key, hash, 16);
+
+    printf(&quot;Derived key from UID:\r\n&quot;);
+    for (int i = 0; i &lt; 16; i++) {
+        printf(&quot;%02X &quot;, derived_key[i]);
+    }
+    printf(&quot;\r\n&quot;);
+}
+</code></pre>
+<p><strong>优点</strong>：每个设备有唯一密钥
+<strong>缺点</strong>：需要为每个设备生成专用固件</p>
+<p><strong>方案3：使用OTP区域存储密钥</strong></p>
+<pre><code class="language-c">// OTP区域地址（STM32F4）
+#define OTP_BASE_ADDRESS 0x1FFF7800
+#define OTP_KEY_OFFSET 0x00
+
+/**
+ * @brief 从OTP读取密钥
+ * @param key 输出的密钥（16字节）
+ * @return 0成功，-1失败
+ */
+int ReadKeyFromOTP(uint8_t *key) {
+    uint32_t *otp_addr = (uint32_t*)(OTP_BASE_ADDRESS + OTP_KEY_OFFSET);
+
+    // 读取4个32位字（16字节）
+    for (int i = 0; i &lt; 4; i++) {
+        uint32_t word = otp_addr[i];
+        key[i * 4 + 0] = (word &gt;&gt; 0) &amp; 0xFF;
+        key[i * 4 + 1] = (word &gt;&gt; 8) &amp; 0xFF;
+        key[i * 4 + 2] = (word &gt;&gt; 16) &amp; 0xFF;
+        key[i * 4 + 3] = (word &gt;&gt; 24) &amp; 0xFF;
+    }
+
+    // 检查密钥是否为空（全0xFF表示未编程）
+    uint8_t is_empty = 1;
+    for (int i = 0; i &lt; 16; i++) {
+        if (key[i] != 0xFF) {
+            is_empty = 0;
+            break;
+        }
+    }
+
+    if (is_empty) {
+        printf(&quot;OTP key is empty\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Key read from OTP\r\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief 将密钥写入OTP
+ * @param key 密钥（16字节）
+ * @warning OTP只能写入一次，不可修改！
+ */
+void WriteKeyToOTP(const uint8_t *key) {
+    printf(&quot;WARNING: Writing to OTP is irreversible!\r\n&quot;);
+    printf(&quot;Press any key to continue or reset to cancel...\r\n&quot;);
+
+    // 等待用户确认
+    // ...
+
+    // 解锁Flash
+    FLASH_Unlock();
+
+    uint32_t *otp_addr = (uint32_t*)(OTP_BASE_ADDRESS + OTP_KEY_OFFSET);
+
+    // 写入4个32位字
+    for (int i = 0; i &lt; 4; i++) {
+        uint32_t word = (key[i * 4 + 0] &lt;&lt; 0) |
+                       (key[i * 4 + 1] &lt;&lt; 8) |
+                       (key[i * 4 + 2] &lt;&lt; 16) |
+                       (key[i * 4 + 3] &lt;&lt; 24);
+
+        // 编程OTP
+        *(__IO uint32_t*)(otp_addr + i) = word;
+
+        // 等待完成
+        while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+    }
+
+    // 锁定Flash
+    FLASH_Lock();
+
+    printf(&quot;Key written to OTP\r\n&quot;);
+}
+</code></pre>
+<p><strong>优点</strong>：密钥安全存储，不易被读取
+<strong>缺点</strong>：只能写入一次，无法更改</p>
+<h4 id="_18">密钥轮换</h4>
+<p>为了提高安全性，可以实现密钥轮换机制：</p>
+<pre><code class="language-c">// 密钥版本管理
+typedef struct {
+    uint8_t version;
+    uint8_t key[16];
+    uint32_t valid_from;  // 生效时间戳
+    uint32_t valid_until;  // 失效时间戳
+} KeyInfo_t;
+
+// 存储多个密钥版本
+#define MAX_KEY_VERSIONS 4
+static KeyInfo_t key_store[MAX_KEY_VERSIONS];
+
+/**
+ * @brief 获取当前有效的密钥
+ * @param current_time 当前时间戳
+ * @return 密钥指针，NULL表示无有效密钥
+ */
+const uint8_t* GetCurrentKey(uint32_t current_time) {
+    for (int i = 0; i &lt; MAX_KEY_VERSIONS; i++) {
+        if (key_store[i].valid_from &lt;= current_time &amp;&amp;
+            current_time &lt; key_store[i].valid_until) {
+            printf(&quot;Using key version %u\r\n&quot;, key_store[i].version);
+            return key_store[i].key;
+        }
+    }
+
+    printf(&quot;No valid key found\r\n&quot;);
+    return NULL;
+}
+
+/**
+ * @brief 添加新密钥版本
+ * @param version 密钥版本号
+ * @param key 密钥数据
+ * @param valid_from 生效时间
+ * @param valid_until 失效时间
+ */
+void AddKeyVersion(uint8_t version, const uint8_t *key,
+                   uint32_t valid_from, uint32_t valid_until) {
+    // 找到空闲槽位
+    for (int i = 0; i &lt; MAX_KEY_VERSIONS; i++) {
+        if (key_store[i].version == 0) {
+            key_store[i].version = version;
+            memcpy(key_store[i].key, key, 16);
+            key_store[i].valid_from = valid_from;
+            key_store[i].valid_until = valid_until;
+
+            printf(&quot;Key version %u added\r\n&quot;, version);
+            return;
+        }
+    }
+
+    printf(&quot;Key store full\r\n&quot;);
+}
+</code></pre>
+<h3 id="6">6. 防回滚机制</h3>
+<p>防回滚机制防止攻击者将固件降级到存在漏洞的旧版本。</p>
+<h4 id="_19">版本号管理</h4>
+<pre><code class="language-c">// 固件版本信息
+typedef struct {
+    uint32_t magic;          // 魔数：0x56455253 (&quot;VERS&quot;)
+    uint16_t major;          // 主版本号
+    uint16_t minor;          // 次版本号
+    uint32_t build;          // 编译号
+    uint32_t timestamp;      // 编译时间戳
+    uint32_t security_version;  // 安全版本号（单调递增）
+} FirmwareVersion_t;
+
+// 最低安全版本存储地址
+#define MIN_SECURITY_VERSION_ADDR 0x080FC000
+
+/**
+ * @brief 读取最低安全版本
+ * @return 最低安全版本号
+ */
+uint32_t ReadMinSecurityVersion(void) {
+    uint32_t min_version = *(__IO uint32_t*)MIN_SECURITY_VERSION_ADDR;
+
+    // 如果是0xFFFFFFFF（未初始化），返回0
+    if (min_version == 0xFFFFFFFF) {
+        return 0;
+    }
+
+    return min_version;
+}
+
+/**
+ * @brief 更新最低安全版本
+ * @param new_version 新的最低版本
+ * @return 0成功，-1失败
+ */
+int UpdateMinSecurityVersion(uint32_t new_version) {
+    uint32_t current_min = ReadMinSecurityVersion();
+
+    // 只能递增，不能降低
+    if (new_version &lt;= current_min) {
+        printf(&quot;Cannot downgrade security version\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Updating minimum security version: %u -&gt; %u\r\n&quot;,
+           current_min, new_version);
+
+    // 解锁Flash
+    FLASH_Unlock();
+
+    // 擦除扇区
+    if (!FLASH_EraseSector(MIN_SECURITY_VERSION_ADDR)) {
+        FLASH_Lock();
+        return -1;
+    }
+
+    // 写入新版本
+    if (!FLASH_ProgramWord(MIN_SECURITY_VERSION_ADDR, new_version)) {
+        FLASH_Lock();
+        return -1;
+    }
+
+    // 锁定Flash
+    FLASH_Lock();
+
+    printf(&quot;Security version updated successfully\r\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief 验证固件版本
+ * @param firmware_version 固件版本信息
+ * @return 0允许，-1拒绝
+ */
+int VerifyFirmwareVersion(FirmwareVersion_t *firmware_version) {
+    // 检查魔数
+    if (firmware_version-&gt;magic != 0x56455253) {
+        printf(&quot;Invalid version magic\r\n&quot;);
+        return -1;
+    }
+
+    // 读取最低安全版本
+    uint32_t min_security_version = ReadMinSecurityVersion();
+
+    printf(&quot;Firmware version: %u.%u.%u (security: %u)\r\n&quot;,
+           firmware_version-&gt;major,
+           firmware_version-&gt;minor,
+           firmware_version-&gt;build,
+           firmware_version-&gt;security_version);
+
+    printf(&quot;Minimum security version: %u\r\n&quot;, min_security_version);
+
+    // 检查安全版本
+    if (firmware_version-&gt;security_version &lt; min_security_version) {
+        printf(&quot;Firmware security version too old\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Firmware version check passed\r\n&quot;);
+    return 0;
+}
+</code></pre>
+<h4 id="_20">单调计数器</h4>
+<p>使用OTP区域实现真正的单调计数器：</p>
+<pre><code class="language-c">// OTP单调计数器地址
+#define OTP_COUNTER_BASE 0x1FFF7820
+#define OTP_COUNTER_SIZE 32  // 32个字节，每个字节一个计数
+
+/**
+ * @brief 读取单调计数器
+ * @return 当前计数值
+ */
+uint32_t ReadMonotonicCounter(void) {
+    uint8_t *counter_addr = (uint8_t*)OTP_COUNTER_BASE;
+    uint32_t count = 0;
+
+    // 计算已编程的字节数
+    for (int i = 0; i &lt; OTP_COUNTER_SIZE; i++) {
+        if (counter_addr[i] != 0xFF) {
+            count++;
+        } else {
+            break;
+        }
+    }
+
+    return count;
+}
+
+/**
+ * @brief 递增单调计数器
+ * @return 0成功，-1失败（计数器已满）
+ */
+int IncrementMonotonicCounter(void) {
+    uint32_t current = ReadMonotonicCounter();
+
+    if (current &gt;= OTP_COUNTER_SIZE) {
+        printf(&quot;Monotonic counter full\r\n&quot;);
+        return -1;
+    }
+
+    // 解锁Flash
+    FLASH_Unlock();
+
+    // 编程下一个字节
+    uint8_t *counter_addr = (uint8_t*)(OTP_COUNTER_BASE + current);
+    *counter_addr = 0x00;  // 将0xFF变为0x00
+
+    // 等待完成
+    while (FLASH-&gt;SR &amp; FLASH_SR_BSY);
+
+    // 锁定Flash
+    FLASH_Lock();
+
+    printf(&quot;Monotonic counter incremented to %u\r\n&quot;, current + 1);
+    return 0;
+}
+
+/**
+ * @brief 验证固件的单调计数器
+ * @param firmware_counter 固件中的计数器值
+ * @return 0验证成功，-1验证失败
+ */
+int VerifyMonotonicCounter(uint32_t firmware_counter) {
+    uint32_t device_counter = ReadMonotonicCounter();
+
+    printf(&quot;Firmware counter: %u\r\n&quot;, firmware_counter);
+    printf(&quot;Device counter: %u\r\n&quot;, device_counter);
+
+    if (firmware_counter &lt; device_counter) {
+        printf(&quot;Firmware counter too old (rollback detected)\r\n&quot;);
+        return -1;
+    }
+
+    // 如果固件计数器更新，递增设备计数器
+    if (firmware_counter &gt; device_counter) {
+        printf(&quot;Updating device counter...\r\n&quot;);
+
+        // 递增到固件计数器值
+        while (ReadMonotonicCounter() &lt; firmware_counter) {
+            if (IncrementMonotonicCounter() != 0) {
+                printf(&quot;Failed to update counter\r\n&quot;);
+                return -1;
+            }
+        }
+    }
+
+    printf(&quot;Monotonic counter verification passed\r\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="7">7. 完整的加密启动流程</h3>
+<p>将所有组件整合到完整的加密启动系统中：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+#include &quot;firmware_encryption.h&quot;
+#include &quot;flash_protection.h&quot;
+#include &quot;version_control.h&quot;
+
+// 加密固件地址
+#define ENCRYPTED_FIRMWARE_ADDR 0x08010000
+// 解密后的应用程序地址
+#define DECRYPTED_APP_ADDR 0x08020000
+
+/**
+ * @brief 加密固件启动主流程
+ * @return 0成功，-1失败
+ */
+int EncryptedBoot_Main(void) {
+    EncryptedFirmware_t encrypted_info;
+    FirmwareVersion_t firmware_version;
+    int ret;
+
+    printf(&quot;\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;  Encrypted Firmware Boot\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+
+    // 1. 检查Flash读保护状态
+    uint8_t rdp_level = FLASH_GetReadProtectionLevel();
+    printf(&quot;Read protection level: %u\r\n&quot;, rdp_level);
+
+    if (rdp_level == 0) {
+        printf(&quot;WARNING: Flash is not protected!\r\n&quot;);
+        printf(&quot;Consider enabling read protection for production\r\n&quot;);
+    }
+
+    // 2. 解析加密固件
+    printf(&quot;\r\nParsing encrypted firmware...\r\n&quot;);
+    ret = ParseEncryptedFirmware(ENCRYPTED_FIRMWARE_ADDR, &amp;encrypted_info);
+    if (ret != 0) {
+        printf(&quot;Failed to parse encrypted firmware\r\n&quot;);
+        return -1;
+    }
+
+    // 3. 提取固件版本信息（假设在固件开头）
+    memcpy(&amp;firmware_version, encrypted_info.encrypted_data, 
+           sizeof(FirmwareVersion_t));
+
+    // 4. 验证固件版本
+    printf(&quot;\r\nVerifying firmware version...\r\n&quot;);
+    ret = VerifyFirmwareVersion(&amp;firmware_version);
+    if (ret != 0) {
+        printf(&quot;Firmware version verification failed\r\n&quot;);
+        return -1;
+    }
+
+    // 5. 验证单调计数器
+    printf(&quot;\r\nVerifying monotonic counter...\r\n&quot;);
+    ret = VerifyMonotonicCounter(firmware_version.security_version);
+    if (ret != 0) {
+        printf(&quot;Monotonic counter verification failed\r\n&quot;);
+        return -1;
+    }
+
+    // 6. 解密固件
+    printf(&quot;\r\nDecrypting firmware...\r\n&quot;);
+    ret = DecryptFirmwareInPlace(&amp;encrypted_info, DECRYPTED_APP_ADDR);
+    if (ret != 0) {
+        printf(&quot;Firmware decryption failed\r\n&quot;);
+        return -1;
+    }
+
+    // 7. 验证解密后的固件（可选：CRC或签名）
+    printf(&quot;\r\nVerifying decrypted firmware...\r\n&quot;);
+    // ... CRC或签名验证代码 ...
+
+    // 8. 更新最低安全版本
+    if (firmware_version.security_version &gt; ReadMinSecurityVersion()) {
+        printf(&quot;\r\nUpdating minimum security version...\r\n&quot;);
+        UpdateMinSecurityVersion(firmware_version.security_version);
+    }
+
+    printf(&quot;\r\n========================================\r\n&quot;);
+    printf(&quot;  All security checks passed!\r\n&quot;);
+    printf(&quot;  Jumping to application...\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief Bootloader主函数
+ */
+int main(void) {
+    // 系统初始化
+    SystemInit();
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化UART
+    UART_Init();
+
+    // 初始化LED
+    LED_Init();
+
+    printf(&quot;\r\n&quot;);
+    printf(&quot;========================================\r\n&quot;);
+    printf(&quot;  Secure Bootloader v1.0\r\n&quot;);
+    printf(&quot;  Build: %s %s\r\n&quot;, __DATE__, __TIME__);
+    printf(&quot;========================================\r\n&quot;);
+
+    // LED快速闪烁表示Bootloader运行
+    for (int i = 0; i &lt; 3; i++) {
+        LED_On();
+        HAL_Delay(100);
+        LED_Off();
+        HAL_Delay(100);
+    }
+
+    // 执行加密固件启动
+    int ret = EncryptedBoot_Main();
+
+    if (ret == 0) {
+        // 启动成功，LED常亮2秒
+        LED_On();
+        HAL_Delay(2000);
+        LED_Off();
+
+        // 跳转到解密后的应用程序
+        JumpToApplication(DECRYPTED_APP_ADDR);
+    } else {
+        // 启动失败，LED快速闪烁表示错误
+        printf(&quot;\r\nBoot failed! System halted.\r\n&quot;);
+
+        while (1) {
+            LED_Toggle();
+            HAL_Delay(200);
+        }
+    }
+
+    // 永远不会执行到这里
+    while (1);
+}
+</code></pre>
+<h2 id="_21">实践示例</h2>
+<h3 id="1">示例1：完整的固件加密和部署流程</h3>
+<p><strong>步骤1：编译应用程序</strong></p>
+<pre><code class="language-bash">cd application
+make clean
+make
+</code></pre>
+<p><strong>步骤2：加密固件</strong></p>
+<pre><code class="language-bash"># 使用Python工具加密固件
+python firmware_encryptor.py encrypt application.bin application.enc
+
+# 输出：
+# Original firmware size: 32768 bytes
+# Padded firmware size: 32768 bytes
+# Encrypted firmware saved to application.enc
+# Total size: 32792 bytes
+#
+# Key (hex):
+# 0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+# 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C,
+#
+# IV (hex):
+# 0x91, 0x28, 0x13, 0x40, 0x3A, 0x8C, 0x5F, 0x2D,
+# 0xE7, 0xB1, 0x49, 0x9C, 0x73, 0x6A, 0x8E, 0x2F,
+</code></pre>
+<p><strong>步骤3：将密钥嵌入Bootloader</strong></p>
+<pre><code class="language-c">// 在Bootloader代码中更新密钥
+const uint8_t aes_key[16] = {
+    0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+    0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+};
+</code></pre>
+<p><strong>步骤4：编译并烧录Bootloader</strong></p>
+<pre><code class="language-bash">cd bootloader
+make clean
+make
+st-flash write bootloader.bin 0x08000000
+</code></pre>
+<p><strong>步骤5：烧录加密固件</strong></p>
+<pre><code class="language-bash">st-flash write application.enc 0x08010000
+</code></pre>
+<p><strong>步骤6：启用Flash读保护（生产环境）</strong></p>
+<pre><code class="language-c">// 在Bootloader中调用
+FLASH_SetReadProtectionLevel1();
+</code></pre>
+<p><strong>步骤7：测试启动</strong></p>
+<p>设备上电后，Bootloader会：
+1. 解析加密固件
+2. 验证版本号
+3. 验证单调计数器
+4. 解密固件到RAM或另一个Flash区域
+5. 验证解密后的固件
+6. 跳转到应用程序</p>
+<h3 id="2aes">示例2：使用硬件AES加速</h3>
+<p>STM32F4部分型号支持硬件AES加速，可以显著提高加密解密速度：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx_hal.h&quot;
+
+// 硬件AES句柄
+CRYP_HandleTypeDef hcryp;
+
+/**
+ * @brief 初始化硬件AES
+ * @param key 密钥（16字节）
+ * @param iv 初始化向量（16字节）
+ * @return 0成功，-1失败
+ */
+int HW_AES_Init(const uint8_t *key, const uint8_t *iv) {
+    // 使能AES时钟
+    __HAL_RCC_CRYP_CLK_ENABLE();
+
+    // 配置AES
+    hcryp.Instance = CRYP;
+    hcryp.Init.DataType = CRYP_DATATYPE_8B;
+    hcryp.Init.KeySize = CRYP_KEYSIZE_128B;
+    hcryp.Init.pKey = (uint32_t*)key;
+    hcryp.Init.pInitVect = (uint32_t*)iv;
+    hcryp.Init.Algorithm = CRYP_AES_CBC;
+    hcryp.Init.DataWidthUnit = CRYP_DATAWIDTHUNIT_BYTE;
+
+    if (HAL_CRYP_Init(&amp;hcryp) != HAL_OK) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 硬件AES解密
+ * @param input 输入数据
+ * @param input_len 输入长度（必须是16的倍数）
+ * @param output 输出数据
+ * @return 0成功，-1失败
+ */
+int HW_AES_Decrypt(const uint8_t *input, uint32_t input_len, uint8_t *output) {
+    if (input_len % 16 != 0) {
+        return -1;
+    }
+
+    // 执行解密
+    if (HAL_CRYP_Decrypt(&amp;hcryp, (uint32_t*)input, input_len,
+                         (uint32_t*)output, 5000) != HAL_OK) {
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 使用硬件AES解密固件
+ * @param encrypted_info 加密固件信息
+ * @param output_address 输出地址
+ * @return 0成功，-1失败
+ */
+int DecryptFirmware_HW(EncryptedFirmware_t *encrypted_info,
+                       uint32_t output_address) {
+    // 初始化硬件AES
+    if (HW_AES_Init(aes_key, encrypted_info-&gt;iv) != 0) {
+        printf(&quot;Hardware AES init failed\r\n&quot;);
+        return -1;
+    }
+
+    // 分配临时缓冲区
+    #define HW_DECRYPT_BUFFER_SIZE (16 * 1024)
+    static uint8_t decrypt_buffer[HW_DECRYPT_BUFFER_SIZE];
+
+    uint32_t remaining = encrypted_info-&gt;encrypted_size;
+    uint32_t offset = 0;
+
+    // 解锁Flash
+    FLASH_Unlock();
+
+    // 擦除目标区域
+    // ... 擦除代码 ...
+
+    // 分块解密
+    while (remaining &gt; 0) {
+        uint32_t chunk_size = (remaining &gt; HW_DECRYPT_BUFFER_SIZE) ?
+                              HW_DECRYPT_BUFFER_SIZE : remaining;
+
+        // 硬件解密
+        if (HW_AES_Decrypt(encrypted_info-&gt;encrypted_data + offset,
+                          chunk_size, decrypt_buffer) != 0) {
+            printf(&quot;Hardware decryption failed\r\n&quot;);
+            FLASH_Lock();
+            return -1;
+        }
+
+        // 写入Flash
+        uint32_t write_size = chunk_size;
+        if (offset + chunk_size &gt; encrypted_info-&gt;original_size) {
+            write_size = encrypted_info-&gt;original_size - offset;
+        }
+
+        if (!FLASH_WriteData(output_address + offset,
+                            (uint32_t*)decrypt_buffer,
+                            write_size / 4)) {
+            FLASH_Lock();
+            return -1;
+        }
+
+        offset += chunk_size;
+        remaining -= chunk_size;
+
+        printf(&quot;Progress: %u%%\r&quot;, (offset * 100) / encrypted_info-&gt;encrypted_size);
+    }
+
+    printf(&quot;\nHardware decryption complete\r\n&quot;);
+
+    FLASH_Lock();
+    return 0;
+}
+</code></pre>
+<p><strong>性能对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>解密速度</th>
+<th>CPU占用</th>
+<th>功耗</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>软件AES</td>
+<td>~1 MB/s</td>
+<td>100%</td>
+<td>高</td>
+</tr>
+<tr>
+<td>硬件AES</td>
+<td>~10 MB/s</td>
+<td>&lt;10%</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3">示例3：混合加密方案</h3>
+<p>对于大型固件，可以使用混合加密方案：使用RSA加密AES密钥，使用AES加密固件：</p>
+<pre><code class="language-c">/**
+ * @brief 混合加密固件格式
+ * [魔数(4字节)]
+ * [原始大小(4字节)]
+ * [加密的AES密钥(256字节，RSA-2048)]
+ * [IV(16字节)]
+ * [加密的固件数据]
+ */
+
+/**
+ * @brief 解密AES密钥
+ * @param encrypted_key 加密的AES密钥（256字节）
+ * @param decrypted_key 输出的解密密钥（16字节）
+ * @return 0成功，-1失败
+ */
+int DecryptAESKey(const uint8_t *encrypted_key, uint8_t *decrypted_key) {
+    mbedtls_rsa_context rsa;
+    int ret;
+
+    // 初始化RSA上下文
+    mbedtls_rsa_init(&amp;rsa, MBEDTLS_RSA_PKCS_V15, 0);
+
+    // 设置RSA私钥（存储在安全区域）
+    // ... 设置私钥代码 ...
+
+    // 解密AES密钥
+    size_t olen;
+    ret = mbedtls_rsa_pkcs1_decrypt(&amp;rsa, NULL, NULL,
+                                    MBEDTLS_RSA_PRIVATE,
+                                    &amp;olen, encrypted_key,
+                                    decrypted_key, 16);
+
+    mbedtls_rsa_free(&amp;rsa);
+
+    if (ret != 0 || olen != 16) {
+        printf(&quot;Failed to decrypt AES key\r\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;AES key decrypted successfully\r\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief 解密混合加密固件
+ * @param firmware_address 固件地址
+ * @param output_address 输出地址
+ * @return 0成功，-1失败
+ */
+int DecryptHybridFirmware(uint32_t firmware_address, uint32_t output_address) {
+    uint8_t *data = (uint8_t*)firmware_address;
+    uint8_t aes_key[16];
+    uint8_t iv[16];
+
+    // 解析格式
+    uint32_t magic = *(uint32_t*)data;
+    if (magic != 0x48594252) {  // &quot;HYBR&quot;
+        printf(&quot;Invalid hybrid firmware format\r\n&quot;);
+        return -1;
+    }
+
+    uint32_t original_size = *(uint32_t*)(data + 4);
+    uint8_t *encrypted_key = data + 8;
+    memcpy(iv, data + 264, 16);
+    uint8_t *encrypted_data = data + 280;
+
+    // 1. 解密AES密钥
+    printf(&quot;Decrypting AES key...\r\n&quot;);
+    if (DecryptAESKey(encrypted_key, aes_key) != 0) {
+        return -1;
+    }
+
+    // 2. 使用解密的AES密钥解密固件
+    printf(&quot;Decrypting firmware...\r\n&quot;);
+    EncryptedFirmware_t encrypted_info;
+    encrypted_info.original_size = original_size;
+    encrypted_info.encrypted_size = ((original_size + 15) / 16) * 16;
+    memcpy(encrypted_info.iv, iv, 16);
+    encrypted_info.encrypted_data = encrypted_data;
+
+    // 使用解密的密钥
+    const uint8_t *old_key = aes_key;  // 临时保存
+    // ... 解密固件 ...
+
+    return 0;
+}
+</code></pre>
+<p><strong>优点</strong>：
+- AES密钥每次可以不同（随机生成）
+- 即使AES密钥泄露，只影响单个固件
+- 可以使用不同的RSA密钥对管理不同产品线</p>
+<p><strong>缺点</strong>：
+- 需要在设备中存储RSA私钥
+- 解密过程更复杂
+- 需要更多的存储空间</p>
+<h2 id="_22">验证与测试</h2>
+<h3 id="_23">测试加密解密功能</h3>
+<pre><code class="language-c">/**
+ * @brief 测试AES加密解密
+ */
+void Test_AES_Encryption(void) {
+    printf(&quot;\r\n=== AES Encryption Test ===\r\n&quot;);
+
+    // 测试数据
+    const uint8_t key[16] = {
+        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+        0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+    };
+
+    const uint8_t iv[16] = {
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F
+    };
+
+    const char *plaintext = &quot;Hello, Encrypted World! This is a test message.&quot;;
+    uint8_t encrypted[64];
+    uint8_t decrypted[64];
+
+    // 填充
+    size_t padded_len = PKCS7_Pad((uint8_t*)plaintext, strlen(plaintext), 64);
+    printf(&quot;Original length: %u\r\n&quot;, strlen(plaintext));
+    printf(&quot;Padded length: %u\r\n&quot;, padded_len);
+
+    // 加密
+    if (AES_Encrypt_CBC(key, iv, (uint8_t*)plaintext, padded_len, encrypted) == 0) {
+        printf(&quot;Encryption successful\r\n&quot;);
+
+        // 打印密文
+        printf(&quot;Encrypted data: &quot;);
+        for (size_t i = 0; i &lt; padded_len; i++) {
+            printf(&quot;%02X &quot;, encrypted[i]);
+        }
+        printf(&quot;\r\n&quot;);
+    } else {
+        printf(&quot;Encryption failed\r\n&quot;);
+        return;
+    }
+
+    // 解密
+    if (AES_Decrypt_CBC(key, iv, encrypted, padded_len, decrypted) == 0) {
+        printf(&quot;Decryption successful\r\n&quot;);
+
+        // 移除填充
+        size_t original_len = PKCS7_Unpad(decrypted, padded_len);
+        decrypted[original_len] = '\0';
+
+        // 打印明文
+        printf(&quot;Decrypted data: %s\r\n&quot;, decrypted);
+
+        // 验证
+        if (memcmp(plaintext, decrypted, strlen(plaintext)) == 0) {
+            printf(&quot;✓ Test PASSED\r\n&quot;);
+        } else {
+            printf(&quot;✗ Test FAILED\r\n&quot;);
+        }
+    } else {
+        printf(&quot;Decryption failed\r\n&quot;);
+    }
+}
+
+/**
+ * @brief 测试Flash保护
+ */
+void Test_FlashProtection(void) {
+    printf(&quot;\r\n=== Flash Protection Test ===\r\n&quot;);
+
+    // 检查读保护级别
+    uint8_t rdp_level = FLASH_GetReadProtectionLevel();
+    printf(&quot;Current RDP level: %u\r\n&quot;, rdp_level);
+
+    // 检查写保护
+    for (uint8_t sector = 0; sector &lt; 8; sector++) {
+        uint8_t protected = FLASH_IsSectorWriteProtected(sector);
+        printf(&quot;Sector %u: %s\r\n&quot;, sector,
+               protected ? &quot;Write Protected&quot; : &quot;Not Protected&quot;);
+    }
+}
+
+/**
+ * @brief 测试版本控制
+ */
+void Test_VersionControl(void) {
+    printf(&quot;\r\n=== Version Control Test ===\r\n&quot;);
+
+    // 读取当前最低版本
+    uint32_t min_version = ReadMinSecurityVersion();
+    printf(&quot;Current minimum security version: %u\r\n&quot;, min_version);
+
+    // 测试版本验证
+    FirmwareVersion_t test_version = {
+        .magic = 0x56455253,
+        .major = 1,
+        .minor = 2,
+        .build = 345,
+        .timestamp = 1234567890,
+        .security_version = min_version + 1
+    };
+
+    if (VerifyFirmwareVersion(&amp;test_version) == 0) {
+        printf(&quot;✓ Version verification PASSED\r\n&quot;);
+    } else {
+        printf(&quot;✗ Version verification FAILED\r\n&quot;);
+    }
+
+    // 测试单调计数器
+    uint32_t counter = ReadMonotonicCounter();
+    printf(&quot;Monotonic counter: %u\r\n&quot;, counter);
+}
+</code></pre>
+<h3 id="_24">性能测试</h3>
+<pre><code class="language-c">/**
+ * @brief 测试加密解密性能
+ */
+void Test_Performance(void) {
+    printf(&quot;\r\n=== Performance Test ===\r\n&quot;);
+
+    const uint8_t key[16] = {
+        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
+        0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C
+    };
+
+    const uint8_t iv[16] = {0};
+
+    // 测试不同大小的数据
+    uint32_t test_sizes[] = {1024, 4096, 16384, 65536};
+
+    for (int i = 0; i &lt; 4; i++) {
+        uint32_t size = test_sizes[i];
+        uint8_t *data = malloc(size);
+        uint8_t *encrypted = malloc(size);
+        uint8_t *decrypted = malloc(size);
+
+        if (!data || !encrypted || !decrypted) {
+            printf(&quot;Memory allocation failed\r\n&quot;);
+            continue;
+        }
+
+        // 填充测试数据
+        for (uint32_t j = 0; j &lt; size; j++) {
+            data[j] = j &amp; 0xFF;
+        }
+
+        // 测试加密
+        uint32_t start_time = HAL_GetTick();
+        AES_Encrypt_CBC(key, iv, data, size, encrypted);
+        uint32_t encrypt_time = HAL_GetTick() - start_time;
+
+        // 测试解密
+        start_time = HAL_GetTick();
+        AES_Decrypt_CBC(key, iv, encrypted, size, decrypted);
+        uint32_t decrypt_time = HAL_GetTick() - start_time;
+
+        // 计算速度
+        float encrypt_speed = (float)size / encrypt_time;  // KB/s
+        float decrypt_speed = (float)size / decrypt_time;  // KB/s
+
+        printf(&quot;Size: %u bytes\r\n&quot;, size);
+        printf(&quot;  Encrypt: %u ms (%.2f KB/s)\r\n&quot;, encrypt_time, encrypt_speed);
+        printf(&quot;  Decrypt: %u ms (%.2f KB/s)\r\n&quot;, decrypt_time, decrypt_speed);
+
+        // 验证
+        if (memcmp(data, decrypted, size) == 0) {
+            printf(&quot;  ✓ Verification PASSED\r\n&quot;);
+        } else {
+            printf(&quot;  ✗ Verification FAILED\r\n&quot;);
+        }
+
+        free(data);
+        free(encrypted);
+        free(decrypted);
+    }
+}
+</code></pre>
+<h2 id="_25">故障排除</h2>
+<h3 id="_26">常见问题</h3>
+<p><strong>问题1：解密后的固件无法运行</strong></p>
+<p>可能原因：
+- 密钥不匹配
+- IV不正确
+- 填充处理错误
+- Flash写入错误</p>
+<p>解决方法：</p>
+<pre><code class="language-c">// 添加详细的调试输出
+printf(&quot;Encrypted data (first 32 bytes):\r\n&quot;);
+for (int i = 0; i &lt; 32; i++) {
+    printf(&quot;%02X &quot;, encrypted_data[i]);
+}
+printf(&quot;\r\n&quot;);
+
+printf(&quot;Decrypted data (first 32 bytes):\r\n&quot;);
+for (int i = 0; i &lt; 32; i++) {
+    printf(&quot;%02X &quot;, decrypted_data[i]);
+}
+printf(&quot;\r\n&quot;);
+
+// 验证解密后的栈指针
+uint32_t sp = *(uint32_t*)decrypted_address;
+printf(&quot;Stack pointer: 0x%08X\r\n&quot;, sp);
+if ((sp &amp; 0x2FFE0000) != 0x20000000) {
+    printf(&quot;Invalid stack pointer!\r\n&quot;);
+}
+</code></pre>
+<p><strong>问题2：Flash读保护后无法调试</strong></p>
+<p>这是正常现象。解决方法：
+- 开发阶段不启用读保护
+- 使用串口输出调试信息
+- 预留调试命令接口
+- 使用LED指示状态</p>
+<p><strong>问题3：单调计数器用完</strong></p>
+<p>OTP区域有限，计数器会用完。解决方法：</p>
+<pre><code class="language-c">// 使用更大的计数器空间
+#define OTP_COUNTER_SIZE 128  // 增加到128字节
+
+// 或使用Flash模拟
+#define COUNTER_FLASH_ADDR 0x080FC000
+// 每次擦除扇区，重新写入递增的值
+</code></pre>
+<p><strong>问题4：加密固件太大</strong></p>
+<p>加密会增加文件大小（填充）。解决方法：
+- 优化固件大小
+- 使用压缩（先压缩后加密）
+- 分段加密
+- 使用流密码模式（CTR）</p>
+<h2 id="_27">总结</h2>
+<p>本教程介绍了固件加密与防护的完整技术体系：</p>
+<ol>
+<li><strong>加密算法</strong>：AES-128/256 CBC模式，平衡安全性和性能</li>
+<li><strong>Flash保护</strong>：读保护和写保护，防止固件被读取和篡改</li>
+<li><strong>防回滚</strong>：版本号管理和单调计数器，防止降级攻击</li>
+<li><strong>密钥管理</strong>：多种密钥存储方案，确保密钥安全</li>
+<li><strong>完整流程</strong>：从固件加密到安全启动的完整实现</li>
+</ol>
+<p>通过这些技术的组合使用，可以构建一个安全可靠的固件防护系统，有效保护知识产权和防止恶意攻击。</p>
+<h2 id="_28">延伸阅读</h2>
+<ul>
+<li><a href="./02-secure-boot.html">安全启动(Secure Boot)技术详解</a></li>
+<li><a href="./01-iap-implementation.html">IAP在线升级功能实现</a></li>
+<li><a href="./04-dual-bank-upgrade.html">双区升级与A/B分区策略</a></li>
+<li>NIST Special Publication 800-38A: Recommendation for Block Cipher Modes of Operation</li>
+<li>STM32 Flash保护机制应用笔记</li>
+<li>mbedTLS加密库文档</li>
+</ul>
+<h2 id="_29">下一步</h2>
+<p>学习完本教程后，建议继续学习：</p>
+<ol>
+<li>双区升级技术，实现更可靠的固件更新</li>
+<li>OTA升级系统，实现远程固件管理</li>
+<li>安全元件的使用，进一步提高系统安全性</li>
+<li>密码学高级主题，如椭圆曲线加密、同态加密等</li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

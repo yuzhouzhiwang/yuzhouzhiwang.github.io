@@ -1,0 +1,2775 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>分布式存储系统设计：构建高可用嵌入式存储集群 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/02-storage-technology/">02-storage-technology</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/02-storage-technology/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">项目概述</a><ul>
+<li><a href="#_3">项目特点</a></li>
+<li><a href="#_4">学习目标</a></li>
+<li><a href="#_5">项目成果</a></li>
+</ul>
+</li>
+<li><a href="#_6">技术栈</a><ul>
+<li><a href="#_7">硬件要求</a></li>
+<li><a href="#_8">软件要求</a></li>
+<li><a href="#_9">技术选型</a></li>
+</ul>
+</li>
+<li><a href="#_10">系统架构</a><ul>
+<li><a href="#_11">整体架构设计</a></li>
+<li><a href="#_12">核心概念</a><ul>
+<li><a href="#1-sharding">1. 数据分片（Sharding）</a></li>
+<li><a href="#2-replication">2. 数据副本（Replication）</a></li>
+<li><a href="#3">3. 一致性保证</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#1">阶段1：基础框架搭建</a><ul>
+<li><a href="#11">1.1 项目结构设计</a></li>
+<li><a href="#12">1.2 核心数据结构</a></li>
+<li><a href="#13">1.3 节点初始化实现</a></li>
+</ul>
+</li>
+<li><a href="#2">阶段2：一致性哈希实现</a><ul>
+<li><a href="#21">2.1 哈希环数据结构</a></li>
+<li><a href="#22">2.2 哈希环实现</a></li>
+<li><a href="#23">2.3 测试哈希环</a></li>
+</ul>
+</li>
+<li><a href="#3_1">阶段3：本地存储引擎</a><ul>
+<li><a href="#31">3.1 键值存储接口</a></li>
+<li><a href="#32">3.2 存储引擎实现</a></li>
+<li><a href="#33">3.3 持久化支持</a></li>
+</ul>
+</li>
+<li><a href="#4">阶段4：网络通信实现</a><ul>
+<li><a href="#41-tcp">4.1 TCP服务器</a></li>
+<li><a href="#42">4.2 消息处理</a></li>
+<li><a href="#43">4.3 心跳机制</a></li>
+</ul>
+</li>
+<li><a href="#5api">阶段5：分布式API实现</a><ul>
+<li><a href="#51-api">5.1 分布式存储API</a></li>
+<li><a href="#52-put">5.2 PUT操作实现</a></li>
+<li><a href="#53-get">5.3 GET操作实现</a></li>
+<li><a href="#54">5.4 服务器消息处理</a></li>
+</ul>
+</li>
+<li><a href="#6">阶段6：系统集成与测试</a><ul>
+<li><a href="#61">6.1 完整示例程序</a></li>
+<li><a href="#62">6.2 编译和运行</a></li>
+<li><a href="#63">6.3 功能测试</a></li>
+<li><a href="#64">6.4 性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_13">故障排除</a><ul>
+<li><a href="#1_1">问题1：节点无法加入集群</a></li>
+<li><a href="#2_1">问题2：数据不一致</a></li>
+<li><a href="#3_2">问题3：性能下降</a></li>
+<li><a href="#4_1">问题4：内存泄漏</a></li>
+</ul>
+</li>
+<li><a href="#_14">扩展功能</a><ul>
+<li><a href="#1_2">1. 数据压缩</a></li>
+<li><a href="#2_2">2. 数据加密</a></li>
+<li><a href="#3_3">3. 数据迁移</a></li>
+<li><a href="#4_2">4. 监控和统计</a></li>
+</ul>
+</li>
+<li><a href="#_15">最佳实践</a><ul>
+<li><a href="#1_3">1. 容量规划</a></li>
+<li><a href="#2_3">2. 性能优化</a></li>
+<li><a href="#3_4">3. 可靠性保证</a></li>
+</ul>
+</li>
+<li><a href="#_16">项目总结</a><ul>
+<li><a href="#_17">学到的技能</a></li>
+<li><a href="#_18">进一步学习</a></li>
+<li><a href="#_19">实际应用</a></li>
+</ul>
+</li>
+<li><a href="#_20">参考资源</a><ul>
+<li><a href="#_21">开源项目</a></li>
+<li><a href="#_22">学习资源</a></li>
+<li><a href="#_23">工具和库</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">分布式存储系统设计：构建高可用嵌入式存储集群</h1>
+<h2 id="_2">项目概述</h2>
+<p>本项目将带你从零开始设计和实现一个分布式存储系统（DSS - Distributed Storage System），专门针对嵌入式设备和IoT场景优化。这是一个完整的分布式系统项目，涵盖架构设计、网络通信、数据分片、一致性保证、故障恢复等核心技术。</p>
+<h3 id="_3">项目特点</h3>
+<ul>
+<li><strong>分布式架构</strong>：多节点协同工作，无单点故障</li>
+<li><strong>数据冗余</strong>：多副本机制保证数据安全</li>
+<li><strong>自动恢复</strong>：节点故障自动检测和数据恢复</li>
+<li><strong>负载均衡</strong>：智能数据分布和访问负载均衡</li>
+<li><strong>可扩展性</strong>：支持动态添加和移除节点</li>
+<li><strong>轻量级</strong>：针对嵌入式设备优化，资源占用小</li>
+</ul>
+<h3 id="_4">学习目标</h3>
+<p>完成本项目后，你将能够：</p>
+<ul>
+<li>[ ] 理解分布式系统的核心概念和设计原则</li>
+<li>[ ] 掌握数据分片和副本管理技术</li>
+<li>[ ] 实现分布式一致性协议</li>
+<li>[ ] 设计故障检测和自动恢复机制</li>
+<li>[ ] 实现负载均衡和数据迁移</li>
+<li>[ ] 掌握分布式系统的测试和调试方法</li>
+<li>[ ] 构建完整的分布式存储解决方案</li>
+</ul>
+<h3 id="_5">项目成果</h3>
+<p><strong>核心功能</strong>：
+- 支持3-10个存储节点的集群
+- 数据自动分片和多副本存储
+- 节点故障自动检测和恢复
+- 数据一致性保证
+- 负载均衡和性能优化</p>
+<p><strong>交付物</strong>：
+- 完整的分布式存储系统代码
+- 节点管理和监控工具
+- 性能测试和压力测试套件
+- 部署和运维文档</p>
+<h2 id="_6">技术栈</h2>
+<h3 id="_7">硬件要求</h3>
+<p><strong>开发板</strong>（每个节点）：
+- STM32F407或ESP32（推荐）
+- 至少256KB RAM
+- 至少1MB Flash
+- 以太网或WiFi模块</p>
+<p><strong>存储设备</strong>：
+- SPI Flash（16MB+）或
+- SD卡（4GB+）</p>
+<p><strong>网络设备</strong>：
+- 以太网交换机或WiFi路由器
+- 至少3个开发板组成集群</p>
+<h3 id="_8">软件要求</h3>
+<p><strong>开发环境</strong>：
+- STM32CubeIDE / ESP-IDF
+- GCC ARM编译器
+- Python 3.8+（用于测试工具）</p>
+<p><strong>网络协议</strong>：
+- TCP/IP协议栈（LwIP）
+- 自定义分布式协议</p>
+<p><strong>测试工具</strong>：
+- Wireshark（网络分析）
+- 性能监控工具</p>
+<h3 id="_9">技术选型</h3>
+<p><strong>分布式算法</strong>：
+- 一致性哈希（Consistent Hashing）
+- Raft共识算法（简化版）
+- Gossip协议（节点发现）</p>
+<p><strong>数据管理</strong>：
+- 数据分片（Sharding）
+- 多副本复制（Replication）
+- 版本控制（Versioning）</p>
+<h2 id="_10">系统架构</h2>
+<h3 id="_11">整体架构设计</h3>
+<p>分布式存储系统采用对等节点（Peer-to-Peer）架构，每个节点既是客户端也是服务器：</p>
+<pre><code>                    分布式存储集群
+        ┌─────────────────────────────────┐
+        │                                 │
+    ┌───┴───┐      ┌───────┐      ┌───────┴──┐
+    │ Node1 │◄────►│ Node2 │◄────►│  Node3   │
+    │ (主)  │      │       │      │          │
+    └───┬───┘      └───┬───┘      └───┬──────┘
+        │              │              │
+        │              │              │
+        └──────────────┼──────────────┘
+                       │
+                   ┌───▼───┐
+                   │ Node4 │
+                   │       │
+                   └───────┘
+
+每个节点包含：
+┌─────────────────────────────────────┐
+│           应用接口层                 │
+│    (PUT/GET/DELETE/LIST API)        │
+├─────────────────────────────────────┤
+│          分布式协调层                │
+│  ┌──────┐ ┌──────┐ ┌──────┐        │
+│  │节点  │ │数据  │ │一致性│        │
+│  │管理  │ │路由  │ │协议  │        │
+│  └──────┘ └──────┘ └──────┘        │
+├─────────────────────────────────────┤
+│          数据管理层                  │
+│  ┌──────┐ ┌──────┐ ┌──────┐        │
+│  │分片  │ │副本  │ │版本  │        │
+│  │管理  │ │管理  │ │控制  │        │
+│  └──────┘ └──────┘ └──────┘        │
+├─────────────────────────────────────┤
+│          存储引擎层                  │
+│  ┌──────┐ ┌──────┐ ┌──────┐        │
+│  │本地  │ │缓存  │ │索引  │        │
+│  │存储  │ │管理  │ │管理  │        │
+│  └──────┘ └──────┘ └──────┘        │
+├─────────────────────────────────────┤
+│          网络通信层                  │
+│    (TCP/IP, 自定义协议)             │
+└─────────────────────────────────────┘
+</code></pre>
+<h3 id="_12">核心概念</h3>
+<h4 id="1-sharding">1. 数据分片（Sharding）</h4>
+<p>将数据空间划分为多个分片，每个分片由不同节点负责：</p>
+<pre><code>数据键空间: [0x00000000 - 0xFFFFFFFF]
+
+分片策略（一致性哈希）:
+┌────────────────────────────────────┐
+│         哈希环 (Hash Ring)          │
+│                                    │
+│         Node1 (0x20000000)         │
+│              ↓                     │
+│    ┌─────────────────────┐        │
+│    │                     │        │
+│ Node4 ←              → Node2      │
+│(0xE0000000)        (0x60000000)   │
+│    │                     │        │
+│    └─────────────────────┘        │
+│              ↑                     │
+│         Node3 (0xA0000000)         │
+│                                    │
+└────────────────────────────────────┘
+
+数据分配:
+- Key的哈希值落在哪个节点区间，就存储在该节点
+- 例如: hash(&quot;file1.txt&quot;) = 0x45000000 → 存储在Node2
+</code></pre>
+<h4 id="2-replication">2. 数据副本（Replication）</h4>
+<p>每份数据存储多个副本，提高可靠性：</p>
+<pre><code>副本策略（3副本）:
+数据 &quot;file1.txt&quot; (hash = 0x45000000)
+
+主副本: Node2 (0x60000000) - 负责该区间
+副本1: Node3 (0xA0000000) - 顺时针下一个节点
+副本2: Node4 (0xE0000000) - 顺时针再下一个节点
+
+写入流程:
+Client → Node2 (主) → Node3 (副本1) → Node4 (副本2)
+                ↓
+            确认写入成功
+</code></pre>
+<h4 id="3">3. 一致性保证</h4>
+<p>使用简化的Raft协议保证数据一致性：</p>
+<pre><code>写入一致性流程:
+1. 客户端发送写请求到主节点
+2. 主节点写入本地
+3. 主节点并行复制到副本节点
+4. 等待多数副本确认（2/3）
+5. 返回成功给客户端
+
+读取一致性:
+- 强一致性: 从主节点读取
+- 最终一致性: 从任意副本读取
+</code></pre>
+<h2 id="1">阶段1：基础框架搭建</h2>
+<h3 id="11">1.1 项目结构设计</h3>
+<pre><code>distributed-storage/
+├── src/
+│   ├── core/
+│   │   ├── node.c/h              # 节点管理
+│   │   ├── cluster.c/h           # 集群管理
+│   │   └── config.c/h            # 配置管理
+│   ├── network/
+│   │   ├── protocol.c/h          # 通信协议
+│   │   ├── message.c/h           # 消息处理
+│   │   └── connection.c/h        # 连接管理
+│   ├── storage/
+│   │   ├── local_storage.c/h     # 本地存储
+│   │   ├── cache.c/h             # 缓存管理
+│   │   └── index.c/h             # 索引管理
+│   ├── distributed/
+│   │   ├── hash_ring.c/h         # 一致性哈希
+│   │   ├── replication.c/h       # 副本管理
+│   │   └── consistency.c/h       # 一致性协议
+│   └── api/
+│       └── dss_api.c/h           # 对外API
+├── tests/
+│   ├── unit_tests/               # 单元测试
+│   └── integration_tests/        # 集成测试
+├── tools/
+│   ├── monitor.py                # 监控工具
+│   └── benchmark.py              # 性能测试
+└── docs/
+    ├── architecture.md           # 架构文档
+    └── api_reference.md          # API文档
+</code></pre>
+<h3 id="12">1.2 核心数据结构</h3>
+<pre><code class="language-c">// node.h - 节点定义
+#ifndef NODE_H
+#define NODE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 节点ID类型
+typedef uint32_t node_id_t;
+
+// 节点状态
+typedef enum {
+    NODE_STATE_INIT,        // 初始化
+    NODE_STATE_JOINING,     // 加入中
+    NODE_STATE_ACTIVE,      // 活跃
+    NODE_STATE_LEAVING,     // 离开中
+    NODE_STATE_FAILED       // 故障
+} node_state_t;
+
+// 节点信息
+typedef struct {
+    node_id_t id;           // 节点ID（哈希值）
+    char ip_addr[16];       // IP地址
+    uint16_t port;          // 端口号
+    node_state_t state;     // 节点状态
+    uint32_t last_heartbeat;// 最后心跳时间
+    uint64_t storage_used;  // 已用存储空间
+    uint64_t storage_total; // 总存储空间
+} node_info_t;
+
+// 节点操作接口
+int node_init(node_info_t *node, const char *ip, uint16_t port);
+int node_start(node_info_t *node);
+int node_stop(node_info_t *node);
+int node_send_heartbeat(node_info_t *node);
+bool node_is_alive(node_info_t *node, uint32_t timeout_ms);
+
+#endif // NODE_H
+</code></pre>
+<pre><code class="language-c">// cluster.h - 集群管理
+#ifndef CLUSTER_H
+#define CLUSTER_H
+
+#include &quot;node.h&quot;
+
+#define MAX_NODES 10        // 最大节点数
+#define REPLICATION_FACTOR 3 // 副本因子
+
+// 集群信息
+typedef struct {
+    node_info_t nodes[MAX_NODES];   // 节点列表
+    uint8_t node_count;             // 节点数量
+    node_id_t local_node_id;        // 本地节点ID
+    uint32_t cluster_version;       // 集群版本号
+} cluster_info_t;
+
+// 集群操作接口
+int cluster_init(cluster_info_t *cluster);
+int cluster_add_node(cluster_info_t *cluster, node_info_t *node);
+int cluster_remove_node(cluster_info_t *cluster, node_id_t node_id);
+node_info_t* cluster_find_node(cluster_info_t *cluster, node_id_t node_id);
+int cluster_get_replicas(cluster_info_t *cluster, uint32_t key_hash, 
+                         node_id_t *replicas, int count);
+
+#endif // CLUSTER_H
+</code></pre>
+<pre><code class="language-c">// protocol.h - 通信协议
+#ifndef PROTOCOL_H
+#define PROTOCOL_H
+
+#include &lt;stdint.h&gt;
+
+// 消息类型
+typedef enum {
+    MSG_HEARTBEAT = 1,      // 心跳
+    MSG_JOIN_REQUEST,       // 加入请求
+    MSG_JOIN_RESPONSE,      // 加入响应
+    MSG_PUT_REQUEST,        // 写入请求
+    MSG_PUT_RESPONSE,       // 写入响应
+    MSG_GET_REQUEST,        // 读取请求
+    MSG_GET_RESPONSE,       // 读取响应
+    MSG_DELETE_REQUEST,     // 删除请求
+    MSG_DELETE_RESPONSE,    // 删除响应
+    MSG_REPLICATE,          // 副本复制
+    MSG_SYNC_REQUEST,       // 同步请求
+    MSG_SYNC_RESPONSE       // 同步响应
+} message_type_t;
+
+// 消息头
+typedef struct __attribute__((packed)) {
+    uint32_t magic;         // 魔数 0x44535321 (&quot;DSS!&quot;)
+    uint16_t version;       // 协议版本
+    uint16_t type;          // 消息类型
+    uint32_t sequence;      // 序列号
+    node_id_t sender_id;    // 发送者ID
+    node_id_t receiver_id;  // 接收者ID
+    uint32_t payload_len;   // 负载长度
+    uint32_t checksum;      // 校验和
+} message_header_t;
+
+// 完整消息
+typedef struct {
+    message_header_t header;
+    uint8_t *payload;       // 负载数据
+} message_t;
+
+// 协议操作接口
+int protocol_init(void);
+int protocol_create_message(message_t *msg, message_type_t type, 
+                            const void *payload, uint32_t len);
+int protocol_send_message(int sockfd, message_t *msg);
+int protocol_receive_message(int sockfd, message_t *msg);
+void protocol_free_message(message_t *msg);
+
+#endif // PROTOCOL_H
+</code></pre>
+<h3 id="13">1.3 节点初始化实现</h3>
+<pre><code class="language-c">// node.c - 节点实现
+#include &quot;node.h&quot;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+// 计算节点ID（使用IP和端口的哈希）
+static uint32_t calculate_node_id(const char *ip, uint16_t port) {
+    uint32_t hash = 5381;
+
+    // 哈希IP地址
+    for (const char *p = ip; *p != '\0'; p++) {
+        hash = ((hash &lt;&lt; 5) + hash) + *p;
+    }
+
+    // 哈希端口
+    hash = ((hash &lt;&lt; 5) + hash) + (port &amp; 0xFF);
+    hash = ((hash &lt;&lt; 5) + hash) + ((port &gt;&gt; 8) &amp; 0xFF);
+
+    return hash;
+}
+
+/**
+ * @brief 初始化节点
+ */
+int node_init(node_info_t *node, const char *ip, uint16_t port) {
+    if (!node || !ip) {
+        return -1;
+    }
+
+    memset(node, 0, sizeof(node_info_t));
+
+    // 设置节点信息
+    node-&gt;id = calculate_node_id(ip, port);
+    strncpy(node-&gt;ip_addr, ip, sizeof(node-&gt;ip_addr) - 1);
+    node-&gt;port = port;
+    node-&gt;state = NODE_STATE_INIT;
+    node-&gt;last_heartbeat = time(NULL);
+    node-&gt;storage_total = 16 * 1024 * 1024;  // 16MB
+    node-&gt;storage_used = 0;
+
+    return 0;
+}
+
+/**
+ * @brief 启动节点
+ */
+int node_start(node_info_t *node) {
+    if (!node) {
+        return -1;
+    }
+
+    node-&gt;state = NODE_STATE_ACTIVE;
+    node-&gt;last_heartbeat = time(NULL);
+
+    return 0;
+}
+
+/**
+ * @brief 停止节点
+ */
+int node_stop(node_info_t *node) {
+    if (!node) {
+        return -1;
+    }
+
+    node-&gt;state = NODE_STATE_LEAVING;
+
+    return 0;
+}
+
+/**
+ * @brief 发送心跳
+ */
+int node_send_heartbeat(node_info_t *node) {
+    if (!node) {
+        return -1;
+    }
+
+    node-&gt;last_heartbeat = time(NULL);
+
+    return 0;
+}
+
+/**
+ * @brief 检查节点是否存活
+ */
+bool node_is_alive(node_info_t *node, uint32_t timeout_ms) {
+    if (!node) {
+        return false;
+    }
+
+    uint32_t current_time = time(NULL);
+    uint32_t elapsed = (current_time - node-&gt;last_heartbeat) * 1000;
+
+    return (elapsed &lt; timeout_ms) &amp;&amp; (node-&gt;state == NODE_STATE_ACTIVE);
+}
+</code></pre>
+<h2 id="2">阶段2：一致性哈希实现</h2>
+<h3 id="21">2.1 哈希环数据结构</h3>
+<pre><code class="language-c">// hash_ring.h - 一致性哈希环
+#ifndef HASH_RING_H
+#define HASH_RING_H
+
+#include &quot;node.h&quot;
+
+#define VIRTUAL_NODES 150   // 每个物理节点的虚拟节点数
+
+// 虚拟节点
+typedef struct {
+    uint32_t hash;          // 哈希值
+    node_id_t node_id;      // 对应的物理节点ID
+} virtual_node_t;
+
+// 哈希环
+typedef struct {
+    virtual_node_t *vnodes; // 虚拟节点数组
+    int vnode_count;        // 虚拟节点数量
+    int capacity;           // 容量
+} hash_ring_t;
+
+// 哈希环操作接口
+int hash_ring_init(hash_ring_t *ring);
+void hash_ring_destroy(hash_ring_t *ring);
+int hash_ring_add_node(hash_ring_t *ring, node_id_t node_id);
+int hash_ring_remove_node(hash_ring_t *ring, node_id_t node_id);
+node_id_t hash_ring_get_node(hash_ring_t *ring, uint32_t key_hash);
+int hash_ring_get_replicas(hash_ring_t *ring, uint32_t key_hash,
+                           node_id_t *replicas, int count);
+
+#endif // HASH_RING_H
+</code></pre>
+<h3 id="22">2.2 哈希环实现</h3>
+<pre><code class="language-c">// hash_ring.c - 一致性哈希环实现
+#include &quot;hash_ring.h&quot;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 哈希函数（MurmurHash3简化版）
+static uint32_t murmur_hash(const void *key, int len, uint32_t seed) {
+    const uint8_t *data = (const uint8_t*)key;
+    uint32_t h = seed;
+
+    for (int i = 0; i &lt; len; i++) {
+        h ^= data[i];
+        h *= 0x5bd1e995;
+        h ^= h &gt;&gt; 15;
+    }
+
+    return h;
+}
+
+// 虚拟节点比较函数（用于排序）
+static int vnode_compare(const void *a, const void *b) {
+    const virtual_node_t *va = (const virtual_node_t*)a;
+    const virtual_node_t *vb = (const virtual_node_t*)b;
+
+    if (va-&gt;hash &lt; vb-&gt;hash) return -1;
+    if (va-&gt;hash &gt; vb-&gt;hash) return 1;
+    return 0;
+}
+
+/**
+ * @brief 初始化哈希环
+ */
+int hash_ring_init(hash_ring_t *ring) {
+    if (!ring) {
+        return -1;
+    }
+
+    ring-&gt;capacity = MAX_NODES * VIRTUAL_NODES;
+    ring-&gt;vnodes = (virtual_node_t*)malloc(ring-&gt;capacity * sizeof(virtual_node_t));
+    if (!ring-&gt;vnodes) {
+        return -1;
+    }
+
+    ring-&gt;vnode_count = 0;
+
+    return 0;
+}
+
+/**
+ * @brief 销毁哈希环
+ */
+void hash_ring_destroy(hash_ring_t *ring) {
+    if (ring &amp;&amp; ring-&gt;vnodes) {
+        free(ring-&gt;vnodes);
+        ring-&gt;vnodes = NULL;
+        ring-&gt;vnode_count = 0;
+    }
+}
+
+/**
+ * @brief 添加节点到哈希环
+ */
+int hash_ring_add_node(hash_ring_t *ring, node_id_t node_id) {
+    if (!ring || !ring-&gt;vnodes) {
+        return -1;
+    }
+
+    // 为该节点创建虚拟节点
+    for (int i = 0; i &lt; VIRTUAL_NODES; i++) {
+        if (ring-&gt;vnode_count &gt;= ring-&gt;capacity) {
+            return -1;  // 容量不足
+        }
+
+        // 生成虚拟节点的哈希值
+        char key[32];
+        snprintf(key, sizeof(key), &quot;%u-%d&quot;, node_id, i);
+        uint32_t hash = murmur_hash(key, strlen(key), 0);
+
+        // 添加虚拟节点
+        ring-&gt;vnodes[ring-&gt;vnode_count].hash = hash;
+        ring-&gt;vnodes[ring-&gt;vnode_count].node_id = node_id;
+        ring-&gt;vnode_count++;
+    }
+
+    // 排序虚拟节点（按哈希值）
+    qsort(ring-&gt;vnodes, ring-&gt;vnode_count, sizeof(virtual_node_t), vnode_compare);
+
+    return 0;
+}
+
+/**
+ * @brief 从哈希环移除节点
+ */
+int hash_ring_remove_node(hash_ring_t *ring, node_id_t node_id) {
+    if (!ring || !ring-&gt;vnodes) {
+        return -1;
+    }
+
+    // 移除该节点的所有虚拟节点
+    int write_pos = 0;
+    for (int read_pos = 0; read_pos &lt; ring-&gt;vnode_count; read_pos++) {
+        if (ring-&gt;vnodes[read_pos].node_id != node_id) {
+            if (write_pos != read_pos) {
+                ring-&gt;vnodes[write_pos] = ring-&gt;vnodes[read_pos];
+            }
+            write_pos++;
+        }
+    }
+
+    ring-&gt;vnode_count = write_pos;
+
+    return 0;
+}
+
+/**
+ * @brief 获取键对应的节点
+ */
+node_id_t hash_ring_get_node(hash_ring_t *ring, uint32_t key_hash) {
+    if (!ring || ring-&gt;vnode_count == 0) {
+        return 0;
+    }
+
+    // 二分查找第一个哈希值 &gt;= key_hash 的虚拟节点
+    int left = 0;
+    int right = ring-&gt;vnode_count - 1;
+
+    while (left &lt; right) {
+        int mid = left + (right - left) / 2;
+        if (ring-&gt;vnodes[mid].hash &lt; key_hash) {
+            left = mid + 1;
+        } else {
+            right = mid;
+        }
+    }
+
+    // 如果所有节点的哈希值都小于key_hash，则回到第一个节点（环形）
+    if (left == ring-&gt;vnode_count - 1 &amp;&amp; ring-&gt;vnodes[left].hash &lt; key_hash) {
+        left = 0;
+    }
+
+    return ring-&gt;vnodes[left].node_id;
+}
+
+/**
+ * @brief 获取键的副本节点列表
+ */
+int hash_ring_get_replicas(hash_ring_t *ring, uint32_t key_hash,
+                           node_id_t *replicas, int count) {
+    if (!ring || !replicas || count &lt;= 0 || ring-&gt;vnode_count == 0) {
+        return -1;
+    }
+
+    // 找到第一个节点
+    int start_idx = 0;
+    for (int i = 0; i &lt; ring-&gt;vnode_count; i++) {
+        if (ring-&gt;vnodes[i].hash &gt;= key_hash) {
+            start_idx = i;
+            break;
+        }
+    }
+
+    // 收集不同的物理节点
+    int replica_count = 0;
+    int checked = 0;
+
+    for (int i = 0; i &lt; ring-&gt;vnode_count &amp;&amp; replica_count &lt; count; i++) {
+        int idx = (start_idx + i) % ring-&gt;vnode_count;
+        node_id_t node_id = ring-&gt;vnodes[idx].node_id;
+
+        // 检查是否已经添加过该物理节点
+        bool already_added = false;
+        for (int j = 0; j &lt; replica_count; j++) {
+            if (replicas[j] == node_id) {
+                already_added = true;
+                break;
+            }
+        }
+
+        if (!already_added) {
+            replicas[replica_count++] = node_id;
+        }
+
+        checked++;
+        if (checked &gt; ring-&gt;vnode_count) {
+            break;  // 防止无限循环
+        }
+    }
+
+    return replica_count;
+}
+</code></pre>
+<h3 id="23">2.3 测试哈希环</h3>
+<pre><code class="language-c">// test_hash_ring.c - 哈希环测试
+#include &quot;hash_ring.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;assert.h&gt;
+
+void test_hash_ring_basic(void) {
+    printf(&quot;Testing hash ring basic operations...\n&quot;);
+
+    hash_ring_t ring;
+    assert(hash_ring_init(&amp;ring) == 0);
+
+    // 添加3个节点
+    node_id_t node1 = 0x10000000;
+    node_id_t node2 = 0x50000000;
+    node_id_t node3 = 0x90000000;
+
+    assert(hash_ring_add_node(&amp;ring, node1) == 0);
+    assert(hash_ring_add_node(&amp;ring, node2) == 0);
+    assert(hash_ring_add_node(&amp;ring, node3) == 0);
+
+    printf(&quot;Added 3 nodes, total vnodes: %d\n&quot;, ring.vnode_count);
+
+    // 测试键分配
+    uint32_t test_keys[] = {0x20000000, 0x60000000, 0xA0000000};
+    for (int i = 0; i &lt; 3; i++) {
+        node_id_t node = hash_ring_get_node(&amp;ring, test_keys[i]);
+        printf(&quot;Key 0x%08X -&gt; Node 0x%08X\n&quot;, test_keys[i], node);
+    }
+
+    // 测试副本分配
+    node_id_t replicas[3];
+    int count = hash_ring_get_replicas(&amp;ring, 0x20000000, replicas, 3);
+    printf(&quot;Replicas for key 0x20000000: &quot;);
+    for (int i = 0; i &lt; count; i++) {
+        printf(&quot;0x%08X &quot;, replicas[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 移除一个节点
+    assert(hash_ring_remove_node(&amp;ring, node2) == 0);
+    printf(&quot;Removed node2, remaining vnodes: %d\n&quot;, ring.vnode_count);
+
+    hash_ring_destroy(&amp;ring);
+    printf(&quot;Test passed!\n\n&quot;);
+}
+
+void test_hash_ring_distribution(void) {
+    printf(&quot;Testing hash ring distribution...\n&quot;);
+
+    hash_ring_t ring;
+    hash_ring_init(&amp;ring);
+
+    // 添加4个节点
+    node_id_t nodes[] = {0x10000000, 0x40000000, 0x80000000, 0xC0000000};
+    for (int i = 0; i &lt; 4; i++) {
+        hash_ring_add_node(&amp;ring, nodes[i]);
+    }
+
+    // 统计1000个键的分布
+    int distribution[4] = {0};
+    for (int i = 0; i &lt; 1000; i++) {
+        uint32_t key = murmur_hash(&amp;i, sizeof(i), 0);
+        node_id_t node = hash_ring_get_node(&amp;ring, key);
+
+        // 找到节点索引
+        for (int j = 0; j &lt; 4; j++) {
+            if (node == nodes[j]) {
+                distribution[j]++;
+                break;
+            }
+        }
+    }
+
+    printf(&quot;Distribution of 1000 keys:\n&quot;);
+    for (int i = 0; i &lt; 4; i++) {
+        printf(&quot;  Node%d: %d keys (%.1f%%)\n&quot;, 
+               i, distribution[i], distribution[i] / 10.0);
+    }
+
+    hash_ring_destroy(&amp;ring);
+    printf(&quot;Test passed!\n\n&quot;);
+}
+
+int main(void) {
+    test_hash_ring_basic();
+    test_hash_ring_distribution();
+
+    printf(&quot;All hash ring tests passed!\n&quot;);
+    return 0;
+}
+</code></pre>
+<h2 id="3_1">阶段3：本地存储引擎</h2>
+<h3 id="31">3.1 键值存储接口</h3>
+<pre><code class="language-c">// local_storage.h - 本地存储引擎
+#ifndef LOCAL_STORAGE_H
+#define LOCAL_STORAGE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+#define MAX_KEY_SIZE 256
+#define MAX_VALUE_SIZE 4096
+
+// 存储项
+typedef struct {
+    char key[MAX_KEY_SIZE];
+    uint8_t *value;
+    uint32_t value_len;
+    uint32_t version;       // 版本号
+    uint64_t timestamp;     // 时间戳
+} storage_item_t;
+
+// 存储引擎
+typedef struct {
+    storage_item_t *items;
+    int item_count;
+    int capacity;
+    uint64_t total_size;
+} local_storage_t;
+
+// 存储操作接口
+int storage_init(local_storage_t *storage, int capacity);
+void storage_destroy(local_storage_t *storage);
+int storage_put(local_storage_t *storage, const char *key, 
+                const void *value, uint32_t value_len);
+int storage_get(local_storage_t *storage, const char *key,
+                void *value, uint32_t *value_len);
+int storage_delete(local_storage_t *storage, const char *key);
+bool storage_exists(local_storage_t *storage, const char *key);
+int storage_list_keys(local_storage_t *storage, char **keys, int max_keys);
+
+#endif // LOCAL_STORAGE_H
+</code></pre>
+<h3 id="32">3.2 存储引擎实现</h3>
+<pre><code class="language-c">// local_storage.c - 本地存储实现
+#include &quot;local_storage.h&quot;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+/**
+ * @brief 初始化存储引擎
+ */
+int storage_init(local_storage_t *storage, int capacity) {
+    if (!storage || capacity &lt;= 0) {
+        return -1;
+    }
+
+    storage-&gt;items = (storage_item_t*)calloc(capacity, sizeof(storage_item_t));
+    if (!storage-&gt;items) {
+        return -1;
+    }
+
+    storage-&gt;item_count = 0;
+    storage-&gt;capacity = capacity;
+    storage-&gt;total_size = 0;
+
+    return 0;
+}
+
+/**
+ * @brief 销毁存储引擎
+ */
+void storage_destroy(local_storage_t *storage) {
+    if (!storage) {
+        return;
+    }
+
+    // 释放所有值的内存
+    for (int i = 0; i &lt; storage-&gt;item_count; i++) {
+        if (storage-&gt;items[i].value) {
+            free(storage-&gt;items[i].value);
+        }
+    }
+
+    free(storage-&gt;items);
+    storage-&gt;items = NULL;
+    storage-&gt;item_count = 0;
+}
+
+/**
+ * @brief 查找键
+ */
+static int storage_find_key(local_storage_t *storage, const char *key) {
+    for (int i = 0; i &lt; storage-&gt;item_count; i++) {
+        if (strcmp(storage-&gt;items[i].key, key) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * @brief 存储键值对
+ */
+int storage_put(local_storage_t *storage, const char *key,
+                const void *value, uint32_t value_len) {
+    if (!storage || !key || !value || value_len == 0 || value_len &gt; MAX_VALUE_SIZE) {
+        return -1;
+    }
+
+    // 检查键是否已存在
+    int idx = storage_find_key(storage, key);
+
+    if (idx &gt;= 0) {
+        // 更新现有项
+        storage_item_t *item = &amp;storage-&gt;items[idx];
+
+        // 释放旧值
+        if (item-&gt;value) {
+            storage-&gt;total_size -= item-&gt;value_len;
+            free(item-&gt;value);
+        }
+
+        // 分配新值
+        item-&gt;value = (uint8_t*)malloc(value_len);
+        if (!item-&gt;value) {
+            return -1;
+        }
+
+        memcpy(item-&gt;value, value, value_len);
+        item-&gt;value_len = value_len;
+        item-&gt;version++;
+        item-&gt;timestamp = time(NULL);
+        storage-&gt;total_size += value_len;
+
+    } else {
+        // 添加新项
+        if (storage-&gt;item_count &gt;= storage-&gt;capacity) {
+            return -1;  // 容量不足
+        }
+
+        storage_item_t *item = &amp;storage-&gt;items[storage-&gt;item_count];
+
+        strncpy(item-&gt;key, key, MAX_KEY_SIZE - 1);
+        item-&gt;key[MAX_KEY_SIZE - 1] = '\0';
+
+        item-&gt;value = (uint8_t*)malloc(value_len);
+        if (!item-&gt;value) {
+            return -1;
+        }
+
+        memcpy(item-&gt;value, value, value_len);
+        item-&gt;value_len = value_len;
+        item-&gt;version = 1;
+        item-&gt;timestamp = time(NULL);
+
+        storage-&gt;item_count++;
+        storage-&gt;total_size += value_len;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 获取键值
+ */
+int storage_get(local_storage_t *storage, const char *key,
+                void *value, uint32_t *value_len) {
+    if (!storage || !key || !value || !value_len) {
+        return -1;
+    }
+
+    int idx = storage_find_key(storage, key);
+    if (idx &lt; 0) {
+        return -1;  // 键不存在
+    }
+
+    storage_item_t *item = &amp;storage-&gt;items[idx];
+
+    if (*value_len &lt; item-&gt;value_len) {
+        *value_len = item-&gt;value_len;
+        return -2;  // 缓冲区太小
+    }
+
+    memcpy(value, item-&gt;value, item-&gt;value_len);
+    *value_len = item-&gt;value_len;
+
+    return 0;
+}
+
+/**
+ * @brief 删除键
+ */
+int storage_delete(local_storage_t *storage, const char *key) {
+    if (!storage || !key) {
+        return -1;
+    }
+
+    int idx = storage_find_key(storage, key);
+    if (idx &lt; 0) {
+        return -1;  // 键不存在
+    }
+
+    // 释放值内存
+    storage_item_t *item = &amp;storage-&gt;items[idx];
+    if (item-&gt;value) {
+        storage-&gt;total_size -= item-&gt;value_len;
+        free(item-&gt;value);
+    }
+
+    // 移动后续项
+    for (int i = idx; i &lt; storage-&gt;item_count - 1; i++) {
+        storage-&gt;items[i] = storage-&gt;items[i + 1];
+    }
+
+    storage-&gt;item_count--;
+
+    return 0;
+}
+
+/**
+ * @brief 检查键是否存在
+ */
+bool storage_exists(local_storage_t *storage, const char *key) {
+    if (!storage || !key) {
+        return false;
+    }
+
+    return storage_find_key(storage, key) &gt;= 0;
+}
+
+/**
+ * @brief 列出所有键
+ */
+int storage_list_keys(local_storage_t *storage, char **keys, int max_keys) {
+    if (!storage || !keys || max_keys &lt;= 0) {
+        return -1;
+    }
+
+    int count = (storage-&gt;item_count &lt; max_keys) ? storage-&gt;item_count : max_keys;
+
+    for (int i = 0; i &lt; count; i++) {
+        keys[i] = storage-&gt;items[i].key;
+    }
+
+    return count;
+}
+</code></pre>
+<h3 id="33">3.3 持久化支持</h3>
+<pre><code class="language-c">// storage_persistence.c - 存储持久化
+#include &quot;local_storage.h&quot;
+#include &lt;stdio.h&gt;
+
+#define STORAGE_FILE &quot;storage.dat&quot;
+#define STORAGE_MAGIC 0x44535344  // &quot;DSSD&quot;
+
+// 文件头
+typedef struct {
+    uint32_t magic;
+    uint32_t version;
+    uint32_t item_count;
+    uint64_t total_size;
+} storage_file_header_t;
+
+/**
+ * @brief 保存存储到文件
+ */
+int storage_save_to_file(local_storage_t *storage, const char *filename) {
+    if (!storage || !filename) {
+        return -1;
+    }
+
+    FILE *fp = fopen(filename, &quot;wb&quot;);
+    if (!fp) {
+        return -1;
+    }
+
+    // 写入文件头
+    storage_file_header_t header = {
+        .magic = STORAGE_MAGIC,
+        .version = 1,
+        .item_count = storage-&gt;item_count,
+        .total_size = storage-&gt;total_size
+    };
+
+    if (fwrite(&amp;header, sizeof(header), 1, fp) != 1) {
+        fclose(fp);
+        return -1;
+    }
+
+    // 写入每个项
+    for (int i = 0; i &lt; storage-&gt;item_count; i++) {
+        storage_item_t *item = &amp;storage-&gt;items[i];
+
+        // 写入键长度和键
+        uint32_t key_len = strlen(item-&gt;key) + 1;
+        fwrite(&amp;key_len, sizeof(key_len), 1, fp);
+        fwrite(item-&gt;key, 1, key_len, fp);
+
+        // 写入值长度和值
+        fwrite(&amp;item-&gt;value_len, sizeof(item-&gt;value_len), 1, fp);
+        fwrite(item-&gt;value, 1, item-&gt;value_len, fp);
+
+        // 写入元数据
+        fwrite(&amp;item-&gt;version, sizeof(item-&gt;version), 1, fp);
+        fwrite(&amp;item-&gt;timestamp, sizeof(item-&gt;timestamp), 1, fp);
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+/**
+ * @brief 从文件加载存储
+ */
+int storage_load_from_file(local_storage_t *storage, const char *filename) {
+    if (!storage || !filename) {
+        return -1;
+    }
+
+    FILE *fp = fopen(filename, &quot;rb&quot;);
+    if (!fp) {
+        return -1;
+    }
+
+    // 读取文件头
+    storage_file_header_t header;
+    if (fread(&amp;header, sizeof(header), 1, fp) != 1) {
+        fclose(fp);
+        return -1;
+    }
+
+    // 验证魔数
+    if (header.magic != STORAGE_MAGIC) {
+        fclose(fp);
+        return -1;
+    }
+
+    // 清空现有存储
+    storage_destroy(storage);
+    storage_init(storage, header.item_count + 100);
+
+    // 读取每个项
+    for (uint32_t i = 0; i &lt; header.item_count; i++) {
+        char key[MAX_KEY_SIZE];
+        uint32_t key_len;
+        uint32_t value_len;
+        uint8_t *value;
+        uint32_t version;
+        uint64_t timestamp;
+
+        // 读取键
+        fread(&amp;key_len, sizeof(key_len), 1, fp);
+        fread(key, 1, key_len, fp);
+
+        // 读取值
+        fread(&amp;value_len, sizeof(value_len), 1, fp);
+        value = (uint8_t*)malloc(value_len);
+        fread(value, 1, value_len, fp);
+
+        // 读取元数据
+        fread(&amp;version, sizeof(version), 1, fp);
+        fread(&amp;timestamp, sizeof(timestamp), 1, fp);
+
+        // 添加到存储
+        storage_put(storage, key, value, value_len);
+
+        // 更新元数据
+        int idx = storage_find_key(storage, key);
+        if (idx &gt;= 0) {
+            storage-&gt;items[idx].version = version;
+            storage-&gt;items[idx].timestamp = timestamp;
+        }
+
+        free(value);
+    }
+
+    fclose(fp);
+    return 0;
+}
+</code></pre>
+<h2 id="4">阶段4：网络通信实现</h2>
+<h3 id="41-tcp">4.1 TCP服务器</h3>
+<pre><code class="language-c">// connection.c - 网络连接管理
+#include &quot;connection.h&quot;
+#include &quot;protocol.h&quot;
+#include &lt;sys/socket.h&gt;
+#include &lt;netinet/in.h&gt;
+#include &lt;arpa/inet.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;string.h&gt;
+
+/**
+ * @brief 创建TCP服务器
+ */
+int connection_create_server(uint16_t port) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd &lt; 0) {
+        return -1;
+    }
+
+    // 设置地址重用
+    int opt = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &amp;opt, sizeof(opt));
+
+    // 绑定地址
+    struct sockaddr_in addr;
+    memset(&amp;addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = INADDR_ANY;
+    addr.sin_port = htons(port);
+
+    if (bind(sockfd, (struct sockaddr*)&amp;addr, sizeof(addr)) &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    // 监听
+    if (listen(sockfd, 10) &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    return sockfd;
+}
+
+/**
+ * @brief 连接到服务器
+ */
+int connection_connect(const char *ip, uint16_t port) {
+    int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd &lt; 0) {
+        return -1;
+    }
+
+    struct sockaddr_in addr;
+    memset(&amp;addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip, &amp;addr.sin_addr) &lt;= 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    if (connect(sockfd, (struct sockaddr*)&amp;addr, sizeof(addr)) &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    return sockfd;
+}
+
+/**
+ * @brief 设置非阻塞模式
+ */
+int connection_set_nonblocking(int sockfd) {
+    int flags = fcntl(sockfd, F_GETFL, 0);
+    if (flags &lt; 0) {
+        return -1;
+    }
+
+    return fcntl(sockfd, F_SETFL, flags | O_NONBLOCK);
+}
+</code></pre>
+<h3 id="42">4.2 消息处理</h3>
+<pre><code class="language-c">// message.c - 消息处理
+#include &quot;message.h&quot;
+#include &quot;protocol.h&quot;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 消息序列号（全局）
+static uint32_t g_message_sequence = 0;
+
+/**
+ * @brief 创建消息
+ */
+int message_create(message_t *msg, message_type_t type,
+                   node_id_t sender, node_id_t receiver,
+                   const void *payload, uint32_t payload_len) {
+    if (!msg) {
+        return -1;
+    }
+
+    memset(msg, 0, sizeof(message_t));
+
+    // 设置消息头
+    msg-&gt;header.magic = 0x44535321;  // &quot;DSS!&quot;
+    msg-&gt;header.version = 1;
+    msg-&gt;header.type = type;
+    msg-&gt;header.sequence = ++g_message_sequence;
+    msg-&gt;header.sender_id = sender;
+    msg-&gt;header.receiver_id = receiver;
+    msg-&gt;header.payload_len = payload_len;
+
+    // 复制负载
+    if (payload_len &gt; 0 &amp;&amp; payload) {
+        msg-&gt;payload = (uint8_t*)malloc(payload_len);
+        if (!msg-&gt;payload) {
+            return -1;
+        }
+        memcpy(msg-&gt;payload, payload, payload_len);
+    }
+
+    // 计算校验和（简单的累加和）
+    uint32_t checksum = 0;
+    uint8_t *header_bytes = (uint8_t*)&amp;msg-&gt;header;
+    for (size_t i = 0; i &lt; sizeof(message_header_t) - sizeof(uint32_t); i++) {
+        checksum += header_bytes[i];
+    }
+    if (msg-&gt;payload) {
+        for (uint32_t i = 0; i &lt; payload_len; i++) {
+            checksum += msg-&gt;payload[i];
+        }
+    }
+    msg-&gt;header.checksum = checksum;
+
+    return 0;
+}
+
+/**
+ * @brief 发送消息
+ */
+int message_send(int sockfd, message_t *msg) {
+    if (sockfd &lt; 0 || !msg) {
+        return -1;
+    }
+
+    // 发送消息头
+    ssize_t sent = send(sockfd, &amp;msg-&gt;header, sizeof(message_header_t), 0);
+    if (sent != sizeof(message_header_t)) {
+        return -1;
+    }
+
+    // 发送负载
+    if (msg-&gt;header.payload_len &gt; 0 &amp;&amp; msg-&gt;payload) {
+        sent = send(sockfd, msg-&gt;payload, msg-&gt;header.payload_len, 0);
+        if (sent != msg-&gt;header.payload_len) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 接收消息
+ */
+int message_receive(int sockfd, message_t *msg) {
+    if (sockfd &lt; 0 || !msg) {
+        return -1;
+    }
+
+    memset(msg, 0, sizeof(message_t));
+
+    // 接收消息头
+    ssize_t received = recv(sockfd, &amp;msg-&gt;header, sizeof(message_header_t), 0);
+    if (received != sizeof(message_header_t)) {
+        return -1;
+    }
+
+    // 验证魔数
+    if (msg-&gt;header.magic != 0x44535321) {
+        return -1;
+    }
+
+    // 接收负载
+    if (msg-&gt;header.payload_len &gt; 0) {
+        msg-&gt;payload = (uint8_t*)malloc(msg-&gt;header.payload_len);
+        if (!msg-&gt;payload) {
+            return -1;
+        }
+
+        received = recv(sockfd, msg-&gt;payload, msg-&gt;header.payload_len, 0);
+        if (received != msg-&gt;header.payload_len) {
+            free(msg-&gt;payload);
+            msg-&gt;payload = NULL;
+            return -1;
+        }
+    }
+
+    // 验证校验和
+    uint32_t checksum = 0;
+    uint8_t *header_bytes = (uint8_t*)&amp;msg-&gt;header;
+    for (size_t i = 0; i &lt; sizeof(message_header_t) - sizeof(uint32_t); i++) {
+        checksum += header_bytes[i];
+    }
+    if (msg-&gt;payload) {
+        for (uint32_t i = 0; i &lt; msg-&gt;header.payload_len; i++) {
+            checksum += msg-&gt;payload[i];
+        }
+    }
+
+    if (checksum != msg-&gt;header.checksum) {
+        message_free(msg);
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 释放消息
+ */
+void message_free(message_t *msg) {
+    if (msg &amp;&amp; msg-&gt;payload) {
+        free(msg-&gt;payload);
+        msg-&gt;payload = NULL;
+    }
+}
+
+/**
+ * @brief 打印消息信息（调试用）
+ */
+void message_print(message_t *msg) {
+    if (!msg) {
+        return;
+    }
+
+    printf(&quot;Message:\n&quot;);
+    printf(&quot;  Type: %d\n&quot;, msg-&gt;header.type);
+    printf(&quot;  Sequence: %u\n&quot;, msg-&gt;header.sequence);
+    printf(&quot;  Sender: 0x%08X\n&quot;, msg-&gt;header.sender_id);
+    printf(&quot;  Receiver: 0x%08X\n&quot;, msg-&gt;header.receiver_id);
+    printf(&quot;  Payload Length: %u\n&quot;, msg-&gt;header.payload_len);
+    printf(&quot;  Checksum: 0x%08X\n&quot;, msg-&gt;header.checksum);
+}
+</code></pre>
+<h3 id="43">4.3 心跳机制</h3>
+<pre><code class="language-c">// heartbeat.c - 心跳机制
+#include &quot;node.h&quot;
+#include &quot;cluster.h&quot;
+#include &quot;message.h&quot;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdio.h&gt;
+
+#define HEARTBEAT_INTERVAL 5    // 心跳间隔（秒）
+#define HEARTBEAT_TIMEOUT 15    // 心跳超时（秒）
+
+// 心跳负载
+typedef struct {
+    node_id_t node_id;
+    uint64_t storage_used;
+    uint64_t storage_total;
+    uint32_t timestamp;
+} heartbeat_payload_t;
+
+/**
+ * @brief 发送心跳到所有节点
+ */
+static int send_heartbeat_to_all(cluster_info_t *cluster, node_info_t *local_node) {
+    heartbeat_payload_t payload = {
+        .node_id = local_node-&gt;id,
+        .storage_used = local_node-&gt;storage_used,
+        .storage_total = local_node-&gt;storage_total,
+        .timestamp = time(NULL)
+    };
+
+    for (int i = 0; i &lt; cluster-&gt;node_count; i++) {
+        node_info_t *remote_node = &amp;cluster-&gt;nodes[i];
+
+        // 跳过自己
+        if (remote_node-&gt;id == local_node-&gt;id) {
+            continue;
+        }
+
+        // 连接到远程节点
+        int sockfd = connection_connect(remote_node-&gt;ip_addr, remote_node-&gt;port);
+        if (sockfd &lt; 0) {
+            printf(&quot;Failed to connect to node 0x%08X\n&quot;, remote_node-&gt;id);
+            continue;
+        }
+
+        // 创建心跳消息
+        message_t msg;
+        message_create(&amp;msg, MSG_HEARTBEAT, local_node-&gt;id, remote_node-&gt;id,
+                      &amp;payload, sizeof(payload));
+
+        // 发送消息
+        if (message_send(sockfd, &amp;msg) &lt; 0) {
+            printf(&quot;Failed to send heartbeat to node 0x%08X\n&quot;, remote_node-&gt;id);
+        }
+
+        message_free(&amp;msg);
+        close(sockfd);
+    }
+
+    return 0;
+}
+
+/**
+ * @brief 检查节点健康状态
+ */
+static void check_node_health(cluster_info_t *cluster) {
+    uint32_t current_time = time(NULL);
+
+    for (int i = 0; i &lt; cluster-&gt;node_count; i++) {
+        node_info_t *node = &amp;cluster-&gt;nodes[i];
+
+        // 跳过本地节点
+        if (node-&gt;id == cluster-&gt;local_node_id) {
+            continue;
+        }
+
+        // 检查心跳超时
+        uint32_t elapsed = current_time - node-&gt;last_heartbeat;
+        if (elapsed &gt; HEARTBEAT_TIMEOUT &amp;&amp; node-&gt;state == NODE_STATE_ACTIVE) {
+            printf(&quot;Node 0x%08X timeout, marking as failed\n&quot;, node-&gt;id);
+            node-&gt;state = NODE_STATE_FAILED;
+
+            // TODO: 触发数据恢复流程
+        }
+    }
+}
+
+/**
+ * @brief 心跳线程
+ */
+static void* heartbeat_thread(void *arg) {
+    cluster_info_t *cluster = (cluster_info_t*)arg;
+    node_info_t *local_node = cluster_find_node(cluster, cluster-&gt;local_node_id);
+
+    if (!local_node) {
+        return NULL;
+    }
+
+    printf(&quot;Heartbeat thread started\n&quot;);
+
+    while (1) {
+        // 发送心跳
+        send_heartbeat_to_all(cluster, local_node);
+
+        // 检查节点健康
+        check_node_health(cluster);
+
+        // 等待下一个心跳间隔
+        sleep(HEARTBEAT_INTERVAL);
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief 启动心跳服务
+ */
+int heartbeat_start(cluster_info_t *cluster) {
+    pthread_t thread;
+
+    if (pthread_create(&amp;thread, NULL, heartbeat_thread, cluster) != 0) {
+        return -1;
+    }
+
+    pthread_detach(thread);
+
+    return 0;
+}
+</code></pre>
+<h2 id="5api">阶段5：分布式API实现</h2>
+<h3 id="51-api">5.1 分布式存储API</h3>
+<pre><code class="language-c">// dss_api.h - 分布式存储系统API
+#ifndef DSS_API_H
+#define DSS_API_H
+
+#include &quot;cluster.h&quot;
+#include &quot;local_storage.h&quot;
+#include &quot;hash_ring.h&quot;
+
+// DSS上下文
+typedef struct {
+    cluster_info_t cluster;
+    local_storage_t storage;
+    hash_ring_t ring;
+    int server_sockfd;
+    bool running;
+} dss_context_t;
+
+// API接口
+int dss_init(dss_context_t *ctx, const char *ip, uint16_t port);
+int dss_start(dss_context_t *ctx);
+int dss_stop(dss_context_t *ctx);
+int dss_join_cluster(dss_context_t *ctx, const char *seed_ip, uint16_t seed_port);
+
+// 数据操作
+int dss_put(dss_context_t *ctx, const char *key, const void *value, uint32_t value_len);
+int dss_get(dss_context_t *ctx, const char *key, void *value, uint32_t *value_len);
+int dss_delete(dss_context_t *ctx, const char *key);
+bool dss_exists(dss_context_t *ctx, const char *key);
+
+#endif // DSS_API_H
+</code></pre>
+<h3 id="52-put">5.2 PUT操作实现</h3>
+<pre><code class="language-c">// dss_put.c - 分布式PUT操作
+#include &quot;dss_api.h&quot;
+#include &quot;message.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// PUT请求负载
+typedef struct {
+    char key[MAX_KEY_SIZE];
+    uint32_t value_len;
+    uint8_t value[];  // 柔性数组
+} put_request_t;
+
+// PUT响应负载
+typedef struct {
+    int status;  // 0=成功, -1=失败
+    char message[64];
+} put_response_t;
+
+/**
+ * @brief 计算键的哈希值
+ */
+static uint32_t calculate_key_hash(const char *key) {
+    uint32_t hash = 5381;
+    for (const char *p = key; *p != '\0'; p++) {
+        hash = ((hash &lt;&lt; 5) + hash) + *p;
+    }
+    return hash;
+}
+
+/**
+ * @brief 本地PUT操作
+ */
+static int dss_put_local(dss_context_t *ctx, const char *key,
+                         const void *value, uint32_t value_len) {
+    return storage_put(&amp;ctx-&gt;storage, key, value, value_len);
+}
+
+/**
+ * @brief 远程PUT操作
+ */
+static int dss_put_remote(dss_context_t *ctx, node_id_t node_id,
+                          const char *key, const void *value, uint32_t value_len) {
+    // 查找目标节点
+    node_info_t *node = cluster_find_node(&amp;ctx-&gt;cluster, node_id);
+    if (!node) {
+        return -1;
+    }
+
+    // 连接到目标节点
+    int sockfd = connection_connect(node-&gt;ip_addr, node-&gt;port);
+    if (sockfd &lt; 0) {
+        printf(&quot;Failed to connect to node 0x%08X\n&quot;, node_id);
+        return -1;
+    }
+
+    // 创建PUT请求
+    size_t request_size = sizeof(put_request_t) + value_len;
+    put_request_t *request = (put_request_t*)malloc(request_size);
+    if (!request) {
+        close(sockfd);
+        return -1;
+    }
+
+    strncpy(request-&gt;key, key, MAX_KEY_SIZE - 1);
+    request-&gt;value_len = value_len;
+    memcpy(request-&gt;value, value, value_len);
+
+    // 发送消息
+    message_t msg;
+    message_create(&amp;msg, MSG_PUT_REQUEST, ctx-&gt;cluster.local_node_id,
+                  node_id, request, request_size);
+
+    int result = message_send(sockfd, &amp;msg);
+    message_free(&amp;msg);
+    free(request);
+
+    if (result &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    // 接收响应
+    message_t response;
+    if (message_receive(sockfd, &amp;response) &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    put_response_t *resp = (put_response_t*)response.payload;
+    result = resp-&gt;status;
+
+    message_free(&amp;response);
+    close(sockfd);
+
+    return result;
+}
+
+/**
+ * @brief 分布式PUT操作
+ */
+int dss_put(dss_context_t *ctx, const char *key,
+            const void *value, uint32_t value_len) {
+    if (!ctx || !key || !value || value_len == 0) {
+        return -1;
+    }
+
+    // 计算键的哈希值
+    uint32_t key_hash = calculate_key_hash(key);
+
+    // 获取副本节点列表
+    node_id_t replicas[REPLICATION_FACTOR];
+    int replica_count = hash_ring_get_replicas(&amp;ctx-&gt;ring, key_hash,
+                                               replicas, REPLICATION_FACTOR);
+
+    if (replica_count == 0) {
+        return -1;
+    }
+
+    printf(&quot;PUT key='%s' to %d replicas\n&quot;, key, replica_count);
+
+    // 写入所有副本
+    int success_count = 0;
+    for (int i = 0; i &lt; replica_count; i++) {
+        int result;
+
+        if (replicas[i] == ctx-&gt;cluster.local_node_id) {
+            // 本地写入
+            result = dss_put_local(ctx, key, value, value_len);
+            printf(&quot;  Local write: %s\n&quot;, result == 0 ? &quot;OK&quot; : &quot;FAILED&quot;);
+        } else {
+            // 远程写入
+            result = dss_put_remote(ctx, replicas[i], key, value, value_len);
+            printf(&quot;  Remote write to 0x%08X: %s\n&quot;, replicas[i],
+                   result == 0 ? &quot;OK&quot; : &quot;FAILED&quot;);
+        }
+
+        if (result == 0) {
+            success_count++;
+        }
+    }
+
+    // 需要多数副本写入成功
+    int required = (replica_count / 2) + 1;
+    if (success_count &gt;= required) {
+        printf(&quot;PUT succeeded (%d/%d replicas)\n&quot;, success_count, replica_count);
+        return 0;
+    } else {
+        printf(&quot;PUT failed (%d/%d replicas, need %d)\n&quot;,
+               success_count, replica_count, required);
+        return -1;
+    }
+}
+</code></pre>
+<h3 id="53-get">5.3 GET操作实现</h3>
+<pre><code class="language-c">// dss_get.c - 分布式GET操作
+#include &quot;dss_api.h&quot;
+#include &quot;message.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// GET请求负载
+typedef struct {
+    char key[MAX_KEY_SIZE];
+} get_request_t;
+
+// GET响应负载
+typedef struct {
+    int status;  // 0=成功, -1=失败
+    uint32_t value_len;
+    uint8_t value[];  // 柔性数组
+} get_response_t;
+
+/**
+ * @brief 本地GET操作
+ */
+static int dss_get_local(dss_context_t *ctx, const char *key,
+                         void *value, uint32_t *value_len) {
+    return storage_get(&amp;ctx-&gt;storage, key, value, value_len);
+}
+
+/**
+ * @brief 远程GET操作
+ */
+static int dss_get_remote(dss_context_t *ctx, node_id_t node_id,
+                          const char *key, void *value, uint32_t *value_len) {
+    // 查找目标节点
+    node_info_t *node = cluster_find_node(&amp;ctx-&gt;cluster, node_id);
+    if (!node) {
+        return -1;
+    }
+
+    // 连接到目标节点
+    int sockfd = connection_connect(node-&gt;ip_addr, node-&gt;port);
+    if (sockfd &lt; 0) {
+        return -1;
+    }
+
+    // 创建GET请求
+    get_request_t request;
+    strncpy(request.key, key, MAX_KEY_SIZE - 1);
+
+    // 发送消息
+    message_t msg;
+    message_create(&amp;msg, MSG_GET_REQUEST, ctx-&gt;cluster.local_node_id,
+                  node_id, &amp;request, sizeof(request));
+
+    int result = message_send(sockfd, &amp;msg);
+    message_free(&amp;msg);
+
+    if (result &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    // 接收响应
+    message_t response;
+    if (message_receive(sockfd, &amp;response) &lt; 0) {
+        close(sockfd);
+        return -1;
+    }
+
+    get_response_t *resp = (get_response_t*)response.payload;
+
+    if (resp-&gt;status == 0 &amp;&amp; resp-&gt;value_len &gt; 0) {
+        if (*value_len &gt;= resp-&gt;value_len) {
+            memcpy(value, resp-&gt;value, resp-&gt;value_len);
+            *value_len = resp-&gt;value_len;
+            result = 0;
+        } else {
+            result = -2;  // 缓冲区太小
+        }
+    } else {
+        result = -1;
+    }
+
+    message_free(&amp;response);
+    close(sockfd);
+
+    return result;
+}
+
+/**
+ * @brief 分布式GET操作
+ */
+int dss_get(dss_context_t *ctx, const char *key,
+            void *value, uint32_t *value_len) {
+    if (!ctx || !key || !value || !value_len) {
+        return -1;
+    }
+
+    // 计算键的哈希值
+    uint32_t key_hash = calculate_key_hash(key);
+
+    // 获取主节点
+    node_id_t primary_node = hash_ring_get_node(&amp;ctx-&gt;ring, key_hash);
+
+    printf(&quot;GET key='%s' from node 0x%08X\n&quot;, key, primary_node);
+
+    // 尝试从主节点读取
+    int result;
+    if (primary_node == ctx-&gt;cluster.local_node_id) {
+        result = dss_get_local(ctx, key, value, value_len);
+    } else {
+        result = dss_get_remote(ctx, primary_node, key, value, value_len);
+    }
+
+    if (result == 0) {
+        printf(&quot;GET succeeded from primary node\n&quot;);
+        return 0;
+    }
+
+    // 主节点失败，尝试副本节点
+    printf(&quot;Primary node failed, trying replicas...\n&quot;);
+
+    node_id_t replicas[REPLICATION_FACTOR];
+    int replica_count = hash_ring_get_replicas(&amp;ctx-&gt;ring, key_hash,
+                                               replicas, REPLICATION_FACTOR);
+
+    for (int i = 1; i &lt; replica_count; i++) {  // 跳过主节点（i=0）
+        if (replicas[i] == ctx-&gt;cluster.local_node_id) {
+            result = dss_get_local(ctx, key, value, value_len);
+        } else {
+            result = dss_get_remote(ctx, replicas[i], key, value, value_len);
+        }
+
+        if (result == 0) {
+            printf(&quot;GET succeeded from replica %d\n&quot;, i);
+            return 0;
+        }
+    }
+
+    printf(&quot;GET failed from all replicas\n&quot;);
+    return -1;
+}
+</code></pre>
+<h3 id="54">5.4 服务器消息处理</h3>
+<pre><code class="language-c">// dss_server.c - 服务器消息处理
+#include &quot;dss_api.h&quot;
+#include &quot;message.h&quot;
+#include &lt;pthread.h&gt;
+#include &lt;stdio.h&gt;
+
+/**
+ * @brief 处理PUT请求
+ */
+static void handle_put_request(dss_context_t *ctx, int client_sockfd, message_t *request) {
+    put_request_t *req = (put_request_t*)request-&gt;payload;
+
+    // 执行本地PUT
+    int status = storage_put(&amp;ctx-&gt;storage, req-&gt;key, req-&gt;value, req-&gt;value_len);
+
+    // 创建响应
+    put_response_t response = {
+        .status = status
+    };
+
+    if (status == 0) {
+        strcpy(response.message, &quot;OK&quot;);
+    } else {
+        strcpy(response.message, &quot;Failed&quot;);
+    }
+
+    // 发送响应
+    message_t msg;
+    message_create(&amp;msg, MSG_PUT_RESPONSE, ctx-&gt;cluster.local_node_id,
+                  request-&gt;header.sender_id, &amp;response, sizeof(response));
+    message_send(client_sockfd, &amp;msg);
+    message_free(&amp;msg);
+}
+
+/**
+ * @brief 处理GET请求
+ */
+static void handle_get_request(dss_context_t *ctx, int client_sockfd, message_t *request) {
+    get_request_t *req = (get_request_t*)request-&gt;payload;
+
+    // 读取数据
+    uint8_t value[MAX_VALUE_SIZE];
+    uint32_t value_len = MAX_VALUE_SIZE;
+    int status = storage_get(&amp;ctx-&gt;storage, req-&gt;key, value, &amp;value_len);
+
+    // 创建响应
+    size_t response_size = sizeof(get_response_t) + (status == 0 ? value_len : 0);
+    get_response_t *response = (get_response_t*)malloc(response_size);
+
+    response-&gt;status = status;
+    response-&gt;value_len = (status == 0) ? value_len : 0;
+    if (status == 0) {
+        memcpy(response-&gt;value, value, value_len);
+    }
+
+    // 发送响应
+    message_t msg;
+    message_create(&amp;msg, MSG_GET_RESPONSE, ctx-&gt;cluster.local_node_id,
+                  request-&gt;header.sender_id, response, response_size);
+    message_send(client_sockfd, &amp;msg);
+    message_free(&amp;msg);
+    free(response);
+}
+
+/**
+ * @brief 处理客户端连接
+ */
+static void* handle_client(void *arg) {
+    struct {
+        dss_context_t *ctx;
+        int sockfd;
+    } *params = arg;
+
+    dss_context_t *ctx = params-&gt;ctx;
+    int client_sockfd = params-&gt;sockfd;
+    free(params);
+
+    // 接收消息
+    message_t msg;
+    if (message_receive(client_sockfd, &amp;msg) &lt; 0) {
+        close(client_sockfd);
+        return NULL;
+    }
+
+    // 根据消息类型处理
+    switch (msg.header.type) {
+        case MSG_PUT_REQUEST:
+            handle_put_request(ctx, client_sockfd, &amp;msg);
+            break;
+
+        case MSG_GET_REQUEST:
+            handle_get_request(ctx, client_sockfd, &amp;msg);
+            break;
+
+        case MSG_HEARTBEAT:
+            // 更新节点心跳时间
+            {
+                heartbeat_payload_t *hb = (heartbeat_payload_t*)msg.payload;
+                node_info_t *node = cluster_find_node(&amp;ctx-&gt;cluster, hb-&gt;node_id);
+                if (node) {
+                    node-&gt;last_heartbeat = time(NULL);
+                    node-&gt;storage_used = hb-&gt;storage_used;
+                }
+            }
+            break;
+
+        default:
+            printf(&quot;Unknown message type: %d\n&quot;, msg.header.type);
+            break;
+    }
+
+    message_free(&amp;msg);
+    close(client_sockfd);
+
+    return NULL;
+}
+
+/**
+ * @brief 服务器主循环
+ */
+static void* server_thread(void *arg) {
+    dss_context_t *ctx = (dss_context_t*)arg;
+
+    printf(&quot;Server thread started on port %d\n&quot;,
+           cluster_find_node(&amp;ctx-&gt;cluster, ctx-&gt;cluster.local_node_id)-&gt;port);
+
+    while (ctx-&gt;running) {
+        // 接受客户端连接
+        struct sockaddr_in client_addr;
+        socklen_t addr_len = sizeof(client_addr);
+
+        int client_sockfd = accept(ctx-&gt;server_sockfd,
+                                   (struct sockaddr*)&amp;client_addr, &amp;addr_len);
+        if (client_sockfd &lt; 0) {
+            continue;
+        }
+
+        // 创建线程处理客户端
+        struct {
+            dss_context_t *ctx;
+            int sockfd;
+        } *params = malloc(sizeof(*params));
+
+        params-&gt;ctx = ctx;
+        params-&gt;sockfd = client_sockfd;
+
+        pthread_t thread;
+        pthread_create(&amp;thread, NULL, handle_client, params);
+        pthread_detach(thread);
+    }
+
+    return NULL;
+}
+
+/**
+ * @brief 启动服务器
+ */
+int dss_start_server(dss_context_t *ctx) {
+    pthread_t thread;
+
+    if (pthread_create(&amp;thread, NULL, server_thread, ctx) != 0) {
+        return -1;
+    }
+
+    pthread_detach(thread);
+
+    return 0;
+}
+</code></pre>
+<h2 id="6">阶段6：系统集成与测试</h2>
+<h3 id="61">6.1 完整示例程序</h3>
+<pre><code class="language-c">// main.c - 主程序
+#include &quot;dss_api.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+/**
+ * @brief 打印使用说明
+ */
+void print_usage(const char *prog_name) {
+    printf(&quot;Usage: %s &lt;mode&gt; &lt;ip&gt; &lt;port&gt; [seed_ip] [seed_port]\n&quot;, prog_name);
+    printf(&quot;  mode: 'seed' for first node, 'join' for joining node\n&quot;);
+    printf(&quot;  ip: local IP address\n&quot;);
+    printf(&quot;  port: local port\n&quot;);
+    printf(&quot;  seed_ip: seed node IP (for join mode)\n&quot;);
+    printf(&quot;  seed_port: seed node port (for join mode)\n&quot;);
+}
+
+/**
+ * @brief 交互式命令行
+ */
+void interactive_cli(dss_context_t *ctx) {
+    char command[256];
+    char key[MAX_KEY_SIZE];
+    char value[MAX_VALUE_SIZE];
+
+    printf(&quot;\nDistributed Storage System CLI\n&quot;);
+    printf(&quot;Commands: put &lt;key&gt; &lt;value&gt;, get &lt;key&gt;, delete &lt;key&gt;, list, quit\n\n&quot;);
+
+    while (1) {
+        printf(&quot;dss&gt; &quot;);
+        fflush(stdout);
+
+        if (!fgets(command, sizeof(command), stdin)) {
+            break;
+        }
+
+        // 移除换行符
+        command[strcspn(command, &quot;\n&quot;)] = 0;
+
+        if (strncmp(command, &quot;put &quot;, 4) == 0) {
+            // PUT命令
+            if (sscanf(command + 4, &quot;%s %s&quot;, key, value) == 2) {
+                int result = dss_put(ctx, key, value, strlen(value) + 1);
+                if (result == 0) {
+                    printf(&quot;OK\n&quot;);
+                } else {
+                    printf(&quot;ERROR: PUT failed\n&quot;);
+                }
+            } else {
+                printf(&quot;Usage: put &lt;key&gt; &lt;value&gt;\n&quot;);
+            }
+
+        } else if (strncmp(command, &quot;get &quot;, 4) == 0) {
+            // GET命令
+            if (sscanf(command + 4, &quot;%s&quot;, key) == 1) {
+                uint8_t buffer[MAX_VALUE_SIZE];
+                uint32_t len = MAX_VALUE_SIZE;
+
+                int result = dss_get(ctx, key, buffer, &amp;len);
+                if (result == 0) {
+                    printf(&quot;Value: %s\n&quot;, (char*)buffer);
+                } else {
+                    printf(&quot;ERROR: Key not found\n&quot;);
+                }
+            } else {
+                printf(&quot;Usage: get &lt;key&gt;\n&quot;);
+            }
+
+        } else if (strncmp(command, &quot;delete &quot;, 7) == 0) {
+            // DELETE命令
+            if (sscanf(command + 7, &quot;%s&quot;, key) == 1) {
+                int result = dss_delete(ctx, key);
+                if (result == 0) {
+                    printf(&quot;OK\n&quot;);
+                } else {
+                    printf(&quot;ERROR: DELETE failed\n&quot;);
+                }
+            } else {
+                printf(&quot;Usage: delete &lt;key&gt;\n&quot;);
+            }
+
+        } else if (strcmp(command, &quot;list&quot;) == 0) {
+            // LIST命令
+            char *keys[100];
+            int count = storage_list_keys(&amp;ctx-&gt;storage, keys, 100);
+
+            printf(&quot;Local keys (%d):\n&quot;, count);
+            for (int i = 0; i &lt; count; i++) {
+                printf(&quot;  %s\n&quot;, keys[i]);
+            }
+
+        } else if (strcmp(command, &quot;status&quot;) == 0) {
+            // STATUS命令
+            printf(&quot;Cluster Status:\n&quot;);
+            printf(&quot;  Nodes: %d\n&quot;, ctx-&gt;cluster.node_count);
+            printf(&quot;  Local Node ID: 0x%08X\n&quot;, ctx-&gt;cluster.local_node_id);
+            printf(&quot;  Storage: %lu / %lu bytes\n&quot;,
+                   ctx-&gt;storage.total_size,
+                   cluster_find_node(&amp;ctx-&gt;cluster, ctx-&gt;cluster.local_node_id)-&gt;storage_total);
+
+            printf(&quot;\nNode List:\n&quot;);
+            for (int i = 0; i &lt; ctx-&gt;cluster.node_count; i++) {
+                node_info_t *node = &amp;ctx-&gt;cluster.nodes[i];
+                printf(&quot;  Node 0x%08X: %s:%d [%s]\n&quot;,
+                       node-&gt;id, node-&gt;ip_addr, node-&gt;port,
+                       node-&gt;state == NODE_STATE_ACTIVE ? &quot;ACTIVE&quot; : &quot;INACTIVE&quot;);
+            }
+
+        } else if (strcmp(command, &quot;quit&quot;) == 0 || strcmp(command, &quot;exit&quot;) == 0) {
+            break;
+
+        } else if (strlen(command) &gt; 0) {
+            printf(&quot;Unknown command: %s\n&quot;, command);
+        }
+    }
+}
+
+/**
+ * @brief 主函数
+ */
+int main(int argc, char *argv[]) {
+    if (argc &lt; 4) {
+        print_usage(argv[0]);
+        return 1;
+    }
+
+    const char *mode = argv[1];
+    const char *local_ip = argv[2];
+    uint16_t local_port = atoi(argv[3]);
+
+    // 初始化DSS
+    dss_context_t ctx;
+    if (dss_init(&amp;ctx, local_ip, local_port) &lt; 0) {
+        printf(&quot;Failed to initialize DSS\n&quot;);
+        return 1;
+    }
+
+    // 启动服务器
+    if (dss_start(&amp;ctx) &lt; 0) {
+        printf(&quot;Failed to start DSS\n&quot;);
+        return 1;
+    }
+
+    printf(&quot;DSS started on %s:%d\n&quot;, local_ip, local_port);
+    printf(&quot;Node ID: 0x%08X\n&quot;, ctx.cluster.local_node_id);
+
+    // 加入集群或作为种子节点
+    if (strcmp(mode, &quot;join&quot;) == 0) {
+        if (argc &lt; 6) {
+            printf(&quot;Join mode requires seed_ip and seed_port\n&quot;);
+            return 1;
+        }
+
+        const char *seed_ip = argv[4];
+        uint16_t seed_port = atoi(argv[5]);
+
+        printf(&quot;Joining cluster via %s:%d...\n&quot;, seed_ip, seed_port);
+
+        if (dss_join_cluster(&amp;ctx, seed_ip, seed_port) &lt; 0) {
+            printf(&quot;Failed to join cluster\n&quot;);
+            return 1;
+        }
+
+        printf(&quot;Successfully joined cluster\n&quot;);
+
+    } else if (strcmp(mode, &quot;seed&quot;) == 0) {
+        printf(&quot;Running as seed node\n&quot;);
+    } else {
+        printf(&quot;Unknown mode: %s\n&quot;, mode);
+        return 1;
+    }
+
+    // 启动心跳服务
+    heartbeat_start(&amp;ctx.cluster);
+
+    // 进入交互式命令行
+    interactive_cli(&amp;ctx);
+
+    // 停止DSS
+    dss_stop(&amp;ctx);
+
+    printf(&quot;DSS stopped\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="62">6.2 编译和运行</h3>
+<pre><code class="language-bash"># Makefile
+CC = gcc
+CFLAGS = -Wall -Wextra -O2 -pthread
+LDFLAGS = -pthread
+
+SRCS = main.c node.c cluster.c hash_ring.c local_storage.c \
+       connection.c message.c heartbeat.c dss_api.c dss_put.c dss_get.c dss_server.c
+
+OBJS = $(SRCS:.c=.o)
+TARGET = dss
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+    $(CC) $(LDFLAGS) -o $@ $^
+
+%.o: %.c
+    $(CC) $(CFLAGS) -c -o $@ $&lt;
+
+clean:
+    rm -f $(OBJS) $(TARGET)
+
+.PHONY: all clean
+</code></pre>
+<p><strong>编译</strong>：</p>
+<pre><code class="language-bash">make
+</code></pre>
+<p><strong>运行种子节点</strong>：</p>
+<pre><code class="language-bash">./dss seed 192.168.1.100 8001
+</code></pre>
+<p><strong>运行加入节点</strong>：</p>
+<pre><code class="language-bash"># 终端2
+./dss join 192.168.1.101 8002 192.168.1.100 8001
+
+# 终端3
+./dss join 192.168.1.102 8003 192.168.1.100 8001
+</code></pre>
+<h3 id="63">6.3 功能测试</h3>
+<p><strong>测试1：基本读写</strong></p>
+<p>在节点1上：</p>
+<pre><code>dss&gt; put user1 Alice
+OK
+dss&gt; get user1
+Value: Alice
+</code></pre>
+<p>在节点2上：</p>
+<pre><code>dss&gt; get user1
+Value: Alice
+</code></pre>
+<p><strong>测试2：数据分布</strong></p>
+<pre><code>dss&gt; put key1 value1
+dss&gt; put key2 value2
+dss&gt; put key3 value3
+dss&gt; status
+</code></pre>
+<p>观察数据在不同节点的分布情况。</p>
+<p><strong>测试3：节点故障</strong></p>
+<ol>
+<li>启动3个节点</li>
+<li>写入数据</li>
+<li>停止一个节点</li>
+<li>从其他节点读取数据（应该成功）</li>
+</ol>
+<p><strong>测试4：负载均衡</strong></p>
+<pre><code class="language-python"># test_load_balance.py
+import socket
+import struct
+import random
+
+def send_put(ip, port, key, value):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((ip, port))
+
+    # 构造PUT请求
+    # ... (省略协议细节)
+
+    sock.close()
+
+# 发送1000个请求
+nodes = [
+    ('192.168.1.100', 8001),
+    ('192.168.1.101', 8002),
+    ('192.168.1.102', 8003)
+]
+
+for i in range(1000):
+    key = f&quot;key{i}&quot;
+    value = f&quot;value{i}&quot;
+    node = random.choice(nodes)
+    send_put(node[0], node[1], key, value)
+
+print(&quot;Load balance test completed&quot;)
+</code></pre>
+<h3 id="64">6.4 性能测试</h3>
+<pre><code class="language-c">// benchmark.c - 性能测试
+#include &quot;dss_api.h&quot;
+#include &lt;time.h&gt;
+#include &lt;stdio.h&gt;
+
+void benchmark_put(dss_context_t *ctx, int count) {
+    clock_t start = clock();
+
+    for (int i = 0; i &lt; count; i++) {
+        char key[32];
+        char value[64];
+        snprintf(key, sizeof(key), &quot;bench_key_%d&quot;, i);
+        snprintf(value, sizeof(value), &quot;bench_value_%d&quot;, i);
+
+        dss_put(ctx, key, value, strlen(value) + 1);
+    }
+
+    clock_t end = clock();
+    double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+
+    printf(&quot;PUT Benchmark:\n&quot;);
+    printf(&quot;  Operations: %d\n&quot;, count);
+    printf(&quot;  Time: %.2f seconds\n&quot;, elapsed);
+    printf(&quot;  Throughput: %.2f ops/sec\n&quot;, count / elapsed);
+}
+
+void benchmark_get(dss_context_t *ctx, int count) {
+    clock_t start = clock();
+
+    for (int i = 0; i &lt; count; i++) {
+        char key[32];
+        uint8_t value[64];
+        uint32_t len = sizeof(value);
+
+        snprintf(key, sizeof(key), &quot;bench_key_%d&quot;, i);
+        dss_get(ctx, key, value, &amp;len);
+    }
+
+    clock_t end = clock();
+    double elapsed = (double)(end - start) / CLOCKS_PER_SEC;
+
+    printf(&quot;GET Benchmark:\n&quot;);
+    printf(&quot;  Operations: %d\n&quot;, count);
+    printf(&quot;  Time: %.2f seconds\n&quot;, elapsed);
+    printf(&quot;  Throughput: %.2f ops/sec\n&quot;, count / elapsed);
+}
+
+int main(void) {
+    dss_context_t ctx;
+
+    // 初始化
+    dss_init(&amp;ctx, &quot;127.0.0.1&quot;, 8001);
+    dss_start(&amp;ctx);
+
+    // 运行基准测试
+    printf(&quot;Running benchmarks...\n\n&quot;);
+
+    benchmark_put(&amp;ctx, 1000);
+    printf(&quot;\n&quot;);
+    benchmark_get(&amp;ctx, 1000);
+
+    dss_stop(&amp;ctx);
+
+    return 0;
+}
+</code></pre>
+<h2 id="_13">故障排除</h2>
+<h3 id="1_1">问题1：节点无法加入集群</h3>
+<p><strong>现象</strong>：
+- 新节点启动后无法连接到种子节点
+- 加入集群失败</p>
+<p><strong>可能原因</strong>：
+- 网络连接问题
+- 防火墙阻止连接
+- 种子节点未运行
+- IP地址或端口配置错误</p>
+<p><strong>解决方法</strong>：
+1. 检查网络连接：<code>ping &lt;seed_ip&gt;</code>
+2. 检查端口是否开放：<code>telnet &lt;seed_ip&gt; &lt;seed_port&gt;</code>
+3. 检查防火墙设置
+4. 验证IP和端口配置</p>
+<pre><code class="language-bash"># 检查端口监听
+netstat -an | grep 8001
+
+# 测试连接
+nc -zv 192.168.1.100 8001
+</code></pre>
+<h3 id="2_1">问题2：数据不一致</h3>
+<p><strong>现象</strong>：
+- 从不同节点读取同一键得到不同的值
+- 写入后立即读取失败</p>
+<p><strong>可能原因</strong>：
+- 副本同步延迟
+- 网络分区
+- 节点故障未及时检测</p>
+<p><strong>解决方法</strong>：
+1. 检查网络延迟
+2. 增加写入确认超时时间
+3. 实现读修复机制</p>
+<pre><code class="language-c">// 读修复：比较多个副本的版本
+int dss_get_with_repair(dss_context_t *ctx, const char *key,
+                        void *value, uint32_t *value_len) {
+    // 从所有副本读取
+    // 比较版本号
+    // 使用最新版本
+    // 修复过期副本
+}
+</code></pre>
+<h3 id="3_2">问题3：性能下降</h3>
+<p><strong>现象</strong>：
+- 读写操作变慢
+- 系统响应时间增加</p>
+<p><strong>可能原因</strong>：
+- 网络拥塞
+- 节点负载不均
+- 存储空间不足
+- 缓存未命中率高</p>
+<p><strong>解决方法</strong>：
+1. 监控网络带宽使用
+2. 检查节点负载分布
+3. 增加虚拟节点数量改善负载均衡
+4. 实现本地缓存</p>
+<pre><code class="language-c">// 添加缓存层
+typedef struct {
+    char key[MAX_KEY_SIZE];
+    uint8_t *value;
+    uint32_t value_len;
+    time_t expire_time;
+} cache_entry_t;
+
+// 缓存查找
+int cache_get(cache_t *cache, const char *key, void *value, uint32_t *len);
+</code></pre>
+<h3 id="4_1">问题4：内存泄漏</h3>
+<p><strong>现象</strong>：
+- 长时间运行后内存占用持续增长
+- 系统最终崩溃</p>
+<p><strong>可能原因</strong>：
+- 消息未正确释放
+- 存储项未清理
+- 连接未关闭</p>
+<p><strong>解决方法</strong>：
+1. 使用valgrind检测内存泄漏
+2. 确保所有malloc都有对应的free
+3. 实现资源自动清理</p>
+<pre><code class="language-bash"># 使用valgrind检测
+valgrind --leak-check=full ./dss seed 127.0.0.1 8001
+</code></pre>
+<h2 id="_14">扩展功能</h2>
+<h3 id="1_2">1. 数据压缩</h3>
+<pre><code class="language-c">// compression.h - 数据压缩
+#include &lt;zlib.h&gt;
+
+int compress_data(const void *src, size_t src_len,
+                  void *dst, size_t *dst_len) {
+    return compress2(dst, dst_len, src, src_len, Z_DEFAULT_COMPRESSION);
+}
+
+int decompress_data(const void *src, size_t src_len,
+                    void *dst, size_t *dst_len) {
+    return uncompress(dst, dst_len, src, src_len);
+}
+</code></pre>
+<h3 id="2_2">2. 数据加密</h3>
+<pre><code class="language-c">// encryption.h - 数据加密
+#include &lt;openssl/aes.h&gt;
+
+typedef struct {
+    AES_KEY encrypt_key;
+    AES_KEY decrypt_key;
+    uint8_t iv[AES_BLOCK_SIZE];
+} encryption_context_t;
+
+int encrypt_data(encryption_context_t *ctx, const void *plaintext,
+                 size_t len, void *ciphertext);
+int decrypt_data(encryption_context_t *ctx, const void *ciphertext,
+                 size_t len, void *plaintext);
+</code></pre>
+<h3 id="3_3">3. 数据迁移</h3>
+<pre><code class="language-c">// migration.c - 数据迁移
+typedef struct {
+    node_id_t from_node;
+    node_id_t to_node;
+    uint32_t key_hash_start;
+    uint32_t key_hash_end;
+    int status;  // 0=pending, 1=in_progress, 2=completed
+} migration_task_t;
+
+/**
+ * @brief 执行数据迁移
+ */
+int execute_migration(dss_context_t *ctx, migration_task_t *task) {
+    // 1. 标记迁移开始
+    task-&gt;status = 1;
+
+    // 2. 遍历本地存储，找到需要迁移的键
+    for (int i = 0; i &lt; ctx-&gt;storage.item_count; i++) {
+        storage_item_t *item = &amp;ctx-&gt;storage.items[i];
+        uint32_t key_hash = calculate_key_hash(item-&gt;key);
+
+        // 检查是否在迁移范围内
+        if (key_hash &gt;= task-&gt;key_hash_start &amp;&amp; key_hash &lt;= task-&gt;key_hash_end) {
+            // 复制到目标节点
+            dss_put_remote(ctx, task-&gt;to_node, item-&gt;key,
+                          item-&gt;value, item-&gt;value_len);
+        }
+    }
+
+    // 3. 标记迁移完成
+    task-&gt;status = 2;
+
+    return 0;
+}
+</code></pre>
+<h3 id="4_2">4. 监控和统计</h3>
+<pre><code class="language-c">// monitoring.h - 监控统计
+typedef struct {
+    uint64_t put_count;
+    uint64_t get_count;
+    uint64_t delete_count;
+    uint64_t put_success;
+    uint64_t get_success;
+    uint64_t network_bytes_sent;
+    uint64_t network_bytes_received;
+    double avg_put_latency;
+    double avg_get_latency;
+} statistics_t;
+
+void statistics_update_put(statistics_t *stats, bool success, double latency);
+void statistics_update_get(statistics_t *stats, bool success, double latency);
+void statistics_print(statistics_t *stats);
+</code></pre>
+<h2 id="_15">最佳实践</h2>
+<h3 id="1_3">1. 容量规划</h3>
+<p><strong>节点数量</strong>：
+- 最少3个节点（保证高可用）
+- 推荐5-7个节点（平衡性能和成本）
+- 根据数据量和访问量扩展</p>
+<p><strong>副本因子</strong>：
+- 生产环境：3副本
+- 测试环境：2副本
+- 关键数据：5副本</p>
+<p><strong>存储容量</strong>：</p>
+<pre><code>总容量 = 单节点容量 × 节点数 / 副本因子
+例如：16MB × 5节点 / 3副本 = 26.7MB 可用容量
+</code></pre>
+<h3 id="2_3">2. 性能优化</h3>
+<p><strong>网络优化</strong>：
+- 使用连接池减少连接开销
+- 批量操作减少网络往返
+- 启用TCP_NODELAY减少延迟</p>
+<p><strong>存储优化</strong>：
+- 使用SSD提高I/O性能
+- 实现写缓冲合并小写入
+- 定期压缩和清理过期数据</p>
+<p><strong>并发优化</strong>：
+- 使用读写锁提高并发度
+- 实现无锁数据结构
+- 异步I/O减少阻塞</p>
+<h3 id="3_4">3. 可靠性保证</h3>
+<p><strong>数据备份</strong>：</p>
+<pre><code class="language-bash"># 定期备份脚本
+#!/bin/bash
+DATE=$(date +%Y%m%d)
+BACKUP_DIR=&quot;/backup/dss-$DATE&quot;
+
+mkdir -p $BACKUP_DIR
+cp storage.dat $BACKUP_DIR/
+cp cluster.conf $BACKUP_DIR/
+
+echo &quot;Backup completed: $BACKUP_DIR&quot;
+</code></pre>
+<p><strong>故障恢复</strong>：
+1. 检测节点故障（心跳超时）
+2. 标记节点为失败状态
+3. 从副本节点恢复数据
+4. 重新平衡数据分布</p>
+<p><strong>数据校验</strong>：</p>
+<pre><code class="language-c">// 定期校验数据完整性
+void verify_data_integrity(dss_context_t *ctx) {
+    for (int i = 0; i &lt; ctx-&gt;storage.item_count; i++) {
+        storage_item_t *item = &amp;ctx-&gt;storage.items[i];
+
+        // 计算校验和
+        uint32_t checksum = calculate_checksum(item-&gt;value, item-&gt;value_len);
+
+        // 验证校验和
+        if (checksum != item-&gt;checksum) {
+            printf(&quot;Data corruption detected: %s\n&quot;, item-&gt;key);
+            // 从副本恢复
+            recover_from_replica(ctx, item-&gt;key);
+        }
+    }
+}
+</code></pre>
+<h2 id="_16">项目总结</h2>
+<h3 id="_17">学到的技能</h3>
+<p>通过完成本项目，你已经掌握了：</p>
+<ol>
+<li>
+<p><strong>分布式系统设计</strong>
+   - 一致性哈希算法
+   - 数据分片和副本管理
+   - 节点发现和故障检测</p>
+</li>
+<li>
+<p><strong>网络编程</strong>
+   - TCP/IP通信
+   - 自定义协议设计
+   - 消息序列化和反序列化</p>
+</li>
+<li>
+<p><strong>存储系统</strong>
+   - 键值存储实现
+   - 数据持久化
+   - 缓存管理</p>
+</li>
+<li>
+<p><strong>系统优化</strong>
+   - 性能测试和分析
+   - 负载均衡
+   - 并发控制</p>
+</li>
+</ol>
+<h3 id="_18">进一步学习</h3>
+<p><strong>推荐阅读</strong>：
+- 《Designing Data-Intensive Applications》
+- 《Distributed Systems: Principles and Paradigms》
+- Cassandra、Redis Cluster源码</p>
+<p><strong>扩展项目</strong>：
+- 实现Raft完整共识算法
+- 添加事务支持（ACID）
+- 实现分布式查询引擎
+- 支持多数据中心部署</p>
+<h3 id="_19">实际应用</h3>
+<p>本项目的技术可应用于：</p>
+<ul>
+<li><strong>IoT数据存储</strong>：传感器数据分布式存储</li>
+<li><strong>边缘计算</strong>：边缘节点协同存储</li>
+<li><strong>智能家居</strong>：设备配置分布式管理</li>
+<li><strong>工业监控</strong>：生产数据高可用存储</li>
+</ul>
+<h2 id="_20">参考资源</h2>
+<h3 id="_21">开源项目</h3>
+<ul>
+<li><strong>Cassandra</strong>：分布式NoSQL数据库</li>
+<li><strong>Redis Cluster</strong>：分布式内存数据库</li>
+<li><strong>Ceph</strong>：分布式对象存储</li>
+<li><strong>etcd</strong>：分布式键值存储</li>
+</ul>
+<h3 id="_22">学习资源</h3>
+<ul>
+<li><a href="https://raft.github.io/">Raft共识算法可视化</a></li>
+<li><a href="https://www.toptal.com/big-data/consistent-hashing">一致性哈希详解</a></li>
+<li><a href="https://pdos.csail.mit.edu/6.824/">分布式系统课程</a></li>
+</ul>
+<h3 id="_23">工具和库</h3>
+<ul>
+<li><strong>ZeroMQ</strong>：高性能消息队列</li>
+<li><strong>Protocol Buffers</strong>：数据序列化</li>
+<li><strong>RocksDB</strong>：嵌入式键值存储引擎</li>
+</ul>
+<hr />
+<p><strong>恭喜你完成了分布式存储系统项目！</strong> 这是一个复杂但非常有价值的项目，你已经掌握了构建分布式系统的核心技能。继续探索和优化，将这些技术应用到实际项目中！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

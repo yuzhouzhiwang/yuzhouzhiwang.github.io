@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>电池管理系统(BMS)设计实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/03-power-management/">03-power-management</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/03-power-management/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a><ul>
+<li><a href="#bms_1">什么是BMS</a></li>
+<li><a href="#bms_2">BMS的重要性</a></li>
+<li><a href="#_2">应用场景</a></li>
+</ul>
+</li>
+<li><a href="#bms_3">第一部分：BMS系统架构</a><ul>
+<li><a href="#_3">硬件架构</a></li>
+<li><a href="#_4">软件架构</a></li>
+</ul>
+</li>
+<li><a href="#_5">第二部分：电量计算算法</a><ul>
+<li><a href="#soc-state-of-charge">SOC (State of Charge) 计算</a></li>
+<li><a href="#_6">安时积分法实现</a></li>
+</ul>
+</li>
+<li><a href="#_7">第三部分：充放电控制</a><ul>
+<li><a href="#_8">充电管理</a></li>
+<li><a href="#_9">充电控制实现</a></li>
+<li><a href="#_10">放电管理</a></li>
+</ul>
+</li>
+<li><a href="#_11">第四部分：电池保护</a><ul>
+<li><a href="#_12">保护功能实现</a></li>
+</ul>
+</li>
+<li><a href="#_13">第五部分：均衡管理</a><ul>
+<li><a href="#_14">被动均衡原理</a></li>
+<li><a href="#_15">被动均衡实现</a></li>
+</ul>
+</li>
+<li><a href="#_16">第六部分：通信接口</a><ul>
+<li><a href="#uart">UART通信协议</a></li>
+</ul>
+</li>
+<li><a href="#bms_4">第七部分：完整BMS主程序</a><ul>
+<li><a href="#_17">主程序实现</a></li>
+</ul>
+</li>
+<li><a href="#_18">实践建议</a><ul>
+<li><a href="#_19">开发流程</a></li>
+<li><a href="#_20">调试技巧</a></li>
+<li><a href="#_21">常见问题</a></li>
+<li><a href="#_22">性能优化</a></li>
+</ul>
+</li>
+<li><a href="#_23">总结</a><ul>
+<li><a href="#_24">关键要点</a></li>
+<li><a href="#_25">进阶学习</a></li>
+<li><a href="#_26">参考资源</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="bms">电池管理系统(BMS)设计实战</h1>
+<h2 id="_1">概述</h2>
+<p>电池管理系统(Battery Management System, BMS)是电池供电设备的核心组件，负责监测电池状态、控制充放电过程、保护电池安全、延长电池寿命。本教程将通过实战项目，深入讲解BMS的设计与实现。</p>
+<h3 id="bms_1">什么是BMS</h3>
+<p>BMS是一个智能电子系统，用于管理可充电电池组，主要功能包括：</p>
+<ol>
+<li>
+<p><strong>状态监测</strong>：
+   - 电压监测（单体/总压）
+   - 电流监测（充电/放电）
+   - 温度监测（多点测温）
+   - 电量估算（SOC计算）</p>
+</li>
+<li>
+<p><strong>安全保护</strong>：
+   - 过充保护
+   - 过放保护
+   - 过流保护
+   - 过温保护
+   - 短路保护</p>
+</li>
+<li>
+<p><strong>充放电控制</strong>：
+   - 充电管理
+   - 放电管理
+   - 预充电控制
+   - 充电均衡</p>
+</li>
+<li>
+<p><strong>通信接口</strong>：
+   - 与主控通信
+   - 数据上报
+   - 参数配置
+   - 故障诊断</p>
+</li>
+</ol>
+<h3 id="bms_2">BMS的重要性</h3>
+<pre><code>为什么需要BMS：
+
+1. 安全性
+   - 防止电池过充/过放
+   - 避免热失控
+   - 防止短路起火
+   - 保护人身安全
+
+2. 可靠性
+   - 延长电池寿命
+   - 提高系统稳定性
+   - 减少故障率
+   - 降低维护成本
+
+3. 性能优化
+   - 准确的电量显示
+   - 优化充放电策略
+   - 提高能量利用率
+   - 改善用户体验
+
+4. 法规要求
+   - 满足安全认证
+   - 符合行业标准
+   - 通过质量检测
+   - 获得市场准入
+</code></pre>
+<h3 id="_2">应用场景</h3>
+<ul>
+<li><strong>消费电子</strong>：手机、平板、笔记本电脑</li>
+<li><strong>电动工具</strong>：电钻、电锯、割草机</li>
+<li><strong>电动车辆</strong>：电动自行车、电动汽车</li>
+<li><strong>储能系统</strong>：家庭储能、UPS电源</li>
+<li><strong>便携设备</strong>：移动电源、无人机</li>
+</ul>
+<h2 id="bms_3">第一部分：BMS系统架构</h2>
+<h3 id="_3">硬件架构</h3>
+<p><strong>典型BMS硬件组成</strong>：</p>
+<pre><code>BMS硬件架构：
+
+┌─────────────────────────────────────────────────────┐
+│                    主控MCU                           │
+│  (STM32F103 / ESP32 / nRF52)                       │
+│  - 核心控制逻辑                                      │
+│  - 算法计算                                          │
+│  - 通信管理                                          │
+└──────┬──────────┬──────────┬──────────┬────────────┘
+       │          │          │          │
+   ┌───▼───┐  ┌──▼───┐  ┌──▼───┐  ┌──▼────┐
+   │电压监测│  │电流监测│  │温度监测│  │充放电控制│
+   │芯片    │  │电路    │  │电路    │  │MOSFET   │
+   │(AFE)  │  │(霍尔)  │  │(NTC)  │  │驱动     │
+   └───┬───┘  └──┬───┘  └──┬───┘  └──┬────┘
+       │          │          │          │
+   ┌───▼──────────▼──────────▼──────────▼────┐
+   │              电池组                       │
+   │  Cell1  Cell2  Cell3  ...  CellN        │
+   └──────────────────────────────────────────┘
+
+关键组件：
+1. 主控MCU：STM32F103C8T6
+2. 电压监测：BQ76920 (3-5串锂电池)
+3. 电流检测：ACS712 (霍尔传感器)
+4. 温度监测：NTC热敏电阻 × 2
+5. 充放电控制：N-MOSFET × 2
+6. 通信接口：UART/CAN/I2C
+</code></pre>
+<h3 id="_4">软件架构</h3>
+<p><strong>BMS软件模块</strong>：</p>
+<pre><code class="language-c">/**
+ * @file    bms_architecture.h
+ * @brief   BMS软件架构定义
+ */
+
+#ifndef BMS_ARCHITECTURE_H
+#define BMS_ARCHITECTURE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/**
+ * @brief  BMS系统状态
+ */
+typedef enum {
+    BMS_STATE_INIT = 0,        // 初始化
+    BMS_STATE_IDLE,            // 空闲
+    BMS_STATE_CHARGING,        // 充电中
+    BMS_STATE_DISCHARGING,     // 放电中
+    BMS_STATE_BALANCING,       // 均衡中
+    BMS_STATE_FAULT,           // 故障
+    BMS_STATE_SLEEP            // 休眠
+} BMS_State_t;
+
+/**
+ * @brief  电池参数
+ */
+typedef struct {
+    uint16_t cell_voltage[5];  // 单体电压 (mV)
+    uint16_t pack_voltage;     // 总电压 (mV)
+    int16_t  current;          // 电流 (mA, 正=充电, 负=放电)
+    int16_t  temperature[2];   // 温度 (0.1°C)
+    uint8_t  soc;              // 电量百分比 (0-100%)
+    uint8_t  soh;              // 健康度 (0-100%)
+    uint32_t capacity_mah;     // 剩余容量 (mAh)
+} BMS_BatteryParams_t;
+
+/**
+ * @brief  保护状态
+ */
+typedef struct {
+    bool overcharge;           // 过充保护
+    bool overdischarge;        // 过放保护
+    bool overcurrent_charge;   // 充电过流
+    bool overcurrent_discharge;// 放电过流
+    bool overtemperature;      // 过温保护
+    bool undertemperature;     // 低温保护
+    bool short_circuit;        // 短路保护
+    bool cell_imbalance;       // 单体不均衡
+} BMS_Protection_t;
+
+/**
+ * @brief  BMS配置参数
+ */
+typedef struct {
+    uint16_t cell_overvoltage_mv;      // 单体过充电压 (mV)
+    uint16_t cell_undervoltage_mv;     // 单体过放电压 (mV)
+    uint16_t charge_overcurrent_ma;    // 充电过流阈值 (mA)
+    uint16_t discharge_overcurrent_ma; // 放电过流阈值 (mA)
+    int16_t  overtemperature_c;        // 过温阈值 (°C)
+    int16_t  undertemperature_c;       // 低温阈值 (°C)
+    uint16_t balance_voltage_diff_mv;  // 均衡电压差 (mV)
+    uint32_t design_capacity_mah;      // 设计容量 (mAh)
+} BMS_Config_t;
+
+/**
+ * @brief  BMS主数据结构
+ */
+typedef struct {
+    BMS_State_t state;                 // 系统状态
+    BMS_BatteryParams_t battery;       // 电池参数
+    BMS_Protection_t protection;       // 保护状态
+    BMS_Config_t config;               // 配置参数
+    uint32_t timestamp_ms;             // 时间戳
+    uint32_t cycle_count;              // 循环次数
+} BMS_Handle_t;
+
+#endif // BMS_ARCHITECTURE_H
+</code></pre>
+<h2 id="_5">第二部分：电量计算算法</h2>
+<h3 id="soc-state-of-charge">SOC (State of Charge) 计算</h3>
+<p>SOC表示电池的剩余电量百分比，是BMS最重要的功能之一。</p>
+<p><strong>常用SOC计算方法</strong>：</p>
+<pre><code>SOC计算方法对比：
+
+1. 开路电压法 (OCV)
+   优点：简单、无需电流传感器
+   缺点：需要静置、精度低
+   适用：低成本应用
+
+2. 安时积分法 (Coulomb Counting)
+   优点：实时、精度高
+   缺点：累积误差、需要校准
+   适用：大多数应用
+
+3. 卡尔曼滤波法
+   优点：精度最高、自适应
+   缺点：计算复杂、资源消耗大
+   适用：高端应用
+
+4. 混合算法
+   优点：综合优势、精度高
+   缺点：实现复杂
+   适用：推荐方案
+</code></pre>
+<h3 id="_6">安时积分法实现</h3>
+<pre><code class="language-c">/**
+ * @file    soc_calculation.c
+ * @brief   SOC计算算法实现
+ */
+
+#include &quot;bms_architecture.h&quot;
+#include &lt;math.h&gt;
+
+/**
+ * @brief  SOC计算器数据结构
+ */
+typedef struct {
+    float soc_percent;              // 当前SOC (%)
+    float remaining_capacity_mah;   // 剩余容量 (mAh)
+    float full_capacity_mah;        // 满充容量 (mAh)
+    uint32_t last_update_ms;        // 上次更新时间
+    bool initialized;               // 是否已初始化
+} SOC_Calculator_t;
+
+static SOC_Calculator_t soc_calc = {0};
+
+/**
+ * @brief  初始化SOC计算器
+ * @param  initial_soc: 初始SOC (%)
+ * @param  capacity_mah: 电池容量 (mAh)
+ */
+void SOC_Init(float initial_soc, float capacity_mah) {
+    soc_calc.soc_percent = initial_soc;
+    soc_calc.full_capacity_mah = capacity_mah;
+    soc_calc.remaining_capacity_mah = capacity_mah * initial_soc / 100.0f;
+    soc_calc.last_update_ms = HAL_GetTick();
+    soc_calc.initialized = true;
+
+    printf(&quot;SOC初始化: %.1f%%, 容量: %.0f mAh\n&quot;, 
+           initial_soc, capacity_mah);
+}
+
+/**
+ * @brief  通过OCV估算初始SOC
+ * @param  voltage_mv: 开路电压 (mV)
+ * @retval 估算的SOC (%)
+ */
+float SOC_EstimateFromOCV(uint16_t voltage_mv) {
+    // 锂电池OCV-SOC曲线（3.7V标称电压）
+    // 这是一个简化的线性近似，实际应使用查表法
+
+    const uint16_t voltage_100 = 4200;  // 100% SOC电压
+    const uint16_t voltage_0   = 3000;  // 0% SOC电压
+
+    if (voltage_mv &gt;= voltage_100) {
+        return 100.0f;
+    } else if (voltage_mv &lt;= voltage_0) {
+        return 0.0f;
+    }
+
+    // 线性插值
+    float soc = (float)(voltage_mv - voltage_0) / 
+                (voltage_100 - voltage_0) * 100.0f;
+
+    return soc;
+}
+
+/**
+ * @brief  更新SOC（安时积分法）
+ * @param  current_ma: 当前电流 (mA, 正=充电, 负=放电)
+ * @param  timestamp_ms: 当前时间戳 (ms)
+ */
+void SOC_Update(int16_t current_ma, uint32_t timestamp_ms) {
+    if (!soc_calc.initialized) {
+        printf(&quot;错误：SOC未初始化\n&quot;);
+        return;
+    }
+
+    // 计算时间差 (小时)
+    uint32_t delta_ms = timestamp_ms - soc_calc.last_update_ms;
+    float delta_hours = delta_ms / 3600000.0f;
+
+    // 计算电量变化 (mAh)
+    // Q = I × t
+    float delta_capacity = current_ma * delta_hours;
+
+    // 更新剩余容量
+    soc_calc.remaining_capacity_mah += delta_capacity;
+
+    // 限制范围
+    if (soc_calc.remaining_capacity_mah &gt; soc_calc.full_capacity_mah) {
+        soc_calc.remaining_capacity_mah = soc_calc.full_capacity_mah;
+    } else if (soc_calc.remaining_capacity_mah &lt; 0) {
+        soc_calc.remaining_capacity_mah = 0;
+    }
+
+    // 计算SOC百分比
+    soc_calc.soc_percent = soc_calc.remaining_capacity_mah / 
+                           soc_calc.full_capacity_mah * 100.0f;
+
+    // 更新时间戳
+    soc_calc.last_update_ms = timestamp_ms;
+}
+
+/**
+ * @brief  获取当前SOC
+ * @retval SOC百分比 (0-100%)
+ */
+float SOC_GetPercent(void) {
+    return soc_calc.soc_percent;
+}
+
+/**
+ * @brief  获取剩余容量
+ * @retval 剩余容量 (mAh)
+ */
+float SOC_GetRemainingCapacity(void) {
+    return soc_calc.remaining_capacity_mah;
+}
+
+/**
+ * @brief  SOC校准（充满时）
+ */
+void SOC_CalibrateFullCharge(void) {
+    soc_calc.soc_percent = 100.0f;
+    soc_calc.remaining_capacity_mah = soc_calc.full_capacity_mah;
+    printf(&quot;SOC校准：充满 100%%\n&quot;);
+}
+
+/**
+ * @brief  SOC校准（放空时）
+ */
+void SOC_CalibrateEmpty(void) {
+    soc_calc.soc_percent = 0.0f;
+    soc_calc.remaining_capacity_mah = 0.0f;
+    printf(&quot;SOC校准：放空 0%%\n&quot;);
+}
+
+/**
+ * @brief  混合SOC算法（安时积分 + OCV校准）
+ * @param  current_ma: 电流 (mA)
+ * @param  voltage_mv: 电压 (mV)
+ * @param  timestamp_ms: 时间戳 (ms)
+ */
+void SOC_UpdateHybrid(int16_t current_ma, uint16_t voltage_mv, 
+                      uint32_t timestamp_ms) {
+    // 1. 安时积分更新
+    SOC_Update(current_ma, timestamp_ms);
+
+    // 2. 静置时使用OCV校准
+    static uint32_t idle_start_ms = 0;
+    const uint32_t IDLE_TIME_MS = 300000;  // 5分钟静置
+
+    if (abs(current_ma) &lt; 50) {  // 电流小于50mA视为静置
+        if (idle_start_ms == 0) {
+            idle_start_ms = timestamp_ms;
+        } else if (timestamp_ms - idle_start_ms &gt; IDLE_TIME_MS) {
+            // 静置足够长时间，使用OCV校准
+            float ocv_soc = SOC_EstimateFromOCV(voltage_mv);
+
+            // 加权融合
+            float weight_ocv = 0.3f;  // OCV权重
+            float weight_cc = 0.7f;   // 安时积分权重
+
+            soc_calc.soc_percent = soc_calc.soc_percent * weight_cc + 
+                                   ocv_soc * weight_ocv;
+
+            soc_calc.remaining_capacity_mah = soc_calc.soc_percent / 100.0f *
+                                              soc_calc.full_capacity_mah;
+
+            printf(&quot;SOC混合校准: CC=%.1f%%, OCV=%.1f%%, 融合=%.1f%%\n&quot;,
+                   soc_calc.soc_percent * weight_cc / (weight_cc + weight_ocv),
+                   ocv_soc,
+                   soc_calc.soc_percent);
+
+            idle_start_ms = 0;  // 重置静置计时
+        }
+    } else {
+        idle_start_ms = 0;  // 有电流，重置静置计时
+    }
+}
+</code></pre>
+<h2 id="_7">第三部分：充放电控制</h2>
+<h3 id="_8">充电管理</h3>
+<p><strong>充电阶段</strong>：</p>
+<pre><code>锂电池充电曲线（CC-CV）：
+
+电压
+  │
+4.2V├─────────────────────────┐
+  │                           │ CV恒压阶段
+  │                           │ (电流逐渐减小)
+  │                           │
+3.7V├──────────────┐          │
+  │                │          │
+  │  CC恒流阶段    │          │
+  │  (恒定电流)    │          │
+  │                │          │
+3.0V├────────────────┴──────────┴─────→ 时间
+    预充电  恒流充电(CC)  恒压充电(CV)  充满
+
+充电阶段：
+1. 预充电 (Pre-charge)
+   - 条件：电压 &lt; 3.0V
+   - 电流：0.1C
+   - 目的：激活深度放电的电池
+
+2. 恒流充电 (CC)
+   - 条件：3.0V &lt; 电压 &lt; 4.2V
+   - 电流：0.5C - 1C
+   - 目的：快速充电
+
+3. 恒压充电 (CV)
+   - 条件：电压 = 4.2V
+   - 电流：逐渐减小
+   - 目的：充满电池
+
+4. 充电完成
+   - 条件：电流 &lt; 0.05C
+   - 动作：停止充电
+</code></pre>
+<h3 id="_9">充电控制实现</h3>
+<pre><code class="language-c">/**
+ * @file    charge_control.c
+ * @brief   充电控制实现
+ */
+
+#include &quot;bms_architecture.h&quot;
+
+/**
+ * @brief  充电状态
+ */
+typedef enum {
+    CHARGE_STATE_IDLE = 0,     // 空闲
+    CHARGE_STATE_PRECHARGE,    // 预充电
+    CHARGE_STATE_CC,           // 恒流充电
+    CHARGE_STATE_CV,           // 恒压充电
+    CHARGE_STATE_COMPLETE,     // 充电完成
+    CHARGE_STATE_FAULT         // 故障
+} ChargeState_t;
+
+/**
+ * @brief  充电控制器
+ */
+typedef struct {
+    ChargeState_t state;       // 充电状态
+    uint32_t charge_start_ms;  // 充电开始时间
+    uint32_t state_start_ms;   // 当前状态开始时间
+    float accumulated_mah;     // 累积充电量
+} ChargeController_t;
+
+static ChargeController_t charge_ctrl = {0};
+
+/**
+ * @brief  充电参数配置
+ */
+#define PRECHARGE_VOLTAGE_MV    3000   // 预充电电压阈值
+#define CC_VOLTAGE_MV           4200   // 恒流充电目标电压
+#define CV_VOLTAGE_MV           4200   // 恒压充电电压
+#define PRECHARGE_CURRENT_MA    200    // 预充电电流 (0.1C for 2000mAh)
+#define CC_CURRENT_MA           1000   // 恒流充电电流 (0.5C for 2000mAh)
+#define CV_CUTOFF_CURRENT_MA    100    // 恒压截止电流 (0.05C)
+#define CHARGE_TIMEOUT_MS       14400000  // 充电超时 (4小时)
+
+/**
+ * @brief  初始化充电控制器
+ */
+void Charge_Init(void) {
+    charge_ctrl.state = CHARGE_STATE_IDLE;
+    charge_ctrl.charge_start_ms = 0;
+    charge_ctrl.state_start_ms = 0;
+    charge_ctrl.accumulated_mah = 0;
+
+    printf(&quot;充电控制器初始化完成\n&quot;);
+}
+
+/**
+ * @brief  开始充电
+ */
+void Charge_Start(void) {
+    charge_ctrl.state = CHARGE_STATE_PRECHARGE;
+    charge_ctrl.charge_start_ms = HAL_GetTick();
+    charge_ctrl.state_start_ms = HAL_GetTick();
+    charge_ctrl.accumulated_mah = 0;
+
+    printf(&quot;开始充电\n&quot;);
+}
+
+/**
+ * @brief  停止充电
+ */
+void Charge_Stop(void) {
+    charge_ctrl.state = CHARGE_STATE_IDLE;
+
+    // 关闭充电MOSFET
+    HAL_GPIO_WritePin(CHARGE_MOSFET_GPIO, CHARGE_MOSFET_PIN, GPIO_PIN_RESET);
+
+    printf(&quot;停止充电\n&quot;);
+}
+
+/**
+ * @brief  充电状态机
+ * @param  bms: BMS句柄
+ */
+void Charge_StateMachine(BMS_Handle_t* bms) {
+    uint16_t voltage = bms-&gt;battery.pack_voltage;
+    int16_t current = bms-&gt;battery.current;
+    uint32_t now_ms = HAL_GetTick();
+
+    switch (charge_ctrl.state) {
+        case CHARGE_STATE_IDLE:
+            // 空闲状态，等待开始充电
+            break;
+
+        case CHARGE_STATE_PRECHARGE:
+            printf(&quot;预充电阶段: 电压=%d mV, 电流=%d mA\n&quot;, voltage, current);
+
+            // 设置预充电电流
+            Charge_SetCurrent(PRECHARGE_CURRENT_MA);
+
+            // 检查是否进入恒流充电
+            if (voltage &gt;= PRECHARGE_VOLTAGE_MV) {
+                charge_ctrl.state = CHARGE_STATE_CC;
+                charge_ctrl.state_start_ms = now_ms;
+                printf(&quot;进入恒流充电阶段\n&quot;);
+            }
+
+            // 超时检查
+            if (now_ms - charge_ctrl.state_start_ms &gt; 1800000) {  // 30分钟
+                printf(&quot;预充电超时\n&quot;);
+                charge_ctrl.state = CHARGE_STATE_FAULT;
+            }
+            break;
+
+        case CHARGE_STATE_CC:
+            printf(&quot;恒流充电阶段: 电压=%d mV, 电流=%d mA\n&quot;, voltage, current);
+
+            // 设置恒流充电电流
+            Charge_SetCurrent(CC_CURRENT_MA);
+
+            // 检查是否进入恒压充电
+            if (voltage &gt;= CC_VOLTAGE_MV) {
+                charge_ctrl.state = CHARGE_STATE_CV;
+                charge_ctrl.state_start_ms = now_ms;
+                printf(&quot;进入恒压充电阶段\n&quot;);
+            }
+
+            // 超时检查
+            if (now_ms - charge_ctrl.charge_start_ms &gt; CHARGE_TIMEOUT_MS) {
+                printf(&quot;充电超时\n&quot;);
+                charge_ctrl.state = CHARGE_STATE_FAULT;
+            }
+            break;
+
+        case CHARGE_STATE_CV:
+            printf(&quot;恒压充电阶段: 电压=%d mV, 电流=%d mA\n&quot;, voltage, current);
+
+            // 设置恒压充电电压
+            Charge_SetVoltage(CV_VOLTAGE_MV);
+
+            // 检查是否充电完成
+            if (current &lt; CV_CUTOFF_CURRENT_MA) {
+                charge_ctrl.state = CHARGE_STATE_COMPLETE;
+                charge_ctrl.state_start_ms = now_ms;
+                printf(&quot;充电完成\n&quot;);
+
+                // SOC校准为100%
+                SOC_CalibrateFullCharge();
+            }
+
+            // 超时检查
+            if (now_ms - charge_ctrl.charge_start_ms &gt; CHARGE_TIMEOUT_MS) {
+                printf(&quot;充电超时\n&quot;);
+                charge_ctrl.state = CHARGE_STATE_FAULT;
+            }
+            break;
+
+        case CHARGE_STATE_COMPLETE:
+            // 充电完成，停止充电
+            Charge_Stop();
+            break;
+
+        case CHARGE_STATE_FAULT:
+            // 故障状态，停止充电
+            Charge_Stop();
+            printf(&quot;充电故障\n&quot;);
+            break;
+    }
+}
+
+/**
+ * @brief  设置充电电流（硬件相关）
+ * @param  current_ma: 目标电流 (mA)
+ */
+void Charge_SetCurrent(uint16_t current_ma) {
+    // 这里需要根据实际硬件实现
+    // 例如：通过DAC或PWM控制充电芯片的电流设置引脚
+
+    // 示例：使用DAC输出控制电流
+    // DAC_value = current_ma / 1000.0 * 4095 / 3.3;
+    // HAL_DAC_SetValue(&amp;hdac, DAC_CHANNEL_1, DAC_ALIGN_12B_R, DAC_value);
+
+    printf(&quot;设置充电电流: %d mA\n&quot;, current_ma);
+}
+
+/**
+ * @brief  设置充电电压（硬件相关）
+ * @param  voltage_mv: 目标电压 (mV)
+ */
+void Charge_SetVoltage(uint16_t voltage_mv) {
+    // 这里需要根据实际硬件实现
+    // 例如：通过DAC或PWM控制充电芯片的电压设置引脚
+
+    printf(&quot;设置充电电压: %d mV\n&quot;, voltage_mv);
+}
+
+/**
+ * @brief  获取充电状态
+ * @retval 充电状态
+ */
+ChargeState_t Charge_GetState(void) {
+    return charge_ctrl.state;
+}
+</code></pre>
+<h3 id="_10">放电管理</h3>
+<pre><code class="language-c">/**
+ * @file    discharge_control.c
+ * @brief   放电控制实现
+ */
+
+/**
+ * @brief  放电状态
+ */
+typedef enum {
+    DISCHARGE_STATE_IDLE = 0,      // 空闲
+    DISCHARGE_STATE_NORMAL,        // 正常放电
+    DISCHARGE_STATE_LIMITED,       // 限流放电
+    DISCHARGE_STATE_CUTOFF,        // 截止放电
+    DISCHARGE_STATE_FAULT          // 故障
+} DischargeState_t;
+
+/**
+ * @brief  放电控制器
+ */
+typedef struct {
+    DischargeState_t state;        // 放电状态
+    uint32_t discharge_start_ms;   // 放电开始时间
+    float accumulated_mah;         // 累积放电量
+    uint16_t current_limit_ma;     // 电流限制
+} DischargeController_t;
+
+static DischargeController_t discharge_ctrl = {0};
+
+/**
+ * @brief  放电参数配置
+ */
+#define DISCHARGE_CUTOFF_VOLTAGE_MV  3000   // 放电截止电压
+#define DISCHARGE_MAX_CURRENT_MA     3000   // 最大放电电流
+#define DISCHARGE_LIMIT_VOLTAGE_MV   3200   // 限流电压阈值
+#define DISCHARGE_LIMITED_CURRENT_MA 1000   // 限流值
+
+/**
+ * @brief  初始化放电控制器
+ */
+void Discharge_Init(void) {
+    discharge_ctrl.state = DISCHARGE_STATE_IDLE;
+    discharge_ctrl.discharge_start_ms = 0;
+    discharge_ctrl.accumulated_mah = 0;
+    discharge_ctrl.current_limit_ma = DISCHARGE_MAX_CURRENT_MA;
+
+    printf(&quot;放电控制器初始化完成\n&quot;);
+}
+
+/**
+ * @brief  使能放电
+ */
+void Discharge_Enable(void) {
+    discharge_ctrl.state = DISCHARGE_STATE_NORMAL;
+    discharge_ctrl.discharge_start_ms = HAL_GetTick();
+
+    // 打开放电MOSFET
+    HAL_GPIO_WritePin(DISCHARGE_MOSFET_GPIO, DISCHARGE_MOSFET_PIN, GPIO_PIN_SET);
+
+    printf(&quot;使能放电\n&quot;);
+}
+
+/**
+ * @brief  禁止放电
+ */
+void Discharge_Disable(void) {
+    discharge_ctrl.state = DISCHARGE_STATE_IDLE;
+
+    // 关闭放电MOSFET
+    HAL_GPIO_WritePin(DISCHARGE_MOSFET_GPIO, DISCHARGE_MOSFET_PIN, GPIO_PIN_RESET);
+
+    printf(&quot;禁止放电\n&quot;);
+}
+
+/**
+ * @brief  放电状态机
+ * @param  bms: BMS句柄
+ */
+void Discharge_StateMachine(BMS_Handle_t* bms) {
+    uint16_t voltage = bms-&gt;battery.pack_voltage;
+    int16_t current = abs(bms-&gt;battery.current);  // 放电电流为负值，取绝对值
+
+    switch (discharge_ctrl.state) {
+        case DISCHARGE_STATE_IDLE:
+            // 空闲状态
+            break;
+
+        case DISCHARGE_STATE_NORMAL:
+            printf(&quot;正常放电: 电压=%d mV, 电流=%d mA\n&quot;, voltage, current);
+
+            // 检查是否需要限流
+            if (voltage &lt; DISCHARGE_LIMIT_VOLTAGE_MV) {
+                discharge_ctrl.state = DISCHARGE_STATE_LIMITED;
+                discharge_ctrl.current_limit_ma = DISCHARGE_LIMITED_CURRENT_MA;
+                printf(&quot;进入限流放电\n&quot;);
+            }
+
+            // 检查是否达到截止电压
+            if (voltage &lt; DISCHARGE_CUTOFF_VOLTAGE_MV) {
+                discharge_ctrl.state = DISCHARGE_STATE_CUTOFF;
+                Discharge_Disable();
+                printf(&quot;达到放电截止电压\n&quot;);
+
+                // SOC校准为0%
+                SOC_CalibrateEmpty();
+            }
+            break;
+
+        case DISCHARGE_STATE_LIMITED:
+            printf(&quot;限流放电: 电压=%d mV, 电流=%d mA (限制=%d mA)\n&quot;,
+                   voltage, current, discharge_ctrl.current_limit_ma);
+
+            // 检查是否恢复正常
+            if (voltage &gt; DISCHARGE_LIMIT_VOLTAGE_MV + 100) {  // 加100mV滞回
+                discharge_ctrl.state = DISCHARGE_STATE_NORMAL;
+                discharge_ctrl.current_limit_ma = DISCHARGE_MAX_CURRENT_MA;
+                printf(&quot;恢复正常放电\n&quot;);
+            }
+
+            // 检查是否达到截止电压
+            if (voltage &lt; DISCHARGE_CUTOFF_VOLTAGE_MV) {
+                discharge_ctrl.state = DISCHARGE_STATE_CUTOFF;
+                Discharge_Disable();
+                printf(&quot;达到放电截止电压\n&quot;);
+                SOC_CalibrateEmpty();
+            }
+            break;
+
+        case DISCHARGE_STATE_CUTOFF:
+            // 放电截止，已禁止放电
+            break;
+
+        case DISCHARGE_STATE_FAULT:
+            // 故障状态
+            Discharge_Disable();
+            break;
+    }
+}
+
+/**
+ * @brief  获取放电电流限制
+ * @retval 电流限制 (mA)
+ */
+uint16_t Discharge_GetCurrentLimit(void) {
+    return discharge_ctrl.current_limit_ma;
+}
+</code></pre>
+<h2 id="_11">第四部分：电池保护</h2>
+<h3 id="_12">保护功能实现</h3>
+<pre><code class="language-c">/**
+ * @file    battery_protection.c
+ * @brief   电池保护功能实现
+ */
+
+#include &quot;bms_architecture.h&quot;
+
+/**
+ * @brief  保护检查结果
+ */
+typedef struct {
+    bool fault_detected;       // 是否检测到故障
+    char fault_message[64];    // 故障信息
+} ProtectionCheck_t;
+
+/**
+ * @brief  过充保护检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckOvercharge(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+
+    // 检查单体电压
+    for (int i = 0; i &lt; 5; i++) {
+        if (bms-&gt;battery.cell_voltage[i] &gt; bms-&gt;config.cell_overvoltage_mv) {
+            result.fault_detected = true;
+            snprintf(result.fault_message, sizeof(result.fault_message),
+                    &quot;单体%d过充: %d mV &gt; %d mV&quot;, 
+                    i+1, 
+                    bms-&gt;battery.cell_voltage[i],
+                    bms-&gt;config.cell_overvoltage_mv);
+
+            // 设置保护标志
+            bms-&gt;protection.overcharge = true;
+
+            // 停止充电
+            Charge_Stop();
+
+            printf(&quot;⚠ %s\n&quot;, result.fault_message);
+            break;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * @brief  过放保护检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckOverdischarge(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+
+    // 检查单体电压
+    for (int i = 0; i &lt; 5; i++) {
+        if (bms-&gt;battery.cell_voltage[i] &lt; bms-&gt;config.cell_undervoltage_mv) {
+            result.fault_detected = true;
+            snprintf(result.fault_message, sizeof(result.fault_message),
+                    &quot;单体%d过放: %d mV &lt; %d mV&quot;,
+                    i+1,
+                    bms-&gt;battery.cell_voltage[i],
+                    bms-&gt;config.cell_undervoltage_mv);
+
+            // 设置保护标志
+            bms-&gt;protection.overdischarge = true;
+
+            // 停止放电
+            Discharge_Disable();
+
+            printf(&quot;⚠ %s\n&quot;, result.fault_message);
+            break;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * @brief  过流保护检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckOvercurrent(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+    int16_t current = bms-&gt;battery.current;
+
+    // 检查充电过流
+    if (current &gt; 0 &amp;&amp; current &gt; bms-&gt;config.charge_overcurrent_ma) {
+        result.fault_detected = true;
+        snprintf(result.fault_message, sizeof(result.fault_message),
+                &quot;充电过流: %d mA &gt; %d mA&quot;,
+                current,
+                bms-&gt;config.charge_overcurrent_ma);
+
+        bms-&gt;protection.overcurrent_charge = true;
+        Charge_Stop();
+
+        printf(&quot;⚠ %s\n&quot;, result.fault_message);
+    }
+
+    // 检查放电过流
+    if (current &lt; 0 &amp;&amp; abs(current) &gt; bms-&gt;config.discharge_overcurrent_ma) {
+        result.fault_detected = true;
+        snprintf(result.fault_message, sizeof(result.fault_message),
+                &quot;放电过流: %d mA &gt; %d mA&quot;,
+                abs(current),
+                bms-&gt;config.discharge_overcurrent_ma);
+
+        bms-&gt;protection.overcurrent_discharge = true;
+        Discharge_Disable();
+
+        printf(&quot;⚠ %s\n&quot;, result.fault_message);
+    }
+
+    return result;
+}
+
+/**
+ * @brief  温度保护检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckTemperature(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+
+    for (int i = 0; i &lt; 2; i++) {
+        int16_t temp = bms-&gt;battery.temperature[i] / 10;  // 转换为°C
+
+        // 检查过温
+        if (temp &gt; bms-&gt;config.overtemperature_c) {
+            result.fault_detected = true;
+            snprintf(result.fault_message, sizeof(result.fault_message),
+                    &quot;温度%d过高: %d°C &gt; %d°C&quot;,
+                    i+1, temp, bms-&gt;config.overtemperature_c);
+
+            bms-&gt;protection.overtemperature = true;
+
+            // 停止充放电
+            Charge_Stop();
+            Discharge_Disable();
+
+            printf(&quot;⚠ %s\n&quot;, result.fault_message);
+            break;
+        }
+
+        // 检查低温
+        if (temp &lt; bms-&gt;config.undertemperature_c) {
+            result.fault_detected = true;
+            snprintf(result.fault_message, sizeof(result.fault_message),
+                    &quot;温度%d过低: %d°C &lt; %d°C&quot;,
+                    i+1, temp, bms-&gt;config.undertemperature_c);
+
+            bms-&gt;protection.undertemperature = true;
+
+            // 低温禁止充电
+            Charge_Stop();
+
+            printf(&quot;⚠ %s\n&quot;, result.fault_message);
+            break;
+        }
+    }
+
+    return result;
+}
+
+/**
+ * @brief  短路保护检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckShortCircuit(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+
+    // 短路判断：电流突然超过阈值（例如10A）
+    const int16_t SHORT_CIRCUIT_CURRENT_MA = 10000;
+
+    if (abs(bms-&gt;battery.current) &gt; SHORT_CIRCUIT_CURRENT_MA) {
+        result.fault_detected = true;
+        snprintf(result.fault_message, sizeof(result.fault_message),
+                &quot;检测到短路: 电流=%d mA&quot;, bms-&gt;battery.current);
+
+        bms-&gt;protection.short_circuit = true;
+
+        // 立即断开充放电
+        Charge_Stop();
+        Discharge_Disable();
+
+        printf(&quot;⚠⚠⚠ %s\n&quot;, result.fault_message);
+    }
+
+    return result;
+}
+
+/**
+ * @brief  单体不均衡检查
+ * @param  bms: BMS句柄
+ * @retval 检查结果
+ */
+ProtectionCheck_t Protection_CheckCellImbalance(BMS_Handle_t* bms) {
+    ProtectionCheck_t result = {false, &quot;&quot;};
+
+    // 找出最高和最低电压
+    uint16_t max_voltage = 0;
+    uint16_t min_voltage = 65535;
+    uint8_t max_cell = 0;
+    uint8_t min_cell = 0;
+
+    for (int i = 0; i &lt; 5; i++) {
+        if (bms-&gt;battery.cell_voltage[i] &gt; max_voltage) {
+            max_voltage = bms-&gt;battery.cell_voltage[i];
+            max_cell = i;
+        }
+        if (bms-&gt;battery.cell_voltage[i] &lt; min_voltage) {
+            min_voltage = bms-&gt;battery.cell_voltage[i];
+            min_cell = i;
+        }
+    }
+
+    // 计算电压差
+    uint16_t voltage_diff = max_voltage - min_voltage;
+
+    if (voltage_diff &gt; bms-&gt;config.balance_voltage_diff_mv) {
+        result.fault_detected = true;
+        snprintf(result.fault_message, sizeof(result.fault_message),
+                &quot;单体不均衡: Cell%d(%d mV) - Cell%d(%d mV) = %d mV&quot;,
+                max_cell+1, max_voltage,
+                min_cell+1, min_voltage,
+                voltage_diff);
+
+        bms-&gt;protection.cell_imbalance = true;
+
+        printf(&quot;⚠ %s\n&quot;, result.fault_message);
+    }
+
+    return result;
+}
+
+/**
+ * @brief  执行所有保护检查
+ * @param  bms: BMS句柄
+ * @retval 是否检测到故障
+ */
+bool Protection_CheckAll(BMS_Handle_t* bms) {
+    bool fault_detected = false;
+
+    // 清除之前的保护标志
+    memset(&amp;bms-&gt;protection, 0, sizeof(BMS_Protection_t));
+
+    // 执行各项检查
+    if (Protection_CheckOvercharge(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    if (Protection_CheckOverdischarge(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    if (Protection_CheckOvercurrent(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    if (Protection_CheckTemperature(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    if (Protection_CheckShortCircuit(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    if (Protection_CheckCellImbalance(bms).fault_detected) {
+        fault_detected = true;
+    }
+
+    return fault_detected;
+}
+
+/**
+ * @brief  清除保护故障（需要人工确认）
+ * @param  bms: BMS句柄
+ */
+void Protection_ClearFaults(BMS_Handle_t* bms) {
+    memset(&amp;bms-&gt;protection, 0, sizeof(BMS_Protection_t));
+    printf(&quot;保护故障已清除\n&quot;);
+}
+</code></pre>
+<h2 id="_13">第五部分：均衡管理</h2>
+<h3 id="_14">被动均衡原理</h3>
+<pre><code>被动均衡（电阻放电）：
+
+高电压单体 ──→ [均衡电阻] ──→ 热量
+                 ↓
+              能量损耗
+
+优点：
+- 电路简单
+- 成本低
+- 可靠性高
+
+缺点：
+- 能量浪费
+- 产生热量
+- 均衡速度慢
+
+主动均衡（能量转移）：
+
+高电压单体 ──→ [DC-DC转换器] ──→ 低电压单体
+                 ↓
+              能量转移
+
+优点：
+- 能量利用率高
+- 均衡速度快
+- 发热少
+
+缺点：
+- 电路复杂
+- 成本高
+- 可靠性相对低
+</code></pre>
+<h3 id="_15">被动均衡实现</h3>
+<pre><code class="language-c">/**
+ * @file    cell_balancing.c
+ * @brief   电池均衡管理实现
+ */
+
+#include &quot;bms_architecture.h&quot;
+
+/**
+ * @brief  均衡控制器
+ */
+typedef struct {
+    bool balancing_active;         // 均衡是否激活
+    uint8_t balance_cells;         // 需要均衡的单体（位掩码）
+    uint32_t balance_start_ms;     // 均衡开始时间
+    uint32_t balance_duration_ms;  // 均衡持续时间
+} BalanceController_t;
+
+static BalanceController_t balance_ctrl = {0};
+
+/**
+ * @brief  均衡参数配置
+ */
+#define BALANCE_VOLTAGE_THRESHOLD_MV  50    // 均衡电压差阈值
+#define BALANCE_MIN_VOLTAGE_MV        3600  // 最低均衡电压
+#define BALANCE_MAX_DURATION_MS       3600000  // 最大均衡时间（1小时）
+#define BALANCE_CURRENT_MA            100   // 均衡电流（取决于均衡电阻）
+
+/**
+ * @brief  初始化均衡控制器
+ */
+void Balance_Init(void) {
+    balance_ctrl.balancing_active = false;
+    balance_ctrl.balance_cells = 0;
+    balance_ctrl.balance_start_ms = 0;
+    balance_ctrl.balance_duration_ms = 0;
+
+    // 关闭所有均衡开关
+    for (int i = 0; i &lt; 5; i++) {
+        Balance_SetCell(i, false);
+    }
+
+    printf(&quot;均衡控制器初始化完成\n&quot;);
+}
+
+/**
+ * @brief  控制单体均衡开关
+ * @param  cell_index: 单体索引 (0-4)
+ * @param  enable: 使能/禁止
+ */
+void Balance_SetCell(uint8_t cell_index, bool enable) {
+    // 这里需要根据实际硬件实现
+    // 例如：通过GPIO控制MOSFET开关
+
+    GPIO_TypeDef* gpio_port;
+    uint16_t gpio_pin;
+
+    switch (cell_index) {
+        case 0: gpio_port = GPIOA; gpio_pin = GPIO_PIN_0; break;
+        case 1: gpio_port = GPIOA; gpio_pin = GPIO_PIN_1; break;
+        case 2: gpio_port = GPIOA; gpio_pin = GPIO_PIN_2; break;
+        case 3: gpio_port = GPIOA; gpio_pin = GPIO_PIN_3; break;
+        case 4: gpio_port = GPIOA; gpio_pin = GPIO_PIN_4; break;
+        default: return;
+    }
+
+    HAL_GPIO_WritePin(gpio_port, gpio_pin, enable ? GPIO_PIN_SET : GPIO_PIN_RESET);
+
+    printf(&quot;单体%d均衡: %s\n&quot;, cell_index+1, enable ? &quot;开启&quot; : &quot;关闭&quot;);
+}
+
+/**
+ * @brief  计算需要均衡的单体
+ * @param  bms: BMS句柄
+ * @retval 需要均衡的单体（位掩码）
+ */
+uint8_t Balance_CalculateTargets(BMS_Handle_t* bms) {
+    uint8_t balance_targets = 0;
+
+    // 找出最低电压
+    uint16_t min_voltage = 65535;
+    for (int i = 0; i &lt; 5; i++) {
+        if (bms-&gt;battery.cell_voltage[i] &lt; min_voltage) {
+            min_voltage = bms-&gt;battery.cell_voltage[i];
+        }
+    }
+
+    // 标记需要均衡的单体（电压高于最低电压+阈值）
+    for (int i = 0; i &lt; 5; i++) {
+        uint16_t voltage_diff = bms-&gt;battery.cell_voltage[i] - min_voltage;
+
+        if (voltage_diff &gt; BALANCE_VOLTAGE_THRESHOLD_MV &amp;&amp;
+            bms-&gt;battery.cell_voltage[i] &gt; BALANCE_MIN_VOLTAGE_MV) {
+            balance_targets |= (1 &lt;&lt; i);
+            printf(&quot;单体%d需要均衡: %d mV (差值=%d mV)\n&quot;,
+                   i+1, bms-&gt;battery.cell_voltage[i], voltage_diff);
+        }
+    }
+
+    return balance_targets;
+}
+
+/**
+ * @brief  开始均衡
+ * @param  bms: BMS句柄
+ */
+void Balance_Start(BMS_Handle_t* bms) {
+    // 计算需要均衡的单体
+    balance_ctrl.balance_cells = Balance_CalculateTargets(bms);
+
+    if (balance_ctrl.balance_cells == 0) {
+        printf(&quot;无需均衡\n&quot;);
+        return;
+    }
+
+    // 开启均衡
+    balance_ctrl.balancing_active = true;
+    balance_ctrl.balance_start_ms = HAL_GetTick();
+
+    // 使能对应单体的均衡
+    for (int i = 0; i &lt; 5; i++) {
+        if (balance_ctrl.balance_cells &amp; (1 &lt;&lt; i)) {
+            Balance_SetCell(i, true);
+        }
+    }
+
+    printf(&quot;开始均衡，目标单体: 0x%02X\n&quot;, balance_ctrl.balance_cells);
+}
+
+/**
+ * @brief  停止均衡
+ */
+void Balance_Stop(void) {
+    // 关闭所有均衡开关
+    for (int i = 0; i &lt; 5; i++) {
+        Balance_SetCell(i, false);
+    }
+
+    balance_ctrl.balancing_active = false;
+    balance_ctrl.balance_cells = 0;
+
+    printf(&quot;停止均衡\n&quot;);
+}
+
+/**
+ * @brief  均衡状态机
+ * @param  bms: BMS句柄
+ */
+void Balance_StateMachine(BMS_Handle_t* bms) {
+    if (!balance_ctrl.balancing_active) {
+        return;
+    }
+
+    uint32_t now_ms = HAL_GetTick();
+    uint32_t elapsed_ms = now_ms - balance_ctrl.balance_start_ms;
+
+    // 检查是否超时
+    if (elapsed_ms &gt; BALANCE_MAX_DURATION_MS) {
+        printf(&quot;均衡超时，停止均衡\n&quot;);
+        Balance_Stop();
+        return;
+    }
+
+    // 检查是否均衡完成
+    uint8_t new_targets = Balance_CalculateTargets(bms);
+
+    if (new_targets == 0) {
+        printf(&quot;均衡完成，耗时: %.1f 分钟\n&quot;, elapsed_ms / 60000.0f);
+        Balance_Stop();
+        return;
+    }
+
+    // 更新均衡目标（可能有单体已经均衡完成）
+    if (new_targets != balance_ctrl.balance_cells) {
+        printf(&quot;更新均衡目标: 0x%02X -&gt; 0x%02X\n&quot;,
+               balance_ctrl.balance_cells, new_targets);
+
+        // 关闭已完成的单体
+        for (int i = 0; i &lt; 5; i++) {
+            if ((balance_ctrl.balance_cells &amp; (1 &lt;&lt; i)) &amp;&amp;
+                !(new_targets &amp; (1 &lt;&lt; i))) {
+                Balance_SetCell(i, false);
+                printf(&quot;单体%d均衡完成\n&quot;, i+1);
+            }
+        }
+
+        balance_ctrl.balance_cells = new_targets;
+    }
+
+    // 定期打印均衡进度
+    static uint32_t last_print_ms = 0;
+    if (now_ms - last_print_ms &gt; 10000) {  // 每10秒打印一次
+        printf(&quot;均衡进行中... 已耗时: %.1f 分钟\n&quot;, elapsed_ms / 60000.0f);
+
+        for (int i = 0; i &lt; 5; i++) {
+            printf(&quot;  单体%d: %d mV %s\n&quot;,
+                   i+1,
+                   bms-&gt;battery.cell_voltage[i],
+                   (balance_ctrl.balance_cells &amp; (1 &lt;&lt; i)) ? &quot;[均衡中]&quot; : &quot;&quot;);
+        }
+
+        last_print_ms = now_ms;
+    }
+}
+
+/**
+ * @brief  判断是否需要均衡
+ * @param  bms: BMS句柄
+ * @retval true=需要均衡, false=不需要
+ */
+bool Balance_IsNeeded(BMS_Handle_t* bms) {
+    uint8_t targets = Balance_CalculateTargets(bms);
+    return (targets != 0);
+}
+
+/**
+ * @brief  获取均衡状态
+ * @retval true=均衡中, false=未均衡
+ */
+bool Balance_IsActive(void) {
+    return balance_ctrl.balancing_active;
+}
+</code></pre>
+<h2 id="_16">第六部分：通信接口</h2>
+<h3 id="uart">UART通信协议</h3>
+<pre><code class="language-c">/**
+ * @file    bms_communication.c
+ * @brief   BMS通信接口实现
+ */
+
+#include &quot;bms_architecture.h&quot;
+#include &lt;string.h&gt;
+
+/**
+ * @brief  通信协议定义
+ */
+#define COMM_START_BYTE     0xAA
+#define COMM_END_BYTE       0x55
+#define COMM_MAX_DATA_LEN   64
+
+/**
+ * @brief  命令类型
+ */
+typedef enum {
+    CMD_GET_STATUS = 0x01,         // 获取状态
+    CMD_GET_VOLTAGE = 0x02,        // 获取电压
+    CMD_GET_CURRENT = 0x03,        // 获取电流
+    CMD_GET_TEMPERATURE = 0x04,    // 获取温度
+    CMD_GET_SOC = 0x05,            // 获取SOC
+    CMD_START_CHARGE = 0x10,       // 开始充电
+    CMD_STOP_CHARGE = 0x11,        // 停止充电
+    CMD_START_BALANCE = 0x12,      // 开始均衡
+    CMD_STOP_BALANCE = 0x13,       // 停止均衡
+    CMD_CLEAR_FAULTS = 0x14,       // 清除故障
+    CMD_SET_CONFIG = 0x20,         // 设置配置
+    CMD_GET_CONFIG = 0x21          // 获取配置
+} CommCommand_t;
+
+/**
+ * @brief  通信数据包结构
+ */
+typedef struct {
+    uint8_t start;                 // 起始字节 (0xAA)
+    uint8_t command;               // 命令字节
+    uint8_t length;                // 数据长度
+    uint8_t data[COMM_MAX_DATA_LEN]; // 数据
+    uint8_t checksum;              // 校验和
+    uint8_t end;                   // 结束字节 (0x55)
+} __attribute__((packed)) CommPacket_t;
+
+/**
+ * @brief  计算校验和
+ * @param  data: 数据指针
+ * @param  length: 数据长度
+ * @retval 校验和
+ */
+uint8_t Comm_CalculateChecksum(uint8_t* data, uint8_t length) {
+    uint8_t checksum = 0;
+    for (uint8_t i = 0; i &lt; length; i++) {
+        checksum += data[i];
+    }
+    return checksum;
+}
+
+/**
+ * @brief  发送数据包
+ * @param  command: 命令
+ * @param  data: 数据
+ * @param  length: 数据长度
+ */
+void Comm_SendPacket(uint8_t command, uint8_t* data, uint8_t length) {
+    CommPacket_t packet;
+
+    packet.start = COMM_START_BYTE;
+    packet.command = command;
+    packet.length = length;
+
+    if (length &gt; 0 &amp;&amp; data != NULL) {
+        memcpy(packet.data, data, length);
+    }
+
+    // 计算校验和（命令 + 长度 + 数据）
+    uint8_t checksum_data[2 + COMM_MAX_DATA_LEN];
+    checksum_data[0] = packet.command;
+    checksum_data[1] = packet.length;
+    memcpy(&amp;checksum_data[2], packet.data, length);
+    packet.checksum = Comm_CalculateChecksum(checksum_data, 2 + length);
+
+    packet.end = COMM_END_BYTE;
+
+    // 发送数据包
+    uint8_t packet_size = 5 + length;  // start + cmd + len + data + checksum + end
+    HAL_UART_Transmit(&amp;huart1, (uint8_t*)&amp;packet, packet_size, 1000);
+}
+
+/**
+ * @brief  处理接收到的命令
+ * @param  bms: BMS句柄
+ * @param  packet: 接收到的数据包
+ */
+void Comm_ProcessCommand(BMS_Handle_t* bms, CommPacket_t* packet) {
+    uint8_t response_data[COMM_MAX_DATA_LEN];
+    uint8_t response_length = 0;
+
+    switch (packet-&gt;command) {
+        case CMD_GET_STATUS:
+            // 返回系统状态
+            response_data[0] = bms-&gt;state;
+            response_data[1] = bms-&gt;protection.overcharge ? 1 : 0;
+            response_data[2] = bms-&gt;protection.overdischarge ? 1 : 0;
+            response_data[3] = bms-&gt;protection.overcurrent_charge ? 1 : 0;
+            response_data[4] = bms-&gt;protection.overcurrent_discharge ? 1 : 0;
+            response_data[5] = bms-&gt;protection.overtemperature ? 1 : 0;
+            response_length = 6;
+            break;
+
+        case CMD_GET_VOLTAGE:
+            // 返回电压信息
+            for (int i = 0; i &lt; 5; i++) {
+                response_data[i*2] = (bms-&gt;battery.cell_voltage[i] &gt;&gt; 8) &amp; 0xFF;
+                response_data[i*2+1] = bms-&gt;battery.cell_voltage[i] &amp; 0xFF;
+            }
+            response_data[10] = (bms-&gt;battery.pack_voltage &gt;&gt; 8) &amp; 0xFF;
+            response_data[11] = bms-&gt;battery.pack_voltage &amp; 0xFF;
+            response_length = 12;
+            break;
+
+        case CMD_GET_CURRENT:
+            // 返回电流信息
+            response_data[0] = (bms-&gt;battery.current &gt;&gt; 8) &amp; 0xFF;
+            response_data[1] = bms-&gt;battery.current &amp; 0xFF;
+            response_length = 2;
+            break;
+
+        case CMD_GET_TEMPERATURE:
+            // 返回温度信息
+            for (int i = 0; i &lt; 2; i++) {
+                response_data[i*2] = (bms-&gt;battery.temperature[i] &gt;&gt; 8) &amp; 0xFF;
+                response_data[i*2+1] = bms-&gt;battery.temperature[i] &amp; 0xFF;
+            }
+            response_length = 4;
+            break;
+
+        case CMD_GET_SOC:
+            // 返回SOC信息
+            response_data[0] = bms-&gt;battery.soc;
+            response_data[1] = bms-&gt;battery.soh;
+            response_data[2] = (bms-&gt;battery.capacity_mah &gt;&gt; 24) &amp; 0xFF;
+            response_data[3] = (bms-&gt;battery.capacity_mah &gt;&gt; 16) &amp; 0xFF;
+            response_data[4] = (bms-&gt;battery.capacity_mah &gt;&gt; 8) &amp; 0xFF;
+            response_data[5] = bms-&gt;battery.capacity_mah &amp; 0xFF;
+            response_length = 6;
+            break;
+
+        case CMD_START_CHARGE:
+            // 开始充电
+            Charge_Start();
+            response_data[0] = 0x00;  // 成功
+            response_length = 1;
+            break;
+
+        case CMD_STOP_CHARGE:
+            // 停止充电
+            Charge_Stop();
+            response_data[0] = 0x00;  // 成功
+            response_length = 1;
+            break;
+
+        case CMD_START_BALANCE:
+            // 开始均衡
+            Balance_Start(bms);
+            response_data[0] = 0x00;  // 成功
+            response_length = 1;
+            break;
+
+        case CMD_STOP_BALANCE:
+            // 停止均衡
+            Balance_Stop();
+            response_data[0] = 0x00;  // 成功
+            response_length = 1;
+            break;
+
+        case CMD_CLEAR_FAULTS:
+            // 清除故障
+            Protection_ClearFaults(bms);
+            response_data[0] = 0x00;  // 成功
+            response_length = 1;
+            break;
+
+        default:
+            // 未知命令
+            response_data[0] = 0xFF;  // 错误
+            response_length = 1;
+            break;
+    }
+
+    // 发送响应
+    Comm_SendPacket(packet-&gt;command, response_data, response_length);
+}
+
+/**
+ * @brief  接收数据包（中断回调）
+ * @param  bms: BMS句柄
+ * @param  rx_data: 接收缓冲区
+ * @param  rx_length: 接收长度
+ */
+void Comm_ReceiveCallback(BMS_Handle_t* bms, uint8_t* rx_data, uint16_t rx_length) {
+    static uint8_t rx_buffer[256];
+    static uint16_t rx_index = 0;
+
+    // 将接收数据添加到缓冲区
+    for (uint16_t i = 0; i &lt; rx_length; i++) {
+        rx_buffer[rx_index++] = rx_data[i];
+
+        // 防止缓冲区溢出
+        if (rx_index &gt;= sizeof(rx_buffer)) {
+            rx_index = 0;
+        }
+    }
+
+    // 查找完整的数据包
+    for (uint16_t i = 0; i &lt; rx_index - 5; i++) {
+        if (rx_buffer[i] == COMM_START_BYTE) {
+            uint8_t length = rx_buffer[i + 2];
+            uint16_t packet_size = 5 + length;
+
+            if (i + packet_size &lt;= rx_index &amp;&amp;
+                rx_buffer[i + packet_size - 1] == COMM_END_BYTE) {
+
+                // 找到完整数据包
+                CommPacket_t* packet = (CommPacket_t*)&amp;rx_buffer[i];
+
+                // 验证校验和
+                uint8_t checksum_data[2 + COMM_MAX_DATA_LEN];
+                checksum_data[0] = packet-&gt;command;
+                checksum_data[1] = packet-&gt;length;
+                memcpy(&amp;checksum_data[2], packet-&gt;data, length);
+                uint8_t calculated_checksum = Comm_CalculateChecksum(checksum_data, 2 + length);
+
+                if (calculated_checksum == packet-&gt;checksum) {
+                    // 校验通过，处理命令
+                    Comm_ProcessCommand(bms, packet);
+                } else {
+                    printf(&quot;校验和错误\n&quot;);
+                }
+
+                // 移除已处理的数据包
+                memmove(rx_buffer, &amp;rx_buffer[i + packet_size], rx_index - i - packet_size);
+                rx_index -= (i + packet_size);
+                i = 0;
+            }
+        }
+    }
+}
+
+/**
+ * @brief  定期上报数据
+ * @param  bms: BMS句柄
+ */
+void Comm_PeriodicReport(BMS_Handle_t* bms) {
+    static uint32_t last_report_ms = 0;
+    uint32_t now_ms = HAL_GetTick();
+
+    // 每秒上报一次
+    if (now_ms - last_report_ms &gt;= 1000) {
+        // 上报电压
+        uint8_t voltage_data[12];
+        for (int i = 0; i &lt; 5; i++) {
+            voltage_data[i*2] = (bms-&gt;battery.cell_voltage[i] &gt;&gt; 8) &amp; 0xFF;
+            voltage_data[i*2+1] = bms-&gt;battery.cell_voltage[i] &amp; 0xFF;
+        }
+        voltage_data[10] = (bms-&gt;battery.pack_voltage &gt;&gt; 8) &amp; 0xFF;
+        voltage_data[11] = bms-&gt;battery.pack_voltage &amp; 0xFF;
+        Comm_SendPacket(CMD_GET_VOLTAGE, voltage_data, 12);
+
+        // 上报SOC
+        uint8_t soc_data[6];
+        soc_data[0] = bms-&gt;battery.soc;
+        soc_data[1] = bms-&gt;battery.soh;
+        soc_data[2] = (bms-&gt;battery.capacity_mah &gt;&gt; 24) &amp; 0xFF;
+        soc_data[3] = (bms-&gt;battery.capacity_mah &gt;&gt; 16) &amp; 0xFF;
+        soc_data[4] = (bms-&gt;battery.capacity_mah &gt;&gt; 8) &amp; 0xFF;
+        soc_data[5] = bms-&gt;battery.capacity_mah &amp; 0xFF;
+        Comm_SendPacket(CMD_GET_SOC, soc_data, 6);
+
+        last_report_ms = now_ms;
+    }
+}
+</code></pre>
+<h2 id="bms_4">第七部分：完整BMS主程序</h2>
+<h3 id="_17">主程序实现</h3>
+<pre><code class="language-c">/**
+ * @file    bms_main.c
+ * @brief   BMS主程序
+ */
+
+#include &quot;bms_architecture.h&quot;
+
+// 全局BMS句柄
+BMS_Handle_t g_bms = {0};
+
+/**
+ * @brief  BMS初始化
+ */
+void BMS_Init(void) {
+    printf(&quot;\n═══════════════════════════════════════════\n&quot;);
+    printf(&quot;    电池管理系统 (BMS) 初始化\n&quot;);
+    printf(&quot;═══════════════════════════════════════════\n\n&quot;);
+
+    // 初始化状态
+    g_bms.state = BMS_STATE_INIT;
+
+    // 初始化配置参数
+    g_bms.config.cell_overvoltage_mv = 4250;       // 4.25V
+    g_bms.config.cell_undervoltage_mv = 2800;      // 2.8V
+    g_bms.config.charge_overcurrent_ma = 2000;     // 2A
+    g_bms.config.discharge_overcurrent_ma = 5000;  // 5A
+    g_bms.config.overtemperature_c = 60;           // 60°C
+    g_bms.config.undertemperature_c = 0;           // 0°C
+    g_bms.config.balance_voltage_diff_mv = 50;     // 50mV
+    g_bms.config.design_capacity_mah = 2000;       // 2000mAh
+
+    printf(&quot;配置参数：\n&quot;);
+    printf(&quot;  过充电压: %d mV\n&quot;, g_bms.config.cell_overvoltage_mv);
+    printf(&quot;  过放电压: %d mV\n&quot;, g_bms.config.cell_undervoltage_mv);
+    printf(&quot;  充电过流: %d mA\n&quot;, g_bms.config.charge_overcurrent_ma);
+    printf(&quot;  放电过流: %d mA\n&quot;, g_bms.config.discharge_overcurrent_ma);
+    printf(&quot;  设计容量: %d mAh\n\n&quot;, g_bms.config.design_capacity_mah);
+
+    // 初始化各模块
+    SOC_Init(50.0f, g_bms.config.design_capacity_mah);
+    Charge_Init();
+    Discharge_Init();
+    Balance_Init();
+
+    // 初始化硬件
+    BMS_HardwareInit();
+
+    // 读取初始电池参数
+    BMS_ReadBatteryParams(&amp;g_bms);
+
+    // 根据电压估算初始SOC
+    float initial_soc = SOC_EstimateFromOCV(g_bms.battery.pack_voltage / 5);
+    SOC_Init(initial_soc, g_bms.config.design_capacity_mah);
+
+    printf(&quot;初始电池状态：\n&quot;);
+    printf(&quot;  总电压: %d mV\n&quot;, g_bms.battery.pack_voltage);
+    printf(&quot;  电流: %d mA\n&quot;, g_bms.battery.current);
+    printf(&quot;  温度: %.1f°C\n&quot;, g_bms.battery.temperature[0] / 10.0f);
+    printf(&quot;  SOC: %.1f%%\n\n&quot;, initial_soc);
+
+    // 进入空闲状态
+    g_bms.state = BMS_STATE_IDLE;
+
+    printf(&quot;BMS初始化完成\n&quot;);
+    printf(&quot;═══════════════════════════════════════════\n\n&quot;);
+}
+
+/**
+ * @brief  硬件初始化
+ */
+void BMS_HardwareInit(void) {
+    // 初始化GPIO
+    // 充电MOSFET控制引脚
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = CHARGE_MOSFET_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(CHARGE_MOSFET_GPIO, &amp;GPIO_InitStruct);
+
+    // 放电MOSFET控制引脚
+    GPIO_InitStruct.Pin = DISCHARGE_MOSFET_PIN;
+    HAL_GPIO_Init(DISCHARGE_MOSFET_GPIO, &amp;GPIO_InitStruct);
+
+    // 初始化ADC（用于电压/电流/温度采集）
+    HAL_ADC_Start(&amp;hadc1);
+
+    // 初始化UART（用于通信）
+    // 已在main.c中初始化
+
+    printf(&quot;硬件初始化完成\n&quot;);
+}
+
+/**
+ * @brief  读取电池参数
+ * @param  bms: BMS句柄
+ */
+void BMS_ReadBatteryParams(BMS_Handle_t* bms) {
+    // 读取单体电压（通过AFE芯片，如BQ76920）
+    // 这里使用模拟数据，实际应从AFE芯片读取
+    bms-&gt;battery.cell_voltage[0] = 3750;  // mV
+    bms-&gt;battery.cell_voltage[1] = 3760;
+    bms-&gt;battery.cell_voltage[2] = 3755;
+    bms-&gt;battery.cell_voltage[3] = 3765;
+    bms-&gt;battery.cell_voltage[4] = 3770;
+
+    // 计算总电压
+    bms-&gt;battery.pack_voltage = 0;
+    for (int i = 0; i &lt; 5; i++) {
+        bms-&gt;battery.pack_voltage += bms-&gt;battery.cell_voltage[i];
+    }
+
+    // 读取电流（通过霍尔传感器）
+    // 这里使用模拟数据
+    bms-&gt;battery.current = 0;  // mA (正=充电, 负=放电)
+
+    // 读取温度（通过NTC热敏电阻）
+    // 这里使用模拟数据
+    bms-&gt;battery.temperature[0] = 250;  // 25.0°C
+    bms-&gt;battery.temperature[1] = 260;  // 26.0°C
+
+    // 更新SOC
+    bms-&gt;battery.soc = (uint8_t)SOC_GetPercent();
+    bms-&gt;battery.capacity_mah = (uint32_t)SOC_GetRemainingCapacity();
+
+    // 更新SOH（简化实现，实际需要复杂算法）
+    bms-&gt;battery.soh = 100;  // 100%
+
+    // 更新时间戳
+    bms-&gt;timestamp_ms = HAL_GetTick();
+}
+
+/**
+ * @brief  BMS主循环
+ */
+void BMS_MainLoop(void) {
+    static uint32_t last_update_ms = 0;
+    uint32_t now_ms = HAL_GetTick();
+
+    // 每100ms更新一次
+    if (now_ms - last_update_ms &gt;= 100) {
+        // 读取电池参数
+        BMS_ReadBatteryParams(&amp;g_bms);
+
+        // 更新SOC
+        SOC_UpdateHybrid(g_bms.battery.current,
+                        g_bms.battery.pack_voltage / 5,
+                        now_ms);
+
+        // 执行保护检查
+        bool fault = Protection_CheckAll(&amp;g_bms);
+
+        if (fault) {
+            g_bms.state = BMS_STATE_FAULT;
+        }
+
+        // 执行充电状态机
+        if (g_bms.state == BMS_STATE_CHARGING) {
+            Charge_StateMachine(&amp;g_bms);
+        }
+
+        // 执行放电状态机
+        if (g_bms.state == BMS_STATE_DISCHARGING) {
+            Discharge_StateMachine(&amp;g_bms);
+        }
+
+        // 执行均衡状态机
+        if (g_bms.state == BMS_STATE_BALANCING) {
+            Balance_StateMachine(&amp;g_bms);
+        }
+
+        last_update_ms = now_ms;
+    }
+
+    // 处理通信
+    Comm_PeriodicReport(&amp;g_bms);
+}
+
+/**
+ * @brief  打印BMS状态
+ */
+void BMS_PrintStatus(void) {
+    printf(&quot;\n═══════════════════════════════════════════\n&quot;);
+    printf(&quot;           BMS 状态报告\n&quot;);
+    printf(&quot;═══════════════════════════════════════════\n&quot;);
+
+    // 系统状态
+    const char* state_str[] = {
+        &quot;初始化&quot;, &quot;空闲&quot;, &quot;充电中&quot;, &quot;放电中&quot;, &quot;均衡中&quot;, &quot;故障&quot;, &quot;休眠&quot;
+    };
+    printf(&quot;系统状态: %s\n&quot;, state_str[g_bms.state]);
+
+    // 电池参数
+    printf(&quot;\n电池参数:\n&quot;);
+    printf(&quot;  单体电压:\n&quot;);
+    for (int i = 0; i &lt; 5; i++) {
+        printf(&quot;    Cell%d: %d mV\n&quot;, i+1, g_bms.battery.cell_voltage[i]);
+    }
+    printf(&quot;  总电压: %d mV\n&quot;, g_bms.battery.pack_voltage);
+    printf(&quot;  电流: %d mA %s\n&quot;,
+           abs(g_bms.battery.current),
+           g_bms.battery.current &gt; 0 ? &quot;(充电)&quot; :
+           g_bms.battery.current &lt; 0 ? &quot;(放电)&quot; : &quot;(静置)&quot;);
+    printf(&quot;  温度1: %.1f°C\n&quot;, g_bms.battery.temperature[0] / 10.0f);
+    printf(&quot;  温度2: %.1f°C\n&quot;, g_bms.battery.temperature[1] / 10.0f);
+    printf(&quot;  SOC: %d%%\n&quot;, g_bms.battery.soc);
+    printf(&quot;  SOH: %d%%\n&quot;, g_bms.battery.soh);
+    printf(&quot;  剩余容量: %d mAh\n&quot;, g_bms.battery.capacity_mah);
+
+    // 保护状态
+    printf(&quot;\n保护状态:\n&quot;);
+    printf(&quot;  过充保护: %s\n&quot;, g_bms.protection.overcharge ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  过放保护: %s\n&quot;, g_bms.protection.overdischarge ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  充电过流: %s\n&quot;, g_bms.protection.overcurrent_charge ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  放电过流: %s\n&quot;, g_bms.protection.overcurrent_discharge ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  过温保护: %s\n&quot;, g_bms.protection.overtemperature ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  低温保护: %s\n&quot;, g_bms.protection.undertemperature ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  短路保护: %s\n&quot;, g_bms.protection.short_circuit ? &quot;触发&quot; : &quot;正常&quot;);
+    printf(&quot;  单体不均衡: %s\n&quot;, g_bms.protection.cell_imbalance ? &quot;是&quot; : &quot;否&quot;);
+
+    // 运行时间
+    printf(&quot;\n运行时间: %.1f 小时\n&quot;, g_bms.timestamp_ms / 3600000.0f);
+    printf(&quot;循环次数: %d\n&quot;, g_bms.cycle_count);
+
+    printf(&quot;═══════════════════════════════════════════\n\n&quot;);
+}
+
+/**
+ * @brief  主函数
+ */
+int main(void) {
+    // HAL库初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化外设
+    MX_GPIO_Init();
+    MX_ADC1_Init();
+    MX_USART1_UART_Init();
+
+    // 初始化BMS
+    BMS_Init();
+
+    // 主循环
+    while (1) {
+        BMS_MainLoop();
+
+        // 定期打印状态（每10秒）
+        static uint32_t last_print_ms = 0;
+        if (HAL_GetTick() - last_print_ms &gt;= 10000) {
+            BMS_PrintStatus();
+            last_print_ms = HAL_GetTick();
+        }
+
+        HAL_Delay(10);
+    }
+}
+</code></pre>
+<h2 id="_18">实践建议</h2>
+<h3 id="_19">开发流程</h3>
+<p><strong>1. 硬件准备</strong>：
+- 开发板（STM32F103）
+- 电池组（5串锂电池）
+- AFE芯片（BQ76920）
+- 电流传感器（ACS712）
+- NTC热敏电阻
+- MOSFET开关
+- 调试工具（ST-Link）</p>
+<p><strong>2. 软件开发步骤</strong>：</p>
+<pre><code>开发顺序：
+
+第一阶段：基础功能
+1. 搭建硬件平台
+2. 实现电压采集
+3. 实现电流采集
+4. 实现温度采集
+5. 验证数据准确性
+
+第二阶段：核心算法
+1. 实现SOC计算
+2. 实现充电控制
+3. 实现放电控制
+4. 测试充放电流程
+
+第三阶段：保护功能
+1. 实现各项保护
+2. 测试保护触发
+3. 验证保护可靠性
+4. 优化保护参数
+
+第四阶段：高级功能
+1. 实现均衡管理
+2. 实现通信接口
+3. 添加数据记录
+4. 优化用户体验
+
+第五阶段：测试验证
+1. 功能测试
+2. 压力测试
+3. 长期测试
+4. 认证测试
+</code></pre>
+<h3 id="_20">调试技巧</h3>
+<p><strong>1. 电压测量校准</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  电压校准
+ */
+void BMS_CalibrateVoltage(void) {
+    printf(&quot;电压校准程序\n&quot;);
+    printf(&quot;请使用万用表测量实际电压\n\n&quot;);
+
+    for (int i = 0; i &lt; 5; i++) {
+        uint16_t measured_mv = BMS_ReadCellVoltage(i);
+
+        printf(&quot;单体%d:\n&quot;, i+1);
+        printf(&quot;  测量值: %d mV\n&quot;, measured_mv);
+        printf(&quot;  请输入万用表读数(mV): &quot;);
+
+        uint16_t actual_mv;
+        scanf(&quot;%d&quot;, &amp;actual_mv);
+
+        // 计算校准系数
+        float calibration_factor = (float)actual_mv / measured_mv;
+
+        printf(&quot;  校准系数: %.4f\n\n&quot;, calibration_factor);
+
+        // 保存校准系数到EEPROM
+        BMS_SaveCalibration(i, calibration_factor);
+    }
+
+    printf(&quot;电压校准完成\n&quot;);
+}
+</code></pre>
+<p><strong>2. 电流传感器校准</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  电流校准
+ */
+void BMS_CalibrateCurrent(void) {
+    printf(&quot;电流校准程序\n&quot;);
+    printf(&quot;请确保电池无负载\n&quot;);
+    printf(&quot;按任意键开始零点校准...\n&quot;);
+    getchar();
+
+    // 零点校准
+    int32_t zero_offset = 0;
+    for (int i = 0; i &lt; 100; i++) {
+        zero_offset += BMS_ReadCurrentRaw();
+        HAL_Delay(10);
+    }
+    zero_offset /= 100;
+
+    printf(&quot;零点偏移: %d\n&quot;, zero_offset);
+
+    // 满量程校准
+    printf(&quot;\n请连接已知负载（例如1A）\n&quot;);
+    printf(&quot;按任意键继续...\n&quot;);
+    getchar();
+
+    int32_t load_reading = 0;
+    for (int i = 0; i &lt; 100; i++) {
+        load_reading += BMS_ReadCurrentRaw();
+        HAL_Delay(10);
+    }
+    load_reading /= 100;
+
+    printf(&quot;负载读数: %d\n&quot;, load_reading);
+    printf(&quot;请输入实际电流(mA): &quot;);
+
+    int16_t actual_current;
+    scanf(&quot;%d&quot;, &amp;actual_current);
+
+    // 计算校准系数
+    float current_scale = (float)actual_current / (load_reading - zero_offset);
+
+    printf(&quot;电流比例: %.4f mA/LSB\n&quot;, current_scale);
+
+    // 保存校准参数
+    BMS_SaveCurrentCalibration(zero_offset, current_scale);
+
+    printf(&quot;电流校准完成\n&quot;);
+}
+</code></pre>
+<h3 id="_21">常见问题</h3>
+<p><strong>问题1：SOC不准确</strong></p>
+<pre><code>原因分析：
+1. 初始SOC估算不准
+2. 电流测量误差
+3. 累积误差
+4. 温度影响
+
+解决方案：
+1. 使用OCV校准初始SOC
+2. 定期使用OCV校准
+3. 充满/放空时重新校准
+4. 考虑温度补偿
+5. 使用卡尔曼滤波
+</code></pre>
+<p><strong>问题2：保护误触发</strong></p>
+<pre><code>原因分析：
+1. 阈值设置过严
+2. 测量噪声
+3. 瞬态干扰
+4. 传感器故障
+
+解决方案：
+1. 调整保护阈值
+2. 添加滤波算法
+3. 增加延时判断
+4. 多次采样确认
+5. 添加滞回机制
+</code></pre>
+<p><strong>问题3：均衡效果差</strong></p>
+<pre><code>原因分析：
+1. 均衡电流太小
+2. 均衡时间不足
+3. 电池老化不一致
+4. 温度影响
+
+解决方案：
+1. 增大均衡电阻功率
+2. 延长均衡时间
+3. 考虑主动均衡
+4. 定期维护
+5. 更换老化电池
+</code></pre>
+<h3 id="_22">性能优化</h3>
+<p><strong>1. 降低功耗</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  低功耗模式
+ */
+void BMS_EnterLowPowerMode(void) {
+    // 关闭不必要的外设
+    HAL_ADC_Stop(&amp;hadc1);
+
+    // 降低采样频率
+    // 从100ms改为1s
+
+    // 关闭LED指示
+    HAL_GPIO_WritePin(LED_GPIO, LED_PIN, GPIO_PIN_RESET);
+
+    // 进入睡眠模式
+    HAL_PWR_EnterSLEEPMode(PWR_MAINREGULATOR_ON, PWR_SLEEPENTRY_WFI);
+}
+</code></pre>
+<p><strong>2. 提高响应速度</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  快速保护响应
+ */
+void BMS_FastProtection(void) {
+    // 使用硬件比较器
+    // 过流时立即断开MOSFET
+
+    // 配置比较器
+    HAL_COMP_Start(&amp;hcomp1);
+
+    // 配置中断
+    HAL_NVIC_SetPriority(COMP_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(COMP_IRQn);
+}
+
+/**
+ * @brief  比较器中断
+ */
+void COMP_IRQHandler(void) {
+    // 立即断开MOSFET
+    HAL_GPIO_WritePin(DISCHARGE_MOSFET_GPIO, 
+                     DISCHARGE_MOSFET_PIN, 
+                     GPIO_PIN_RESET);
+
+    // 设置故障标志
+    g_bms.protection.overcurrent_discharge = true;
+
+    printf(&quot;过流保护触发！\n&quot;);
+}
+</code></pre>
+<h2 id="_23">总结</h2>
+<h3 id="_24">关键要点</h3>
+<ol>
+<li>
+<p><strong>系统架构</strong>：
+   - 模块化设计
+   - 清晰的接口
+   - 状态机管理
+   - 分层架构</p>
+</li>
+<li>
+<p><strong>核心算法</strong>：
+   - SOC计算（安时积分 + OCV校准）
+   - 充电管理（CC-CV）
+   - 放电控制（限流保护）
+   - 均衡管理（被动/主动）</p>
+</li>
+<li>
+<p><strong>安全保护</strong>：
+   - 多重保护机制
+   - 快速响应
+   - 可靠性设计
+   - 故障诊断</p>
+</li>
+<li>
+<p><strong>通信接口</strong>：
+   - 标准协议
+   - 数据上报
+   - 远程控制
+   - 参数配置</p>
+</li>
+</ol>
+<h3 id="_25">进阶学习</h3>
+<p>完成本教程后，建议继续学习：</p>
+<ul>
+<li><strong>动态电源管理(DPM)技术</strong>：学习更高级的功耗管理</li>
+<li><strong>超低功耗传感器节点设计</strong>：应用BMS技术到IoT设备</li>
+<li><strong>电源完整性分析与优化</strong>：深入理解电源系统设计</li>
+<li><strong>锂电池化学特性</strong>：理解电池工作原理</li>
+</ul>
+<h3 id="_26">参考资源</h3>
+<p><strong>标准和规范</strong>：
+- IEC 62133：锂电池安全标准
+- UL 2054：电池安全认证
+- GB/T 31485：电动汽车BMS标准</p>
+<p><strong>芯片厂商资料</strong>：
+- TI BQ系列BMS芯片
+- Analog Devices LTC系列
+- Maxim MAX系列
+- NXP BMS解决方案</p>
+<p><strong>开源项目</strong>：
+- DieBieMS：开源BMS项目
+- LibreSolar：太阳能BMS
+- VESC BMS：电动车BMS</p>
+<p><strong>在线资源</strong>：
+- Battery University：电池知识库
+- TI BMS设计指南
+- Analog Devices BMS教程</p>
+<hr />
+<p><strong>作者</strong>: 嵌入式知识平台内容团队<br />
+<strong>最后更新</strong>: 2026-03-07<br />
+<strong>版本</strong>: 1.0.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

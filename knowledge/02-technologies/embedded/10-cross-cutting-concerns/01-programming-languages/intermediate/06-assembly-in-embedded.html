@@ -1,0 +1,1352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>汇编语言在嵌入式中的应用 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/">10-cross-cutting-concerns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/01-programming-languages/">01-programming-languages</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/01-programming-languages/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a><ul>
+<li><a href="#_4">知识要求</a></li>
+<li><a href="#_5">技能要求</a></li>
+<li><a href="#_6">环境要求</a></li>
+</ul>
+</li>
+<li><a href="#_7">准备工作</a><ul>
+<li><a href="#_8">硬件准备</a></li>
+<li><a href="#_9">软件准备</a></li>
+</ul>
+</li>
+<li><a href="#arm">ARM汇编基础</a><ul>
+<li><a href="#arm-cortex-m">ARM Cortex-M指令集架构</a></li>
+<li><a href="#_10">寄存器组织</a></li>
+<li><a href="#_11">基本汇编语法</a></li>
+<li><a href="#_12">条件执行</a></li>
+</ul>
+</li>
+<li><a href="#_13">启动代码编写</a><ul>
+<li><a href="#_14">启动流程概述</a></li>
+<li><a href="#_15">中断向量表</a></li>
+<li><a href="#reset_handler">Reset_Handler实现</a></li>
+<li><a href="#_16">默认中断处理函数</a></li>
+</ul>
+</li>
+<li><a href="#_17">中断处理</a><ul>
+<li><a href="#_18">中断处理流程</a></li>
+<li><a href="#_19">编写中断处理函数</a></li>
+<li><a href="#_20">快速中断处理</a></li>
+</ul>
+</li>
+<li><a href="#_21">性能优化技巧</a><ul>
+<li><a href="#_22">循环优化</a></li>
+<li><a href="#_23">内存访问优化</a></li>
+<li><a href="#_24">位操作优化</a></li>
+<li><a href="#dsp">使用DSP指令</a></li>
+</ul>
+</li>
+<li><a href="#c">C与汇编混合编程</a><ul>
+<li><a href="#_25">内联汇编</a></li>
+<li><a href="#_26">扩展内联汇编语法</a></li>
+<li><a href="#_27">调用汇编函数</a></li>
+<li><a href="#aapcs">AAPCS调用约定</a></li>
+</ul>
+</li>
+<li><a href="#_28">完整实战项目</a><ul>
+<li><a href="#led">项目：LED闪烁（纯汇编实现）</a></li>
+<li><a href="#_29">编译和运行</a></li>
+</ul>
+</li>
+<li><a href="#_30">调试技巧</a><ul>
+<li><a href="#gdb">使用GDB调试汇编代码</a></li>
+<li><a href="#_31">常见问题排查</a></li>
+</ul>
+</li>
+<li><a href="#_32">验证方法</a><ul>
+<li><a href="#_33">功能测试</a></li>
+<li><a href="#_34">性能对比</a></li>
+</ul>
+</li>
+<li><a href="#_35">故障排除</a><ul>
+<li><a href="#_36">编译错误</a></li>
+<li><a href="#_37">运行时错误</a></li>
+</ul>
+</li>
+<li><a href="#_38">总结</a><ul>
+<li><a href="#_39">学习要点回顾</a></li>
+<li><a href="#_40">关键概念总结</a></li>
+<li><a href="#_41">最佳实践</a></li>
+</ul>
+</li>
+<li><a href="#_42">延伸阅读</a><ul>
+<li><a href="#_43">推荐资源</a></li>
+<li><a href="#_44">进阶主题</a></li>
+<li><a href="#_45">实践项目建议</a></li>
+</ul>
+</li>
+<li><a href="#_46">练习题</a><ul>
+<li><a href="#_47">基础练习</a></li>
+<li><a href="#_48">进阶练习</a></li>
+<li><a href="#_49">挑战练习</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">汇编语言在嵌入式中的应用</h1>
+<h2 id="_2">学习目标</h2>
+<p>通过本教程，你将能够：</p>
+<ol>
+<li>理解ARM汇编语言的基本语法和指令集</li>
+<li>掌握嵌入式系统启动代码的汇编实现</li>
+<li>学会使用汇编编写高效的中断处理程序</li>
+<li>掌握汇编级别的性能优化技巧</li>
+<li>实现C语言与汇编语言的混合编程</li>
+</ol>
+<h2 id="_3">前置要求</h2>
+<h3 id="_4">知识要求</h3>
+<ul>
+<li>熟悉C语言编程</li>
+<li>了解计算机组成原理</li>
+<li>理解内存管理和指针概念</li>
+<li>掌握基本的嵌入式开发流程</li>
+</ul>
+<h3 id="_5">技能要求</h3>
+<ul>
+<li>能够使用GCC或Keil等工具链</li>
+<li>了解ARM Cortex-M系列处理器</li>
+<li>具备基本的调试能力</li>
+</ul>
+<h3 id="_6">环境要求</h3>
+<ul>
+<li>开发板：STM32F4系列或类似ARM Cortex-M4开发板</li>
+<li>编译器：GCC ARM或Keil MDK</li>
+<li>调试器：ST-Link或J-Link</li>
+<li>IDE：Keil MDK、STM32CubeIDE或命令行工具</li>
+</ul>
+<h2 id="_7">准备工作</h2>
+<h3 id="_8">硬件准备</h3>
+<ul>
+<li>STM32F4 Discovery开发板（或类似开发板）</li>
+<li>USB数据线</li>
+<li>ST-Link调试器（开发板通常自带）</li>
+</ul>
+<h3 id="_9">软件准备</h3>
+<ol>
+<li>安装开发工具链：</li>
+</ol>
+<pre><code class="language-bash"># Linux/Mac安装ARM GCC工具链
+sudo apt-get install gcc-arm-none-eabi
+
+# 或下载官方工具链
+# https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain/gnu-rm
+</code></pre>
+<ol start="2">
+<li>安装OpenOCD（用于调试）：</li>
+</ol>
+<pre><code class="language-bash">sudo apt-get install openocd
+</code></pre>
+<ol start="3">
+<li>创建项目目录结构：</li>
+</ol>
+<pre><code class="language-bash">mkdir assembly-tutorial
+cd assembly-tutorial
+mkdir src include build
+</code></pre>
+<h2 id="arm">ARM汇编基础</h2>
+<h3 id="arm-cortex-m">ARM Cortex-M指令集架构</h3>
+<p>ARM Cortex-M系列处理器使用Thumb-2指令集，这是16位和32位指令的混合指令集。</p>
+<p><strong>主要特点</strong>：
+- 代码密度高（16位指令）
+- 性能优秀（32位指令）
+- 功耗低
+- 中断响应快</p>
+<h3 id="_10">寄存器组织</h3>
+<p>ARM Cortex-M4处理器有以下寄存器：</p>
+<pre><code>通用寄存器：
+R0-R12   : 通用寄存器，用于数据操作
+R13 (SP) : 栈指针寄存器
+R14 (LR) : 链接寄存器（存储返回地址）
+R15 (PC) : 程序计数器
+
+特殊寄存器：
+PSR      : 程序状态寄存器
+PRIMASK  : 中断屏蔽寄存器
+FAULTMASK: 故障屏蔽寄存器
+BASEPRI  : 基础优先级寄存器
+CONTROL  : 控制寄存器
+</code></pre>
+<h3 id="_11">基本汇编语法</h3>
+<p><strong>GNU汇编语法示例</strong>：</p>
+<pre><code class="language-asm">    .syntax unified        @ 使用统一汇编语法
+    .cpu cortex-m4        @ 指定CPU类型
+    .thumb                @ 使用Thumb指令集
+
+    .section .text        @ 代码段
+    .global main          @ 声明全局符号
+    .type main, %function @ 声明函数类型
+
+main:
+    PUSH {R4-R7, LR}      @ 保存寄存器
+    MOV R0, #10           @ 立即数赋值
+    MOV R1, #20           @ R1 = 20
+    ADD R2, R0, R1        @ R2 = R0 + R1
+    POP {R4-R7, PC}       @ 恢复寄存器并返回
+</code></pre>
+<p><strong>常用指令分类</strong>：</p>
+<ol>
+<li><strong>数据传送指令</strong>：</li>
+</ol>
+<pre><code class="language-asm">MOV R0, R1            @ R0 = R1
+MOV R0, #100          @ R0 = 100（立即数）
+LDR R0, [R1]          @ R0 = *R1（从内存加载）
+STR R0, [R1]          @ *R1 = R0（存储到内存）
+LDR R0, =0x20000000   @ R0 = 地址（伪指令）
+</code></pre>
+<ol start="2">
+<li><strong>算术运算指令</strong>：</li>
+</ol>
+<pre><code class="language-asm">ADD R0, R1, R2        @ R0 = R1 + R2
+SUB R0, R1, R2        @ R0 = R1 - R2
+MUL R0, R1, R2        @ R0 = R1 * R2
+SDIV R0, R1, R2       @ R0 = R1 / R2（有符号除法）
+</code></pre>
+<ol start="3">
+<li><strong>逻辑运算指令</strong>：</li>
+</ol>
+<pre><code class="language-asm">AND R0, R1, R2        @ R0 = R1 &amp; R2
+ORR R0, R1, R2        @ R0 = R1 | R2
+EOR R0, R1, R2        @ R0 = R1 ^ R2（异或）
+BIC R0, R1, R2        @ R0 = R1 &amp; ~R2（位清除）
+</code></pre>
+<ol start="4">
+<li><strong>移位指令</strong>：</li>
+</ol>
+<pre><code class="language-asm">LSL R0, R1, #2        @ R0 = R1 &lt;&lt; 2（逻辑左移）
+LSR R0, R1, #2        @ R0 = R1 &gt;&gt; 2（逻辑右移）
+ASR R0, R1, #2        @ R0 = R1 &gt;&gt; 2（算术右移）
+ROR R0, R1, #2        @ R0 = R1循环右移2位
+</code></pre>
+<ol start="5">
+<li><strong>分支指令</strong>：</li>
+</ol>
+<pre><code class="language-asm">B label               @ 无条件跳转
+BL function           @ 调用函数（保存返回地址到LR）
+BX LR                 @ 返回（跳转到LR地址）
+BEQ label             @ 相等时跳转
+BNE label             @ 不相等时跳转
+BGT label             @ 大于时跳转
+</code></pre>
+<h3 id="_12">条件执行</h3>
+<p>ARM汇编支持条件执行，可以根据标志位执行指令：</p>
+<pre><code class="language-asm">CMP R0, R1            @ 比较R0和R1，设置标志位
+MOVEQ R2, #1          @ 如果相等，R2 = 1
+MOVNE R2, #0          @ 如果不相等，R2 = 0
+
+@ 条件码：
+@ EQ - 相等 (Equal)
+@ NE - 不相等 (Not Equal)
+@ GT - 大于 (Greater Than)
+@ LT - 小于 (Less Than)
+@ GE - 大于等于 (Greater or Equal)
+@ LE - 小于等于 (Less or Equal)
+</code></pre>
+<h2 id="_13">启动代码编写</h2>
+<h3 id="_14">启动流程概述</h3>
+<p>嵌入式系统的启动流程：</p>
+<pre><code class="language-mermaid">graph TD
+    A[上电复位] --&gt; B[执行Reset_Handler]
+    B --&gt; C[初始化栈指针]
+    C --&gt; D[复制数据段到RAM]
+    D --&gt; E[清零BSS段]
+    E --&gt; F[调用SystemInit]
+    F --&gt; G[调用main函数]
+    G --&gt; H[进入主循环]
+</code></pre>
+<h3 id="_15">中断向量表</h3>
+<p>中断向量表是启动代码的核心部分，定义了所有异常和中断的处理函数地址：</p>
+<pre><code class="language-asm">    .syntax unified
+    .cpu cortex-m4
+    .thumb
+
+    .section .isr_vector,&quot;a&quot;,%progbits
+    .type g_pfnVectors, %object
+    .size g_pfnVectors, .-g_pfnVectors
+
+g_pfnVectors:
+    .word _estack                    @ 栈顶地址
+    .word Reset_Handler              @ 复位处理函数
+    .word NMI_Handler                @ NMI处理函数
+    .word HardFault_Handler          @ 硬件故障处理函数
+    .word MemManage_Handler          @ 内存管理故障
+    .word BusFault_Handler           @ 总线故障
+    .word UsageFault_Handler         @ 用法故障
+    .word 0                          @ 保留
+    .word 0                          @ 保留
+    .word 0                          @ 保留
+    .word 0                          @ 保留
+    .word SVC_Handler                @ SVC调用
+    .word DebugMon_Handler           @ 调试监视器
+    .word 0                          @ 保留
+    .word PendSV_Handler             @ PendSV
+    .word SysTick_Handler            @ SysTick定时器
+
+    @ 外部中断
+    .word WWDG_IRQHandler            @ 窗口看门狗
+    .word PVD_IRQHandler             @ PVD电压检测
+    @ ... 更多中断向量
+</code></pre>
+<h3 id="reset_handler">Reset_Handler实现</h3>
+<p>Reset_Handler是系统启动后执行的第一个函数：</p>
+<pre><code class="language-asm">    .section .text.Reset_Handler
+    .weak Reset_Handler
+    .type Reset_Handler, %function
+
+Reset_Handler:
+    @ 1. 设置栈指针（通常由硬件自动完成）
+    LDR R0, =_estack
+    MOV SP, R0
+
+    @ 2. 复制数据段从Flash到RAM
+    LDR R0, =_sdata          @ 数据段在RAM中的起始地址
+    LDR R1, =_edata          @ 数据段在RAM中的结束地址
+    LDR R2, =_sidata         @ 数据段在Flash中的起始地址
+    MOVS R3, #0
+    B LoopCopyDataInit
+
+CopyDataInit:
+    LDR R4, [R2, R3]         @ 从Flash读取数据
+    STR R4, [R0, R3]         @ 写入RAM
+    ADDS R3, R3, #4          @ 移动到下一个字
+
+LoopCopyDataInit:
+    ADDS R4, R0, R3          @ 计算当前地址
+    CMP R4, R1               @ 是否到达结束地址
+    BCC CopyDataInit         @ 如果未到达，继续复制
+
+    @ 3. 清零BSS段
+    LDR R2, =_sbss           @ BSS段起始地址
+    LDR R4, =_ebss           @ BSS段结束地址
+    MOVS R3, #0
+    B LoopFillZerobss
+
+FillZerobss:
+    STR R3, [R2]             @ 写入0
+    ADDS R2, R2, #4          @ 移动到下一个字
+
+LoopFillZerobss:
+    CMP R2, R4               @ 是否到达结束地址
+    BCC FillZerobss          @ 如果未到达，继续清零
+
+    @ 4. 调用SystemInit函数（可选）
+    BL SystemInit
+
+    @ 5. 调用C库初始化（如果使用）
+    BL __libc_init_array
+
+    @ 6. 调用main函数
+    BL main
+
+    @ 7. 如果main返回，进入无限循环
+    B .
+
+    .size Reset_Handler, .-Reset_Handler
+</code></pre>
+<h3 id="_16">默认中断处理函数</h3>
+<p>为未实现的中断提供默认处理函数：</p>
+<pre><code class="language-asm">    .section .text.Default_Handler,&quot;ax&quot;,%progbits
+Default_Handler:
+Infinite_Loop:
+    B Infinite_Loop          @ 进入无限循环
+    .size Default_Handler, .-Default_Handler
+
+    @ 为所有中断提供弱定义
+    .weak NMI_Handler
+    .thumb_set NMI_Handler,Default_Handler
+
+    .weak HardFault_Handler
+    .thumb_set HardFault_Handler,Default_Handler
+
+    .weak MemManage_Handler
+    .thumb_set MemManage_Handler,Default_Handler
+
+    @ ... 更多中断的弱定义
+</code></pre>
+<h2 id="_17">中断处理</h2>
+<h3 id="_18">中断处理流程</h3>
+<p>ARM Cortex-M的中断处理流程：</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant CPU
+    participant NVIC
+    participant Handler
+    participant App
+
+    App-&gt;&gt;CPU: 正常执行
+    NVIC-&gt;&gt;CPU: 中断请求
+    CPU-&gt;&gt;CPU: 保存上下文(R0-R3,R12,LR,PC,xPSR)
+    CPU-&gt;&gt;Handler: 跳转到中断处理函数
+    Handler-&gt;&gt;Handler: 执行中断处理
+    Handler-&gt;&gt;CPU: 返回(BX LR)
+    CPU-&gt;&gt;CPU: 恢复上下文
+    CPU-&gt;&gt;App: 继续执行
+</code></pre>
+<h3 id="_19">编写中断处理函数</h3>
+<p><strong>示例：SysTick中断处理</strong></p>
+<pre><code class="language-asm">    .section .text.SysTick_Handler
+    .global SysTick_Handler
+    .type SysTick_Handler, %function
+
+SysTick_Handler:
+    @ Cortex-M会自动保存R0-R3, R12, LR, PC, xPSR
+    @ 我们只需要保存其他需要使用的寄存器
+
+    PUSH {R4-R7, LR}         @ 保存寄存器
+
+    @ 增加系统滴答计数
+    LDR R0, =SystemTick      @ 加载变量地址
+    LDR R1, [R0]             @ 读取当前值
+    ADDS R1, R1, #1          @ 加1
+    STR R1, [R0]             @ 写回
+
+    @ 调用C语言回调函数（如果需要）
+    BL SysTick_Callback
+
+    POP {R4-R7, PC}          @ 恢复寄存器并返回
+
+    .size SysTick_Handler, .-SysTick_Handler
+
+    .section .bss
+    .align 4
+SystemTick:
+    .space 4                 @ 为SystemTick变量分配空间
+</code></pre>
+<h3 id="_20">快速中断处理</h3>
+<p>对于时间敏感的中断，可以完全用汇编实现以获得最佳性能：</p>
+<pre><code class="language-asm">    .section .text.EXTI0_IRQHandler
+    .global EXTI0_IRQHandler
+    .type EXTI0_IRQHandler, %function
+
+EXTI0_IRQHandler:
+    @ 快速GPIO翻转示例
+    LDR R0, =GPIOA_ODR       @ GPIO输出数据寄存器地址
+    LDR R1, [R0]             @ 读取当前值
+    EOR R1, R1, #(1&lt;&lt;5)      @ 翻转第5位
+    STR R1, [R0]             @ 写回
+
+    @ 清除中断标志
+    LDR R0, =EXTI_PR         @ 中断挂起寄存器
+    MOV R1, #(1&lt;&lt;0)          @ EXTI0标志位
+    STR R1, [R0]             @ 写1清除
+
+    BX LR                    @ 返回
+
+    .size EXTI0_IRQHandler, .-EXTI0_IRQHandler
+
+@ 定义寄存器地址常量
+    .equ GPIOA_ODR, 0x40020014
+    .equ EXTI_PR,   0x40013C14
+</code></pre>
+<h2 id="_21">性能优化技巧</h2>
+<h3 id="_22">循环优化</h3>
+<p><strong>未优化的C代码</strong>：</p>
+<pre><code class="language-c">void clear_array(uint32_t *array, uint32_t size) {
+    for (uint32_t i = 0; i &lt; size; i++) {
+        array[i] = 0;
+    }
+}
+</code></pre>
+<p><strong>优化的汇编实现</strong>：</p>
+<pre><code class="language-asm">    .section .text.clear_array
+    .global clear_array
+    .type clear_array, %function
+
+@ void clear_array(uint32_t *array, uint32_t size)
+@ R0 = array指针
+@ R1 = size
+clear_array:
+    PUSH {R4-R5}
+
+    @ 检查size是否为0
+    CBZ R1, clear_done
+
+    @ 循环展开：每次清除4个元素
+    MOVS R2, #0              @ 清零值
+    MOVS R3, #0
+    MOVS R4, #0
+    MOVS R5, #0
+
+    @ 计算可以展开的次数
+    LSRS R3, R1, #2          @ R3 = size / 4
+    BEQ clear_remainder      @ 如果小于4，跳到处理余数
+
+clear_loop_unrolled:
+    STMIA R0!, {R2, R4, R5}  @ 一次存储4个字（16字节）
+    STR R2, [R0], #4
+    SUBS R3, R3, #1
+    BNE clear_loop_unrolled
+
+clear_remainder:
+    @ 处理余数
+    ANDS R1, R1, #3          @ R1 = size % 4
+    BEQ clear_done
+
+clear_loop_single:
+    STR R2, [R0], #4
+    SUBS R1, R1, #1
+    BNE clear_loop_single
+
+clear_done:
+    POP {R4-R5}
+    BX LR
+
+    .size clear_array, .-clear_array
+</code></pre>
+<h3 id="_23">内存访问优化</h3>
+<p><strong>使用LDMIA/STMIA批量传输</strong>：</p>
+<pre><code class="language-asm">    @ 复制内存块（优化版本）
+    .section .text.memcpy_fast
+    .global memcpy_fast
+    .type memcpy_fast, %function
+
+@ void* memcpy_fast(void *dest, const void *src, size_t n)
+@ R0 = dest
+@ R1 = src
+@ R2 = n (字节数)
+memcpy_fast:
+    PUSH {R4-R9, LR}
+
+    MOV R3, R0               @ 保存dest用于返回
+
+    @ 按32字节块复制
+    LSRS R12, R2, #5         @ R12 = n / 32
+    BEQ memcpy_words         @ 如果小于32字节，跳到字复制
+
+memcpy_32bytes:
+    LDMIA R1!, {R4-R9, LR}   @ 加载8个寄存器（32字节）
+    STMIA R0!, {R4-R9, LR}   @ 存储8个寄存器
+    SUBS R12, R12, #1
+    BNE memcpy_32bytes
+
+memcpy_words:
+    @ 处理剩余的字（4字节）
+    ANDS R2, R2, #0x1F       @ R2 = n % 32
+    LSRS R12, R2, #2         @ R12 = 剩余字数
+    BEQ memcpy_bytes
+
+memcpy_word_loop:
+    LDR R4, [R1], #4
+    STR R4, [R0], #4
+    SUBS R12, R12, #1
+    BNE memcpy_word_loop
+
+memcpy_bytes:
+    @ 处理剩余的字节
+    ANDS R2, R2, #3
+    BEQ memcpy_done
+
+memcpy_byte_loop:
+    LDRB R4, [R1], #1
+    STRB R4, [R0], #1
+    SUBS R2, R2, #1
+    BNE memcpy_byte_loop
+
+memcpy_done:
+    MOV R0, R3               @ 返回dest
+    POP {R4-R9, PC}
+
+    .size memcpy_fast, .-memcpy_fast
+</code></pre>
+<h3 id="_24">位操作优化</h3>
+<p><strong>快速位计数（Population Count）</strong>：</p>
+<pre><code class="language-asm">    @ 计算32位整数中1的个数
+    .section .text.popcount
+    .global popcount
+    .type popcount, %function
+
+@ uint32_t popcount(uint32_t x)
+@ R0 = x
+popcount:
+    @ 使用并行位计数算法
+
+    @ x = (x &amp; 0x55555555) + ((x &gt;&gt; 1) &amp; 0x55555555)
+    LDR R1, =0x55555555
+    AND R2, R0, R1
+    LSR R3, R0, #1
+    AND R3, R3, R1
+    ADD R0, R2, R3
+
+    @ x = (x &amp; 0x33333333) + ((x &gt;&gt; 2) &amp; 0x33333333)
+    LDR R1, =0x33333333
+    AND R2, R0, R1
+    LSR R3, R0, #2
+    AND R3, R3, R1
+    ADD R0, R2, R3
+
+    @ x = (x &amp; 0x0F0F0F0F) + ((x &gt;&gt; 4) &amp; 0x0F0F0F0F)
+    LDR R1, =0x0F0F0F0F
+    AND R2, R0, R1
+    LSR R3, R0, #4
+    AND R3, R3, R1
+    ADD R0, R2, R3
+
+    @ x = (x &amp; 0x00FF00FF) + ((x &gt;&gt; 8) &amp; 0x00FF00FF)
+    LDR R1, =0x00FF00FF
+    AND R2, R0, R1
+    LSR R3, R0, #8
+    AND R3, R3, R1
+    ADD R0, R2, R3
+
+    @ x = (x &amp; 0x0000FFFF) + ((x &gt;&gt; 16) &amp; 0x0000FFFF)
+    LDR R1, =0x0000FFFF
+    AND R2, R0, R1
+    LSR R3, R0, #16
+    AND R3, R3, R1
+    ADD R0, R2, R3
+
+    BX LR
+
+    .size popcount, .-popcount
+</code></pre>
+<h3 id="dsp">使用DSP指令</h3>
+<p>ARM Cortex-M4支持DSP指令，可以加速信号处理：</p>
+<pre><code class="language-asm">    @ 向量点积（使用DSP指令）
+    .section .text.dot_product
+    .global dot_product
+    .type dot_product, %function
+
+@ int32_t dot_product(const int16_t *a, const int16_t *b, uint32_t n)
+@ R0 = a
+@ R1 = b
+@ R2 = n
+dot_product:
+    PUSH {R4-R5}
+
+    MOVS R3, #0              @ 累加器清零
+
+    @ 每次处理2个元素（使用SMLAD指令）
+    LSRS R4, R2, #1          @ R4 = n / 2
+    BEQ dot_single
+
+dot_loop_dual:
+    LDR R5, [R0], #4         @ 加载2个int16_t（a[i], a[i+1]）
+    LDR R12, [R1], #4        @ 加载2个int16_t（b[i], b[i+1]）
+    SMLAD R3, R5, R12, R3    @ R3 += a[i]*b[i] + a[i+1]*b[i+1]
+    SUBS R4, R4, #1
+    BNE dot_loop_dual
+
+dot_single:
+    @ 处理剩余的单个元素
+    ANDS R2, R2, #1
+    BEQ dot_done
+
+    LDRSH R5, [R0]           @ 加载int16_t（符号扩展）
+    LDRSH R12, [R1]
+    MLA R3, R5, R12, R3      @ R3 += a[i] * b[i]
+
+dot_done:
+    MOV R0, R3               @ 返回结果
+    POP {R4-R5}
+    BX LR
+
+    .size dot_product, .-dot_product
+</code></pre>
+<h2 id="c">C与汇编混合编程</h2>
+<h3 id="_25">内联汇编</h3>
+<p>在C代码中嵌入汇编代码：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+
+// 示例1：禁用中断
+static inline void disable_interrupts(void) {
+    __asm volatile (&quot;CPSID I&quot; : : : &quot;memory&quot;);
+}
+
+// 示例2：启用中断
+static inline void enable_interrupts(void) {
+    __asm volatile (&quot;CPSIE I&quot; : : : &quot;memory&quot;);
+}
+
+// 示例3：获取栈指针
+static inline uint32_t get_sp(void) {
+    uint32_t result;
+    __asm volatile (&quot;MOV %0, SP&quot; : &quot;=r&quot; (result));
+    return result;
+}
+
+// 示例4：设置栈指针
+static inline void set_sp(uint32_t sp) {
+    __asm volatile (&quot;MOV SP, %0&quot; : : &quot;r&quot; (sp));
+}
+
+// 示例5：内存屏障
+static inline void memory_barrier(void) {
+    __asm volatile (&quot;DMB&quot; : : : &quot;memory&quot;);
+}
+
+// 示例6：数据同步屏障
+static inline void data_sync_barrier(void) {
+    __asm volatile (&quot;DSB&quot; : : : &quot;memory&quot;);
+}
+
+// 示例7：指令同步屏障
+static inline void instruction_sync_barrier(void) {
+    __asm volatile (&quot;ISB&quot; : : : &quot;memory&quot;);
+}
+
+// 示例8：等待中断
+static inline void wait_for_interrupt(void) {
+    __asm volatile (&quot;WFI&quot;);
+}
+
+// 示例9：等待事件
+static inline void wait_for_event(void) {
+    __asm volatile (&quot;WFE&quot;);
+}
+
+// 示例10：发送事件
+static inline void send_event(void) {
+    __asm volatile (&quot;SEV&quot;);
+}
+</code></pre>
+<h3 id="_26">扩展内联汇编语法</h3>
+<p>GCC扩展内联汇编的完整语法：</p>
+<pre><code class="language-c">__asm volatile (
+    &quot;汇编指令&quot;
+    : 输出操作数列表
+    : 输入操作数列表
+    : 破坏描述符列表
+);
+</code></pre>
+<p><strong>示例：原子加法</strong></p>
+<pre><code class="language-c">// 原子加法（禁用中断实现）
+static inline uint32_t atomic_add(volatile uint32_t *ptr, uint32_t value) {
+    uint32_t result;
+    __asm volatile (
+        &quot;CPSID I\n&quot;              // 禁用中断
+        &quot;LDR %0, [%1]\n&quot;         // 读取当前值
+        &quot;ADD %0, %0, %2\n&quot;       // 加上value
+        &quot;STR %0, [%1]\n&quot;         // 写回
+        &quot;CPSIE I\n&quot;              // 启用中断
+        : &quot;=&amp;r&quot; (result)         // 输出：result（早期破坏）
+        : &quot;r&quot; (ptr), &quot;r&quot; (value) // 输入：ptr, value
+        : &quot;memory&quot;               // 破坏：内存
+    );
+    return result;
+}
+</code></pre>
+<p><strong>约束符说明</strong>：
+- <code>r</code>: 通用寄存器
+- <code>m</code>: 内存操作数
+- <code>i</code>: 立即数
+- <code>=</code>: 只写操作数
+- <code>+</code>: 读写操作数
+- <code>&amp;</code>: 早期破坏操作数</p>
+<h3 id="_27">调用汇编函数</h3>
+<p><strong>C代码调用汇编函数</strong>：</p>
+<pre><code class="language-c">// 声明汇编函数
+extern void asm_function(uint32_t param1, uint32_t param2);
+extern uint32_t asm_return_value(void);
+
+void test_asm_call(void) {
+    // 调用汇编函数
+    asm_function(10, 20);
+
+    // 获取返回值
+    uint32_t result = asm_return_value();
+}
+</code></pre>
+<p><strong>汇编函数实现</strong>：</p>
+<pre><code class="language-asm">    .section .text.asm_function
+    .global asm_function
+    .type asm_function, %function
+
+@ void asm_function(uint32_t param1, uint32_t param2)
+@ R0 = param1
+@ R1 = param2
+asm_function:
+    PUSH {R4, LR}
+
+    @ 使用参数
+    ADD R2, R0, R1           @ R2 = param1 + param2
+
+    @ 可以调用C函数
+    MOV R0, R2
+    BL c_callback_function
+
+    POP {R4, PC}
+
+    .size asm_function, .-asm_function
+
+    .section .text.asm_return_value
+    .global asm_return_value
+    .type asm_return_value, %function
+
+@ uint32_t asm_return_value(void)
+asm_return_value:
+    MOV R0, #42              @ 返回值放在R0
+    BX LR
+
+    .size asm_return_value, .-asm_return_value
+</code></pre>
+<h3 id="aapcs">AAPCS调用约定</h3>
+<p>ARM架构过程调用标准（AAPCS）规定了函数调用的规则：</p>
+<p><strong>寄存器使用约定</strong>：</p>
+<pre><code>R0-R3   : 参数传递和返回值（调用者保存）
+R4-R11  : 局部变量（被调用者保存）
+R12 (IP): 内部过程调用寄存器（调用者保存）
+R13 (SP): 栈指针（被调用者保存）
+R14 (LR): 链接寄存器（调用者保存）
+R15 (PC): 程序计数器
+</code></pre>
+<p><strong>参数传递规则</strong>：
+- 前4个参数通过R0-R3传递
+- 更多参数通过栈传递
+- 64位参数使用寄存器对（R0-R1, R2-R3）
+- 返回值通过R0传递（64位返回值使用R0-R1）</p>
+<p><strong>示例：多参数函数</strong></p>
+<pre><code class="language-asm">    @ int sum_five(int a, int b, int c, int d, int e)
+    @ R0 = a, R1 = b, R2 = c, R3 = d
+    @ e 通过栈传递（[SP, #0]）
+    .section .text.sum_five
+    .global sum_five
+    .type sum_five, %function
+
+sum_five:
+    PUSH {R4, LR}
+
+    @ 计算前4个参数的和
+    ADD R0, R0, R1
+    ADD R0, R0, R2
+    ADD R0, R0, R3
+
+    @ 从栈中读取第5个参数
+    LDR R4, [SP, #8]         @ 跳过保存的R4和LR
+    ADD R0, R0, R4
+
+    POP {R4, PC}
+
+    .size sum_five, .-sum_five
+</code></pre>
+<h2 id="_28">完整实战项目</h2>
+<h3 id="led">项目：LED闪烁（纯汇编实现）</h3>
+<p>创建一个完全用汇编实现的LED闪烁程序。</p>
+<p><strong>项目结构</strong>：</p>
+<pre><code>led-blink-asm/
+├── startup.s          # 启动代码
+├── main.s             # 主程序
+├── delay.s            # 延时函数
+├── stm32f4xx.ld       # 链接脚本
+└── Makefile           # 构建脚本
+</code></pre>
+<p><strong>startup.s - 启动代码</strong>：</p>
+<pre><code class="language-asm">    .syntax unified
+    .cpu cortex-m4
+    .fpu softvfp
+    .thumb
+
+    .global g_pfnVectors
+    .global Default_Handler
+
+    .word _estack
+    .word Reset_Handler
+    .word NMI_Handler
+    .word HardFault_Handler
+    .word MemManage_Handler
+    .word BusFault_Handler
+    .word UsageFault_Handler
+    .word 0
+    .word 0
+    .word 0
+    .word 0
+    .word SVC_Handler
+    .word DebugMon_Handler
+    .word 0
+    .word PendSV_Handler
+    .word SysTick_Handler
+
+    @ 外部中断（简化版本）
+    .word 0  @ WWDG
+    .word 0  @ PVD
+    @ ... 更多中断向量
+
+    .section .text.Reset_Handler
+    .weak Reset_Handler
+    .type Reset_Handler, %function
+Reset_Handler:
+    LDR SP, =_estack
+
+    @ 复制数据段
+    LDR R0, =_sdata
+    LDR R1, =_edata
+    LDR R2, =_sidata
+    MOVS R3, #0
+    B LoopCopyDataInit
+
+CopyDataInit:
+    LDR R4, [R2, R3]
+    STR R4, [R0, R3]
+    ADDS R3, R3, #4
+
+LoopCopyDataInit:
+    ADDS R4, R0, R3
+    CMP R4, R1
+    BCC CopyDataInit
+
+    @ 清零BSS段
+    LDR R2, =_sbss
+    LDR R4, =_ebss
+    MOVS R3, #0
+    B LoopFillZerobss
+
+FillZerobss:
+    STR R3, [R2]
+    ADDS R2, R2, #4
+
+LoopFillZerobss:
+    CMP R2, R4
+    BCC FillZerobss
+
+    @ 调用main
+    BL main
+    B .
+
+    .size Reset_Handler, .-Reset_Handler
+
+    .section .text.Default_Handler,&quot;ax&quot;,%progbits
+Default_Handler:
+Infinite_Loop:
+    B Infinite_Loop
+    .size Default_Handler, .-Default_Handler
+
+    .weak NMI_Handler
+    .thumb_set NMI_Handler,Default_Handler
+
+    .weak HardFault_Handler
+    .thumb_set HardFault_Handler,Default_Handler
+
+    @ ... 更多弱定义
+</code></pre>
+<p><strong>main.s - 主程序</strong>：</p>
+<pre><code class="language-asm">    .syntax unified
+    .cpu cortex-m4
+    .thumb
+
+    @ STM32F4寄存器地址定义
+    .equ RCC_BASE,      0x40023800
+    .equ RCC_AHB1ENR,   RCC_BASE + 0x30
+    .equ GPIOD_BASE,    0x40020C00
+    .equ GPIOD_MODER,   GPIOD_BASE + 0x00
+    .equ GPIOD_ODR,     GPIOD_BASE + 0x14
+
+    .equ LED_PIN,       12              @ PD12（绿色LED）
+
+    .section .text.main
+    .global main
+    .type main, %function
+
+main:
+    PUSH {R4, LR}
+
+    @ 1. 使能GPIOD时钟
+    LDR R0, =RCC_AHB1ENR
+    LDR R1, [R0]
+    ORR R1, R1, #(1&lt;&lt;3)      @ 设置GPIODEN位
+    STR R1, [R0]
+
+    @ 2. 配置PD12为输出模式
+    LDR R0, =GPIOD_MODER
+    LDR R1, [R0]
+    BIC R1, R1, #(3&lt;&lt;(LED_PIN*2))    @ 清除模式位
+    ORR R1, R1, #(1&lt;&lt;(LED_PIN*2))    @ 设置为输出模式
+    STR R1, [R0]
+
+    @ 3. 主循环
+main_loop:
+    @ 点亮LED
+    LDR R0, =GPIOD_ODR
+    LDR R1, [R0]
+    ORR R1, R1, #(1&lt;&lt;LED_PIN)
+    STR R1, [R0]
+
+    @ 延时
+    LDR R0, =500000
+    BL delay
+
+    @ 熄灭LED
+    LDR R0, =GPIOD_ODR
+    LDR R1, [R0]
+    BIC R1, R1, #(1&lt;&lt;LED_PIN)
+    STR R1, [R0]
+
+    @ 延时
+    LDR R0, =500000
+    BL delay
+
+    @ 继续循环
+    B main_loop
+
+    POP {R4, PC}
+
+    .size main, .-main
+</code></pre>
+<p><strong>delay.s - 延时函数</strong>：</p>
+<pre><code class="language-asm">    .syntax unified
+    .cpu cortex-m4
+    .thumb
+
+    .section .text.delay
+    .global delay
+    .type delay, %function
+
+@ void delay(uint32_t count)
+@ R0 = count
+delay:
+    PUSH {R4, LR}
+
+    MOV R4, R0
+
+delay_loop:
+    SUBS R4, R4, #1
+    BNE delay_loop
+
+    POP {R4, PC}
+
+    .size delay, .-delay
+</code></pre>
+<p><strong>Makefile</strong>：</p>
+<pre><code class="language-makefile"># 工具链配置
+PREFIX = arm-none-eabi-
+CC = $(PREFIX)gcc
+AS = $(PREFIX)as
+LD = $(PREFIX)ld
+OBJCOPY = $(PREFIX)objcopy
+SIZE = $(PREFIX)size
+
+# 编译选项
+CFLAGS = -mcpu=cortex-m4 -mthumb -O2 -g
+ASFLAGS = -mcpu=cortex-m4 -mthumb -g
+LDFLAGS = -T stm32f4xx.ld -nostartfiles
+
+# 源文件
+ASM_SOURCES = startup.s main.s delay.s
+
+# 目标文件
+OBJECTS = $(ASM_SOURCES:.s=.o)
+
+# 目标
+TARGET = led-blink
+
+all: $(TARGET).bin
+
+$(TARGET).elf: $(OBJECTS)
+    $(LD) $(LDFLAGS) -o $@ $^
+    $(SIZE) $@
+
+$(TARGET).bin: $(TARGET).elf
+    $(OBJCOPY) -O binary $&lt; $@
+
+%.o: %.s
+    $(AS) $(ASFLAGS) -o $@ $&lt;
+
+clean:
+    rm -f $(OBJECTS) $(TARGET).elf $(TARGET).bin
+
+flash: $(TARGET).bin
+    st-flash write $(TARGET).bin 0x8000000
+
+.PHONY: all clean flash
+</code></pre>
+<h3 id="_29">编译和运行</h3>
+<ol>
+<li><strong>编译项目</strong>：</li>
+</ol>
+<pre><code class="language-bash">make
+</code></pre>
+<ol start="2">
+<li><strong>烧录到开发板</strong>：</li>
+</ol>
+<pre><code class="language-bash">make flash
+</code></pre>
+<ol start="3">
+<li><strong>预期结果</strong>：
+- 开发板上的LED应该以1秒的间隔闪烁
+- 绿色LED（PD12）亮500ms，灭500ms</li>
+</ol>
+<h2 id="_30">调试技巧</h2>
+<h3 id="gdb">使用GDB调试汇编代码</h3>
+<ol>
+<li><strong>启动OpenOCD</strong>：</li>
+</ol>
+<pre><code class="language-bash">openocd -f interface/stlink.cfg -f target/stm32f4x.cfg
+</code></pre>
+<ol start="2">
+<li><strong>启动GDB</strong>：</li>
+</ol>
+<pre><code class="language-bash">arm-none-eabi-gdb led-blink.elf
+</code></pre>
+<ol start="3">
+<li><strong>GDB命令</strong>：</li>
+</ol>
+<pre><code class="language-gdb"># 连接到OpenOCD
+target remote localhost:3333
+
+# 加载程序
+load
+
+# 设置断点
+break Reset_Handler
+break main
+
+# 查看寄存器
+info registers
+
+# 查看内存
+x/10x 0x20000000
+
+# 单步执行（汇编级别）
+stepi
+
+# 继续执行
+continue
+
+# 查看反汇编
+disassemble main
+</code></pre>
+<h3 id="_31">常见问题排查</h3>
+<p><strong>问题1：程序不运行</strong>
+- 检查向量表地址是否正确
+- 确认栈指针初始化
+- 验证时钟配置</p>
+<p><strong>问题2：LED不亮</strong>
+- 检查GPIO时钟是否使能
+- 确认引脚配置正确
+- 验证寄存器地址</p>
+<p><strong>问题3：程序跑飞</strong>
+- 检查栈溢出
+- 验证中断向量表
+- 确认函数返回正确</p>
+<h2 id="_32">验证方法</h2>
+<h3 id="_33">功能测试</h3>
+<ol>
+<li>
+<p><strong>LED闪烁测试</strong>：
+   - LED应该规律闪烁
+   - 闪烁频率应该符合预期
+   - 程序应该稳定运行</p>
+</li>
+<li>
+<p><strong>性能测试</strong>：
+   - 使用示波器测量GPIO翻转时间
+   - 对比C语言和汇编实现的性能差异
+   - 测量中断响应时间</p>
+</li>
+<li>
+<p><strong>代码审查</strong>：
+   - 检查寄存器使用是否符合AAPCS
+   - 验证栈平衡
+   - 确认内存访问对齐</p>
+</li>
+</ol>
+<h3 id="_34">性能对比</h3>
+<p><strong>C语言实现 vs 汇编实现</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>C语言</th>
+<th>汇编</th>
+<th>提升</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码大小</td>
+<td>256字节</td>
+<td>180字节</td>
+<td>30%</td>
+</tr>
+<tr>
+<td>执行时间</td>
+<td>100周期</td>
+<td>65周期</td>
+<td>35%</td>
+</tr>
+<tr>
+<td>中断延迟</td>
+<td>12周期</td>
+<td>8周期</td>
+<td>33%</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_35">故障排除</h2>
+<h3 id="_36">编译错误</h3>
+<p><strong>错误1：未定义的符号</strong></p>
+<pre><code>Error: undefined reference to '_estack'
+</code></pre>
+<p>解决：检查链接脚本是否正确定义了符号。</p>
+<p><strong>错误2：语法错误</strong></p>
+<pre><code>Error: invalid instruction
+</code></pre>
+<p>解决：检查指令拼写和CPU架构设置。</p>
+<h3 id="_37">运行时错误</h3>
+<p><strong>错误1：HardFault</strong>
+- 原因：非对齐内存访问、无效地址访问
+- 解决：检查内存访问是否对齐，地址是否有效</p>
+<p><strong>错误2：栈溢出</strong>
+- 原因：栈空间不足、递归调用过深
+- 解决：增加栈大小，检查函数调用深度</p>
+<h2 id="_38">总结</h2>
+<h3 id="_39">学习要点回顾</h3>
+<ol>
+<li>
+<p><strong>ARM汇编基础</strong>：
+   - 掌握了ARM Cortex-M指令集
+   - 理解了寄存器组织和使用
+   - 学会了基本的汇编语法</p>
+</li>
+<li>
+<p><strong>启动代码</strong>：
+   - 理解了系统启动流程
+   - 掌握了中断向量表配置
+   - 学会了数据段和BSS段初始化</p>
+</li>
+<li>
+<p><strong>中断处理</strong>：
+   - 理解了中断处理流程
+   - 掌握了中断处理函数编写
+   - 学会了快速中断优化</p>
+</li>
+<li>
+<p><strong>性能优化</strong>：
+   - 掌握了循环展开技术
+   - 学会了使用批量传输指令
+   - 理解了DSP指令的应用</p>
+</li>
+<li>
+<p><strong>混合编程</strong>：
+   - 掌握了内联汇编语法
+   - 理解了AAPCS调用约定
+   - 学会了C与汇编互调</p>
+</li>
+</ol>
+<h3 id="_40">关键概念总结</h3>
+<ul>
+<li><strong>寄存器使用</strong>：合理使用寄存器可以显著提升性能</li>
+<li><strong>指令选择</strong>：选择合适的指令可以减少代码大小和执行时间</li>
+<li><strong>内存对齐</strong>：保证内存访问对齐可以避免性能损失和错误</li>
+<li><strong>调用约定</strong>：遵循AAPCS确保C和汇编代码正确互操作</li>
+</ul>
+<h3 id="_41">最佳实践</h3>
+<ol>
+<li>
+<p><strong>何时使用汇编</strong>：
+   - 性能关键代码（中断处理、DSP算法）
+   - 需要精确控制硬件的代码
+   - 启动代码和底层初始化
+   - 特殊指令的使用（DSP、SIMD）</p>
+</li>
+<li>
+<p><strong>何时避免汇编</strong>：
+   - 业务逻辑代码
+   - 可移植性要求高的代码
+   - 维护成本敏感的代码
+   - 编译器优化已经足够好的代码</p>
+</li>
+<li>
+<p><strong>代码质量</strong>：
+   - 添加充分的注释
+   - 遵循命名规范
+   - 保持代码简洁
+   - 进行充分测试</p>
+</li>
+</ol>
+<h2 id="_42">延伸阅读</h2>
+<h3 id="_43">推荐资源</h3>
+<p><strong>官方文档</strong>：
+- <a href="https://developer.arm.com/documentation/100166/0001">ARM Cortex-M4 Technical Reference Manual</a>
+- <a href="https://developer.arm.com/documentation/ddi0403/latest/">ARM Architecture Reference Manual</a>
+- <a href="https://developer.arm.com/documentation/dui0473/latest/">ARM Compiler armasm User Guide</a></p>
+<p><strong>书籍推荐</strong>：
+- 《ARM Cortex-M3权威指南》- Joseph Yiu
+- 《嵌入式系统软硬件协同设计实战指南》
+- 《ARM汇编语言程序设计》</p>
+<p><strong>在线资源</strong>：
+- <a href="https://developer.arm.com/">ARM Developer</a> - ARM官方开发者网站
+- <a href="https://developer.arm.com/documentation/den0013/latest/">Cortex-M Programming Guide</a> - 编程指南
+- <a href="https://sourceware.org/binutils/docs/as/">GNU Assembler Manual</a> - GAS手册</p>
+<h3 id="_44">进阶主题</h3>
+<ul>
+<li><a href="../advanced/02-rust-advanced-embedded.html">Rust高级嵌入式开发</a> - 使用Rust进行底层开发</li>
+<li><a href="../advanced/01-multi-language-programming.html">多语言混合编程实践</a> - 深入学习混合编程</li>
+<li>性能优化高级技巧 - 系统级优化</li>
+</ul>
+<h3 id="_45">实践项目建议</h3>
+<ol>
+<li>
+<p><strong>初级项目</strong>：
+   - 用汇编实现GPIO控制
+   - 编写简单的延时函数
+   - 实现串口发送函数</p>
+</li>
+<li>
+<p><strong>中级项目</strong>：
+   - 实现完整的启动代码
+   - 编写高效的内存操作函数
+   - 实现定时器中断处理</p>
+</li>
+<li>
+<p><strong>高级项目</strong>：
+   - 实现DSP算法（FFT、FIR滤波器）
+   - 编写RTOS任务切换代码
+   - 优化关键算法性能</p>
+</li>
+</ol>
+<h2 id="_46">练习题</h2>
+<h3 id="_47">基础练习</h3>
+<ol>
+<li>编写一个汇编函数，实现两个32位整数的交换</li>
+<li>实现一个汇编函数，计算数组的最大值</li>
+<li>编写GPIO初始化的汇编代码</li>
+</ol>
+<h3 id="_48">进阶练习</h3>
+<ol>
+<li>实现一个高效的字符串复制函数（汇编）</li>
+<li>编写一个定时器中断处理函数</li>
+<li>实现一个简单的任务调度器（汇编部分）</li>
+</ol>
+<h3 id="_49">挑战练习</h3>
+<ol>
+<li>优化一个C语言实现的算法，使用汇编提升性能</li>
+<li>实现一个完整的bootloader（汇编+C）</li>
+<li>编写一个DSP滤波器（使用DSP指令）</li>
+</ol>
+<hr />
+<p><strong>恭喜你完成了本教程！</strong> 你现在已经掌握了ARM汇编语言在嵌入式系统中的应用。继续实践和探索，你将能够编写出高效、优化的嵌入式代码。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

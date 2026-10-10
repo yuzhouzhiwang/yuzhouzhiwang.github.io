@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>MPU内存保护单元配置实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/">01-chip-architecture</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/01-chip-architecture/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_7">概述</a><ul>
+<li><a href="#mpu_1">MPU的优势</a></li>
+<li><a href="#mpu_2">MPU应用场景</a></li>
+</ul>
+</li>
+<li><a href="#1mpu">步骤1：理解MPU基本概念</a><ul>
+<li><a href="#11-mpu">1.1 MPU架构</a></li>
+<li><a href="#12-mpu">1.2 MPU寄存器</a></li>
+<li><a href="#13">1.3 区域大小和对齐</a></li>
+</ul>
+</li>
+<li><a href="#2mpu">步骤2：配置MPU区域</a><ul>
+<li><a href="#21">2.1 基本配置流程</a></li>
+<li><a href="#22-hal">2.2 使用HAL库配置</a></li>
+<li><a href="#23">2.3 完整配置示例</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：访问权限设置</a><ul>
+<li><a href="#31">3.1 访问权限类型</a></li>
+<li><a href="#32">3.2 特权级别与访问权限</a></li>
+<li><a href="#33">3.3 执行权限控制</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：内存属性配置</a><ul>
+<li><a href="#41">4.1 内存类型和属性</a></li>
+<li><a href="#42">4.2 共享属性</a></li>
+<li><a href="#43">4.3 子区域禁用</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：故障处理机制</a><ul>
+<li><a href="#51-memmanage">5.1 MemManage异常</a></li>
+<li><a href="#52">5.2 故障调试技巧</a></li>
+<li><a href="#53">5.3 故障恢复策略</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：安全应用设计</a><ul>
+<li><a href="#61">6.1 栈溢出保护</a></li>
+<li><a href="#62">6.2 代码注入防护</a></li>
+<li><a href="#63">6.3 关键数据保护</a></li>
+<li><a href="#64-rtos">6.4 RTOS任务隔离</a></li>
+</ul>
+</li>
+<li><a href="#_8">故障排除</a><ul>
+<li><a href="#1mpu_1">问题1：MPU配置后系统无法启动</a></li>
+<li><a href="#2memmanage">问题2：MemManage异常频繁触发</a></li>
+<li><a href="#3dma">问题3：DMA传输失败</a></li>
+<li><a href="#4_1">问题4：性能下降</a></li>
+</ul>
+</li>
+<li><a href="#_9">总结</a></li>
+<li><a href="#_10">进阶挑战</a></li>
+<li><a href="#_11">完整代码</a></li>
+<li><a href="#_12">下一步</a></li>
+<li><a href="#_13">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="mpu">MPU内存保护单元配置实战</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解MPU的基本概念和工作原理</li>
+<li>[ ] 掌握MPU区域配置方法</li>
+<li>[ ] 配置不同的访问权限和内存属性</li>
+<li>[ ] 实现MPU故障处理机制</li>
+<li>[ ] 设计安全的嵌入式应用系统</li>
+<li>[ ] 调试和排查MPU相关问题</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 理解ARM Cortex-M处理器架构
+- 了解内存映射和地址空间
+- 掌握处理器工作模式和特权级别
+- 熟悉C语言编程</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32开发板
+- 会配置NVIC和中断
+- 了解异常处理机制</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32F4开发板</td>
+<td>1</td>
+<td>推荐STM32F407VGT6</td>
+<td>-</td>
+</tr>
+<tr>
+<td>ST-Link调试器</td>
+<td>1</td>
+<td>用于程序下载和调试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>1</td>
+<td>连接开发板和电脑</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE v1.10+ 或 Keil MDK</li>
+<li><strong>调试工具</strong>：ST-Link驱动</li>
+<li><strong>辅助工具</strong>：串口调试助手</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<ol>
+<li>安装STM32CubeIDE</li>
+<li>配置ST-Link驱动</li>
+<li>测试开发板连接</li>
+</ol>
+<h2 id="_7">概述</h2>
+<p>MPU（Memory Protection Unit，内存保护单元）是ARM Cortex-M处理器中的一个可选硬件模块，用于保护内存区域免受非法访问。通过配置MPU，可以实现：</p>
+<ul>
+<li><strong>内存访问控制</strong>：限制代码和数据的访问权限</li>
+<li><strong>系统安全性</strong>：防止恶意代码破坏系统</li>
+<li><strong>故障隔离</strong>：快速定位内存访问错误</li>
+<li><strong>RTOS支持</strong>：为任务提供独立的内存空间</li>
+</ul>
+<h3 id="mpu_1">MPU的优势</h3>
+<ol>
+<li>
+<p><strong>提高系统安全性</strong>
+   - 防止栈溢出
+   - 保护关键数据
+   - 隔离不可信代码</p>
+</li>
+<li>
+<p><strong>简化调试</strong>
+   - 快速定位内存错误
+   - 精确的故障信息
+   - 减少调试时间</p>
+</li>
+<li>
+<p><strong>支持RTOS</strong>
+   - 任务内存隔离
+   - 防止任务间干扰
+   - 提高系统可靠性</p>
+</li>
+</ol>
+<h3 id="mpu_2">MPU应用场景</h3>
+<ul>
+<li><strong>安全关键系统</strong>：汽车、医疗、工业控制</li>
+<li><strong>多任务系统</strong>：RTOS环境下的任务隔离</li>
+<li><strong>固件保护</strong>：防止固件被篡改</li>
+<li><strong>调试辅助</strong>：快速定位内存访问错误</li>
+</ul>
+<h2 id="1mpu">步骤1：理解MPU基本概念</h2>
+<h3 id="11-mpu">1.1 MPU架构</h3>
+<p>ARM Cortex-M处理器的MPU支持最多8个可编程的内存区域（Region）。</p>
+<pre><code>MPU架构示意图：
+
+┌─────────────────────────────────────┐
+│         MPU控制器                    │
+│  ┌──────────┐  ┌──────────┐        │
+│  │ Region 0 │  │ Region 1 │  ...   │
+│  │ 配置寄存器│  │ 配置寄存器│        │
+│  └──────────┘  └──────────┘        │
+│       ↓              ↓              │
+│  ┌─────────────────────────┐       │
+│  │   访问权限检查逻辑       │       │
+│  └─────────────────────────┘       │
+│              ↓                      │
+└──────────────┼──────────────────────┘
+               ↓
+        ┌──────────────┐
+        │  内存访问    │
+        │  允许/拒绝   │
+        └──────────────┘
+
+特点：
+- 最多8个可编程区域
+- 每个区域独立配置
+- 支持区域重叠（高编号优先）
+- 可以动态使能/禁用
+</code></pre>
+<h3 id="12-mpu">1.2 MPU寄存器</h3>
+<p>MPU主要通过以下寄存器进行配置：</p>
+<pre><code class="language-c">// MPU类型寄存器（只读）
+#define MPU_TYPE    (*((volatile uint32_t*)0xE000ED90))
+
+// MPU控制寄存器
+#define MPU_CTRL    (*((volatile uint32_t*)0xE000ED94))
+
+// MPU区域编号寄存器
+#define MPU_RNR     (*((volatile uint32_t*)0xE000ED98))
+
+// MPU区域基地址寄存器
+#define MPU_RBAR    (*((volatile uint32_t*)0xE000ED9C))
+
+// MPU区域属性和大小寄存器
+#define MPU_RASR    (*((volatile uint32_t*)0xE000EDA0))
+</code></pre>
+<p><strong>MPU_TYPE寄存器</strong>：</p>
+<pre><code>位域说明：
+[23:16] DREGION - 支持的数据区域数量
+[15:8]  IREGION - 支持的指令区域数量（通常为0）
+[0]     SEPARATE - 是否支持独立的指令和数据区域
+
+示例值：0x00000800 表示支持8个数据区域
+</code></pre>
+<p><strong>MPU_CTRL寄存器</strong>：</p>
+<pre><code class="language-c">// MPU控制位定义
+#define MPU_CTRL_ENABLE     (1 &lt;&lt; 0)  // MPU使能
+#define MPU_CTRL_HFNMIENA   (1 &lt;&lt; 1)  // HardFault和NMI期间使能MPU
+#define MPU_CTRL_PRIVDEFENA (1 &lt;&lt; 2)  // 特权模式默认内存映射使能
+
+// 使能MPU
+MPU_CTRL = MPU_CTRL_ENABLE | MPU_CTRL_PRIVDEFENA;
+</code></pre>
+<h3 id="13">1.3 区域大小和对齐</h3>
+<p>MPU区域大小必须是2的幂次方，最小32字节，最大4GB。</p>
+<pre><code class="language-c">// 区域大小定义
+typedef enum {
+    MPU_REGION_SIZE_32B   = 0x04,  // 32字节
+    MPU_REGION_SIZE_64B   = 0x05,  // 64字节
+    MPU_REGION_SIZE_128B  = 0x06,  // 128字节
+    MPU_REGION_SIZE_256B  = 0x07,  // 256字节
+    MPU_REGION_SIZE_512B  = 0x08,  // 512字节
+    MPU_REGION_SIZE_1KB   = 0x09,  // 1KB
+    MPU_REGION_SIZE_2KB   = 0x0A,  // 2KB
+    MPU_REGION_SIZE_4KB   = 0x0B,  // 4KB
+    MPU_REGION_SIZE_8KB   = 0x0C,  // 8KB
+    MPU_REGION_SIZE_16KB  = 0x0D,  // 16KB
+    MPU_REGION_SIZE_32KB  = 0x0E,  // 32KB
+    MPU_REGION_SIZE_64KB  = 0x0F,  // 64KB
+    MPU_REGION_SIZE_128KB = 0x10,  // 128KB
+    MPU_REGION_SIZE_256KB = 0x11,  // 256KB
+    MPU_REGION_SIZE_512KB = 0x12,  // 512KB
+    MPU_REGION_SIZE_1MB   = 0x13,  // 1MB
+    MPU_REGION_SIZE_2MB   = 0x14,  // 2MB
+    MPU_REGION_SIZE_4MB   = 0x15,  // 4MB
+    MPU_REGION_SIZE_8MB   = 0x16,  // 8MB
+    MPU_REGION_SIZE_16MB  = 0x17,  // 16MB
+    MPU_REGION_SIZE_32MB  = 0x18,  // 32MB
+    MPU_REGION_SIZE_64MB  = 0x19,  // 64MB
+    MPU_REGION_SIZE_128MB = 0x1A,  // 128MB
+    MPU_REGION_SIZE_256MB = 0x1B,  // 256MB
+    MPU_REGION_SIZE_512MB = 0x1C,  // 512MB
+    MPU_REGION_SIZE_1GB   = 0x1D,  // 1GB
+    MPU_REGION_SIZE_2GB   = 0x1E,  // 2GB
+    MPU_REGION_SIZE_4GB   = 0x1F   // 4GB
+} MPU_RegionSize_t;
+
+// 对齐要求：基地址必须对齐到区域大小
+// 例如：64KB区域的基地址必须是64KB的整数倍
+</code></pre>
+<p><strong>预期结果</strong>：
+- 理解MPU的基本架构
+- 熟悉MPU寄存器功能
+- 掌握区域大小和对齐规则</p>
+<h2 id="2mpu">步骤2：配置MPU区域</h2>
+<h3 id="21">2.1 基本配置流程</h3>
+<p>配置MPU区域的基本步骤：</p>
+<pre><code class="language-c">/**
+ * @brief  MPU区域配置基本流程
+ */
+void mpu_region_config_basic(void) {
+    // 1. 禁用MPU
+    MPU-&gt;CTRL = 0;
+
+    // 2. 选择要配置的区域编号（0-7）
+    MPU-&gt;RNR = 0;  // 配置Region 0
+
+    // 3. 设置区域基地址
+    MPU-&gt;RBAR = 0x20000000;  // SRAM起始地址
+
+    // 4. 设置区域属性和大小
+    MPU-&gt;RASR = (1 &lt;&lt; 0)                    // 使能区域
+              | (0x03 &lt;&lt; 24)                // AP=011（完全访问）
+              | (0x0D &lt;&lt; 1)                 // 大小=16KB
+              | (0 &lt;&lt; 16);                  // 禁用子区域
+
+    // 5. 使能MPU
+    MPU-&gt;CTRL = MPU_CTRL_ENABLE | MPU_CTRL_PRIVDEFENA;
+
+    // 6. 数据同步屏障
+    __DSB();
+    __ISB();
+}
+</code></pre>
+<h3 id="22-hal">2.2 使用HAL库配置</h3>
+<p>STM32 HAL库提供了更方便的MPU配置接口：</p>
+<pre><code class="language-c">/**
+ * @brief  使用HAL库配置MPU区域
+ */
+void mpu_hal_config_example(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    // 禁用MPU
+    HAL_MPU_Disable();
+
+    // 配置Region 0: 保护SRAM区域
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
+    MPU_InitStruct.SubRegionDisable = 0x00;
+    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 使能MPU
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+<h3 id="23">2.3 完整配置示例</h3>
+<p>配置多个MPU区域保护不同的内存区域：</p>
+<pre><code class="language-c">/**
+ * @brief  完整的MPU配置示例
+ */
+void mpu_complete_configuration(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    // 禁用MPU
+    HAL_MPU_Disable();
+
+    // ========== Region 0: Flash区域（只读，可执行） ==========
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+    MPU_InitStruct.SubRegionDisable = 0x00;
+    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;  // 特权只读
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;  // 可执行
+    MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // ========== Region 1: SRAM区域（读写，不可执行） ==========
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;  // 完全访问
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;  // 不可执行
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // ========== Region 2: 外设区域（读写，不可执行） ==========
+    MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+    MPU_InitStruct.BaseAddress = 0x40000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_512MB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // ========== Region 3: 栈保护区域（禁止访问） ==========
+    // 在栈底部设置一个禁止访问的区域，防止栈溢出
+    MPU_InitStruct.Number = MPU_REGION_NUMBER3;
+    MPU_InitStruct.BaseAddress = 0x20000000;  // 栈底部
+    MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
+    MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;  // 禁止访问
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 使能MPU
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;MPU配置完成\n&quot;);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- MPU成功配置
+- 不同内存区域有不同的访问权限
+- 系统正常运行</p>
+<h2 id="3">步骤3：访问权限设置</h2>
+<h3 id="31">3.1 访问权限类型</h3>
+<p>MPU支持多种访问权限配置：</p>
+<pre><code class="language-c">// 访问权限定义
+typedef enum {
+    MPU_REGION_NO_ACCESS        = 0x00,  // 000: 无访问权限
+    MPU_REGION_PRIV_RW          = 0x01,  // 001: 特权读写
+    MPU_REGION_PRIV_RW_URO      = 0x02,  // 010: 特权读写，用户只读
+    MPU_REGION_FULL_ACCESS      = 0x03,  // 011: 完全访问（特权和用户读写）
+    // 0x04 保留
+    MPU_REGION_PRIV_RO          = 0x05,  // 101: 特权只读
+    MPU_REGION_PRIV_RO_URO      = 0x06,  // 110: 特权只读，用户只读
+    // 0x07 保留
+} MPU_AccessPermission_t;
+
+/**
+ * @brief  访问权限配置示例
+ */
+void mpu_access_permission_examples(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 示例1: 代码区域 - 特权只读，可执行
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_512KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 示例2: 数据区域 - 完全访问，不可执行
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 示例3: 只读数据区域 - 特权和用户只读
+    MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+    MPU_InitStruct.BaseAddress = 0x08080000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO_URO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 示例4: 保护区域 - 禁止访问
+    MPU_InitStruct.Number = MPU_REGION_NUMBER3;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
+    MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+<h3 id="32">3.2 特权级别与访问权限</h3>
+<p>访问权限与处理器特权级别的关系：</p>
+<pre><code>访问权限表：
+
+AP[2:0] | 特权模式 | 用户模式 | 说明
+--------|---------|---------|------------------
+  000   |   无    |   无    | 完全禁止访问
+  001   |   读写  |   无    | 仅特权模式可访问
+  010   |   读写  |   只读  | 特权读写，用户只读
+  011   |   读写  |   读写  | 完全访问
+  101   |   只读  |   无    | 仅特权模式只读
+  110   |   只读  |   只读  | 所有模式只读
+
+应用场景：
+- 000: 栈保护区、未使用区域
+- 001: 系统关键数据、配置寄存器
+- 010: 共享只读数据
+- 011: 普通数据区域
+- 101: 代码区域、常量数据
+- 110: 全局只读配置
+</code></pre>
+<h3 id="33">3.3 执行权限控制</h3>
+<p>通过XN（eXecute Never）位控制代码执行：</p>
+<pre><code class="language-c">/**
+ * @brief  执行权限控制示例
+ */
+void mpu_execute_permission_example(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 场景1: Flash代码区域 - 可执行
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;  // 可执行
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 场景2: SRAM数据区域 - 不可执行（防止代码注入攻击）
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;  // 不可执行
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 场景3: SRAM代码区域 - 可执行（用于动态加载代码）
+    MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+    MPU_InitStruct.BaseAddress = 0x20010000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_16KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RW;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;  // 可执行
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;执行权限配置完成\n&quot;);
+}
+
+/**
+ * @brief  测试执行权限
+ */
+void test_execute_permission(void) {
+    // 定义一个简单的函数
+    typedef void (*func_ptr_t)(void);
+
+    // 在SRAM中的函数（如果配置为不可执行，会触发MemManage异常）
+    uint32_t sram_code[] = {
+        0x4770,  // BX LR (Thumb指令：返回)
+    };
+
+    func_ptr_t sram_func = (func_ptr_t)((uint32_t)sram_code | 0x01);
+
+    printf(&quot;尝试执行SRAM中的代码...\n&quot;);
+    sram_func();  // 如果SRAM配置为不可执行，这里会触发异常
+    printf(&quot;执行成功\n&quot;);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 不同区域有正确的访问权限
+- 代码区域可执行，数据区域不可执行
+- 非法访问会触发MemManage异常</p>
+<h2 id="4">步骤4：内存属性配置</h2>
+<h3 id="41">4.1 内存类型和属性</h3>
+<p>MPU支持配置内存的缓存和缓冲属性：</p>
+<pre><code class="language-c">/**
+ * @brief  内存属性配置
+ * 
+ * TEX[2:0] | C | B | 内存类型 | 说明
+ * ---------|---|---|---------|------------------
+ *   000    | 0 | 0 | Strongly-ordered | 严格有序
+ *   000    | 0 | 1 | Device | 设备内存
+ *   000    | 1 | 0 | Normal | 普通内存（不可缓存）
+ *   000    | 1 | 1 | Normal | 普通内存（写通缓存）
+ *   001    | 0 | 0 | Normal | 普通内存（写回缓存）
+ *   001    | 0 | 1 | Normal | 普通内存（写回缓存）
+ *   001    | 1 | 0 | Normal | 普通内存（不可缓存）
+ *   001    | 1 | 1 | Normal | 普通内存（写回缓存）
+ */
+
+void mpu_memory_attributes_config(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 配置1: Flash - 可缓存，不可缓冲
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;      // C=1
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE; // B=0
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 配置2: SRAM - 可缓存，可缓冲
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;    // C=1
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;  // B=1
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 配置3: 外设 - 不可缓存，可缓冲（设备内存）
+    MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+    MPU_InitStruct.BaseAddress = 0x40000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_512MB;
+    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;  // C=0
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;    // B=1
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+<h3 id="42">4.2 共享属性</h3>
+<p>共享属性用于多核系统或DMA访问：</p>
+<pre><code class="language-c">/**
+ * @brief  共享属性配置
+ */
+void mpu_shareable_config(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 非共享区域 - 单核独占
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;  // 非共享
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 共享区域 - DMA缓冲区
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20010000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_16KB;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;  // 共享
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;  // DMA区域通常不缓存
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+<h3 id="43">4.3 子区域禁用</h3>
+<p>每个MPU区域可以分为8个子区域，可以单独禁用：</p>
+<pre><code class="language-c">/**
+ * @brief  子区域禁用示例
+ */
+void mpu_subregion_disable_example(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 配置一个64KB的区域，禁用第一个8KB子区域
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_64KB;  // 64KB = 8个8KB子区域
+
+    // 子区域禁用位图（bit0对应第一个子区域）
+    // 0x01 = 0b00000001 - 禁用第一个子区域（0x20000000-0x20001FFF）
+    MPU_InitStruct.SubRegionDisable = 0x01;
+
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;子区域配置：\n&quot;);
+    printf(&quot;  总区域: 0x20000000 - 0x2000FFFF (64KB)\n&quot;);
+    printf(&quot;  禁用区域: 0x20000000 - 0x20001FFF (8KB)\n&quot;);
+    printf(&quot;  可用区域: 0x20002000 - 0x2000FFFF (56KB)\n&quot;);
+}
+
+/**
+ * @brief  使用子区域实现栈保护
+ */
+void mpu_stack_guard_with_subregion(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 假设栈区域为32KB，从0x20008000开始
+    // 禁用最低的4KB作为栈保护区
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x20008000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_32KB;  // 32KB = 8个4KB子区域
+
+    // 禁用第一个子区域（栈底部4KB）
+    MPU_InitStruct.SubRegionDisable = 0x01;
+
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;栈保护配置完成\n&quot;);
+    printf(&quot;  栈区域: 0x20008000 - 0x2000FFFF\n&quot;);
+    printf(&quot;  保护区: 0x20008000 - 0x20008FFF (禁止访问)\n&quot;);
+    printf(&quot;  可用栈: 0x20009000 - 0x2000FFFF\n&quot;);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 内存属性正确配置
+- 缓存和缓冲行为符合预期
+- 子区域禁用功能正常工作</p>
+<h2 id="5">步骤5：故障处理机制</h2>
+<h3 id="51-memmanage">5.1 MemManage异常</h3>
+<p>MPU违规访问会触发MemManage异常：</p>
+<pre><code class="language-c">/**
+ * @brief  MemManage异常处理函数
+ */
+void MemManage_Handler(void) {
+    // 读取故障状态寄存器
+    uint32_t cfsr = SCB-&gt;CFSR;
+    uint32_t mmfsr = cfsr &amp; 0xFF;  // MemManage Fault Status Register
+
+    printf(&quot;\n=== MemManage Fault ===\n&quot;);
+
+    // 分析故障原因
+    if (mmfsr &amp; SCB_CFSR_IACCVIOL_Msk) {
+        printf(&quot;指令访问违规\n&quot;);
+    }
+    if (mmfsr &amp; SCB_CFSR_DACCVIOL_Msk) {
+        printf(&quot;数据访问违规\n&quot;);
+    }
+    if (mmfsr &amp; SCB_CFSR_MUNSTKERR_Msk) {
+        printf(&quot;异常返回时出栈错误\n&quot;);
+    }
+    if (mmfsr &amp; SCB_CFSR_MSTKERR_Msk) {
+        printf(&quot;异常入口时入栈错误\n&quot;);
+    }
+    if (mmfsr &amp; SCB_CFSR_MLSPERR_Msk) {
+        printf(&quot;浮点延迟状态保存错误\n&quot;);
+    }
+
+    // 如果MMARVALID位置位，读取故障地址
+    if (mmfsr &amp; SCB_CFSR_MMARVALID_Msk) {
+        uint32_t mmfar = SCB-&gt;MMFAR;
+        printf(&quot;故障地址: 0x%08X\n&quot;, (unsigned int)mmfar);
+    }
+
+    // 清除故障标志
+    SCB-&gt;CFSR = mmfsr;
+
+    // 进入死循环或重启系统
+    while (1) {
+        __NOP();
+    }
+}
+
+/**
+ * @brief  使能MemManage异常
+ */
+void enable_memmanage_fault(void) {
+    // 使能MemManage异常
+    SCB-&gt;SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
+
+    // 设置MemManage异常优先级
+    NVIC_SetPriority(MemoryManagement_IRQn, 0);
+
+    printf(&quot;MemManage异常已使能\n&quot;);
+}
+</code></pre>
+<h3 id="52">5.2 故障调试技巧</h3>
+<pre><code class="language-c">/**
+ * @brief  MPU故障调试辅助函数
+ */
+void mpu_fault_debug_info(void) {
+    uint32_t cfsr = SCB-&gt;CFSR;
+    uint32_t mmfsr = cfsr &amp; 0xFF;
+
+    printf(&quot;\n=== MPU故障调试信息 ===\n&quot;);
+
+    // 打印MPU配置
+    printf(&quot;MPU控制寄存器: 0x%08X\n&quot;, (unsigned int)MPU-&gt;CTRL);
+    printf(&quot;MPU类型寄存器: 0x%08X\n&quot;, (unsigned int)MPU-&gt;TYPE);
+
+    // 打印所有区域配置
+    for (int i = 0; i &lt; 8; i++) {
+        MPU-&gt;RNR = i;
+        uint32_t rbar = MPU-&gt;RBAR;
+        uint32_t rasr = MPU-&gt;RASR;
+
+        if (rasr &amp; 0x01) {  // 区域使能
+            printf(&quot;\nRegion %d:\n&quot;, i);
+            printf(&quot;  基地址: 0x%08X\n&quot;, (unsigned int)(rbar &amp; 0xFFFFFFE0));
+            printf(&quot;  大小: %d\n&quot;, (int)((rasr &gt;&gt; 1) &amp; 0x1F));
+            printf(&quot;  访问权限: 0x%X\n&quot;, (unsigned int)((rasr &gt;&gt; 24) &amp; 0x07));
+            printf(&quot;  XN: %d\n&quot;, (int)((rasr &gt;&gt; 28) &amp; 0x01));
+        }
+    }
+
+    // 打印故障信息
+    if (mmfsr) {
+        printf(&quot;\n故障状态: 0x%02X\n&quot;, (unsigned int)mmfsr);
+        if (mmfsr &amp; SCB_CFSR_MMARVALID_Msk) {
+            printf(&quot;故障地址: 0x%08X\n&quot;, (unsigned int)SCB-&gt;MMFAR);
+        }
+    }
+}
+
+/**
+ * @brief  测试MPU保护
+ */
+void test_mpu_protection(void) {
+    printf(&quot;\n=== 测试MPU保护 ===\n&quot;);
+
+    // 测试1: 访问禁止区域
+    printf(&quot;测试1: 访问禁止区域...\n&quot;);
+    volatile uint32_t *forbidden_addr = (uint32_t*)0x20000000;
+    // *forbidden_addr = 0x12345678;  // 取消注释会触发MemManage异常
+    printf(&quot;测试1跳过（避免触发异常）\n&quot;);
+
+    // 测试2: 执行数据区域的代码
+    printf(&quot;测试2: 执行数据区域的代码...\n&quot;);
+    typedef void (*func_t)(void);
+    uint32_t code_in_data[] = {0x4770};  // BX LR
+    func_t func = (func_t)((uint32_t)code_in_data | 0x01);
+    // func();  // 取消注释会触发MemManage异常
+    printf(&quot;测试2跳过（避免触发异常）\n&quot;);
+
+    // 测试3: 写入只读区域
+    printf(&quot;测试3: 写入只读区域...\n&quot;);
+    volatile uint32_t *readonly_addr = (uint32_t*)0x08000000;
+    // *readonly_addr = 0xDEADBEEF;  // 取消注释会触发MemManage异常
+    printf(&quot;测试3跳过（避免触发异常）\n&quot;);
+
+    printf(&quot;所有测试完成\n&quot;);
+}
+</code></pre>
+<h3 id="53">5.3 故障恢复策略</h3>
+<pre><code class="language-c">/**
+ * @brief  MPU故障恢复策略
+ */
+typedef enum {
+    MPU_FAULT_ACTION_HALT,      // 停止系统
+    MPU_FAULT_ACTION_RESET,     // 重启系统
+    MPU_FAULT_ACTION_LOG,       // 记录日志并继续
+    MPU_FAULT_ACTION_RECOVER    // 尝试恢复
+} MPU_FaultAction_t;
+
+MPU_FaultAction_t mpu_fault_action = MPU_FAULT_ACTION_HALT;
+
+/**
+ * @brief  改进的MemManage异常处理
+ */
+void MemManage_Handler_Advanced(void) {
+    uint32_t cfsr = SCB-&gt;CFSR;
+    uint32_t mmfsr = cfsr &amp; 0xFF;
+    uint32_t fault_addr = 0;
+
+    // 记录故障信息
+    if (mmfsr &amp; SCB_CFSR_MMARVALID_Msk) {
+        fault_addr = SCB-&gt;MMFAR;
+    }
+
+    // 记录到日志
+    log_mpu_fault(mmfsr, fault_addr);
+
+    // 清除故障标志
+    SCB-&gt;CFSR = mmfsr;
+
+    // 根据策略处理
+    switch (mpu_fault_action) {
+        case MPU_FAULT_ACTION_HALT:
+            printf(&quot;系统停止\n&quot;);
+            while (1);
+            break;
+
+        case MPU_FAULT_ACTION_RESET:
+            printf(&quot;系统重启\n&quot;);
+            NVIC_SystemReset();
+            break;
+
+        case MPU_FAULT_ACTION_LOG:
+            printf(&quot;记录日志并继续\n&quot;);
+            // 返回到下一条指令（需要修改栈帧）
+            break;
+
+        case MPU_FAULT_ACTION_RECOVER:
+            printf(&quot;尝试恢复\n&quot;);
+            // 实现恢复逻辑
+            break;
+    }
+}
+
+/**
+ * @brief  记录MPU故障日志
+ */
+void log_mpu_fault(uint32_t mmfsr, uint32_t fault_addr) {
+    // 保存到Flash或发送到远程服务器
+    printf(&quot;MPU故障日志:\n&quot;);
+    printf(&quot;  时间戳: %u\n&quot;, (unsigned int)HAL_GetTick());
+    printf(&quot;  故障状态: 0x%02X\n&quot;, (unsigned int)mmfsr);
+    printf(&quot;  故障地址: 0x%08X\n&quot;, (unsigned int)fault_addr);
+
+    // 保存到非易失性存储
+    // save_to_flash(...);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- MemManage异常正确触发
+- 故障信息准确记录
+- 故障恢复策略有效</p>
+<h2 id="6">步骤6：安全应用设计</h2>
+<h3 id="61">6.1 栈溢出保护</h3>
+<p>使用MPU保护栈区域，防止栈溢出：</p>
+<pre><code class="language-c">/**
+ * @brief  栈溢出保护配置
+ */
+void mpu_stack_overflow_protection(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    // 获取栈信息（从链接脚本或启动文件）
+    extern uint32_t _sstack;  // 栈底
+    extern uint32_t _estack;  // 栈顶
+
+    uint32_t stack_base = (uint32_t)&amp;_sstack;
+    uint32_t stack_size = (uint32_t)&amp;_estack - stack_base;
+
+    HAL_MPU_Disable();
+
+    // 配置栈保护区（栈底部256字节禁止访问）
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = stack_base;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
+    MPU_InitStruct.SubRegionDisable = 0x00;
+    MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;  // 禁止访问
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 配置正常栈区域
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = stack_base + 256;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_16KB;  // 根据实际栈大小调整
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;栈溢出保护已配置\n&quot;);
+    printf(&quot;  栈底保护区: 0x%08X - 0x%08X\n&quot;, 
+           (unsigned int)stack_base, 
+           (unsigned int)(stack_base + 255));
+}
+
+/**
+ * @brief  测试栈溢出保护
+ */
+void test_stack_overflow_protection(void) {
+    printf(&quot;测试栈溢出保护...\n&quot;);
+
+    // 递归函数，会导致栈溢出
+    void recursive_function(int depth) {
+        char buffer[1024];  // 大数组加速栈消耗
+        buffer[0] = depth;
+
+        printf(&quot;递归深度: %d\n&quot;, depth);
+
+        if (depth &lt; 100) {
+            recursive_function(depth + 1);
+        }
+    }
+
+    // 取消注释以测试（会触发MemManage异常）
+    // recursive_function(0);
+
+    printf(&quot;测试跳过（避免触发异常）\n&quot;);
+}
+</code></pre>
+<h3 id="62">6.2 代码注入防护</h3>
+<p>防止在数据区域执行代码：</p>
+<pre><code class="language-c">/**
+ * @brief  代码注入防护配置
+ */
+void mpu_code_injection_protection(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 配置Flash代码区域 - 可执行
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;  // 可执行
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 配置SRAM数据区域 - 不可执行
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;  // 不可执行
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;代码注入防护已配置\n&quot;);
+    printf(&quot;  Flash区域: 可执行\n&quot;);
+    printf(&quot;  SRAM区域: 不可执行\n&quot;);
+}
+</code></pre>
+<h3 id="63">6.3 关键数据保护</h3>
+<p>保护系统关键配置和密钥：</p>
+<pre><code class="language-c">/**
+ * @brief  关键数据保护
+ */
+#define SECURE_DATA_BASE  0x20010000
+#define SECURE_DATA_SIZE  4096
+
+typedef struct {
+    uint32_t magic;
+    uint8_t  aes_key[32];
+    uint32_t device_id;
+    uint32_t checksum;
+} SecureData_t;
+
+__attribute__((section(&quot;.secure_data&quot;)))
+SecureData_t secure_data;
+
+void mpu_critical_data_protection(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 配置安全数据区域 - 特权只读
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = SECURE_DATA_BASE;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_4KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;  // 特权只读
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;关键数据保护已配置\n&quot;);
+}
+
+/**
+ * @brief  安全数据访问接口
+ */
+void secure_data_write(const SecureData_t *data) {
+    // 临时禁用MPU保护
+    HAL_MPU_Disable();
+
+    // 写入数据
+    memcpy(&amp;secure_data, data, sizeof(SecureData_t));
+
+    // 重新使能MPU保护
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    printf(&quot;安全数据已更新\n&quot;);
+}
+
+const SecureData_t* secure_data_read(void) {
+    // 读取不需要禁用MPU（配置为只读）
+    return &amp;secure_data;
+}
+</code></pre>
+<h3 id="64-rtos">6.4 RTOS任务隔离</h3>
+<p>在RTOS环境中使用MPU隔离任务：</p>
+<pre><code class="language-c">/**
+ * @brief  RTOS任务MPU配置
+ */
+typedef struct {
+    uint32_t stack_base;
+    uint32_t stack_size;
+    uint32_t data_base;
+    uint32_t data_size;
+} TaskMemoryConfig_t;
+
+void mpu_task_isolation_config(TaskMemoryConfig_t *task_config) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // 配置任务栈区域
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = task_config-&gt;stack_base;
+    MPU_InitStruct.Size = get_mpu_size(task_config-&gt;stack_size);
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 配置任务数据区域
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = task_config-&gt;data_base;
+    MPU_InitStruct.Size = get_mpu_size(task_config-&gt;data_size);
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+
+/**
+ * @brief  获取MPU区域大小编码
+ */
+uint32_t get_mpu_size(uint32_t size_bytes) {
+    // 将字节大小转换为MPU大小编码
+    uint32_t size_code = 0;
+    uint32_t temp_size = size_bytes;
+
+    while (temp_size &gt; 32) {
+        temp_size &gt;&gt;= 1;
+        size_code++;
+    }
+
+    return size_code + 4;  // MPU_REGION_SIZE_32B = 0x04
+}
+
+/**
+ * @brief  FreeRTOS任务切换时更新MPU配置
+ */
+void vPortTaskSwitchHook(void *pxCurrentTCB, void *pxNewTCB) {
+    // 获取新任务的内存配置
+    TaskMemoryConfig_t *new_task_config = get_task_memory_config(pxNewTCB);
+
+    // 更新MPU配置
+    mpu_task_isolation_config(new_task_config);
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 栈溢出被MPU检测到
+- 数据区域无法执行代码
+- 关键数据受到保护
+- RTOS任务内存隔离有效</p>
+<h2 id="_8">故障排除</h2>
+<h3 id="1mpu_1">问题1：MPU配置后系统无法启动</h3>
+<p><strong>可能原因</strong>：
+- MPU区域配置错误，覆盖了关键内存
+- 栈区域被禁用
+- 中断向量表区域不可访问</p>
+<p><strong>解决方法</strong>：
+1. 检查MPU区域配置是否正确
+2. 确保栈区域可访问
+3. 确保Flash代码区域可执行
+4. 使用调试器单步跟踪启动过程</p>
+<pre><code class="language-c">// 调试代码
+void debug_mpu_config(void) {
+    printf(&quot;MPU配置检查:\n&quot;);
+    printf(&quot;MPU_CTRL: 0x%08X\n&quot;, (unsigned int)MPU-&gt;CTRL);
+
+    for (int i = 0; i &lt; 8; i++) {
+        MPU-&gt;RNR = i;
+        if (MPU-&gt;RASR &amp; 0x01) {
+            printf(&quot;Region %d: Base=0x%08X, RASR=0x%08X\n&quot;, 
+                   i, (unsigned int)MPU-&gt;RBAR, (unsigned int)MPU-&gt;RASR);
+        }
+    }
+}
+</code></pre>
+<h3 id="2memmanage">问题2：MemManage异常频繁触发</h3>
+<p><strong>可能原因</strong>：
+- 区域大小或对齐不正确
+- 访问权限配置过于严格
+- 代码访问了未配置的区域</p>
+<p><strong>解决方法</strong>：
+1. 检查区域大小和对齐
+2. 放宽访问权限进行测试
+3. 在MemManage_Handler中打印详细信息
+4. 使用MPU_PRIVILEGED_DEFAULT模式</p>
+<pre><code class="language-c">// 详细的故障信息
+void detailed_memmanage_info(void) {
+    uint32_t cfsr = SCB-&gt;CFSR;
+    uint32_t mmfsr = cfsr &amp; 0xFF;
+
+    printf(&quot;CFSR: 0x%08X\n&quot;, (unsigned int)cfsr);
+    printf(&quot;MMFSR: 0x%02X\n&quot;, (unsigned int)mmfsr);
+
+    if (mmfsr &amp; SCB_CFSR_MMARVALID_Msk) {
+        printf(&quot;MMFAR: 0x%08X\n&quot;, (unsigned int)SCB-&gt;MMFAR);
+    }
+
+    // 打印栈回溯
+    print_stack_trace();
+}
+</code></pre>
+<h3 id="3dma">问题3：DMA传输失败</h3>
+<p><strong>可能原因</strong>：
+- DMA缓冲区在MPU保护区域内
+- 内存属性配置不当（缓存问题）
+- 共享属性未正确配置</p>
+<p><strong>解决方法</strong>：
+1. 将DMA缓冲区放在可访问区域
+2. 配置DMA区域为非缓存
+3. 设置共享属性
+4. 使用Cache清理/无效化操作</p>
+<pre><code class="language-c">// DMA缓冲区MPU配置
+void mpu_dma_buffer_config(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    HAL_MPU_Disable();
+
+    // DMA缓冲区：非缓存，可缓冲，共享
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x20010000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_16KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_SHAREABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+}
+</code></pre>
+<h3 id="4_1">问题4：性能下降</h3>
+<p><strong>可能原因</strong>：
+- 过多的MPU区域检查
+- 缓存属性配置不当
+- 区域重叠导致额外开销</p>
+<p><strong>解决方法</strong>：
+1. 减少MPU区域数量
+2. 优化缓存配置
+3. 避免不必要的区域重叠
+4. 使用性能计数器测量影响</p>
+<pre><code class="language-c">// 性能测试
+void test_mpu_performance(void) {
+    uint32_t start, end;
+    volatile uint32_t data;
+
+    // 测试1：无MPU
+    HAL_MPU_Disable();
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 10000; i++) {
+        data = *(volatile uint32_t*)0x20000000;
+    }
+    end = DWT-&gt;CYCCNT;
+    printf(&quot;无MPU: %u 周期\n&quot;, (unsigned int)(end - start));
+
+    // 测试2：有MPU
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+    start = DWT-&gt;CYCCNT;
+    for (int i = 0; i &lt; 10000; i++) {
+        data = *(volatile uint32_t*)0x20000000;
+    }
+    end = DWT-&gt;CYCCNT;
+    printf(&quot;有MPU: %u 周期\n&quot;, (unsigned int)(end - start));
+}
+</code></pre>
+<h2 id="_9">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ MPU的基本概念和架构</li>
+<li>✅ MPU区域配置方法</li>
+<li>✅ 访问权限和内存属性设置</li>
+<li>✅ 故障处理和调试技巧</li>
+<li>✅ 安全应用设计实践</li>
+</ul>
+<h2 id="_10">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1</strong>：实现一个完整的栈溢出检测系统
+   - 配置栈保护区
+   - 实现故障恢复机制
+   - 记录故障日志</p>
+</li>
+<li>
+<p><strong>挑战2</strong>：为FreeRTOS任务配置MPU隔离
+   - 每个任务独立的内存空间
+   - 任务间通信机制
+   - 权限管理</p>
+</li>
+<li>
+<p><strong>挑战3</strong>：实现安全启动流程
+   - 使用MPU保护Bootloader
+   - 验证应用程序完整性
+   - 防止固件篡改</p>
+</li>
+</ol>
+<h2 id="_11">完整代码</h2>
+<p>完整的MPU配置示例代码：</p>
+<pre><code class="language-c">/**
+ * @file    mpu_config.c
+ * @brief   MPU完整配置示例
+ */
+
+#include &quot;stm32f4xx_hal.h&quot;
+#include &lt;stdio.h&gt;
+
+// 使能MemManage异常
+void MPU_Init(void) {
+    MPU_Region_InitTypeDef MPU_InitStruct = {0};
+
+    // 禁用MPU
+    HAL_MPU_Disable();
+
+    // Region 0: Flash (1MB, 只读, 可执行)
+    MPU_InitStruct.Enable = MPU_REGION_ENABLE;
+    MPU_InitStruct.Number = MPU_REGION_NUMBER0;
+    MPU_InitStruct.BaseAddress = 0x08000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_1MB;
+    MPU_InitStruct.SubRegionDisable = 0x00;
+    MPU_InitStruct.TypeExtField = MPU_TEX_LEVEL0;
+    MPU_InitStruct.AccessPermission = MPU_REGION_PRIV_RO;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_ENABLE;
+    MPU_InitStruct.IsShareable = MPU_ACCESS_NOT_SHAREABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_NOT_BUFFERABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // Region 1: SRAM (128KB, 读写, 不可执行)
+    MPU_InitStruct.Number = MPU_REGION_NUMBER1;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_128KB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // Region 2: 外设 (512MB, 读写, 不可执行)
+    MPU_InitStruct.Number = MPU_REGION_NUMBER2;
+    MPU_InitStruct.BaseAddress = 0x40000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_512MB;
+    MPU_InitStruct.AccessPermission = MPU_REGION_FULL_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    MPU_InitStruct.IsCacheable = MPU_ACCESS_NOT_CACHEABLE;
+    MPU_InitStruct.IsBufferable = MPU_ACCESS_BUFFERABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // Region 3: 栈保护区 (256B, 禁止访问)
+    MPU_InitStruct.Number = MPU_REGION_NUMBER3;
+    MPU_InitStruct.BaseAddress = 0x20000000;
+    MPU_InitStruct.Size = MPU_REGION_SIZE_256B;
+    MPU_InitStruct.AccessPermission = MPU_REGION_NO_ACCESS;
+    MPU_InitStruct.DisableExec = MPU_INSTRUCTION_ACCESS_DISABLE;
+    HAL_MPU_ConfigRegion(&amp;MPU_InitStruct);
+
+    // 使能MPU
+    HAL_MPU_Enable(MPU_PRIVILEGED_DEFAULT);
+
+    // 使能MemManage异常
+    SCB-&gt;SHCSR |= SCB_SHCSR_MEMFAULTENA_Msk;
+
+    printf(&quot;MPU初始化完成\n&quot;);
+}
+
+// MemManage异常处理
+void MemManage_Handler(void) {
+    uint32_t cfsr = SCB-&gt;CFSR;
+    uint32_t mmfsr = cfsr &amp; 0xFF;
+
+    printf(&quot;\n=== MemManage Fault ===\n&quot;);
+    printf(&quot;MMFSR: 0x%02X\n&quot;, (unsigned int)mmfsr);
+
+    if (mmfsr &amp; SCB_CFSR_MMARVALID_Msk) {
+        printf(&quot;Fault Address: 0x%08X\n&quot;, (unsigned int)SCB-&gt;MMFAR);
+    }
+
+    // 清除故障标志
+    SCB-&gt;CFSR = mmfsr;
+
+    while (1);
+}
+
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化MPU
+    MPU_Init();
+
+    // 应用程序代码
+    while (1) {
+        HAL_Delay(1000);
+    }
+}
+</code></pre>
+<h2 id="_12">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="05-fpu-usage.html">浮点运算单元FPU使用指南</a> - 学习FPU配置和使用</li>
+<li><a href="../advanced/01-performance-analysis-tool.html">性能计数器与系统性能分析</a> - 学习性能优化</li>
+<li><a href="../advanced/02-jtag-swd-deep-dive.html">JTAG与SWD调试技术</a> - 深入学习调试技术</li>
+</ul>
+<h2 id="_13">参考资料</h2>
+<ol>
+<li>ARM Cortex-M4 Technical Reference Manual</li>
+<li>STM32F4 Reference Manual - MPU章节</li>
+<li>ARM Architecture Reference Manual</li>
+<li>Application Note: Using the MPU on Cortex-M processors</li>
+</ol>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

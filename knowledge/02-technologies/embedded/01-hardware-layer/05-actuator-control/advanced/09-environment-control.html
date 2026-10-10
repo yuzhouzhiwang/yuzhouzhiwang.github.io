@@ -1,0 +1,2565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>环境监控与联动控制系统 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">项目概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#hvac">HVAC控制理论基础</a></li>
+<li><a href="#_4">传感器布置标准</a></li>
+<li><a href="#_5">能效优化原则</a></li>
+<li><a href="#_6">多参数耦合关系</a></li>
+</ul>
+</li>
+<li><a href="#_7">硬件系统设计</a></li>
+<li><a href="#_8">传感器驱动实现</a><ul>
+<li><a href="#dht22">DHT22温湿度传感器</a></li>
+<li><a href="#mh-z19b-co2">MH-Z19B CO₂传感器</a></li>
+<li><a href="#bh1750">BH1750光照传感器</a></li>
+<li><a href="#sht31">SHT31高精度温湿度传感器</a></li>
+<li><a href="#mh-z19b-co2abc">MH-Z19B CO₂自动基线校准（ABC）</a></li>
+<li><a href="#_9">时间调度系统</a></li>
+</ul>
+</li>
+<li><a href="#_10">规则引擎</a></li>
+<li><a href="#_11">预设规则配置</a></li>
+<li><a href="#_12">深入原理</a><ul>
+<li><a href="#pid">PID温度控制算法</a></li>
+<li><a href="#_13">能效优化策略</a></li>
+<li><a href="#_14">故障检测与自恢复</a></li>
+</ul>
+</li>
+<li><a href="#_15">主循环与数据上报</a></li>
+<li><a href="#_16">完整项目实战：智能温室控制系统</a><ul>
+<li><a href="#_17">系统架构</a></li>
+<li><a href="#bom">硬件BOM清单</a></li>
+<li><a href="#_18">接线图</a></li>
+<li><a href="#_19">完整主程序</a></li>
+<li><a href="#grafana">Grafana仪表盘配置</a></li>
+<li><a href="#node-red">移动端控制界面（Node-RED）</a></li>
+</ul>
+</li>
+<li><a href="#_20">延伸阅读</a></li>
+<li><a href="#_21">常见问题与调试</a><ul>
+<li><a href="#_22">传感器相关问题</a></li>
+<li><a href="#_23">控制系统问题</a></li>
+<li><a href="#_24">通信问题</a></li>
+<li><a href="#_25">系统稳定性问题</a></li>
+<li><a href="#_26">调试技巧</a></li>
+</ul>
+</li>
+<li><a href="#_27">参考资料</a><ul>
+<li><a href="#_28">传感器数据手册</a></li>
+<li><a href="#_29">通信协议</a></li>
+<li><a href="#_30">控制理论</a></li>
+<li><a href="#_31">建筑自动化</a></li>
+<li><a href="#_32">农业自动化</a></li>
+<li><a href="#_33">嵌入式系统</a></li>
+<li><a href="#_34">物联网平台</a></li>
+<li><a href="#_35">能效标准</a></li>
+<li><a href="#_36">在线资源</a></li>
+</ul>
+</li>
+<li><a href="#_37">附录：传感器参数速查</a><ul>
+<li><a href="#dht22-vs-dht11-vs-sht31">DHT22 vs DHT11 vs SHT31</a></li>
+<li><a href="#mh-z19b-vs-scd30-vs-scd41">MH-Z19B vs SCD30 vs SCD41</a></li>
+<li><a href="#_38">规则引擎参数参考</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">环境监控与联动控制系统</h1>
+<h2 id="_2">项目概述</h2>
+<p>本项目构建一个多传感器环境监控与联动控制系统，适用于温室大棚、机房、仓库等场景：</p>
+<h2 id="_3">背景知识</h2>
+<h3 id="hvac">HVAC控制理论基础</h3>
+<p>环境控制系统的核心是HVAC（Heating, Ventilation, and Air Conditioning，供暖通风与空调）控制理论。不同于简单的开关控制，现代环境控制需要考虑多个因素：</p>
+<p><strong>控制策略对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>控制方式</th>
+<th>原理</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>On-Off控制</td>
+<td>超过阈值开启，低于阈值关闭</td>
+<td>简单可靠</td>
+<td>频繁开关，温度波动大</td>
+<td>低精度场景</td>
+</tr>
+<tr>
+<td>滞回控制</td>
+<td>设置上下限，形成死区</td>
+<td>减少开关次数</td>
+<td>仍有温度波动</td>
+<td>一般应用</td>
+</tr>
+<tr>
+<td>PID控制</td>
+<td>比例-积分-微分反馈</td>
+<td>精确稳定</td>
+<td>参数调试复杂</td>
+<td>高精度要求</td>
+</tr>
+<tr>
+<td>模糊控制</td>
+<td>基于规则的模糊推理</td>
+<td>适应性强</td>
+<td>需要专家知识</td>
+<td>复杂多变环境</td>
+</tr>
+</tbody>
+</table>
+<p><strong>死区（Deadband）与滞回（Hysteresis）</strong>：</p>
+<pre><code>温度控制示例：
+  目标温度：25°C
+  死区：±1°C
+
+  控制逻辑：
+    温度 &gt; 26°C → 开启空调
+    温度 &lt; 24°C → 关闭空调
+    24°C ≤ 温度 ≤ 26°C → 保持当前状态
+
+  优势：
+    - 避免在目标温度附近频繁开关
+    - 延长设备寿命
+    - 降低能耗
+</code></pre>
+<p><strong>时间常数与响应特性</strong>：</p>
+<p>环境系统具有大时间常数特性（thermal inertia，热惯性）：</p>
+<pre><code>典型时间常数：
+  小房间（20m²）：τ ≈ 10~15分钟
+  温室大棚（100m²）：τ ≈ 30~60分钟
+  大型机房（500m²）：τ ≈ 2~4小时
+
+控制周期选择：
+  采样周期 T_s ≈ τ/10 ~ τ/20
+  控制动作最小间隔 ≥ 2τ（避免过度控制）
+</code></pre>
+<h3 id="_4">传感器布置标准</h3>
+<p>根据ASHRAE（American Society of Heating, Refrigerating and Air-Conditioning Engineers，美国供暖、制冷与空调工程师学会）标准55-2020，传感器布置需遵循以下原则：</p>
+<p><strong>温湿度传感器布置</strong>：</p>
+<pre><code>高度要求：
+  - 居住空间：距地面1.1~1.7m（人体活动区域）
+  - 机房：距地面0.6m和1.8m各一个（冷热分层监测）
+  - 温室：距地面0.5m、1.5m、2.5m（垂直温度梯度）
+
+水平位置：
+  - 避开门窗、空调出风口（至少1.5m距离）
+  - 避开热源（电器、阳光直射）
+  - 选择空气流通但不剧烈的位置
+  - 多点布置时呈对角线或网格分布
+
+响应时间：
+  - 裸露传感器：τ₆₃ ≈ 10~30秒
+  - 带防护罩：τ₆₃ ≈ 1~3分钟
+  - 选择原则：响应时间 &lt; 控制周期/5
+</code></pre>
+<p><strong>CO₂传感器布置</strong>：</p>
+<pre><code>高度：
+  - 办公室/教室：1.2~1.5m（呼吸区域）
+  - 温室：0.3~0.5m（植物冠层，CO₂下沉）
+
+注意事项：
+  - 避开通风口（测量值不代表整体）
+  - 定期校准（ABC自动基线校准，需要400ppm新鲜空气）
+  - 预热时间：NDIR传感器需3~5分钟稳定
+</code></pre>
+<p><strong>光照传感器布置</strong>：</p>
+<pre><code>位置：
+  - 水平放置，朝向天空或主光源
+  - 避免阴影遮挡
+  - 温室：多点测量取平均（光照不均匀）
+
+光谱响应：
+  - BH1750：接近人眼响应曲线（适合照明控制）
+  - 植物补光：需要PAR（Photosynthetically Active Radiation，光合有效辐射）传感器
+</code></pre>
+<h3 id="_5">能效优化原则</h3>
+<p>环境控制系统的能耗占建筑总能耗的40~60%，优化策略包括：</p>
+<p><strong>最小开关次数策略</strong>：</p>
+<pre><code class="language-c">// 继电器寿命与开关次数关系
+// 典型5V继电器：机械寿命10万次，电气寿命（阻性负载）10万次
+
+// 策略1：最小动作间隔
+#define MIN_ACTION_INTERVAL_MS  (5 * 60 * 1000)  // 5分钟
+
+typedef struct {
+    uint32_t last_action_time;
+    bool     current_state;
+} RelayState;
+
+bool relay_set_with_limit(uint8_t ch, bool on, RelayState *state) {
+    uint32_t now = HAL_GetTick();
+    if (state-&gt;current_state == on) return true;  // 已经是目标状态
+
+    if (now - state-&gt;last_action_time &lt; MIN_ACTION_INTERVAL_MS) {
+        return false;  // 动作过于频繁，拒绝
+    }
+
+    relay_set(ch, on);
+    state-&gt;last_action_time = now;
+    state-&gt;current_state = on;
+    return true;
+}
+</code></pre>
+<p><strong>预测性控制</strong>：</p>
+<pre><code class="language-c">// 基于温度变化率预测
+float predict_temperature(float current_temp, float rate_per_min, float minutes) {
+    return current_temp + rate_per_min * minutes;
+}
+
+// 示例：提前关闭加热器
+void smart_heater_control(float temp, float target) {
+    static float last_temp = 0;
+    static uint32_t last_time = 0;
+
+    uint32_t now = HAL_GetTick();
+    float dt_min = (now - last_time) / 60000.0f;
+
+    if (dt_min &gt; 0.1f) {  // 至少6秒间隔
+        float rate = (temp - last_temp) / dt_min;  // °C/min
+
+        // 预测5分钟后温度
+        float predicted = predict_temperature(temp, rate, 5.0f);
+
+        if (predicted &gt;= target) {
+            relay_set(HEATER_CH, false);  // 提前关闭
+        } else if (temp &lt; target - 2.0f) {
+            relay_set(HEATER_CH, true);
+        }
+
+        last_temp = temp;
+        last_time = now;
+    }
+}
+</code></pre>
+<h3 id="_6">多参数耦合关系</h3>
+<p>环境参数之间存在复杂的耦合关系：</p>
+<p><strong>温湿度耦合</strong>：</p>
+<pre><code>相对湿度RH与绝对湿度AH的关系：
+  RH = (AH / AH_sat(T)) × 100%
+
+  其中AH_sat(T)是饱和绝对湿度，随温度指数增长：
+  AH_sat(T) ≈ 5.018 + 0.32321×T + 0.0081847×T² + 0.00031243×T³ (g/m³)
+
+  实际影响：
+    - 温度升高1°C，相对湿度下降约3~5%
+    - 加热时需同时加湿
+    - 降温时可能结露（露点温度）
+</code></pre>
+<p><strong>CO₂与通风耦合</strong>：</p>
+<pre><code>CO₂浓度变化模型（简化）：
+  dC/dt = G - V×(C - C_out)
+
+  其中：
+    C：室内CO₂浓度(ppm)
+    G：CO₂产生速率(ppm/h)，人均约20~40ppm/h
+    V：换气次数(次/h)
+    C_out：室外CO₂浓度(约400ppm)
+
+  稳态浓度：
+    C_ss = C_out + G/V
+
+  示例：10人办公室，50m³空间
+    G = 10人 × 30ppm/h = 300ppm/h
+    要求C_ss &lt; 1000ppm
+    则V &gt; 300/(1000-400) = 0.5次/h
+    风量 = 50m³ × 0.5次/h = 25m³/h
+</code></pre>
+<p><strong>光照与温度耦合</strong>：</p>
+<pre><code>补光灯热效应：
+  LED补光灯：光效100~150lm/W，发热约50~60%
+  100W LED灯 → 约50~60W热量
+
+  温室补光时需考虑：
+    - 冬季：补光同时提供热量（有利）
+    - 夏季：补光增加制冷负担（需加强通风）
+</code></pre>
+<p><strong>监测参数</strong>：
+- 温度（DHT22）
+- 湿度（DHT22）
+- CO₂浓度（MH-Z19B）
+- 光照强度（BH1750）
+- 土壤湿度（电阻式，可选）</p>
+<p><strong>控制输出</strong>（继电器）：
+- CH0：空调/加热器
+- CH1：排风扇
+- CH2：加湿器
+- CH3：补光灯
+- CH4：灌溉泵（可选）</p>
+<p><strong>硬件清单</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>型号</th>
+<th>接口</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控</td>
+<td>STM32F103C8T6</td>
+<td>-</td>
+</tr>
+<tr>
+<td>温湿度</td>
+<td>DHT22</td>
+<td>单总线</td>
+</tr>
+<tr>
+<td>CO₂传感器</td>
+<td>MH-Z19B</td>
+<td>UART</td>
+</tr>
+<tr>
+<td>光照传感器</td>
+<td>BH1750</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>继电器</td>
+<td>4路5V继电器板</td>
+<td>GPIO</td>
+</tr>
+<tr>
+<td>显示屏</td>
+<td>0.96" OLED</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>通信</td>
+<td>ESP8266 AT</td>
+<td>UART</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_7">硬件系统设计</h2>
+<p><strong>监测参数</strong>：
+- 温度（DHT22）
+- 湿度（DHT22）
+- CO₂浓度（MH-Z19B）
+- 光照强度（BH1750）
+- 土壤湿度（电阻式，可选）</p>
+<p><strong>控制输出</strong>（继电器）：
+- CH0：空调/加热器
+- CH1：排风扇
+- CH2：加湿器
+- CH3：补光灯
+- CH4：灌溉泵（可选）</p>
+<p><strong>硬件清单</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>型号</th>
+<th>接口</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控</td>
+<td>STM32F103C8T6</td>
+<td>-</td>
+</tr>
+<tr>
+<td>温湿度</td>
+<td>DHT22</td>
+<td>单总线</td>
+</tr>
+<tr>
+<td>CO₂传感器</td>
+<td>MH-Z19B</td>
+<td>UART</td>
+</tr>
+<tr>
+<td>光照传感器</td>
+<td>BH1750</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>继电器</td>
+<td>4路5V继电器板</td>
+<td>GPIO</td>
+</tr>
+<tr>
+<td>显示屏</td>
+<td>0.96" OLED</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>通信</td>
+<td>ESP8266 AT</td>
+<td>UART</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">传感器驱动实现</h2>
+<h3 id="dht22">DHT22温湿度传感器</h3>
+<pre><code class="language-c">#include &quot;dht22.h&quot;
+
+typedef struct {
+    float temperature;  // 摄氏度
+    float humidity;     // 相对湿度%
+    bool  valid;
+} DHT22_Data;
+
+// 单总线时序读取（需要精确延时）
+DHT22_Data dht22_read(GPIO_TypeDef *port, uint16_t pin) {
+    DHT22_Data data = {0, 0, false};
+    uint8_t buf[5] = {0};
+
+    // 主机发送起始信号：拉低至少1ms
+    GPIO_SetOutput(port, pin);
+    GPIO_Low(port, pin);
+    HAL_Delay(2);
+    GPIO_High(port, pin);
+    delay_us(30);
+    GPIO_SetInput(port, pin);
+
+    // 等待DHT22响应（低80us + 高80us）
+    uint32_t timeout = 200;
+    while (GPIO_Read(port, pin) &amp;&amp; --timeout);
+    if (!timeout) return data;
+    timeout = 200;
+    while (!GPIO_Read(port, pin) &amp;&amp; --timeout);
+    if (!timeout) return data;
+    timeout = 200;
+    while (GPIO_Read(port, pin) &amp;&amp; --timeout);
+
+    // 读取40位数据
+    for (int i = 0; i &lt; 40; i++) {
+        timeout = 200;
+        while (!GPIO_Read(port, pin) &amp;&amp; --timeout);  // 等待高电平
+        delay_us(40);  // 等待40us后采样
+        if (GPIO_Read(port, pin)) {
+            buf[i/8] |= (1 &lt;&lt; (7 - i%8));  // 高电平&gt;40us = 1
+        }
+        timeout = 200;
+        while (GPIO_Read(port, pin) &amp;&amp; --timeout);   // 等待低电平
+    }
+
+    // 校验和
+    if (buf[4] != ((buf[0]+buf[1]+buf[2]+buf[3]) &amp; 0xFF)) return data;
+
+    data.humidity    = ((buf[0] &lt;&lt; 8) | buf[1]) / 10.0f;
+    data.temperature = (((buf[2] &amp; 0x7F) &lt;&lt; 8) | buf[3]) / 10.0f;
+    if (buf[2] &amp; 0x80) data.temperature = -data.temperature;
+    data.valid = true;
+    return data;
+}
+</code></pre>
+<h3 id="mh-z19b-co2">MH-Z19B CO₂传感器</h3>
+<pre><code class="language-c">// MH-Z19B通过UART通信，发送读取命令获取CO₂浓度
+uint16_t mhz19_read_co2(UART_HandleTypeDef *huart) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    uint8_t resp[9] = {0};
+
+    HAL_UART_Transmit(huart, cmd, 9, 100);
+    HAL_UART_Receive(huart, resp, 9, 500);
+
+    // 验证响应
+    if (resp[0] != 0xFF || resp[1] != 0x86) return 0;
+
+    // 校验和
+    uint8_t checksum = 0;
+    for (int i = 1; i &lt; 8; i++) checksum += resp[i];
+    checksum = 0xFF - checksum + 1;
+    if (checksum != resp[8]) return 0;
+
+    return (resp[2] &lt;&lt; 8) | resp[3];  // CO₂浓度(ppm)
+}
+</code></pre>
+<h3 id="bh1750">BH1750光照传感器</h3>
+<pre><code class="language-c">#define BH1750_ADDR  0x23  // ADDR引脚接GND
+
+uint16_t bh1750_read_lux(void) {
+    uint8_t cmd = 0x20;  // 单次高分辨率模式
+    uint8_t buf[2];
+
+    HAL_I2C_Master_Transmit(&amp;hi2c1, BH1750_ADDR &lt;&lt; 1, &amp;cmd, 1, 100);
+    HAL_Delay(180);  // 等待测量完成（最长180ms）
+    HAL_I2C_Master_Receive(&amp;hi2c1, BH1750_ADDR &lt;&lt; 1, buf, 2, 100);
+
+    uint16_t raw = (buf[0] &lt;&lt; 8) | buf[1];
+    return raw * 10 / 12;  // 转换为lux
+}
+</code></pre>
+<h3 id="sht31">SHT31高精度温湿度传感器</h3>
+<p>SHT31相比DHT22具有更高精度（±0.3°C/±2%RH）和更快响应速度，适合高精度应用：</p>
+<pre><code class="language-c">#define SHT31_ADDR  0x44  // ADDR引脚接GND
+
+typedef struct {
+    float temperature;
+    float humidity;
+    bool  valid;
+} SHT31_Data;
+
+// CRC-8校验（多项式0x31）
+static uint8_t sht31_crc8(const uint8_t *data, uint8_t len) {
+    uint8_t crc = 0xFF;
+    for (uint8_t i = 0; i &lt; len; i++) {
+        crc ^= data[i];
+        for (uint8_t bit = 0; bit &lt; 8; bit++) {
+            if (crc &amp; 0x80) crc = (crc &lt;&lt; 1) ^ 0x31;
+            else            crc = (crc &lt;&lt; 1);
+        }
+    }
+    return crc;
+}
+
+SHT31_Data sht31_read(void) {
+    SHT31_Data data = {0, 0, false};
+    uint8_t cmd[2] = {0x24, 0x00};  // 单次测量，高重复性
+    uint8_t buf[6];
+
+    // 发送测量命令
+    if (HAL_I2C_Master_Transmit(&amp;hi2c1, SHT31_ADDR &lt;&lt; 1, cmd, 2, 100) != HAL_OK)
+        return data;
+
+    HAL_Delay(15);  // 等待测量完成（高重复性模式需15ms）
+
+    // 读取6字节数据：温度MSB, 温度LSB, 温度CRC, 湿度MSB, 湿度LSB, 湿度CRC
+    if (HAL_I2C_Master_Receive(&amp;hi2c1, SHT31_ADDR &lt;&lt; 1, buf, 6, 100) != HAL_OK)
+        return data;
+
+    // 校验CRC
+    if (sht31_crc8(&amp;buf[0], 2) != buf[2]) return data;
+    if (sht31_crc8(&amp;buf[3], 2) != buf[5]) return data;
+
+    // 转换温度：T = -45 + 175 × (raw / 65535)
+    uint16_t temp_raw = (buf[0] &lt;&lt; 8) | buf[1];
+    data.temperature = -45.0f + 175.0f * (temp_raw / 65535.0f);
+
+    // 转换湿度：RH = 100 × (raw / 65535)
+    uint16_t humi_raw = (buf[3] &lt;&lt; 8) | buf[4];
+    data.humidity = 100.0f * (humi_raw / 65535.0f);
+
+    data.valid = true;
+    return data;
+}
+
+// 软复位（解决传感器卡死）
+void sht31_reset(void) {
+    uint8_t cmd[2] = {0x30, 0xA2};
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SHT31_ADDR &lt;&lt; 1, cmd, 2, 100);
+    HAL_Delay(2);
+}
+
+// 开启加热器（除湿，消除结露）
+void sht31_heater_enable(bool enable) {
+    uint8_t cmd[2] = enable ? (uint8_t[]){0x30, 0x6D} : (uint8_t[]){0x30, 0x66};
+    HAL_I2C_Master_Transmit(&amp;hi2c1, SHT31_ADDR &lt;&lt; 1, cmd, 2, 100);
+}
+</code></pre>
+<h3 id="mh-z19b-co2abc">MH-Z19B CO₂自动基线校准（ABC）</h3>
+<p>MH-Z19B支持ABC（Automatic Baseline Correction）算法，假设传感器每24小时至少暴露一次在400ppm新鲜空气中：</p>
+<pre><code class="language-c">// 启用/禁用ABC（出厂默认开启）
+void mhz19_set_abc(UART_HandleTypeDef *huart, bool enable) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x79, enable ? 0xA0 : 0x00,
+                      0x00, 0x00, 0x00, 0x00, 0x00};
+    // 计算校验和
+    uint8_t checksum = 0;
+    for (int i = 1; i &lt; 8; i++) checksum += cmd[i];
+    cmd[8] = 0xFF - checksum + 1;
+
+    HAL_UART_Transmit(huart, cmd, 9, 100);
+}
+
+// 手动零点校准（需在400ppm环境中）
+void mhz19_calibrate_zero(UART_HandleTypeDef *huart) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x87, 0x00, 0x00, 0x00, 0x00, 0x00, 0x78};
+    HAL_UART_Transmit(huart, cmd, 9, 100);
+    // 校准需要20分钟稳定时间
+}
+
+// 手动跨度校准（需在已知浓度气体中，如2000ppm）
+void mhz19_calibrate_span(UART_HandleTypeDef *huart, uint16_t span_ppm) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x88, (span_ppm &gt;&gt; 8) &amp; 0xFF, span_ppm &amp; 0xFF,
+                      0x00, 0x00, 0x00, 0x00};
+    uint8_t checksum = 0;
+    for (int i = 1; i &lt; 8; i++) checksum += cmd[i];
+    cmd[8] = 0xFF - checksum + 1;
+
+    HAL_UART_Transmit(huart, cmd, 9, 100);
+}
+
+// 读取ABC状态
+bool mhz19_get_abc_status(UART_HandleTypeDef *huart) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x7D, 0x00, 0x00, 0x00, 0x00, 0x00, 0x82};
+    uint8_t resp[9] = {0};
+
+    HAL_UART_Transmit(huart, cmd, 9, 100);
+    HAL_UART_Receive(huart, resp, 9, 500);
+
+    if (resp[0] == 0xFF &amp;&amp; resp[1] == 0x7D) {
+        return resp[4] == 0xA0;  // 0xA0=开启, 0x00=关闭
+    }
+    return false;
+}
+</code></pre>
+<p><strong>ABC算法原理</strong>：</p>
+<pre><code>ABC假设：
+  - 传感器每天至少有一次暴露在新鲜空气（400ppm）中
+  - 记录24小时内的最低读数
+  - 如果最低读数 &gt; 400ppm，逐步调整基线使其接近400ppm
+
+适用场景：
+  ✓ 办公室、教室（夜间无人，CO₂降至400ppm）
+  ✓ 家庭（开窗通风）
+  ✗ 温室（植物持续呼吸，CO₂可能低于400ppm）
+  ✗ 密闭空间（长期高浓度）
+
+禁用ABC的场景：
+  - 需要测量低于400ppm的浓度
+  - 环境CO₂从不降至400ppm
+  - 需要绝对精度（ABC会引入±50ppm误差）
+</code></pre>
+<h3 id="_9">时间调度系统</h3>
+<p>基于RTC实现时间相关的控制规则：</p>
+<pre><code class="language-c">#include &quot;rtc.h&quot;
+
+typedef struct {
+    uint8_t hour_start;   // 开始小时（0~23）
+    uint8_t min_start;    // 开始分钟（0~59）
+    uint8_t hour_end;     // 结束小时
+    uint8_t min_end;      // 结束分钟
+    uint8_t weekday_mask; // 星期掩码：bit0=周一, bit6=周日, 0xFF=每天
+} TimeWindow;
+
+// 判断当前时间是否在时间窗口内
+bool time_in_window(const TimeWindow *win) {
+    RTC_TimeTypeDef time;
+    RTC_DateTypeDef date;
+    HAL_RTC_GetTime(&amp;hrtc, &amp;time, RTC_FORMAT_BIN);
+    HAL_RTC_GetDate(&amp;hrtc, &amp;date, RTC_FORMAT_BIN);  // 必须读取日期才能解锁时间
+
+    // 检查星期
+    uint8_t weekday = date.WeekDay;  // 1=周一, 7=周日
+    if (!(win-&gt;weekday_mask &amp; (1 &lt;&lt; (weekday - 1)))) return false;
+
+    // 转换为分钟数
+    uint16_t now_min = time.Hours * 60 + time.Minutes;
+    uint16_t start_min = win-&gt;hour_start * 60 + win-&gt;min_start;
+    uint16_t end_min = win-&gt;hour_end * 60 + win-&gt;min_end;
+
+    // 处理跨午夜情况
+    if (end_min &lt; start_min) {
+        return (now_min &gt;= start_min) || (now_min &lt; end_min);
+    } else {
+        return (now_min &gt;= start_min) &amp;&amp; (now_min &lt; end_min);
+    }
+}
+
+// 扩展规则结构，增加时间窗口
+typedef struct {
+    SensorType sensor;
+    CompareOp  op;
+    float      threshold;
+    uint8_t    relay_ch;
+    bool       relay_on;
+    uint32_t   min_duration_ms;
+    uint32_t   condition_start;
+    bool       triggered;
+    TimeWindow time_window;  // 新增：时间窗口限制
+    bool       use_time_window;  // 是否启用时间窗口
+    char       desc[32];
+} ControlRule;
+
+// 修改规则评估函数
+void rules_evaluate(const EnvData *env) {
+    uint32_t now = HAL_GetTick();
+
+    for (int i = 0; i &lt; rule_count; i++) {
+        ControlRule *r = &amp;rules[i];
+
+        // 检查时间窗口
+        if (r-&gt;use_time_window &amp;&amp; !time_in_window(&amp;r-&gt;time_window)) {
+            r-&gt;condition_start = 0;
+            r-&gt;triggered = false;
+            continue;
+        }
+
+        bool cond = eval_condition(r, env);
+
+        if (cond) {
+            if (r-&gt;condition_start == 0) r-&gt;condition_start = now;
+
+            if (!r-&gt;triggered &amp;&amp;
+                (now - r-&gt;condition_start &gt;= r-&gt;min_duration_ms)) {
+                relay_set(r-&gt;relay_ch, r-&gt;relay_on);
+                r-&gt;triggered = true;
+                printf(&quot;[RULE] %s → CH%d %s\n&quot;,
+                       r-&gt;desc, r-&gt;relay_ch, r-&gt;relay_on ? &quot;ON&quot; : &quot;OFF&quot;);
+            }
+        } else {
+            r-&gt;condition_start = 0;
+            r-&gt;triggered = false;
+        }
+    }
+}
+
+// 添加带时间窗口的规则
+void rule_add_with_time(SensorType sensor, CompareOp op, float threshold,
+                        uint8_t relay_ch, bool relay_on,
+                        uint32_t min_duration_ms,
+                        uint8_t hour_start, uint8_t min_start,
+                        uint8_t hour_end, uint8_t min_end,
+                        uint8_t weekday_mask,
+                        const char *desc) {
+    if (rule_count &gt;= MAX_RULES) return;
+    ControlRule *r = &amp;rules[rule_count++];
+    r-&gt;sensor          = sensor;
+    r-&gt;op              = op;
+    r-&gt;threshold       = threshold;
+    r-&gt;relay_ch        = relay_ch;
+    r-&gt;relay_on        = relay_on;
+    r-&gt;min_duration_ms = min_duration_ms;
+    r-&gt;condition_start = 0;
+    r-&gt;triggered       = false;
+    r-&gt;use_time_window = true;
+    r-&gt;time_window.hour_start = hour_start;
+    r-&gt;time_window.min_start  = min_start;
+    r-&gt;time_window.hour_end   = hour_end;
+    r-&gt;time_window.min_end    = min_end;
+    r-&gt;time_window.weekday_mask = weekday_mask;
+    strncpy(r-&gt;desc, desc, 31);
+}
+</code></pre>
+<p><strong>时间调度应用示例</strong>：</p>
+<pre><code class="language-c">void setup_time_based_rules(void) {
+    // 补光灯：仅在6:00~20:00且光照不足时开启
+    rule_add_with_time(SENSOR_LIGHT, OP_LT, 500, 3, true, 10000,
+                       6, 0,   // 6:00开始
+                       20, 0,  // 20:00结束
+                       0xFF,   // 每天
+                       &quot;白天光照不足补光&quot;);
+
+    // 夜间强制关闭补光灯
+    rule_add_with_time(SENSOR_LIGHT, OP_GE, 0, 3, false, 0,
+                       20, 0,  // 20:00开始
+                       6, 0,   // 6:00结束
+                       0xFF,
+                       &quot;夜间关闭补光&quot;);
+
+    // 工作日白天降低空调阈值（办公室有人）
+    rule_add_with_time(SENSOR_TEMP, OP_GT, 26.0f, 0, true, 60000,
+                       8, 0,   // 8:00开始
+                       18, 0,  // 18:00结束
+                       0x1F,   // 周一~周五（bit0~bit4）
+                       &quot;工作日空调&quot;);
+
+    // 周末/夜间提高空调阈值（节能）
+    rule_add_with_time(SENSOR_TEMP, OP_GT, 30.0f, 0, true, 60000,
+                       18, 0,  // 18:00开始
+                       8, 0,   // 8:00结束
+                       0xFF,   // 每天
+                       &quot;非工作时段空调&quot;);
+}
+</code></pre>
+<h2 id="_10">规则引擎</h2>
+<p>规则引擎将传感器数据与控制动作解耦，支持灵活配置：</p>
+<pre><code class="language-c">// 环境数据快照
+typedef struct {
+    float    temperature;
+    float    humidity;
+    uint16_t co2_ppm;
+    uint16_t light_lux;
+    uint32_t timestamp;
+} EnvData;
+
+// 控制规则
+typedef enum {
+    OP_GT,  // 大于
+    OP_LT,  // 小于
+    OP_GE,  // 大于等于
+    OP_LE,  // 小于等于
+} CompareOp;
+
+typedef enum {
+    SENSOR_TEMP,
+    SENSOR_HUMI,
+    SENSOR_CO2,
+    SENSOR_LIGHT,
+} SensorType;
+
+typedef struct {
+    SensorType sensor;
+    CompareOp  op;
+    float      threshold;
+    uint8_t    relay_ch;
+    bool       relay_on;
+    uint32_t   min_duration_ms;  // 条件持续多久才触发
+    uint32_t   condition_start;  // 条件开始时间
+    bool       triggered;
+    char       desc[32];         // 规则描述（调试用）
+} ControlRule;
+
+#define MAX_RULES  16
+ControlRule rules[MAX_RULES];
+uint8_t     rule_count = 0;
+
+// 注册规则
+void rule_add(SensorType sensor, CompareOp op, float threshold,
+              uint8_t relay_ch, bool relay_on,
+              uint32_t min_duration_ms, const char *desc) {
+    if (rule_count &gt;= MAX_RULES) return;
+    ControlRule *r = &amp;rules[rule_count++];
+    r-&gt;sensor          = sensor;
+    r-&gt;op              = op;
+    r-&gt;threshold       = threshold;
+    r-&gt;relay_ch        = relay_ch;
+    r-&gt;relay_on        = relay_on;
+    r-&gt;min_duration_ms = min_duration_ms;
+    r-&gt;condition_start = 0;
+    r-&gt;triggered       = false;
+    strncpy(r-&gt;desc, desc, 31);
+}
+
+// 评估单条规则
+static bool eval_condition(const ControlRule *r, const EnvData *env) {
+    float val = 0;
+    switch (r-&gt;sensor) {
+        case SENSOR_TEMP:  val = env-&gt;temperature; break;
+        case SENSOR_HUMI:  val = env-&gt;humidity;    break;
+        case SENSOR_CO2:   val = env-&gt;co2_ppm;     break;
+        case SENSOR_LIGHT: val = env-&gt;light_lux;   break;
+    }
+    switch (r-&gt;op) {
+        case OP_GT: return val &gt;  r-&gt;threshold;
+        case OP_LT: return val &lt;  r-&gt;threshold;
+        case OP_GE: return val &gt;= r-&gt;threshold;
+        case OP_LE: return val &lt;= r-&gt;threshold;
+    }
+    return false;
+}
+
+// 执行所有规则
+void rules_evaluate(const EnvData *env) {
+    uint32_t now = HAL_GetTick();
+
+    for (int i = 0; i &lt; rule_count; i++) {
+        ControlRule *r = &amp;rules[i];
+        bool cond = eval_condition(r, env);
+
+        if (cond) {
+            if (r-&gt;condition_start == 0) r-&gt;condition_start = now;
+
+            // 条件持续时间达到阈值才触发
+            if (!r-&gt;triggered &amp;&amp;
+                (now - r-&gt;condition_start &gt;= r-&gt;min_duration_ms)) {
+                relay_set(r-&gt;relay_ch, r-&gt;relay_on);
+                r-&gt;triggered = true;
+                printf(&quot;[RULE] %s → CH%d %s\n&quot;,
+                       r-&gt;desc, r-&gt;relay_ch, r-&gt;relay_on ? &quot;ON&quot; : &quot;OFF&quot;);
+            }
+        } else {
+            r-&gt;condition_start = 0;
+            r-&gt;triggered = false;
+        }
+    }
+}
+</code></pre>
+<h2 id="_11">预设规则配置</h2>
+<pre><code class="language-c">void setup_rules(void) {
+    // 温度控制
+    rule_add(SENSOR_TEMP, OP_GT, 28.0f, 0, true,  60000, &quot;温度&gt;28°C 开空调&quot;);
+    rule_add(SENSOR_TEMP, OP_LT, 22.0f, 0, false, 60000, &quot;温度&lt;22°C 关空调&quot;);
+
+    // CO₂控制（换气）
+    rule_add(SENSOR_CO2, OP_GT, 1000, 1, true,  30000, &quot;CO2&gt;1000ppm 开风扇&quot;);
+    rule_add(SENSOR_CO2, OP_LT,  600, 1, false, 60000, &quot;CO2&lt;600ppm 关风扇&quot;);
+
+    // 湿度控制
+    rule_add(SENSOR_HUMI, OP_LT, 40.0f, 2, true,  30000, &quot;湿度&lt;40% 开加湿器&quot;);
+    rule_add(SENSOR_HUMI, OP_GT, 70.0f, 2, false, 30000, &quot;湿度&gt;70% 关加湿器&quot;);
+
+    // 光照控制（补光）
+    rule_add(SENSOR_LIGHT, OP_LT, 500, 3, true,  10000, &quot;光照&lt;500lux 开补光灯&quot;);
+    rule_add(SENSOR_LIGHT, OP_GT, 2000, 3, false, 10000, &quot;光照&gt;2000lux 关补光灯&quot;);
+}
+</code></pre>
+<h2 id="_12">深入原理</h2>
+<h3 id="pid">PID温度控制算法</h3>
+<p>对于高精度温度控制（如实验室恒温箱），PID控制优于简单的开关控制：</p>
+<p><strong>PID控制器原理</strong>：</p>
+<pre><code>PID输出：
+  u(t) = Kp×e(t) + Ki×∫e(t)dt + Kd×de(t)/dt
+
+  其中：
+    e(t) = setpoint - measured_value（误差）
+    Kp：比例系数（响应速度）
+    Ki：积分系数（消除稳态误差）
+    Kd：微分系数（抑制超调）
+</code></pre>
+<p><strong>离散PID实现（位置式）</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    float Kp, Ki, Kd;
+    float setpoint;
+    float integral;
+    float last_error;
+    float output_min, output_max;
+    float integral_min, integral_max;  // 积分限幅（抗饱和）
+} PID_Controller;
+
+void pid_init(PID_Controller *pid, float kp, float ki, float kd,
+              float out_min, float out_max) {
+    pid-&gt;Kp = kp;
+    pid-&gt;Ki = ki;
+    pid-&gt;Kd = kd;
+    pid-&gt;setpoint = 0;
+    pid-&gt;integral = 0;
+    pid-&gt;last_error = 0;
+    pid-&gt;output_min = out_min;
+    pid-&gt;output_max = out_max;
+    pid-&gt;integral_min = out_min / ki;  // 防止积分饱和
+    pid-&gt;integral_max = out_max / ki;
+}
+
+float pid_compute(PID_Controller *pid, float measured, float dt) {
+    float error = pid-&gt;setpoint - measured;
+
+    // 比例项
+    float p_term = pid-&gt;Kp * error;
+
+    // 积分项（梯形积分）
+    pid-&gt;integral += (error + pid-&gt;last_error) * 0.5f * dt;
+    // 积分限幅（抗积分饱和）
+    if (pid-&gt;integral &gt; pid-&gt;integral_max) pid-&gt;integral = pid-&gt;integral_max;
+    if (pid-&gt;integral &lt; pid-&gt;integral_min) pid-&gt;integral = pid-&gt;integral_min;
+    float i_term = pid-&gt;Ki * pid-&gt;integral;
+
+    // 微分项（一阶低通滤波，截止频率fc=10Hz）
+    float derivative = (error - pid-&gt;last_error) / dt;
+    static float filtered_derivative = 0;
+    float alpha = dt / (dt + 1.0f / (2.0f * 3.14159f * 10.0f));  // fc=10Hz
+    filtered_derivative = alpha * derivative + (1 - alpha) * filtered_derivative;
+    float d_term = pid-&gt;Kd * filtered_derivative;
+
+    pid-&gt;last_error = error;
+
+    // 输出限幅
+    float output = p_term + i_term + d_term;
+    if (output &gt; pid-&gt;output_max) output = pid-&gt;output_max;
+    if (output &lt; pid-&gt;output_min) output = pid-&gt;output_min;
+
+    return output;
+}
+</code></pre>
+<p><strong>PWM加热器控制</strong>：</p>
+<pre><code class="language-c">// 使用PID输出控制PWM占空比
+void temperature_control_loop(void) {
+    static PID_Controller temp_pid;
+    static bool initialized = false;
+
+    if (!initialized) {
+        // 参数整定（Ziegler-Nichols方法）
+        // Kp=10, Ki=0.5, Kd=2（需根据实际系统调整）
+        pid_init(&amp;temp_pid, 10.0f, 0.5f, 2.0f, 0.0f, 100.0f);
+        temp_pid.setpoint = 25.0f;  // 目标温度25°C
+        initialized = true;
+    }
+
+    static uint32_t last_time = 0;
+    uint32_t now = HAL_GetTick();
+    float dt = (now - last_time) / 1000.0f;  // 秒
+
+    if (dt &gt;= 1.0f) {  // 1秒控制周期
+        float temp = read_temperature();
+        float pwm_duty = pid_compute(&amp;temp_pid, temp, dt);
+
+        // 设置PWM占空比（0~100%）
+        __HAL_TIM_SET_COMPARE(&amp;htim2, TIM_CHANNEL_1, (uint16_t)pwm_duty);
+
+        last_time = now;
+    }
+}
+</code></pre>
+<p><strong>PID参数整定方法</strong>：</p>
+<pre><code>1. Ziegler-Nichols临界振荡法：
+   a) 设置Ki=0, Kd=0，逐步增大Kp直到系统持续振荡
+   b) 记录临界增益Ku和振荡周期Tu
+   c) 计算：
+      Kp = 0.6 × Ku
+      Ki = 2 × Kp / Tu
+      Kd = Kp × Tu / 8
+
+2. 经验调试法：
+   a) 先调Kp：增大Kp加快响应，但过大会振荡
+   b) 再调Ki：消除稳态误差，但过大会超调
+   c) 最后调Kd：抑制超调，但过大会放大噪声
+
+3. 典型参数范围（温度控制）：
+   Kp: 5~20
+   Ki: 0.1~1.0
+   Kd: 1~5
+</code></pre>
+<h3 id="_13">能效优化策略</h3>
+<p><strong>负载预测与提前控制</strong>：</p>
+<pre><code class="language-c">// 基于历史数据的负载预测
+#define HISTORY_SIZE  24  // 24小时历史
+
+typedef struct {
+    float    temp_history[HISTORY_SIZE];
+    uint8_t  hour_index[HISTORY_SIZE];
+    uint8_t  count;
+} TempHistory;
+
+TempHistory history = {0};
+
+void history_add(float temp, uint8_t hour) {
+    if (history.count &lt; HISTORY_SIZE) {
+        history.temp_history[history.count] = temp;
+        history.hour_index[history.count] = hour;
+        history.count++;
+    } else {
+        // 循环覆盖最旧数据
+        memmove(&amp;history.temp_history[0], &amp;history.temp_history[1],
+                (HISTORY_SIZE - 1) * sizeof(float));
+        memmove(&amp;history.hour_index[0], &amp;history.hour_index[1],
+                (HISTORY_SIZE - 1) * sizeof(uint8_t));
+        history.temp_history[HISTORY_SIZE - 1] = temp;
+        history.hour_index[HISTORY_SIZE - 1] = hour;
+    }
+}
+
+// 预测下一小时温度
+float predict_next_hour_temp(uint8_t current_hour) {
+    uint8_t next_hour = (current_hour + 1) % 24;
+    float sum = 0;
+    int count = 0;
+
+    // 查找历史上同一时刻的温度
+    for (int i = 0; i &lt; history.count; i++) {
+        if (history.hour_index[i] == next_hour) {
+            sum += history.temp_history[i];
+            count++;
+        }
+    }
+
+    if (count &gt; 0) return sum / count;
+    return 25.0f;  // 默认值
+}
+
+// 提前预冷/预热
+void predictive_control(void) {
+    RTC_TimeTypeDef time;
+    HAL_RTC_GetTime(&amp;hrtc, &amp;time, RTC_FORMAT_BIN);
+
+    float predicted = predict_next_hour_temp(time.Hours);
+    float current = read_temperature();
+
+    // 如果预测1小时后会过热，提前开启空调
+    if (predicted &gt; 28.0f &amp;&amp; current &gt; 26.0f) {
+        relay_set(AC_CH, true);
+        printf(&quot;[PREDICT] 预测过热，提前开启空调\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>多设备协同优化</strong>：</p>
+<pre><code class="language-c">// 优先级调度：避免多个大功率设备同时启动
+typedef enum {
+    PRIORITY_HIGH   = 0,  // 空调、加热器（舒适性）
+    PRIORITY_MEDIUM = 1,  // 风扇、加湿器
+    PRIORITY_LOW    = 2,  // 补光灯、灌溉泵
+} DevicePriority;
+
+typedef struct {
+    uint8_t         relay_ch;
+    DevicePriority  priority;
+    uint16_t        power_watts;  // 功率（W）
+    bool            is_on;
+} Device;
+
+Device devices[] = {
+    {0, PRIORITY_HIGH,   1500, false},  // 空调1500W
+    {1, PRIORITY_MEDIUM,  50,  false},  // 风扇50W
+    {2, PRIORITY_MEDIUM,  30,  false},  // 加湿器30W
+    {3, PRIORITY_LOW,    100,  false},  // 补光灯100W
+};
+
+#define MAX_TOTAL_POWER  2000  // 最大总功率2000W
+
+bool device_turn_on(uint8_t ch) {
+    // 计算当前总功率
+    uint16_t current_power = 0;
+    for (int i = 0; i &lt; sizeof(devices)/sizeof(Device); i++) {
+        if (devices[i].is_on) current_power += devices[i].power_watts;
+    }
+
+    // 查找目标设备
+    Device *target = NULL;
+    for (int i = 0; i &lt; sizeof(devices)/sizeof(Device); i++) {
+        if (devices[i].relay_ch == ch) {
+            target = &amp;devices[i];
+            break;
+        }
+    }
+    if (!target) return false;
+
+    // 检查是否超过功率限制
+    if (current_power + target-&gt;power_watts &gt; MAX_TOTAL_POWER) {
+        // 尝试关闭低优先级设备
+        for (int i = 0; i &lt; sizeof(devices)/sizeof(Device); i++) {
+            if (devices[i].is_on &amp;&amp;
+                devices[i].priority &gt; target-&gt;priority) {
+                relay_set(devices[i].relay_ch, false);
+                devices[i].is_on = false;
+                current_power -= devices[i].power_watts;
+                printf(&quot;[POWER] 关闭低优先级设备CH%d以腾出功率\n&quot;,
+                       devices[i].relay_ch);
+
+                if (current_power + target-&gt;power_watts &lt;= MAX_TOTAL_POWER)
+                    break;
+            }
+        }
+    }
+
+    // 再次检查
+    if (current_power + target-&gt;power_watts &lt;= MAX_TOTAL_POWER) {
+        relay_set(ch, true);
+        target-&gt;is_on = true;
+        return true;
+    }
+
+    printf(&quot;[POWER] 功率不足，无法开启CH%d\n&quot;, ch);
+    return false;
+}
+</code></pre>
+<h3 id="_14">故障检测与自恢复</h3>
+<p><strong>传感器故障检测</strong>：</p>
+<pre><code class="language-c">typedef struct {
+    float    last_valid_value;
+    uint32_t last_valid_time;
+    uint8_t  consecutive_errors;
+    bool     is_faulty;
+} SensorHealth;
+
+SensorHealth sensor_health[4] = {0};  // TEMP, HUMI, CO2, LIGHT
+
+#define MAX_CONSECUTIVE_ERRORS  5
+#define SENSOR_TIMEOUT_MS       (5 * 60 * 1000)  // 5分钟无有效数据
+
+void sensor_health_check(SensorType type, float value, bool valid) {
+    SensorHealth *health = &amp;sensor_health[type];
+    uint32_t now = HAL_GetTick();
+
+    if (valid) {
+        // 合理性检查
+        bool reasonable = true;
+        switch (type) {
+            case SENSOR_TEMP:
+                reasonable = (value &gt;= -40.0f &amp;&amp; value &lt;= 80.0f);
+                break;
+            case SENSOR_HUMI:
+                reasonable = (value &gt;= 0.0f &amp;&amp; value &lt;= 100.0f);
+                break;
+            case SENSOR_CO2:
+                reasonable = (value &gt;= 300 &amp;&amp; value &lt;= 5000);
+                break;
+            case SENSOR_LIGHT:
+                reasonable = (value &gt;= 0 &amp;&amp; value &lt;= 100000);
+                break;
+        }
+
+        if (reasonable) {
+            health-&gt;last_valid_value = value;
+            health-&gt;last_valid_time = now;
+            health-&gt;consecutive_errors = 0;
+            health-&gt;is_faulty = false;
+        } else {
+            health-&gt;consecutive_errors++;
+        }
+    } else {
+        health-&gt;consecutive_errors++;
+    }
+
+    // 判断故障
+    if (health-&gt;consecutive_errors &gt;= MAX_CONSECUTIVE_ERRORS ||
+        (now - health-&gt;last_valid_time &gt; SENSOR_TIMEOUT_MS)) {
+        if (!health-&gt;is_faulty) {
+            health-&gt;is_faulty = true;
+            printf(&quot;[FAULT] 传感器%d故障\n&quot;, type);
+            // 发送告警
+            esp8266_mqtt_publish(&quot;env/alert&quot;, &quot;{\&quot;type\&quot;:\&quot;sensor_fault\&quot;}&quot;);
+        }
+    }
+}
+
+// 使用最后有效值或安全默认值
+float get_safe_sensor_value(SensorType type, float current, bool valid) {
+    sensor_health_check(type, current, valid);
+
+    if (sensor_health[type].is_faulty) {
+        // 使用最后有效值或安全默认值
+        if (sensor_health[type].last_valid_time &gt; 0) {
+            return sensor_health[type].last_valid_value;
+        } else {
+            // 安全默认值
+            switch (type) {
+                case SENSOR_TEMP:  return 25.0f;
+                case SENSOR_HUMI:  return 50.0f;
+                case SENSOR_CO2:   return 800;
+                case SENSOR_LIGHT: return 500;
+            }
+        }
+    }
+
+    return current;
+}
+</code></pre>
+<h2 id="_15">主循环与数据上报</h2>
+<pre><code class="language-c">void app_main(void) {
+    setup_rules();
+
+    while (1) {
+        // 采集传感器数据
+        EnvData env;
+        DHT22_Data dht = dht22_read(GPIOA, GPIO_PIN_0);
+        env.temperature = dht.valid ? dht.temperature : 0;
+        env.humidity    = dht.valid ? dht.humidity    : 0;
+        env.co2_ppm     = mhz19_read_co2(&amp;huart2);
+        env.light_lux   = bh1750_read_lux();
+        env.timestamp   = HAL_GetTick();
+
+        // 执行规则
+        rules_evaluate(&amp;env);
+
+        // OLED显示
+        oled_printf(0, 0, &quot;T:%.1fC H:%.1f%%&quot;, env.temperature, env.humidity);
+        oled_printf(0, 1, &quot;CO2:%dppm&quot;, env.co2_ppm);
+        oled_printf(0, 2, &quot;Light:%dlux&quot;, env.light_lux);
+        oled_printf(0, 3, &quot;Relay:%04X&quot;,
+                    (relay_get(3)&lt;&lt;3)|(relay_get(2)&lt;&lt;2)|
+                    (relay_get(1)&lt;&lt;1)| relay_get(0));
+
+        // 通过ESP8266上报MQTT（每30秒）
+        static uint32_t last_report = 0;
+        if (HAL_GetTick() - last_report &gt; 30000) {
+            last_report = HAL_GetTick();
+            char json[256];
+            snprintf(json, sizeof(json),
+                     &quot;{\&quot;temp\&quot;:%.1f,\&quot;humi\&quot;:%.1f,\&quot;co2\&quot;:%d,\&quot;light\&quot;:%d}&quot;,
+                     env.temperature, env.humidity,
+                     env.co2_ppm, env.light_lux);
+            esp8266_mqtt_publish(&quot;env/monitor/node001&quot;, json);
+        }
+
+        HAL_Delay(5000);  // 5秒采集一次
+    }
+}
+</code></pre>
+<h2 id="_16">完整项目实战：智能温室控制系统</h2>
+<h3 id="_17">系统架构</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                      云端服务器                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ MQTT Broker  │  │  InfluxDB    │  │   Grafana    │      │
+│  │  (EMQX)      │  │  (时序数据库) │  │  (可视化)     │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+└─────────┼──────────────────┼──────────────────┼─────────────┘
+          │                  │                  │
+          │ MQTT/TLS         │ HTTP             │ HTTP
+          │                  │                  │
+┌─────────┼──────────────────┼──────────────────┼─────────────┐
+│         ▼                  ▼                  ▼              │
+│  ┌──────────────────────────────────────────────────┐       │
+│  │           ESP8266 WiFi模块                        │       │
+│  │  - MQTT客户端                                     │       │
+│  │  - OTA固件更新                                    │       │
+│  │  - Web配置界面                                    │       │
+│  └──────────────────┬───────────────────────────────┘       │
+│                     │ UART                                   │
+│  ┌──────────────────▼───────────────────────────────┐       │
+│  │           STM32F103C8T6主控                       │       │
+│  │  - 传感器数据采集                                 │       │
+│  │  - 规则引擎                                       │       │
+│  │  - 继电器控制                                     │       │
+│  │  - 本地数据记录（SD卡）                           │       │
+│  └─┬────┬────┬────┬────┬────┬────┬────┬────┬────┬──┘       │
+│    │    │    │    │    │    │    │    │    │    │          │
+│  ┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐┌─▼─┐      │
+│  │DHT││SHT││MH-││BH-││土壤││继电││继电││继电││继电││OLED│    │
+│  │22 ││31 ││Z19││1750││湿度││器0││器1││器2││器3││显示│    │
+│  └───┘└───┘└───┘└───┘└───┘└───┘└───┘└───┘└───┘└───┘      │
+│   温湿  温湿  CO₂  光照  土壤  空调  风扇  加湿  补光  状态  │
+└─────────────────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="bom">硬件BOM清单</h3>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>器件</th>
+<th>型号/规格</th>
+<th>数量</th>
+<th>单价</th>
+<th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控</td>
+<td>MCU</td>
+<td>STM32F103C8T6最小系统板</td>
+<td>1</td>
+<td>¥12</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>通信</td>
+<td>WiFi模块</td>
+<td>ESP8266-01S</td>
+<td>1</td>
+<td>¥8</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>传感器</td>
+<td>温湿度</td>
+<td>DHT22/AM2302</td>
+<td>1</td>
+<td>¥15</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>传感器</td>
+<td>温湿度（高精度）</td>
+<td>SHT31-D</td>
+<td>1</td>
+<td>¥25</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>传感器</td>
+<td>CO₂</td>
+<td>MH-Z19B</td>
+<td>1</td>
+<td>¥65</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>传感器</td>
+<td>光照</td>
+<td>BH1750 模块</td>
+<td>1</td>
+<td>¥3</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>传感器</td>
+<td>土壤湿度</td>
+<td>电阻式土壤湿度传感器</td>
+<td>2</td>
+<td>¥2</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>执行器</td>
+<td>继电器</td>
+<td>4路5V继电器模块</td>
+<td>1</td>
+<td>¥12</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>显示</td>
+<td>OLED</td>
+<td>0.96" I2C OLED (SSD1306)</td>
+<td>1</td>
+<td>¥8</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>存储</td>
+<td>SD卡模块</td>
+<td>MicroSD卡模块</td>
+<td>1</td>
+<td>¥3</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>电源</td>
+<td>开关电源</td>
+<td>5V/3A</td>
+<td>1</td>
+<td>¥10</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>杜邦线</td>
+<td>公对母/母对母</td>
+<td>若干</td>
+<td>¥5</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>其他</td>
+<td>面包板</td>
+<td>830孔</td>
+<td>1</td>
+<td>¥5</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td><strong>总计</strong></td>
+<td></td>
+<td></td>
+<td></td>
+<td><strong>¥173</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h3 id="_18">接线图</h3>
+<pre><code>STM32F103C8T6引脚分配：
+
+传感器接口：
+  PA0  ← DHT22 DATA（需10kΩ上拉）
+  PB6  → I2C1_SCL（SHT31, BH1750, OLED）
+  PB7  ← I2C1_SDA
+  PA9  → USART1_TX（ESP8266）
+  PA10 ← USART1_RX
+  PA2  → USART2_TX（MH-Z19B）
+  PA3  ← USART2_RX
+  PA4  ← ADC1_IN4（土壤湿度1）
+  PA5  ← ADC1_IN5（土壤湿度2）
+
+继电器控制：
+  PB12 → Relay CH0（空调）
+  PB13 → Relay CH1（风扇）
+  PB14 → Relay CH2（加湿器）
+  PB15 → Relay CH3（补光灯）
+
+SD卡（SPI1）：
+  PA5  → SPI1_SCK
+  PA6  ← SPI1_MISO
+  PA7  → SPI1_MOSI
+  PA4  → SPI1_CS
+
+按键/LED：
+  PC13 ← 板载LED
+  PB0  ← 按键1（模式切换）
+  PB1  ← 按键2（手动控制）
+
+电源：
+  5V   → STM32 5V输入
+  3.3V → 传感器供电（STM32板载LDO输出）
+  GND  → 公共地
+</code></pre>
+<h3 id="_19">完整主程序</h3>
+<pre><code class="language-c">#include &quot;main.h&quot;
+#include &quot;fatfs.h&quot;  // SD卡文件系统
+
+// 全局变量
+EnvData current_env;
+bool    auto_mode = true;  // 自动/手动模式
+
+// 数据记录到SD卡
+void log_to_sd(const EnvData *env) {
+    FIL file;
+    FRESULT res;
+    char line[128];
+
+    res = f_open(&amp;file, &quot;env_log.csv&quot;, FA_OPEN_APPEND | FA_WRITE);
+    if (res != FR_OK) {
+        // 文件不存在，创建并写入表头
+        res = f_open(&amp;file, &quot;env_log.csv&quot;, FA_CREATE_ALWAYS | FA_WRITE);
+        if (res == FR_OK) {
+            f_puts(&quot;timestamp,temp,humi,co2,light\n&quot;, &amp;file);
+        }
+    }
+
+    if (res == FR_OK) {
+        snprintf(line, sizeof(line), &quot;%lu,%.1f,%.1f,%d,%d\n&quot;,
+                 env-&gt;timestamp, env-&gt;temperature, env-&gt;humidity,
+                 env-&gt;co2_ppm, env-&gt;light_lux);
+        f_puts(line, &amp;file);
+        f_close(&amp;file);
+    }
+}
+
+// 云端数据上报
+void report_to_cloud(const EnvData *env) {
+    char json[512];
+
+    // 获取继电器状态
+    uint8_t relay_status = 0;
+    for (int i = 0; i &lt; 4; i++) {
+        if (relay_get(i)) relay_status |= (1 &lt;&lt; i);
+    }
+
+    // 构造JSON
+    snprintf(json, sizeof(json),
+             &quot;{&quot;
+             &quot;\&quot;device_id\&quot;:\&quot;greenhouse_001\&quot;,&quot;
+             &quot;\&quot;timestamp\&quot;:%lu,&quot;
+             &quot;\&quot;temperature\&quot;:%.2f,&quot;
+             &quot;\&quot;humidity\&quot;:%.2f,&quot;
+             &quot;\&quot;co2\&quot;:%d,&quot;
+             &quot;\&quot;light\&quot;:%d,&quot;
+             &quot;\&quot;relay_status\&quot;:%d,&quot;
+             &quot;\&quot;auto_mode\&quot;:%s&quot;
+             &quot;}&quot;,
+             env-&gt;timestamp,
+             env-&gt;temperature,
+             env-&gt;humidity,
+             env-&gt;co2_ppm,
+             env-&gt;light_lux,
+             relay_status,
+             auto_mode ? &quot;true&quot; : &quot;false&quot;);
+
+    esp8266_mqtt_publish(&quot;greenhouse/data&quot;, json);
+}
+
+// 移动端告警推送
+void send_alert(const char *message) {
+    char json[256];
+    snprintf(json, sizeof(json),
+             &quot;{\&quot;device\&quot;:\&quot;greenhouse_001\&quot;,\&quot;alert\&quot;:\&quot;%s\&quot;,\&quot;time\&quot;:%lu}&quot;,
+             message, HAL_GetTick());
+    esp8266_mqtt_publish(&quot;greenhouse/alert&quot;, json);
+}
+
+// 阈值告警检查
+void check_alerts(const EnvData *env) {
+    static bool temp_high_alerted = false;
+    static bool temp_low_alerted = false;
+    static bool co2_high_alerted = false;
+
+    // 温度过高告警
+    if (env-&gt;temperature &gt; 35.0f) {
+        if (!temp_high_alerted) {
+            send_alert(&quot;温度过高！当前温度超过35°C&quot;);
+            temp_high_alerted = true;
+        }
+    } else if (env-&gt;temperature &lt; 33.0f) {
+        temp_high_alerted = false;  // 恢复
+    }
+
+    // 温度过低告警
+    if (env-&gt;temperature &lt; 10.0f) {
+        if (!temp_low_alerted) {
+            send_alert(&quot;温度过低！当前温度低于10°C&quot;);
+            temp_low_alerted = true;
+        }
+    } else if (env-&gt;temperature &gt; 12.0f) {
+        temp_low_alerted = false;
+    }
+
+    // CO₂过高告警
+    if (env-&gt;co2_ppm &gt; 2000) {
+        if (!co2_high_alerted) {
+            send_alert(&quot;CO₂浓度过高！当前浓度超过2000ppm&quot;);
+            co2_high_alerted = true;
+        }
+    } else if (env-&gt;co2_ppm &lt; 1800) {
+        co2_high_alerted = false;
+    }
+}
+
+// 按键处理
+void handle_buttons(void) {
+    static uint32_t last_btn1_time = 0;
+    static uint32_t last_btn2_time = 0;
+    uint32_t now = HAL_GetTick();
+
+    // 按键1：切换自动/手动模式
+    if (HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_0) == GPIO_PIN_RESET) {
+        if (now - last_btn1_time &gt; 200) {  // 防抖200ms
+            auto_mode = !auto_mode;
+            printf(&quot;[MODE] %s模式\n&quot;, auto_mode ? &quot;自动&quot; : &quot;手动&quot;);
+            last_btn1_time = now;
+        }
+    }
+
+    // 按键2：手动模式下循环切换继电器
+    if (!auto_mode &amp;&amp;
+        HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_1) == GPIO_PIN_RESET) {
+        if (now - last_btn2_time &gt; 200) {
+            static uint8_t manual_ch = 0;
+            relay_toggle(manual_ch);
+            printf(&quot;[MANUAL] CH%d %s\n&quot;, manual_ch,
+                   relay_get(manual_ch) ? &quot;ON&quot; : &quot;OFF&quot;);
+            manual_ch = (manual_ch + 1) % 4;
+            last_btn2_time = now;
+        }
+    }
+}
+
+// MQTT命令处理回调
+void mqtt_command_callback(const char *topic, const char *payload) {
+    // 解析JSON命令
+    // 示例：{&quot;cmd&quot;:&quot;set_relay&quot;,&quot;ch&quot;:0,&quot;state&quot;:true}
+    //      {&quot;cmd&quot;:&quot;set_mode&quot;,&quot;auto&quot;:true}
+    //      {&quot;cmd&quot;:&quot;set_threshold&quot;,&quot;sensor&quot;:&quot;temp&quot;,&quot;value&quot;:28.0}
+
+    if (strstr(payload, &quot;\&quot;cmd\&quot;:\&quot;set_relay\&quot;&quot;)) {
+        // 手动控制继电器
+        int ch, state;
+        if (sscanf(payload, &quot;{\&quot;cmd\&quot;:\&quot;set_relay\&quot;,\&quot;ch\&quot;:%d,\&quot;state\&quot;:%d}&quot;,
+                   &amp;ch, &amp;state) == 2) {
+            if (ch &gt;= 0 &amp;&amp; ch &lt; 4) {
+                relay_set(ch, state);
+                printf(&quot;[MQTT] 远程控制CH%d %s\n&quot;, ch, state ? &quot;ON&quot; : &quot;OFF&quot;);
+            }
+        }
+    } else if (strstr(payload, &quot;\&quot;cmd\&quot;:\&quot;set_mode\&quot;&quot;)) {
+        // 切换模式
+        int mode;
+        if (sscanf(payload, &quot;{\&quot;cmd\&quot;:\&quot;set_mode\&quot;,\&quot;auto\&quot;:%d}&quot;, &amp;mode) == 1) {
+            auto_mode = mode;
+            printf(&quot;[MQTT] 切换到%s模式\n&quot;, auto_mode ? &quot;自动&quot; : &quot;手动&quot;);
+        }
+    }
+}
+
+// 主函数
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化外设
+    MX_GPIO_Init();
+    MX_I2C1_Init();
+    MX_USART1_UART_Init();  // ESP8266
+    MX_USART2_UART_Init();  // MH-Z19B
+    MX_ADC1_Init();
+    MX_SPI1_Init();
+    MX_RTC_Init();
+    MX_FATFS_Init();
+
+    // 初始化传感器
+    sht31_reset();
+    mhz19_set_abc(&amp;huart2, true);  // 启用ABC
+
+    // 初始化ESP8266
+    esp8266_init(&amp;huart1);
+    esp8266_mqtt_connect(&quot;mqtt.example.com&quot;, 1883, &quot;greenhouse_001&quot;);
+    esp8266_mqtt_subscribe(&quot;greenhouse/cmd&quot;, mqtt_command_callback);
+
+    // 初始化OLED
+    oled_init();
+    oled_clear();
+    oled_printf(0, 0, &quot;Greenhouse v1.0&quot;);
+    HAL_Delay(2000);
+
+    // 设置规则
+    setup_rules();
+    setup_time_based_rules();
+
+    printf(&quot;[SYSTEM] 温室控制系统启动\n&quot;);
+
+    uint32_t last_sample = 0;
+    uint32_t last_report = 0;
+    uint32_t last_log = 0;
+
+    while (1) {
+        uint32_t now = HAL_GetTick();
+
+        // 5秒采样一次
+        if (now - last_sample &gt;= 5000) {
+            last_sample = now;
+
+            // 采集传感器
+            SHT31_Data sht = sht31_read();
+            current_env.temperature = get_safe_sensor_value(
+                SENSOR_TEMP, sht.temperature, sht.valid);
+            current_env.humidity = get_safe_sensor_value(
+                SENSOR_HUMI, sht.humidity, sht.valid);
+            current_env.co2_ppm = get_safe_sensor_value(
+                SENSOR_CO2, mhz19_read_co2(&amp;huart2), true);
+            current_env.light_lux = get_safe_sensor_value(
+                SENSOR_LIGHT, bh1750_read_lux(), true);
+            current_env.timestamp = now;
+
+            // 自动模式下执行规则
+            if (auto_mode) {
+                rules_evaluate(&amp;current_env);
+            }
+
+            // 告警检查
+            check_alerts(&amp;current_env);
+
+            // 更新OLED显示
+            oled_clear();
+            oled_printf(0, 0, &quot;T:%.1fC H:%.1f%%&quot;,
+                       current_env.temperature, current_env.humidity);
+            oled_printf(0, 1, &quot;CO2:%dppm&quot;, current_env.co2_ppm);
+            oled_printf(0, 2, &quot;Lux:%d&quot;, current_env.light_lux);
+            oled_printf(0, 3, &quot;%s R:%d%d%d%d&quot;,
+                       auto_mode ? &quot;AUTO&quot; : &quot;MANU&quot;,
+                       relay_get(0), relay_get(1),
+                       relay_get(2), relay_get(3));
+        }
+
+        // 30秒上报一次云端
+        if (now - last_report &gt;= 30000) {
+            last_report = now;
+            report_to_cloud(&amp;current_env);
+        }
+
+        // 10分钟记录一次SD卡
+        if (now - last_log &gt;= 600000) {
+            last_log = now;
+            log_to_sd(&amp;current_env);
+        }
+
+        // 处理按键
+        handle_buttons();
+
+        // 处理MQTT消息
+        esp8266_mqtt_loop();
+
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h3 id="grafana">Grafana仪表盘配置</h3>
+<p>在Grafana中创建温室监控仪表盘：</p>
+<p><strong>Panel 1: 温度趋势</strong></p>
+<pre><code class="language-flux">from(bucket: &quot;greenhouse&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r[&quot;_measurement&quot;] == &quot;environment&quot;)
+  |&gt; filter(fn: (r) =&gt; r[&quot;_field&quot;] == &quot;temperature&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean, createEmpty: false)
+</code></pre>
+<p><strong>Panel 2: 湿度趋势</strong></p>
+<pre><code class="language-flux">from(bucket: &quot;greenhouse&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r[&quot;_field&quot;] == &quot;humidity&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean, createEmpty: false)
+</code></pre>
+<p><strong>Panel 3: CO₂浓度</strong></p>
+<pre><code class="language-flux">from(bucket: &quot;greenhouse&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r[&quot;_field&quot;] == &quot;co2&quot;)
+  |&gt; aggregateWindow(every: 5m, fn: mean, createEmpty: false)
+</code></pre>
+<p><strong>Panel 4: 继电器状态（State Timeline）</strong></p>
+<pre><code class="language-flux">from(bucket: &quot;greenhouse&quot;)
+  |&gt; range(start: -24h)
+  |&gt; filter(fn: (r) =&gt; r[&quot;_field&quot;] == &quot;relay_status&quot;)
+  |&gt; map(fn: (r) =&gt; ({
+      r with
+      relay0: if (r._value &amp; 1) == 1 then &quot;ON&quot; else &quot;OFF&quot;,
+      relay1: if (r._value &amp; 2) == 2 then &quot;ON&quot; else &quot;OFF&quot;,
+      relay2: if (r._value &amp; 4) == 4 then &quot;ON&quot; else &quot;OFF&quot;,
+      relay3: if (r._value &amp; 8) == 8 then &quot;ON&quot; else &quot;OFF&quot;
+    }))
+</code></pre>
+<h3 id="node-red">移动端控制界面（Node-RED）</h3>
+<p>使用Node-RED快速搭建移动端控制界面：</p>
+<pre><code class="language-json">[
+  {
+    &quot;id&quot;: &quot;mqtt_in&quot;,
+    &quot;type&quot;: &quot;mqtt in&quot;,
+    &quot;topic&quot;: &quot;greenhouse/data&quot;,
+    &quot;broker&quot;: &quot;mqtt_broker&quot;
+  },
+  {
+    &quot;id&quot;: &quot;dashboard_temp&quot;,
+    &quot;type&quot;: &quot;ui_gauge&quot;,
+    &quot;min&quot;: 0,
+    &quot;max&quot;: 50,
+    &quot;label&quot;: &quot;温度(°C)&quot;
+  },
+  {
+    &quot;id&quot;: &quot;dashboard_switch&quot;,
+    &quot;type&quot;: &quot;ui_switch&quot;,
+    &quot;label&quot;: &quot;空调&quot;,
+    &quot;topic&quot;: &quot;greenhouse/cmd&quot;,
+    &quot;payload&quot;: &quot;{\&quot;cmd\&quot;:\&quot;set_relay\&quot;,\&quot;ch\&quot;:0,\&quot;state\&quot;:true}&quot;
+  }
+]
+</code></pre>
+<h2 id="_20">延伸阅读</h2>
+<ul>
+<li><a href="../beginner/04-relay-control.html">继电器控制基础</a> - 继电器工作原理</li>
+<li><a href="07-smart-socket-project.html">WiFi智能插座</a> - 单路WiFi控制</li>
+<li><a href="08-automation-system.html">多路继电器自动化</a> - 工业级多路控制</li>
+<li><a href="../../../06-communication-networking/01-wireless-communication/intermediate/03-mqtt-protocol.html">MQTT协议详解</a> - MQTT深入学习</li>
+</ul>
+<h2 id="_21">常见问题与调试</h2>
+<h3 id="_22">传感器相关问题</h3>
+<p><strong>问题1：DHT22读取失败或数据不稳定</strong></p>
+<p>症状：
+- 返回全0或全1
+- 偶尔读取成功，大部分时间失败
+- 温湿度值跳变剧烈</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. 时序问题（最常见）
+// DHT22对时序要求严格，中断会破坏时序
+void dht22_read_with_interrupt_disable(void) {
+    __disable_irq();  // 关闭所有中断
+    DHT22_Data data = dht22_read(GPIOA, GPIO_PIN_0);
+    __enable_irq();   // 恢复中断
+}
+
+// 2. 上拉电阻问题
+// DHT22需要4.7kΩ~10kΩ上拉电阻
+// 检查：用万用表测量DATA引脚空闲时电压应为3.3V
+
+// 3. 供电不足
+// DHT22工作电流：0.5~2.5mA，瞬时可达2.5mA
+// 解决：使用独立3.3V稳压，加100μF电容
+
+// 4. 线缆过长
+// 建议：DATA线长度&lt;20cm，超过需加缓冲器
+
+// 5. 采样频率过高
+// DHT22最快0.5Hz（2秒一次），过快会返回上次数据
+#define DHT22_MIN_INTERVAL_MS  2000
+static uint32_t last_read_time = 0;
+
+DHT22_Data dht22_read_safe(void) {
+    uint32_t now = HAL_GetTick();
+    if (now - last_read_time &lt; DHT22_MIN_INTERVAL_MS) {
+        return last_valid_data;  // 返回缓存
+    }
+    last_read_time = now;
+    return dht22_read(GPIOA, GPIO_PIN_0);
+}
+</code></pre>
+<p><strong>问题2：MH-Z19B CO₂读数异常</strong></p>
+<p>症状：
+- 读数始终为400ppm或5000ppm
+- 读数缓慢上升不下降
+- 预热后读数仍不准确</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. 预热不足
+// MH-Z19B需要3分钟预热，建议等待5分钟
+void mhz19_wait_ready(void) {
+    printf(&quot;MH-Z19B预热中...\n&quot;);
+    for (int i = 0; i &lt; 300; i++) {  // 5分钟
+        HAL_Delay(1000);
+        if (i % 60 == 0) printf(&quot;%d分钟...\n&quot;, i/60);
+    }
+    printf(&quot;预热完成\n&quot;);
+}
+
+// 2. ABC算法误校准
+// 如果环境CO₂从不降至400ppm，ABC会导致读数偏低
+// 解决：禁用ABC或手动校准
+mhz19_set_abc(&amp;huart2, false);
+
+// 3. 串口通信问题
+// 检查波特率（9600）、校验和
+void mhz19_test_communication(void) {
+    uint8_t cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
+    uint8_t resp[9] = {0};
+
+    HAL_UART_Transmit(&amp;huart2, cmd, 9, 100);
+    HAL_StatusTypeDef status = HAL_UART_Receive(&amp;huart2, resp, 9, 500);
+
+    if (status != HAL_OK) {
+        printf(&quot;UART接收失败：%d\n&quot;, status);
+    } else {
+        printf(&quot;响应：&quot;);
+        for (int i = 0; i &lt; 9; i++) printf(&quot;%02X &quot;, resp[i]);
+        printf(&quot;\n&quot;);
+    }
+}
+
+// 4. 零点漂移
+// 长期使用后需要重新校准
+// 在400ppm新鲜空气中放置20分钟后执行：
+mhz19_calibrate_zero(&amp;huart2);
+</code></pre>
+<p><strong>问题3：SHT31 I2C通信失败</strong></p>
+<p>症状：
+- HAL_I2C_Master_Transmit返回HAL_ERROR或HAL_TIMEOUT
+- 读取数据全为0xFF</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. I2C地址错误
+// SHT31有两个地址：0x44（ADDR→GND）或0x45（ADDR→VDD）
+// 扫描I2C总线查找设备
+void i2c_scan(void) {
+    printf(&quot;扫描I2C总线...\n&quot;);
+    for (uint8_t addr = 1; addr &lt; 128; addr++) {
+        if (HAL_I2C_IsDeviceReady(&amp;hi2c1, addr &lt;&lt; 1, 1, 10) == HAL_OK) {
+            printf(&quot;发现设备：0x%02X\n&quot;, addr);
+        }
+    }
+}
+
+// 2. 上拉电阻
+// I2C需要4.7kΩ上拉电阻（SCL和SDA各一个）
+// 检查：用万用表测量SCL/SDA空闲时应为3.3V
+
+// 3. 总线冲突
+// 多个I2C设备共享总线，某个设备卡死会拉低总线
+// 解决：逐个断开设备，找出故障设备
+// 或软件复位I2C总线：
+void i2c_reset(void) {
+    HAL_I2C_DeInit(&amp;hi2c1);
+    HAL_Delay(10);
+    HAL_I2C_Init(&amp;hi2c1);
+}
+
+// 4. 时钟速度过快
+// SHT31支持最高1MHz，但长线缆或多设备时降低速度
+// 在CubeMX中设置I2C时钟为100kHz（标准模式）
+
+// 5. SHT31卡死
+// 长时间运行后可能卡死，需要软复位
+if (sht31_read().valid == false) {
+    sht31_reset();
+    HAL_Delay(10);
+}
+</code></pre>
+<h3 id="_23">控制系统问题</h3>
+<p><strong>问题4：继电器频繁开关</strong></p>
+<p>症状：
+- 继电器每隔几秒就开关一次
+- 听到继电器"咔嗒咔嗒"声音</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. 死区设置不当
+// 温度在阈值附近波动导致频繁触发
+// 解决：增大死区
+rule_add(SENSOR_TEMP, OP_GT, 28.0f, 0, true,  60000, &quot;温度&gt;28°C 开空调&quot;);
+rule_add(SENSOR_TEMP, OP_LT, 24.0f, 0, false, 60000, &quot;温度&lt;24°C 关空调&quot;);
+// 死区：24~28°C（4°C死区）
+
+// 2. 最小动作间隔不足
+// 增加min_duration_ms参数
+rule_add(SENSOR_TEMP, OP_GT, 28.0f, 0, true,
+         5 * 60 * 1000,  // 5分钟持续时间
+         &quot;温度&gt;28°C 开空调&quot;);
+
+// 3. 传感器噪声
+// 对传感器数据进行滤波
+#define FILTER_SIZE  5
+float temp_filter[FILTER_SIZE] = {0};
+uint8_t filter_index = 0;
+
+float get_filtered_temp(float new_temp) {
+    temp_filter[filter_index] = new_temp;
+    filter_index = (filter_index + 1) % FILTER_SIZE;
+
+    float sum = 0;
+    for (int i = 0; i &lt; FILTER_SIZE; i++) sum += temp_filter[i];
+    return sum / FILTER_SIZE;
+}
+</code></pre>
+<p><strong>问题5：规则冲突</strong></p>
+<p>症状：
+- 加湿器和排风扇同时开启（矛盾）
+- 加热器和空调同时开启</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 添加互斥规则检查
+typedef struct {
+    uint8_t ch1, ch2;  // 互斥的继电器通道
+} MutexPair;
+
+MutexPair mutex_pairs[] = {
+    {0, 1},  // 空调(CH0) 与 加热器(CH1) 互斥
+    {2, 3},  // 加湿器(CH2) 与 排风扇(CH3) 互斥
+};
+
+void relay_set_with_mutex(uint8_t ch, bool on) {
+    if (on) {
+        // 检查互斥
+        for (int i = 0; i &lt; sizeof(mutex_pairs)/sizeof(MutexPair); i++) {
+            if (mutex_pairs[i].ch1 == ch &amp;&amp; relay_get(mutex_pairs[i].ch2)) {
+                relay_set(mutex_pairs[i].ch2, false);  // 关闭互斥设备
+                printf(&quot;[MUTEX] 关闭CH%d以开启CH%d\n&quot;, mutex_pairs[i].ch2, ch);
+            }
+            if (mutex_pairs[i].ch2 == ch &amp;&amp; relay_get(mutex_pairs[i].ch1)) {
+                relay_set(mutex_pairs[i].ch1, false);
+                printf(&quot;[MUTEX] 关闭CH%d以开启CH%d\n&quot;, mutex_pairs[i].ch1, ch);
+            }
+        }
+    }
+    relay_set(ch, on);
+}
+</code></pre>
+<h3 id="_24">通信问题</h3>
+<p><strong>问题6：MQTT连接频繁断开</strong></p>
+<p>症状：
+- ESP8266每隔几分钟断开重连
+- 数据上报丢失</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. Keep-Alive超时
+// MQTT默认60秒心跳，网络不稳定时容易超时
+// 解决：缩短心跳间隔，增加超时时间
+esp8266_mqtt_connect_ex(&quot;mqtt.example.com&quot;, 1883,
+                        &quot;greenhouse_001&quot;,
+                        30,   // 30秒心跳
+                        120); // 120秒超时
+
+// 2. WiFi信号弱
+// 检查信号强度
+int8_t rssi = esp8266_get_rssi();
+if (rssi &lt; -70) {
+    printf(&quot;[WARN] WiFi信号弱：%ddBm\n&quot;, rssi);
+}
+
+// 3. QoS设置
+// 使用QoS 1确保消息送达
+esp8266_mqtt_publish_qos(&quot;greenhouse/data&quot;, json, 1);
+
+// 4. 自动重连
+void mqtt_keepalive_task(void) {
+    static uint32_t last_check = 0;
+    uint32_t now = HAL_GetTick();
+
+    if (now - last_check &gt; 10000) {  // 每10秒检查一次
+        last_check = now;
+        if (!esp8266_mqtt_is_connected()) {
+            printf(&quot;[MQTT] 连接断开，重连中...\n&quot;);
+            esp8266_mqtt_connect(&quot;mqtt.example.com&quot;, 1883, &quot;greenhouse_001&quot;);
+        }
+    }
+}
+</code></pre>
+<p><strong>问题7：SD卡写入失败</strong></p>
+<p>症状：
+- f_open返回FR_DISK_ERR
+- 数据记录不完整</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. SD卡格式化
+// 使用FAT32格式，簇大小4KB
+// Windows: format X: /FS:FAT32 /A:4096
+
+// 2. SPI速度过快
+// 降低SPI时钟频率（初始化时使用低速）
+void sd_init_slow(void) {
+    // 初始化时使用低速（&lt;400kHz）
+    hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_128;
+    HAL_SPI_Init(&amp;hspi1);
+
+    // 初始化成功后切换到高速
+    if (f_mount(&amp;SDFatFS, &quot;&quot;, 1) == FR_OK) {
+        hspi1.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_4;
+        HAL_SPI_Init(&amp;hspi1);
+    }
+}
+
+// 3. 文件未关闭
+// 确保每次写入后关闭文件
+void log_to_sd_safe(const EnvData *env) {
+    FIL file;
+    if (f_open(&amp;file, &quot;env_log.csv&quot;, FA_OPEN_APPEND | FA_WRITE) == FR_OK) {
+        char line[128];
+        snprintf(line, sizeof(line), &quot;%lu,%.1f,%.1f,%d,%d\n&quot;,
+                 env-&gt;timestamp, env-&gt;temperature, env-&gt;humidity,
+                 env-&gt;co2_ppm, env-&gt;light_lux);
+        f_puts(line, &amp;file);
+        f_sync(&amp;file);   // 强制写入
+        f_close(&amp;file);  // 必须关闭
+    }
+}
+
+// 4. SD卡写保护
+// 检查SD卡物理写保护开关
+
+// 5. SD卡寿命
+// SD卡有写入次数限制（约10万次）
+// 解决：减少写入频率，使用磨损均衡
+</code></pre>
+<h3 id="_25">系统稳定性问题</h3>
+<p><strong>问题8：系统运行一段时间后死机</strong></p>
+<p>症状：
+- 运行几小时或几天后无响应
+- 看门狗复位</p>
+<p>原因与解决：</p>
+<pre><code class="language-c">// 1. 内存泄漏
+// 检查动态内存分配是否正确释放
+// 避免在循环中使用malloc/free
+
+// 2. 栈溢出
+// 增大栈大小（在启动文件中修改）
+// 或减少局部变量使用
+
+// 3. 看门狗超时
+// 在主循环中喂狗
+void main_loop(void) {
+    while (1) {
+        // ... 业务逻辑 ...
+
+        HAL_IWDG_Refresh(&amp;hiwdg);  // 喂狗
+        HAL_Delay(100);
+    }
+}
+
+// 4. 中断嵌套过深
+// 降低中断优先级，避免高频中断
+
+// 5. 硬件故障
+// 检查电源纹波、温度、湿度
+// 添加硬件看门狗（外部看门狗芯片）
+</code></pre>
+<h3 id="_26">调试技巧</h3>
+<p><strong>串口日志分级</strong>：</p>
+<pre><code class="language-c">typedef enum {
+    LOG_DEBUG,
+    LOG_INFO,
+    LOG_WARN,
+    LOG_ERROR,
+} LogLevel;
+
+LogLevel current_log_level = LOG_INFO;
+
+void log_printf(LogLevel level, const char *fmt, ...) {
+    if (level &lt; current_log_level) return;
+
+    const char *level_str[] = {&quot;[DEBUG]&quot;, &quot;[INFO]&quot;, &quot;[WARN]&quot;, &quot;[ERROR]&quot;};
+    printf(&quot;%s &quot;, level_str[level]);
+
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+}
+
+// 使用
+log_printf(LOG_DEBUG, &quot;传感器读取：T=%.1f\n&quot;, temp);
+log_printf(LOG_ERROR, &quot;MQTT连接失败\n&quot;);
+</code></pre>
+<p><strong>性能监控</strong>：</p>
+<pre><code class="language-c">// CPU使用率监控
+uint32_t idle_count = 0;
+uint32_t total_count = 0;
+
+void idle_task(void) {
+    idle_count++;
+}
+
+void calculate_cpu_usage(void) {
+    static uint32_t last_idle = 0;
+    static uint32_t last_total = 0;
+
+    uint32_t idle_delta = idle_count - last_idle;
+    uint32_t total_delta = total_count - last_total;
+
+    float cpu_usage = 100.0f * (1.0f - (float)idle_delta / total_delta);
+    printf(&quot;[CPU] 使用率：%.1f%%\n&quot;, cpu_usage);
+
+    last_idle = idle_count;
+    last_total = total_count;
+}
+</code></pre>
+<h2 id="_27">参考资料</h2>
+<h3 id="_28">传感器数据手册</h3>
+<ol>
+<li>
+<p><strong>DHT22/AM2302 Datasheet</strong> - AOSONG Electronics
+   - 温湿度测量原理
+   - 单总线通信协议
+   - 时序要求与电气特性</p>
+</li>
+<li>
+<p><strong>SHT31-D Datasheet</strong> - Sensirion AG
+   - 高精度温湿度传感器
+   - I2C通信协议
+   - CRC-8校验算法</p>
+</li>
+<li>
+<p><strong>MH-Z19B CO₂ Sensor Manual</strong> - Winsen Electronics
+   - NDIR（非色散红外）测量原理
+   - UART通信协议
+   - ABC自动基线校准算法</p>
+</li>
+<li>
+<p><strong>BH1750 Ambient Light Sensor Datasheet</strong> - ROHM Semiconductor
+   - 光照强度测量原理
+   - I2C通信协议
+   - 测量模式与分辨率</p>
+</li>
+<li>
+<p><strong>SSD1306 OLED Display Datasheet</strong> - Solomon Systech
+   - OLED显示原理
+   - I2C/SPI接口
+   - 图形显示命令</p>
+</li>
+</ol>
+<h3 id="_29">通信协议</h3>
+<ol start="6">
+<li>
+<p><strong>ESP8266 AT Instruction Set</strong> - Espressif Systems
+   - AT命令集
+   - WiFi配置
+   - TCP/UDP通信</p>
+</li>
+<li>
+<p><strong>MQTT Version 3.1.1</strong> - OASIS Standard
+   - MQTT协议规范
+   - QoS机制
+   - 遗嘱消息</p>
+</li>
+<li>
+<p><strong>MQTT Version 5.0</strong> - OASIS Standard
+   - 新增特性
+   - 用户属性
+   - 共享订阅</p>
+</li>
+</ol>
+<h3 id="_30">控制理论</h3>
+<ol start="9">
+<li>
+<p><strong>《自动控制原理》</strong> - 胡寿松，科学出版社
+   - PID控制器设计
+   - 系统稳定性分析
+   - 频域与时域分析</p>
+</li>
+<li>
+<p><strong>《现代控制理论》</strong> - 刘豹，机械工业出版社</p>
+<ul>
+<li>状态空间方法</li>
+<li>最优控制</li>
+<li>自适应控制</li>
+</ul>
+</li>
+<li>
+<p><strong>PID Control System Design and Automatic Tuning</strong> - Weng Khuen Ho</p>
+<ul>
+<li>PID参数整定方法</li>
+<li>Ziegler-Nichols法</li>
+<li>抗积分饱和技术</li>
+</ul>
+</li>
+</ol>
+<h3 id="_31">建筑自动化</h3>
+<ol start="12">
+<li>
+<p><strong>《智能建筑自动化系统》</strong> - 张少军，中国建筑工业出版社</p>
+<ul>
+<li>楼宇自动化系统</li>
+<li>HVAC控制策略</li>
+<li>能源管理系统</li>
+</ul>
+</li>
+<li>
+<p><strong>ASHRAE Standard 55-2020</strong> - Thermal Environmental Conditions for Human Occupancy</p>
+<ul>
+<li>热舒适标准</li>
+<li>温湿度要求</li>
+<li>空气质量标准</li>
+</ul>
+</li>
+<li>
+<p><strong>ASHRAE Handbook - HVAC Systems and Equipment</strong></p>
+<ul>
+<li>HVAC系统设计</li>
+<li>设备选型</li>
+<li>控制策略</li>
+</ul>
+</li>
+<li>
+<p><strong>GB 50736-2012</strong> - 《民用建筑供暖通风与空气调节设计规范》</p>
+<ul>
+<li>中国国家标准</li>
+<li>室内环境参数</li>
+<li>系统设计要求</li>
+</ul>
+</li>
+</ol>
+<h3 id="_32">农业自动化</h3>
+<ol start="16">
+<li>
+<p><strong>《设施农业环境工程学》</strong> - 李保明，中国农业大学出版社</p>
+<ul>
+<li>温室环境控制</li>
+<li>光照补偿</li>
+<li>灌溉控制</li>
+</ul>
+</li>
+<li>
+<p><strong>《智能温室控制系统设计》</strong> - 王永维，化学工业出版社</p>
+<ul>
+<li>温室自动化</li>
+<li>传感器布置</li>
+<li>控制算法</li>
+</ul>
+</li>
+</ol>
+<h3 id="_33">嵌入式系统</h3>
+<ol start="18">
+<li>
+<p><strong>《STM32库开发实战指南》</strong> - 刘火良，机械工业出版社</p>
+<ul>
+<li>STM32 HAL库</li>
+<li>外设配置</li>
+<li>项目实战</li>
+</ul>
+</li>
+<li>
+<p><strong>《嵌入式实时操作系统》</strong> - 邵贝贝，清华大学出版社</p>
+<ul>
+<li>FreeRTOS原理</li>
+<li>任务调度</li>
+<li>资源管理</li>
+</ul>
+</li>
+</ol>
+<h3 id="_34">物联网平台</h3>
+<ol start="20">
+<li>
+<p><strong>InfluxDB Documentation</strong> - InfluxData</p>
+<ul>
+<li>时序数据库</li>
+<li>Flux查询语言</li>
+<li>数据保留策略</li>
+</ul>
+</li>
+<li>
+<p><strong>Grafana Documentation</strong> - Grafana Labs</p>
+<ul>
+<li>仪表盘设计</li>
+<li>数据源配置</li>
+<li>告警规则</li>
+</ul>
+</li>
+<li>
+<p><strong>Node-RED Documentation</strong> - OpenJS Foundation</p>
+<ul>
+<li>可视化编程</li>
+<li>MQTT集成</li>
+<li>仪表盘开发</li>
+</ul>
+</li>
+</ol>
+<h3 id="_35">能效标准</h3>
+<ol start="23">
+<li>
+<p><strong>GB/T 51350-2019</strong> - 《近零能耗建筑技术标准》</p>
+<ul>
+<li>建筑能效</li>
+<li>节能设计</li>
+<li>能耗监测</li>
+</ul>
+</li>
+<li>
+<p><strong>ISO 50001:2018</strong> - Energy Management Systems</p>
+<ul>
+<li>能源管理体系</li>
+<li>能效优化</li>
+<li>持续改进</li>
+</ul>
+</li>
+</ol>
+<h3 id="_36">在线资源</h3>
+<ol start="25">
+<li>
+<p><strong>ASHRAE官网</strong> - https://www.ashrae.org</p>
+<ul>
+<li>技术标准</li>
+<li>设计指南</li>
+<li>行业资讯</li>
+</ul>
+</li>
+<li>
+<p><strong>STM32中文社区</strong> - https://www.stmcu.org.cn</p>
+<ul>
+<li>技术论坛</li>
+<li>示例代码</li>
+<li>问题解答</li>
+</ul>
+</li>
+<li>
+<p><strong>MQTT.org</strong> - https://mqtt.org</p>
+<ul>
+<li>协议规范</li>
+<li>客户端库</li>
+<li>最佳实践</li>
+</ul>
+</li>
+<li>
+<p><strong>Grafana Community</strong> - https://community.grafana.com</p>
+<ul>
+<li>仪表盘分享</li>
+<li>插件开发</li>
+<li>技术讨论</li>
+</ul>
+</li>
+</ol>
+<hr />
+<h2 id="_37">附录：传感器参数速查</h2>
+<h3 id="dht22-vs-dht11-vs-sht31">DHT22 vs DHT11 vs SHT31</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>DHT11</th>
+<th>DHT22</th>
+<th>SHT31</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>温度范围</td>
+<td>0~50°C</td>
+<td>-40~80°C</td>
+<td>-40~125°C</td>
+</tr>
+<tr>
+<td>温度精度</td>
+<td>±2°C</td>
+<td>±0.5°C</td>
+<td>±0.3°C</td>
+</tr>
+<tr>
+<td>湿度范围</td>
+<td>20~80%RH</td>
+<td>0~100%RH</td>
+<td>0~100%RH</td>
+</tr>
+<tr>
+<td>湿度精度</td>
+<td>±5%RH</td>
+<td>±2%RH</td>
+<td>±2%RH</td>
+</tr>
+<tr>
+<td>接口</td>
+<td>单总线</td>
+<td>单总线</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>采样率</td>
+<td>1Hz</td>
+<td>0.5Hz</td>
+<td>最高10Hz</td>
+</tr>
+<tr>
+<td>价格</td>
+<td>¥3</td>
+<td>¥15</td>
+<td>¥25</td>
+</tr>
+<tr>
+<td>推荐场景</td>
+<td>学习/低精度</td>
+<td>一般应用</td>
+<td>高精度/工业</td>
+</tr>
+</tbody>
+</table>
+<h3 id="mh-z19b-vs-scd30-vs-scd41">MH-Z19B vs SCD30 vs SCD41</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>MH-Z19B</th>
+<th>SCD30</th>
+<th>SCD41</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>测量原理</td>
+<td>NDIR</td>
+<td>NDIR</td>
+<td>光声</td>
+</tr>
+<tr>
+<td>量程</td>
+<td>0~5000ppm</td>
+<td>400~10000ppm</td>
+<td>400~2000ppm</td>
+</tr>
+<tr>
+<td>精度</td>
+<td>±50ppm</td>
+<td>±30ppm</td>
+<td>±40ppm</td>
+</tr>
+<tr>
+<td>预热时间</td>
+<td>3分钟</td>
+<td>2秒</td>
+<td>5秒</td>
+</tr>
+<tr>
+<td>接口</td>
+<td>UART/PWM</td>
+<td>I2C/UART</td>
+<td>I2C</td>
+</tr>
+<tr>
+<td>价格</td>
+<td>¥65</td>
+<td>¥350</td>
+<td>¥200</td>
+</tr>
+<tr>
+<td>推荐场景</td>
+<td>一般应用</td>
+<td>高精度</td>
+<td>低功耗/便携</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_38">规则引擎参数参考</h3>
+<pre><code>温室大棚推荐阈值：
+  温度：
+    加热器开启：&lt; 15°C（持续5分钟）
+    加热器关闭：&gt; 20°C（持续5分钟）
+    空调开启：&gt; 30°C（持续5分钟）
+    空调关闭：&lt; 25°C（持续5分钟）
+
+  湿度：
+    加湿器开启：&lt; 50%RH（持续5分钟）
+    加湿器关闭：&gt; 70%RH（持续5分钟）
+    排风扇开启：&gt; 85%RH（持续2分钟）
+
+  CO₂：
+    排风扇开启：&gt; 1000ppm（持续2分钟）
+    排风扇关闭：&lt; 600ppm（持续5分钟）
+
+  光照：
+    补光灯开启：&lt; 500lux（持续5分钟，且时间在6:00~20:00）
+    补光灯关闭：&gt; 2000lux（持续5分钟）
+
+机房推荐阈值：
+  温度：
+    备用空调开启：&gt; 25°C（持续2分钟）
+    告警：&gt; 28°C（立即）
+    严重告警：&gt; 32°C（立即，同时发送短信）
+
+  湿度：
+    告警（过低）：&lt; 30%RH（静电风险）
+    告警（过高）：&gt; 70%RH（结露风险）
+</code></pre>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

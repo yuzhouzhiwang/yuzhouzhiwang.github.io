@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>看门狗驱动与系统可靠性 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/">02-device-driver-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">看门狗的作用</a></li>
+<li><a href="#_5">看门狗的工作原理</a></li>
+<li><a href="#_6">看门狗的类型</a></li>
+<li><a href="#_7">看门狗的时钟计算</a></li>
+</ul>
+</li>
+<li><a href="#_8">核心内容</a><ul>
+<li><a href="#1-iwdg">1. 独立看门狗（IWDG）配置</a></li>
+<li><a href="#2-wwdg">2. 窗口看门狗（WWDG）配置</a></li>
+<li><a href="#3">3. 喂狗策略设计</a></li>
+<li><a href="#4">4. 复位原因检测</a></li>
+</ul>
+</li>
+<li><a href="#_9">设计考虑</a><ul>
+<li><a href="#1">1. 超时时间选择</a></li>
+<li><a href="#2">2. 调试模式配置</a></li>
+<li><a href="#3_1">3. 多看门狗组合</a></li>
+<li><a href="#4_1">4. 故障记录与分析</a></li>
+</ul>
+</li>
+<li><a href="#_10">常见问题</a><ul>
+<li><a href="#q1">Q1: 看门狗复位后系统无法正常启动？</a></li>
+<li><a href="#q2">Q2: 如何在调试时避免看门狗复位？</a></li>
+<li><a href="#q3">Q3: 看门狗超时时间不准确？</a></li>
+<li><a href="#q4">Q4: 如何判断是否需要使用看门狗？</a></li>
+<li><a href="#q5">Q5: 看门狗和软件复位有什么区别？</a></li>
+</ul>
+</li>
+<li><a href="#_11">最佳实践</a><ul>
+<li><a href="#1_1">1. 看门狗使用原则</a></li>
+<li><a href="#2_1">2. 可靠性设计</a></li>
+<li><a href="#3_2">3. 故障恢复策略</a></li>
+<li><a href="#4_2">4. 测试方法</a></li>
+</ul>
+</li>
+<li><a href="#_12">总结</a></li>
+<li><a href="#_13">相关内容</a></li>
+<li><a href="#_14">练习题</a><ul>
+<li><a href="#_15">基础练习</a></li>
+<li><a href="#_16">进阶练习</a></li>
+<li><a href="#_17">思考题</a></li>
+</ul>
+</li>
+<li><a href="#_18">实验任务</a><ul>
+<li><a href="#1_2">任务1：基本看门狗应用（必做）</a></li>
+<li><a href="#2_2">任务2：任务监控系统（必做）</a></li>
+<li><a href="#3_3">任务3：故障记录系统（选做）</a></li>
+<li><a href="#4_3">任务4：可靠性测试（选做）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">看门狗驱动与系统可靠性</h1>
+<h2 id="_2">概述</h2>
+<p>看门狗（Watchdog）是嵌入式系统中一个重要的安全机制，用于检测和恢复系统故障。当系统因软件错误、硬件故障或外部干扰而陷入死循环或停止响应时，看门狗能够自动复位系统，使其恢复正常运行。这对于无人值守的嵌入式系统尤为重要。</p>
+<p>本文将系统介绍看门狗的工作原理、类型、配置方法和应用策略，帮助你设计更可靠的嵌入式系统。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解看门狗的工作原理和作用</li>
+<li>掌握独立看门狗（IWDG）和窗口看门狗（WWDG）的区别</li>
+<li>配置和使用看门狗定时器</li>
+<li>设计合理的喂狗策略</li>
+<li>实现系统故障检测和自动恢复</li>
+<li>提高系统的可靠性和稳定性</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">看门狗的作用</h3>
+<p>看门狗是一个硬件定时器，其核心功能是监控系统运行状态。如果系统在规定时间内没有"喂狗"（重置看门狗计数器），看门狗就会触发系统复位。</p>
+<p><strong>主要作用</strong>：</p>
+<ol>
+<li><strong>故障检测</strong>：检测系统是否陷入死循环或停止响应</li>
+<li><strong>自动恢复</strong>：在检测到故障后自动复位系统</li>
+<li><strong>提高可靠性</strong>：减少人工干预，提高系统可用性</li>
+<li><strong>安全保障</strong>：防止系统长时间处于异常状态</li>
+</ol>
+<p><strong>典型应用场景</strong>：</p>
+<ul>
+<li>工业控制系统（无人值守）</li>
+<li>汽车电子系统（安全关键）</li>
+<li>医疗设备（高可靠性要求）</li>
+<li>物联网设备（远程部署）</li>
+<li>航空航天系统（极端环境）</li>
+</ul>
+<h3 id="_5">看门狗的工作原理</h3>
+<p>看门狗的工作原理类似于一个倒计时定时器：</p>
+<pre><code>初始化 → 启动计数 → 定期喂狗 → 继续计数
+                ↓
+            超时未喂狗
+                ↓
+            触发系统复位
+</code></pre>
+<p><strong>关键概念</strong>：</p>
+<ol>
+<li><strong>超时时间</strong>：看门狗计数器从初始值减到0所需的时间</li>
+<li><strong>喂狗操作</strong>：重新加载看门狗计数器，防止超时</li>
+<li><strong>复位触发</strong>：计数器减到0时，触发系统复位</li>
+<li><strong>喂狗窗口</strong>：某些看门狗要求在特定时间窗口内喂狗</li>
+</ol>
+<h3 id="_6">看门狗的类型</h3>
+<p>STM32微控制器通常提供两种类型的看门狗：</p>
+<p><strong>1. 独立看门狗（IWDG - Independent Watchdog）</strong></p>
+<ul>
+<li><strong>时钟源</strong>：独立的低速内部时钟（LSI，约32kHz）</li>
+<li><strong>特点</strong>：完全独立于主系统时钟，即使主时钟失效也能工作</li>
+<li><strong>超时范围</strong>：几毫秒到几秒</li>
+<li><strong>应用</strong>：检测系统级故障，如时钟失效、程序跑飞</li>
+<li><strong>优势</strong>：可靠性高，不受主系统影响</li>
+</ul>
+<p><strong>2. 窗口看门狗（WWDG - Window Watchdog）</strong></p>
+<ul>
+<li><strong>时钟源</strong>：APB1时钟</li>
+<li><strong>特点</strong>：具有时间窗口限制，喂狗必须在窗口期内</li>
+<li><strong>超时范围</strong>：几十微秒到几十毫秒</li>
+<li><strong>应用</strong>：检测程序执行时序异常</li>
+<li><strong>优势</strong>：能检测程序执行过快或过慢</li>
+</ul>
+<p><strong>对比表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>独立看门狗（IWDG）</th>
+<th>窗口看门狗（WWDG）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>时钟源</td>
+<td>LSI（32kHz）</td>
+<td>APB1时钟</td>
+</tr>
+<tr>
+<td>独立性</td>
+<td>完全独立</td>
+<td>依赖系统时钟</td>
+</tr>
+<tr>
+<td>超时范围</td>
+<td>0.125ms - 32s</td>
+<td>几十μs - 几十ms</td>
+</tr>
+<tr>
+<td>窗口功能</td>
+<td>无</td>
+<td>有</td>
+</tr>
+<tr>
+<td>中断功能</td>
+<td>无</td>
+<td>有（提前中断）</td>
+</tr>
+<tr>
+<td>停止模式</td>
+<td>继续运行</td>
+<td>停止运行</td>
+</tr>
+<tr>
+<td>调试模式</td>
+<td>可配置</td>
+<td>可配置</td>
+</tr>
+<tr>
+<td>应用场景</td>
+<td>系统级故障检测</td>
+<td>程序时序检测</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_7">看门狗的时钟计算</h3>
+<p>理解看门狗的时钟计算对于正确配置超时时间至关重要。</p>
+<p><strong>独立看门狗（IWDG）时钟计算</strong>：</p>
+<pre><code>LSI频率：约32kHz（实际可能在30-40kHz之间）
+
+预分频器：4, 8, 16, 32, 64, 128, 256
+
+计数器频率 = LSI频率 / 预分频器
+
+超时时间 = 重载值 / 计数器频率
+
+示例：
+LSI = 32kHz
+预分频器 = 64
+重载值 = 4095（最大值）
+
+计数器频率 = 32000 / 64 = 500Hz
+超时时间 = 4095 / 500 = 8.19秒
+</code></pre>
+<p><strong>窗口看门狗（WWDG）时钟计算</strong>：</p>
+<pre><code>WWDG时钟 = APB1时钟 / 4096
+
+预分频器：1, 2, 4, 8
+
+计数器频率 = WWDG时钟 / 预分频器
+
+超时时间 = (计数器值 - 窗口值) / 计数器频率
+
+示例：
+APB1 = 42MHz
+预分频器 = 8
+计数器值 = 127（最大值）
+窗口值 = 80
+
+WWDG时钟 = 42000000 / 4096 = 10254Hz
+计数器频率 = 10254 / 8 = 1281.75Hz
+超时时间 = (127 - 80) / 1281.75 = 36.7ms
+</code></pre>
+<h2 id="_8">核心内容</h2>
+<h3 id="1-iwdg">1. 独立看门狗（IWDG）配置</h3>
+<p>独立看门狗是最常用的看门狗类型，配置简单，可靠性高。</p>
+<p><strong>主要寄存器</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>全称</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>KR</td>
+<td>Key Register</td>
+<td>控制寄存器（写入特定值执行操作）</td>
+</tr>
+<tr>
+<td>PR</td>
+<td>Prescaler Register</td>
+<td>预分频器寄存器</td>
+</tr>
+<tr>
+<td>RLR</td>
+<td>Reload Register</td>
+<td>重载值寄存器</td>
+</tr>
+<tr>
+<td>SR</td>
+<td>Status Register</td>
+<td>状态寄存器</td>
+</tr>
+</tbody>
+</table>
+<p><strong>配置步骤</strong>：</p>
+<ol>
+<li>使能写保护解除（写入0x5555到KR）</li>
+<li>配置预分频器（PR）</li>
+<li>配置重载值（RLR）</li>
+<li>等待寄存器更新完成</li>
+<li>启动看门狗（写入0xCCCC到KR）</li>
+<li>定期喂狗（写入0xAAAA到KR）</li>
+</ol>
+<p><strong>代码示例</strong>：</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+
+/**
+ * @brief  初始化独立看门狗
+ * @param  timeout_ms: 超时时间（毫秒）
+ * @retval 无
+ */
+void IWDG_Init(uint32_t timeout_ms) {
+    // 1. 使能写保护解除
+    IWDG-&gt;KR = 0x5555;
+
+    // 2. 配置预分频器
+    // PR = 6 表示预分频器为256
+    // LSI频率约32kHz，计数器频率 = 32000/256 = 125Hz
+    IWDG-&gt;PR = 6;  // 预分频器256
+
+    // 3. 计算并配置重载值
+    // 超时时间(ms) = RLR / (LSI / 预分频器) * 1000
+    // RLR = 超时时间(ms) * (LSI / 预分频器) / 1000
+    uint32_t reload = (timeout_ms * 125) / 1000;
+
+    // 限制重载值范围（0-4095）
+    if (reload &gt; 4095) reload = 4095;
+    if (reload &lt; 1) reload = 1;
+
+    IWDG-&gt;RLR = reload;
+
+    // 4. 等待寄存器更新完成
+    while (IWDG-&gt;SR != 0);
+
+    // 5. 启动看门狗
+    IWDG-&gt;KR = 0xCCCC;
+}
+
+/**
+ * @brief  喂狗（重载看门狗计数器）
+ * @param  无
+ * @retval 无
+ */
+void IWDG_Feed(void) {
+    IWDG-&gt;KR = 0xAAAA;
+}
+
+/**
+ * @brief  主函数示例
+ */
+int main(void) {
+    // 系统初始化
+    SystemInit();
+
+    // 初始化看门狗，超时时间1000ms
+    IWDG_Init(1000);
+
+    // 主循环
+    while (1) {
+        // 执行任务
+        DoTask();
+
+        // 定期喂狗（必须在1000ms内）
+        IWDG_Feed();
+
+        // 延时
+        HAL_Delay(500);
+    }
+}
+</code></pre>
+<p><strong>配置说明</strong>：</p>
+<ol>
+<li>
+<p><strong>预分频器选择</strong>：
+   - PR = 0: 预分频器4（超时范围：0.125ms - 512ms）
+   - PR = 1: 预分频器8（超时范围：0.25ms - 1024ms）
+   - PR = 2: 预分频器16（超时范围：0.5ms - 2048ms）
+   - PR = 3: 预分频器32（超时范围：1ms - 4096ms）
+   - PR = 4: 预分频器64（超时范围：2ms - 8192ms）
+   - PR = 5: 预分频器128（超时范围：4ms - 16384ms）
+   - PR = 6: 预分频器256（超时范围：8ms - 32768ms）</p>
+</li>
+<li>
+<p><strong>重载值计算</strong>：
+   - 根据所需超时时间和预分频器计算
+   - 重载值范围：0-4095
+   - 超时时间 = RLR × 预分频器 / LSI频率</p>
+</li>
+<li>
+<p><strong>写保护机制</strong>：
+   - PR和RLR寄存器有写保护
+   - 必须先写入0x5555解除保护
+   - 修改完成后自动恢复保护</p>
+</li>
+</ol>
+<h3 id="2-wwdg">2. 窗口看门狗（WWDG）配置</h3>
+<p>窗口看门狗提供更精确的时序监控，能检测程序执行过快或过慢的情况。</p>
+<p><strong>主要寄存器</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>全称</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR</td>
+<td>Control Register</td>
+<td>控制寄存器（计数器值和使能位）</td>
+</tr>
+<tr>
+<td>CFR</td>
+<td>Configuration Register</td>
+<td>配置寄存器（窗口值和预分频器）</td>
+</tr>
+<tr>
+<td>SR</td>
+<td>Status Register</td>
+<td>状态寄存器（中断标志）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>配置步骤</strong>：</p>
+<ol>
+<li>使能WWDG时钟</li>
+<li>配置预分频器</li>
+<li>配置窗口值</li>
+<li>配置计数器初始值</li>
+<li>使能提前唤醒中断（可选）</li>
+<li>启动看门狗</li>
+<li>在窗口期内喂狗</li>
+</ol>
+<p><strong>代码示例</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  初始化窗口看门狗
+ * @param  无
+ * @retval 无
+ */
+void WWDG_Init(void) {
+    // 1. 使能WWDG时钟
+    RCC-&gt;APB1ENR |= RCC_APB1ENR_WWDGEN;
+
+    // 2. 配置预分频器和窗口值
+    // WDGTB = 3: 预分频器8
+    // W[6:0] = 80: 窗口值
+    WWDG-&gt;CFR = (3 &lt;&lt; 7) | 80;
+
+    // 3. 使能提前唤醒中断
+    WWDG-&gt;CFR |= WWDG_CFR_EWI;
+
+    // 4. 配置NVIC中断
+    NVIC_SetPriority(WWDG_IRQn, 2);
+    NVIC_EnableIRQ(WWDG_IRQn);
+
+    // 5. 设置计数器初始值并启动
+    // T[6:0] = 127: 计数器初始值
+    // WDGA = 1: 启动看门狗
+    WWDG-&gt;CR = (1 &lt;&lt; 7) | 127;
+}
+
+/**
+ * @brief  喂狗（重载窗口看门狗计数器）
+ * @param  无
+ * @retval 无
+ * @note   必须在窗口期内调用
+ */
+void WWDG_Feed(void) {
+    // 重载计数器值（必须大于窗口值）
+    WWDG-&gt;CR = (1 &lt;&lt; 7) | 127;
+}
+
+/**
+ * @brief  WWDG中断服务函数
+ * @param  无
+ * @retval 无
+ */
+void WWDG_IRQHandler(void) {
+    // 检查提前唤醒中断标志
+    if (WWDG-&gt;SR &amp; WWDG_SR_EWIF) {
+        // 清除中断标志
+        WWDG-&gt;SR &amp;= ~WWDG_SR_EWIF;
+
+        // 在中断中喂狗
+        WWDG_Feed();
+
+        // 可以在这里执行其他操作
+        // 例如：记录日志、LED指示等
+    }
+}
+
+/**
+ * @brief  主函数示例
+ */
+int main(void) {
+    SystemInit();
+
+    // 初始化窗口看门狗
+    WWDG_Init();
+
+    while (1) {
+        // 执行任务
+        DoTask();
+
+        // 注意：喂狗操作在中断中完成
+        // 主循环只需要正常执行任务
+
+        HAL_Delay(10);
+    }
+}
+</code></pre>
+<p><strong>窗口看门狗特点</strong>：</p>
+<ol>
+<li>
+<p><strong>时间窗口</strong>：
+   - 喂狗必须在计数器值小于窗口值时进行
+   - 过早喂狗（计数器 &gt; 窗口值）会触发复位
+   - 过晚喂狗（计数器 &lt; 0x40）会触发复位</p>
+</li>
+<li>
+<p><strong>提前唤醒中断</strong>：
+   - 计数器减到0x40时触发中断
+   - 可以在中断中喂狗
+   - 提供额外的安全保障</p>
+</li>
+<li>
+<p><strong>时序监控</strong>：
+   - 能检测程序执行过快（过早喂狗）
+   - 能检测程序执行过慢（超时）
+   - 适合对时序要求严格的应用</p>
+</li>
+</ol>
+<h3 id="3">3. 喂狗策略设计</h3>
+<p>合理的喂狗策略是保证系统可靠性的关键。</p>
+<p><strong>策略1：主循环喂狗</strong></p>
+<p>最简单的策略，在主循环中定期喂狗。</p>
+<pre><code class="language-c">int main(void) {
+    SystemInit();
+    IWDG_Init(1000);  // 1秒超时
+
+    while (1) {
+        // 任务1
+        Task1();
+
+        // 任务2
+        Task2();
+
+        // 任务3
+        Task3();
+
+        // 喂狗
+        IWDG_Feed();
+
+        // 延时
+        HAL_Delay(500);
+    }
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 实现简单
+- 适合简单的单任务系统</p>
+<p><strong>缺点</strong>：
+- 如果某个任务卡死，无法喂狗
+- 无法检测任务执行异常</p>
+<p><strong>策略2：定时器喂狗</strong></p>
+<p>使用定时器中断定期喂狗。</p>
+<pre><code class="language-c">volatile uint8_t g_task_flags = 0;
+
+// 定时器中断（每100ms）
+void TIM6_IRQHandler(void) {
+    if (TIM6-&gt;SR &amp; TIM_SR_UIF) {
+        TIM6-&gt;SR &amp;= ~TIM_SR_UIF;
+
+        // 检查所有任务是否正常执行
+        if (g_task_flags == 0x07) {  // 所有任务都执行了
+            IWDG_Feed();
+            g_task_flags = 0;  // 清除标志
+        }
+        // 如果有任务未执行，不喂狗，触发复位
+    }
+}
+
+int main(void) {
+    SystemInit();
+    IWDG_Init(1000);
+    TIM6_Init();  // 初始化定时器
+
+    while (1) {
+        // 任务1
+        Task1();
+        g_task_flags |= 0x01;
+
+        // 任务2
+        Task2();
+        g_task_flags |= 0x02;
+
+        // 任务3
+        Task3();
+        g_task_flags |= 0x04;
+
+        HAL_Delay(50);
+    }
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 能检测任务是否正常执行
+- 更可靠的故障检测</p>
+<p><strong>缺点</strong>：
+- 实现稍复杂
+- 需要额外的定时器资源</p>
+<p><strong>策略3：RTOS任务喂狗</strong></p>
+<p>在RTOS环境中，使用专门的看门狗任务。</p>
+<pre><code class="language-c">// 看门狗任务
+void WatchdogTask(void *pvParameters) {
+    uint32_t task_status = 0;
+
+    while (1) {
+        // 等待所有任务的信号
+        task_status = 0;
+
+        // 检查任务1状态
+        if (xSemaphoreTake(Task1Semaphore, 100) == pdTRUE) {
+            task_status |= 0x01;
+        }
+
+        // 检查任务2状态
+        if (xSemaphoreTake(Task2Semaphore, 100) == pdTRUE) {
+            task_status |= 0x02;
+        }
+
+        // 检查任务3状态
+        if (xSemaphoreTake(Task3Semaphore, 100) == pdTRUE) {
+            task_status |= 0x04;
+        }
+
+        // 所有任务正常才喂狗
+        if (task_status == 0x07) {
+            IWDG_Feed();
+        }
+
+        vTaskDelay(500);  // 延时500ms
+    }
+}
+
+// 其他任务在执行完成后发送信号
+void Task1(void *pvParameters) {
+    while (1) {
+        // 执行任务
+        DoWork();
+
+        // 发送信号表示任务正常
+        xSemaphoreGive(Task1Semaphore);
+
+        vTaskDelay(100);
+    }
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 适合多任务系统
+- 能监控所有任务状态
+- 灵活性高</p>
+<p><strong>缺点</strong>：
+- 需要RTOS支持
+- 实现较复杂</p>
+<h3 id="4">4. 复位原因检测</h3>
+<p>系统复位后，需要判断是否由看门狗触发，以便采取相应措施。</p>
+<p><strong>复位标志寄存器</strong>：</p>
+<p>STM32的RCC_CSR寄存器记录了复位原因。</p>
+<pre><code class="language-c">/**
+ * @brief  检测复位原因
+ * @param  无
+ * @retval 复位原因
+ */
+typedef enum {
+    RESET_CAUSE_UNKNOWN = 0,
+    RESET_CAUSE_LOW_POWER,
+    RESET_CAUSE_WINDOW_WATCHDOG,
+    RESET_CAUSE_INDEPENDENT_WATCHDOG,
+    RESET_CAUSE_SOFTWARE,
+    RESET_CAUSE_POR_PDR,
+    RESET_CAUSE_PIN,
+    RESET_CAUSE_BOR
+} ResetCause_t;
+
+ResetCause_t GetResetCause(void) {
+    ResetCause_t cause = RESET_CAUSE_UNKNOWN;
+
+    // 读取复位标志
+    uint32_t csr = RCC-&gt;CSR;
+
+    if (csr &amp; RCC_CSR_LPWRRSTF) {
+        cause = RESET_CAUSE_LOW_POWER;
+    }
+    else if (csr &amp; RCC_CSR_WWDGRSTF) {
+        cause = RESET_CAUSE_WINDOW_WATCHDOG;
+    }
+    else if (csr &amp; RCC_CSR_IWDGRSTF) {
+        cause = RESET_CAUSE_INDEPENDENT_WATCHDOG;
+    }
+    else if (csr &amp; RCC_CSR_SFTRSTF) {
+        cause = RESET_CAUSE_SOFTWARE;
+    }
+    else if (csr &amp; RCC_CSR_PORRSTF) {
+        cause = RESET_CAUSE_POR_PDR;
+    }
+    else if (csr &amp; RCC_CSR_PINRSTF) {
+        cause = RESET_CAUSE_PIN;
+    }
+    else if (csr &amp; RCC_CSR_BORRSTF) {
+        cause = RESET_CAUSE_BOR;
+    }
+
+    // 清除复位标志
+    RCC-&gt;CSR |= RCC_CSR_RMVF;
+
+    return cause;
+}
+
+/**
+ * @brief  处理复位原因
+ * @param  无
+ * @retval 无
+ */
+void HandleResetCause(void) {
+    ResetCause_t cause = GetResetCause();
+
+    switch (cause) {
+        case RESET_CAUSE_INDEPENDENT_WATCHDOG:
+            // 独立看门狗复位
+            printf(&quot;System reset by IWDG\r\n&quot;);
+            // 记录日志、发送告警等
+            LogError(&quot;IWDG Reset&quot;);
+            break;
+
+        case RESET_CAUSE_WINDOW_WATCHDOG:
+            // 窗口看门狗复位
+            printf(&quot;System reset by WWDG\r\n&quot;);
+            LogError(&quot;WWDG Reset&quot;);
+            break;
+
+        case RESET_CAUSE_SOFTWARE:
+            // 软件复位
+            printf(&quot;System reset by software\r\n&quot;);
+            break;
+
+        case RESET_CAUSE_PIN:
+            // 引脚复位（按键复位）
+            printf(&quot;System reset by pin\r\n&quot;);
+            break;
+
+        case RESET_CAUSE_POR_PDR:
+            // 上电复位
+            printf(&quot;System power on reset\r\n&quot;);
+            break;
+
+        default:
+            printf(&quot;Unknown reset cause\r\n&quot;);
+            break;
+    }
+}
+
+/**
+ * @brief  主函数
+ */
+int main(void) {
+    SystemInit();
+    UART_Init();  // 初始化串口用于调试
+
+    // 检测并处理复位原因
+    HandleResetCause();
+
+    // 初始化看门狗
+    IWDG_Init(1000);
+
+    while (1) {
+        // 正常任务
+        DoTask();
+        IWDG_Feed();
+        HAL_Delay(500);
+    }
+}
+</code></pre>
+<p><strong>复位原因应用</strong>：</p>
+<ol>
+<li>
+<p><strong>故障统计</strong>：
+   - 记录看门狗复位次数
+   - 分析系统稳定性
+   - 发现潜在问题</p>
+</li>
+<li>
+<p><strong>故障恢复</strong>：
+   - 根据复位原因采取不同措施
+   - 看门狗复位后进入安全模式
+   - 记录故障日志</p>
+</li>
+<li>
+<p><strong>调试辅助</strong>：
+   - 开发阶段识别问题
+   - 通过串口输出复位原因
+   - 帮助定位故障点</p>
+</li>
+</ol>
+<h2 id="_9">设计考虑</h2>
+<h3 id="1">1. 超时时间选择</h3>
+<p>选择合适的看门狗超时时间是关键。</p>
+<p><strong>选择原则</strong>：</p>
+<ol>
+<li>
+<p><strong>任务周期分析</strong>：
+   - 分析最长任务执行时间
+   - 考虑最坏情况（中断、延时等）
+   - 留有足够的安全余量</p>
+</li>
+<li>
+<p><strong>超时时间计算</strong>：
+   ```
+   超时时间 = 最长任务时间 × 安全系数</p>
+</li>
+</ol>
+<p>安全系数建议：
+   - 简单系统：1.5 - 2.0
+   - 复杂系统：2.0 - 3.0
+   - 实时系统：1.2 - 1.5
+   ```</p>
+<ol start="3">
+<li><strong>实际示例</strong>：
+   ```
+   假设系统任务：
+   - 任务1：50ms
+   - 任务2：100ms
+   - 任务3：150ms
+   - 总计：300ms</li>
+</ol>
+<p>超时时间 = 300ms × 2 = 600ms
+   实际配置：1000ms（留有更多余量）
+   ```</p>
+<p><strong>常见超时时间</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>应用场景</th>
+<th>推荐超时时间</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>快速响应系统</td>
+<td>100-500ms</td>
+<td>实时控制、快速反馈</td>
+</tr>
+<tr>
+<td>一般应用</td>
+<td>500-2000ms</td>
+<td>数据采集、通信</td>
+</tr>
+<tr>
+<td>慢速系统</td>
+<td>2-10秒</td>
+<td>复杂计算、大数据处理</td>
+</tr>
+<tr>
+<td>超长任务</td>
+<td>10-30秒</td>
+<td>文件操作、网络传输</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2">2. 调试模式配置</h3>
+<p>开发阶段，看门狗可能影响调试，需要合理配置。</p>
+<p><strong>调试选项</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  配置看门狗调试模式
+ * @param  无
+ * @retval 无
+ */
+void IWDG_DebugConfig(void) {
+    // 在调试模式下停止看门狗
+    // 需要在调试器中配置，或使用DBGMCU寄存器
+
+    #ifdef DEBUG
+    // 调试模式下停止IWDG
+    DBGMCU-&gt;APB1FZ |= DBGMCU_APB1_FZ_DBG_IWDG_STOP;
+
+    // 调试模式下停止WWDG
+    DBGMCU-&gt;APB1FZ |= DBGMCU_APB1_FZ_DBG_WWDG_STOP;
+    #endif
+}
+</code></pre>
+<p><strong>调试策略</strong>：</p>
+<ol>
+<li>
+<p><strong>开发阶段</strong>：
+   - 禁用看门狗或设置很长的超时时间
+   - 使用条件编译控制
+   - 在调试器中停止看门狗</p>
+</li>
+<li>
+<p><strong>测试阶段</strong>：
+   - 启用看门狗，使用正常超时时间
+   - 测试故障恢复功能
+   - 验证喂狗策略</p>
+</li>
+<li>
+<p><strong>发布版本</strong>：
+   - 必须启用看门狗
+   - 使用经过验证的配置
+   - 移除调试代码</p>
+</li>
+</ol>
+<h3 id="3_1">3. 多看门狗组合</h3>
+<p>在某些应用中，可以同时使用IWDG和WWDG。</p>
+<p><strong>组合策略</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  初始化双看门狗系统
+ * @param  无
+ * @retval 无
+ */
+void DualWatchdog_Init(void) {
+    // IWDG：监控系统级故障（长超时）
+    IWDG_Init(5000);  // 5秒超时
+
+    // WWDG：监控程序时序（短超时）
+    WWDG_Init();      // 约50ms超时
+}
+
+/**
+ * @brief  双看门狗喂狗
+ * @param  无
+ * @retval 无
+ */
+void DualWatchdog_Feed(void) {
+    // 喂IWDG
+    IWDG_Feed();
+
+    // WWDG在中断中自动喂狗
+}
+</code></pre>
+<p><strong>应用场景</strong>：</p>
+<ul>
+<li><strong>IWDG</strong>：检测系统级故障（时钟失效、程序跑飞）</li>
+<li><strong>WWDG</strong>：检测程序时序异常（任务执行异常）</li>
+<li><strong>组合使用</strong>：提供多层保护</li>
+</ul>
+<h3 id="4_1">4. 故障记录与分析</h3>
+<p>记录看门狗复位信息有助于分析系统问题。</p>
+<p><strong>故障记录实现</strong>：</p>
+<pre><code class="language-c">// 故障记录结构体
+typedef struct {
+    uint32_t reset_count;        // 复位次数
+    uint32_t last_reset_time;    // 最后复位时间
+    ResetCause_t last_cause;     // 最后复位原因
+    uint32_t task_state;         // 任务状态
+} FaultRecord_t;
+
+// 使用备份寄存器或Flash存储
+#define FAULT_RECORD_ADDR  0x08080000  // Flash地址
+
+/**
+ * @brief  保存故障记录
+ * @param  record: 故障记录指针
+ * @retval 无
+ */
+void SaveFaultRecord(FaultRecord_t *record) {
+    // 解锁Flash
+    HAL_FLASH_Unlock();
+
+    // 擦除扇区
+    FLASH_EraseInitTypeDef erase;
+    erase.TypeErase = FLASH_TYPEERASE_SECTORS;
+    erase.Sector = FLASH_SECTOR_11;
+    erase.NbSectors = 1;
+    erase.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+    uint32_t error;
+    HAL_FLASHEx_Erase(&amp;erase, &amp;error);
+
+    // 写入数据
+    uint32_t *data = (uint32_t *)record;
+    for (int i = 0; i &lt; sizeof(FaultRecord_t) / 4; i++) {
+        HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, 
+                         FAULT_RECORD_ADDR + i * 4, 
+                         data[i]);
+    }
+
+    // 锁定Flash
+    HAL_FLASH_Lock();
+}
+
+/**
+ * @brief  读取故障记录
+ * @param  record: 故障记录指针
+ * @retval 无
+ */
+void LoadFaultRecord(FaultRecord_t *record) {
+    uint32_t *src = (uint32_t *)FAULT_RECORD_ADDR;
+    uint32_t *dst = (uint32_t *)record;
+
+    for (int i = 0; i &lt; sizeof(FaultRecord_t) / 4; i++) {
+        dst[i] = src[i];
+    }
+}
+
+/**
+ * @brief  处理看门狗复位
+ * @param  无
+ * @retval 无
+ */
+void HandleWatchdogReset(void) {
+    FaultRecord_t record;
+
+    // 读取故障记录
+    LoadFaultRecord(&amp;record);
+
+    // 更新记录
+    record.reset_count++;
+    record.last_reset_time = HAL_GetTick();
+    record.last_cause = GetResetCause();
+
+    // 保存记录
+    SaveFaultRecord(&amp;record);
+
+    // 输出故障信息
+    printf(&quot;Watchdog reset #%d\r\n&quot;, record.reset_count);
+    printf(&quot;Last reset: %d ms ago\r\n&quot;, 
+           HAL_GetTick() - record.last_reset_time);
+
+    // 如果复位次数过多，进入安全模式
+    if (record.reset_count &gt; 10) {
+        EnterSafeMode();
+    }
+}
+</code></pre>
+<p><strong>故障分析</strong>：</p>
+<ol>
+<li>
+<p><strong>统计分析</strong>：
+   - 复位频率
+   - 复位原因分布
+   - 故障模式识别</p>
+</li>
+<li>
+<p><strong>趋势分析</strong>：
+   - 复位次数增加趋势
+   - 特定条件下的复位
+   - 环境因素影响</p>
+</li>
+<li>
+<p><strong>预防措施</strong>：
+   - 根据分析结果优化代码
+   - 调整看门狗参数
+   - 改进系统设计</p>
+</li>
+</ol>
+<h2 id="_10">常见问题</h2>
+<h3 id="q1">Q1: 看门狗复位后系统无法正常启动？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>初始化代码执行时间过长</li>
+<li>看门狗在启动时自动启动（选项字节配置）</li>
+<li>超时时间设置过短</li>
+</ol>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">int main(void) {
+    // 1. 尽快喂狗
+    IWDG_Feed();
+
+    // 2. 快速初始化关键模块
+    SystemInit();
+    IWDG_Feed();
+
+    // 3. 初始化其他模块
+    GPIO_Init();
+    IWDG_Feed();
+
+    UART_Init();
+    IWDG_Feed();
+
+    // 4. 重新配置看门狗（如果需要）
+    IWDG_Init(2000);  // 增加超时时间
+
+    while (1) {
+        // 正常运行
+    }
+}
+</code></pre>
+<h3 id="q2">Q2: 如何在调试时避免看门狗复位？</h3>
+<p><strong>方法1：条件编译</strong></p>
+<pre><code class="language-c">int main(void) {
+    SystemInit();
+
+    #ifndef DEBUG
+    // 只在发布版本中启用看门狗
+    IWDG_Init(1000);
+    #endif
+
+    while (1) {
+        DoTask();
+
+        #ifndef DEBUG
+        IWDG_Feed();
+        #endif
+    }
+}
+</code></pre>
+<p><strong>方法2：调试器配置</strong></p>
+<pre><code class="language-c">void IWDG_DebugInit(void) {
+    #ifdef DEBUG
+    // 调试模式下停止看门狗
+    DBGMCU-&gt;APB1FZ |= DBGMCU_APB1_FZ_DBG_IWDG_STOP;
+    #endif
+
+    IWDG_Init(1000);
+}
+</code></pre>
+<p><strong>方法3：使用很长的超时时间</strong></p>
+<pre><code class="language-c">#ifdef DEBUG
+#define WATCHDOG_TIMEOUT  30000  // 30秒
+#else
+#define WATCHDOG_TIMEOUT  1000   // 1秒
+#endif
+
+IWDG_Init(WATCHDOG_TIMEOUT);
+</code></pre>
+<h3 id="q3">Q3: 看门狗超时时间不准确？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>LSI时钟频率偏差（IWDG）</li>
+<li>计算公式错误</li>
+<li>预分频器配置错误</li>
+</ol>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  校准LSI时钟频率
+ * @param  无
+ * @retval LSI实际频率（Hz）
+ */
+uint32_t CalibrateLS I(void) {
+    // 使用TIM5测量LSI频率
+    // 1. 使能TIM5和LSI
+    RCC-&gt;APB1ENR |= RCC_APB1ENR_TIM5EN;
+    RCC-&gt;CSR |= RCC_CSR_LSION;
+    while (!(RCC-&gt;CSR &amp; RCC_CSR_LSIRDY));
+
+    // 2. 配置TIM5输入捕获
+    TIM5-&gt;PSC = 0;
+    TIM5-&gt;ARR = 0xFFFFFFFF;
+    TIM5-&gt;CCMR1 = TIM_CCMR1_CC1S_0;  // IC1映射到TI1
+    TIM5-&gt;CCER = TIM_CCER_CC1E;
+
+    // 3. 选择LSI作为TIM5输入
+    TIM5-&gt;OR = TIM5_OR_TI1_RMP_0;
+
+    // 4. 启动TIM5
+    TIM5-&gt;CR1 = TIM_CR1_CEN;
+
+    // 5. 捕获两次上升沿
+    while (!(TIM5-&gt;SR &amp; TIM_SR_CC1IF));
+    uint32_t capture1 = TIM5-&gt;CCR1;
+    TIM5-&gt;SR &amp;= ~TIM_SR_CC1IF;
+
+    while (!(TIM5-&gt;SR &amp; TIM_SR_CC1IF));
+    uint32_t capture2 = TIM5-&gt;CCR1;
+
+    // 6. 计算LSI频率
+    uint32_t lsi_freq = SystemCoreClock / (capture2 - capture1);
+
+    return lsi_freq;
+}
+
+/**
+ * @brief  精确初始化IWDG
+ * @param  timeout_ms: 超时时间（毫秒）
+ * @retval 无
+ */
+void IWDG_InitAccurate(uint32_t timeout_ms) {
+    // 校准LSI频率
+    uint32_t lsi_freq = CalibrateLSI();
+
+    // 选择合适的预分频器
+    uint8_t prescaler = 6;  // 256
+    uint32_t counter_freq = lsi_freq / 256;
+
+    // 计算重载值
+    uint32_t reload = (timeout_ms * counter_freq) / 1000;
+    if (reload &gt; 4095) reload = 4095;
+
+    // 配置IWDG
+    IWDG-&gt;KR = 0x5555;
+    IWDG-&gt;PR = prescaler;
+    IWDG-&gt;RLR = reload;
+    while (IWDG-&gt;SR != 0);
+    IWDG-&gt;KR = 0xCCCC;
+}
+</code></pre>
+<h3 id="q4">Q4: 如何判断是否需要使用看门狗？</h3>
+<p><strong>需要使用看门狗的场景</strong>：</p>
+<ol>
+<li>
+<p><strong>无人值守系统</strong>：
+   - 工业控制
+   - 远程监控
+   - 物联网设备</p>
+</li>
+<li>
+<p><strong>安全关键系统</strong>：
+   - 汽车电子
+   - 医疗设备
+   - 航空航天</p>
+</li>
+<li>
+<p><strong>长期运行系统</strong>：
+   - 服务器
+   - 基站设备
+   - 数据采集器</p>
+</li>
+<li>
+<p><strong>恶劣环境</strong>：
+   - 强电磁干扰
+   - 极端温度
+   - 振动冲击</p>
+</li>
+</ol>
+<p><strong>不需要看门狗的场景</strong>：</p>
+<ol>
+<li>开发调试阶段</li>
+<li>有人值守的系统</li>
+<li>可以随时重启的系统</li>
+<li>对可靠性要求不高的应用</li>
+</ol>
+<h3 id="q5">Q5: 看门狗和软件复位有什么区别？</h3>
+<p><strong>看门狗复位</strong>：</p>
+<ul>
+<li>硬件触发</li>
+<li>自动执行</li>
+<li>用于故障恢复</li>
+<li>可以记录复位原因</li>
+</ul>
+<p><strong>软件复位</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  软件复位系统
+ * @param  无
+ * @retval 无
+ */
+void SystemSoftwareReset(void) {
+    // 使用NVIC系统复位
+    NVIC_SystemReset();
+}
+</code></pre>
+<ul>
+<li>软件触发</li>
+<li>主动执行</li>
+<li>用于正常重启</li>
+<li>可以在复位前保存状态</li>
+</ul>
+<p><strong>使用场景对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>看门狗复位</th>
+<th>软件复位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系统死机</td>
+<td>✓</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>程序跑飞</td>
+<td>✓</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>固件升级</td>
+<td>✗</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>配置更新</td>
+<td>✗</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>故障恢复</td>
+<td>✓</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>正常重启</td>
+<td>✗</td>
+<td>✓</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_11">最佳实践</h2>
+<h3 id="1_1">1. 看门狗使用原则</h3>
+<p><strong>DO（推荐做法）</strong>：</p>
+<p>✅ 在产品发布版本中启用看门狗
+✅ 选择合适的超时时间（留有余量）
+✅ 设计可靠的喂狗策略
+✅ 记录和分析复位原因
+✅ 在调试模式下禁用或延长超时
+✅ 测试看门狗功能是否正常
+✅ 在初始化早期喂狗
+✅ 监控所有关键任务</p>
+<p><strong>DON'T（避免做法）</strong>：</p>
+<p>❌ 在中断中频繁喂狗
+❌ 设置过短的超时时间
+❌ 忽略复位原因
+❌ 在调试时忘记禁用看门狗
+❌ 在不需要的地方使用看门狗
+❌ 过度依赖看门狗（掩盖问题）
+❌ 在多个地方随意喂狗
+❌ 忽略看门狗配置测试</p>
+<h3 id="2_1">2. 可靠性设计</h3>
+<p><strong>多层保护策略</strong>：</p>
+<pre><code class="language-c">// 第一层：软件自检
+typedef struct {
+    uint32_t magic;          // 魔术字
+    uint32_t checksum;       // 校验和
+    uint32_t task_counter;   // 任务计数器
+} SystemHealth_t;
+
+SystemHealth_t g_health = {
+    .magic = 0xDEADBEEF,
+    .checksum = 0,
+    .task_counter = 0
+};
+
+/**
+ * @brief  系统健康检查
+ * @param  无
+ * @retval 1=健康，0=异常
+ */
+uint8_t SystemHealthCheck(void) {
+    // 检查魔术字
+    if (g_health.magic != 0xDEADBEEF) {
+        return 0;
+    }
+
+    // 检查任务计数器
+    static uint32_t last_counter = 0;
+    if (g_health.task_counter == last_counter) {
+        return 0;  // 任务未执行
+    }
+    last_counter = g_health.task_counter;
+
+    return 1;
+}
+
+// 第二层：看门狗保护
+void WatchdogTask(void) {
+    if (SystemHealthCheck()) {
+        IWDG_Feed();  // 系统健康才喂狗
+    }
+    // 否则让看门狗复位系统
+}
+
+// 第三层：外部看门狗
+// 使用外部看门狗芯片（如MAX706）提供额外保护
+</code></pre>
+<h3 id="3_2">3. 故障恢复策略</h3>
+<p><strong>渐进式恢复</strong>：</p>
+<pre><code class="language-c">typedef enum {
+    RECOVERY_LEVEL_NORMAL = 0,
+    RECOVERY_LEVEL_SAFE_MODE,
+    RECOVERY_LEVEL_MINIMAL,
+    RECOVERY_LEVEL_FACTORY_RESET
+} RecoveryLevel_t;
+
+/**
+ * @brief  根据复位次数选择恢复策略
+ * @param  reset_count: 复位次数
+ * @retval 恢复级别
+ */
+RecoveryLevel_t GetRecoveryLevel(uint32_t reset_count) {
+    if (reset_count &lt; 3) {
+        return RECOVERY_LEVEL_NORMAL;
+    }
+    else if (reset_count &lt; 5) {
+        return RECOVERY_LEVEL_SAFE_MODE;
+    }
+    else if (reset_count &lt; 10) {
+        return RECOVERY_LEVEL_MINIMAL;
+    }
+    else {
+        return RECOVERY_LEVEL_FACTORY_RESET;
+    }
+}
+
+/**
+ * @brief  执行恢复策略
+ * @param  level: 恢复级别
+ * @retval 无
+ */
+void ExecuteRecovery(RecoveryLevel_t level) {
+    switch (level) {
+        case RECOVERY_LEVEL_NORMAL:
+            // 正常启动，加载所有功能
+            LoadAllModules();
+            break;
+
+        case RECOVERY_LEVEL_SAFE_MODE:
+            // 安全模式，只加载核心功能
+            LoadCoreModules();
+            DisableOptionalFeatures();
+            break;
+
+        case RECOVERY_LEVEL_MINIMAL:
+            // 最小模式，只保留基本功能
+            LoadMinimalModules();
+            EnableDiagnostics();
+            break;
+
+        case RECOVERY_LEVEL_FACTORY_RESET:
+            // 恢复出厂设置
+            FactoryReset();
+            LoadDefaultConfig();
+            break;
+    }
+}
+</code></pre>
+<h3 id="4_2">4. 测试方法</h3>
+<p><strong>功能测试</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  测试看门狗功能
+ * @param  无
+ * @retval 无
+ */
+void TestWatchdog(void) {
+    printf(&quot;Testing watchdog...\r\n&quot;);
+
+    // 初始化看门狗（短超时用于测试）
+    IWDG_Init(1000);  // 1秒超时
+
+    // 测试1：正常喂狗
+    printf(&quot;Test 1: Normal feeding\r\n&quot;);
+    for (int i = 0; i &lt; 5; i++) {
+        HAL_Delay(500);
+        IWDG_Feed();
+        printf(&quot;  Fed at %d ms\r\n&quot;, HAL_GetTick());
+    }
+    printf(&quot;Test 1: PASS\r\n&quot;);
+
+    // 测试2：故意不喂狗，触发复位
+    printf(&quot;Test 2: Trigger reset\r\n&quot;);
+    printf(&quot;System will reset in 1 second...\r\n&quot;);
+    HAL_Delay(2000);  // 等待超时
+
+    // 如果执行到这里，说明看门狗未工作
+    printf(&quot;Test 2: FAIL - Watchdog not working!\r\n&quot;);
+}
+
+/**
+ * @brief  测试复位检测
+ * @param  无
+ * @retval 无
+ */
+void TestResetDetection(void) {
+    ResetCause_t cause = GetResetCause();
+
+    if (cause == RESET_CAUSE_INDEPENDENT_WATCHDOG) {
+        printf(&quot;Watchdog reset detected - Test PASS\r\n&quot;);
+    }
+    else {
+        printf(&quot;Reset cause: %d\r\n&quot;, cause);
+    }
+}
+</code></pre>
+<p><strong>压力测试</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  看门狗压力测试
+ * @param  无
+ * @retval 无
+ */
+void StressTestWatchdog(void) {
+    IWDG_Init(1000);
+
+    // 模拟各种异常情况
+    for (int test = 0; test &lt; 10; test++) {
+        switch (test) {
+            case 0:
+                // 正常情况
+                for (int i = 0; i &lt; 100; i++) {
+                    HAL_Delay(500);
+                    IWDG_Feed();
+                }
+                break;
+
+            case 1:
+                // 任务执行时间过长
+                HAL_Delay(1500);  // 超时
+                break;
+
+            case 2:
+                // 死循环
+                while (1);
+                break;
+
+            case 3:
+                // 中断风暴
+                while (1) {
+                    __disable_irq();
+                }
+                break;
+        }
+    }
+}
+</code></pre>
+<h2 id="_12">总结</h2>
+<p>看门狗是嵌入式系统可靠性设计的重要组成部分。通过本文的学习，你应该掌握了看门狗的核心知识和应用方法。</p>
+<p><strong>核心要点回顾</strong>：</p>
+<ol>
+<li>
+<p><strong>看门狗类型</strong>：
+   - 独立看门狗（IWDG）：完全独立，用于系统级故障检测
+   - 窗口看门狗（WWDG）：时间窗口限制，用于程序时序检测</p>
+</li>
+<li>
+<p><strong>配置要点</strong>：
+   - 选择合适的超时时间（留有安全余量）
+   - 正确计算预分频器和重载值
+   - 理解时钟源和计算公式</p>
+</li>
+<li>
+<p><strong>喂狗策略</strong>：
+   - 主循环喂狗：简单但可靠性有限
+   - 定时器喂狗：能监控任务执行状态
+   - RTOS任务喂狗：适合多任务系统</p>
+</li>
+<li>
+<p><strong>故障处理</strong>：
+   - 检测复位原因
+   - 记录故障信息
+   - 实施恢复策略</p>
+</li>
+<li>
+<p><strong>可靠性设计</strong>：
+   - 多层保护机制
+   - 渐进式恢复策略
+   - 完善的测试验证</p>
+</li>
+</ol>
+<p><strong>实践建议</strong>：</p>
+<ol>
+<li>
+<p><strong>开发阶段</strong>：
+   - 在调试时禁用或延长超时
+   - 使用条件编译控制
+   - 充分测试看门狗功能</p>
+</li>
+<li>
+<p><strong>测试阶段</strong>：
+   - 验证超时时间准确性
+   - 测试故障恢复功能
+   - 进行压力测试</p>
+</li>
+<li>
+<p><strong>发布阶段</strong>：
+   - 确保看门狗已启用
+   - 使用经过验证的配置
+   - 保留故障记录功能</p>
+</li>
+</ol>
+<p><strong>设计原则</strong>：</p>
+<ul>
+<li>看门狗是最后一道防线，不是解决问题的手段</li>
+<li>应该首先提高代码质量，减少故障发生</li>
+<li>看门狗用于处理无法预见的异常情况</li>
+<li>合理的喂狗策略比看门狗本身更重要</li>
+</ul>
+<p><strong>下一步学习</strong>：</p>
+<ul>
+<li>深入学习系统可靠性设计</li>
+<li>掌握故障诊断和分析方法</li>
+<li>学习RTOS中的看门狗应用</li>
+<li>研究外部看门狗芯片的使用</li>
+</ul>
+<p>看门狗虽然简单，但在系统可靠性设计中起着关键作用。正确使用看门狗，能够显著提高系统的稳定性和可用性，特别是在无人值守和安全关键的应用中。</p>
+<h2 id="_13">相关内容</h2>
+<p><strong>同模块内容</strong>：
+- <a href="01-gpio-driver.html">GPIO驱动开发：LED控制实战</a> - 学习GPIO基础
+- <a href="05-timer-driver.html">定时器驱动基础与应用</a> - 理解定时器原理
+- <a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - 提高系统性能</p>
+<p><strong>相关主题</strong>：
+- <a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础概念</a> - 理解中断机制
+- 系统可靠性设计 - 可靠性设计方法</p>
+<p><strong>官方文档</strong>：
+- <a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4xx参考手册</a> - 看门狗章节
+- <a href="https://www.st.com/resource/en/datasheet/stm32f407vg.pdf">STM32F4xx数据手册</a> - 看门狗特性
+- <a href="https://www.st.com/resource/en/application_note/dm00113801.pdf">AN4435: 看门狗应用笔记</a> - 官方应用指南</p>
+<p><strong>参考资料</strong>：
+1. STM32F4xx参考手册 - STMicroelectronics
+2. 嵌入式系统可靠性设计 - 李明
+3. 工业控制系统设计 - 王强
+4. 看门狗定时器应用指南 - ST官方
+5. 嵌入式系统故障诊断 - 张伟</p>
+<h2 id="_14">练习题</h2>
+<h3 id="_15">基础练习</h3>
+<ol>
+<li>
+<p><strong>看门狗配置练习</strong>：
+   - 配置IWDG，超时时间为2秒
+   - 在主循环中每1秒喂狗一次
+   - 通过LED指示系统运行状态</p>
+</li>
+<li>
+<p><strong>复位检测练习</strong>：
+   - 实现复位原因检测功能
+   - 通过串口输出复位原因
+   - 统计看门狗复位次数</p>
+</li>
+<li>
+<p><strong>窗口看门狗练习</strong>：
+   - 配置WWDG，窗口时间为30-50ms
+   - 在中断中喂狗
+   - 测试窗口限制功能</p>
+</li>
+</ol>
+<h3 id="_16">进阶练习</h3>
+<ol start="4">
+<li>
+<p><strong>喂狗策略设计</strong>：
+   - 设计一个多任务系统
+   - 实现任务监控机制
+   - 只有所有任务正常才喂狗</p>
+</li>
+<li>
+<p><strong>故障恢复系统</strong>：
+   - 实现故障记录功能
+   - 设计渐进式恢复策略
+   - 测试不同级别的恢复</p>
+</li>
+<li>
+<p><strong>双看门狗系统</strong>：
+   - 同时使用IWDG和WWDG
+   - IWDG监控系统级故障
+   - WWDG监控程序时序</p>
+</li>
+</ol>
+<h3 id="_17">思考题</h3>
+<ol>
+<li>
+<p>为什么独立看门狗使用LSI时钟而不是主系统时钟？</p>
+</li>
+<li>
+<p>窗口看门狗的时间窗口有什么作用？在什么场景下需要使用？</p>
+</li>
+<li>
+<p>如何设计一个可靠的喂狗策略，既能检测故障又不会误触发？</p>
+</li>
+<li>
+<p>看门狗复位和软件复位有什么区别？各自适用于什么场景？</p>
+</li>
+<li>
+<p>在RTOS系统中，应该如何设计看门狗监控机制？</p>
+</li>
+</ol>
+<h2 id="_18">实验任务</h2>
+<h3 id="1_2">任务1：基本看门狗应用（必做）</h3>
+<p><strong>要求</strong>：
+- 配置IWDG，超时时间1秒
+- 在主循环中定期喂狗
+- 通过按键模拟系统故障（停止喂狗）
+- LED指示系统状态</p>
+<p><strong>验收标准</strong>：
+- 正常运行时LED闪烁
+- 按键按下后系统复位
+- 串口输出复位原因</p>
+<h3 id="2_2">任务2：任务监控系统（必做）</h3>
+<p><strong>要求</strong>：
+- 创建3个模拟任务
+- 实现任务状态监控
+- 只有所有任务正常才喂狗
+- 记录故障任务信息</p>
+<p><strong>验收标准</strong>：
+- 能检测任务异常
+- 异常时触发看门狗复位
+- 输出故障任务编号</p>
+<h3 id="3_3">任务3：故障记录系统（选做）</h3>
+<p><strong>要求</strong>：
+- 使用Flash保存故障记录
+- 记录复位次数和原因
+- 实现故障历史查询
+- 支持故障统计分析</p>
+<p><strong>验收标准</strong>：
+- 故障信息持久化保存
+- 可查询历史记录
+- 提供统计报告</p>
+<h3 id="4_3">任务4：可靠性测试（选做）</h3>
+<p><strong>要求</strong>：
+- 设计完整的测试方案
+- 测试各种故障场景
+- 验证恢复策略
+- 生成测试报告</p>
+<p><strong>评分标准</strong>：
+- 功能完整性（30分）
+- 代码质量（25分）
+- 可靠性设计（25分）
+- 测试覆盖率（20分）</p>
+<hr />
+<p><strong>下一步学习建议</strong>：</p>
+<p>完成本文学习后，建议按以下顺序继续：</p>
+<ol>
+<li><a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - 学习DMA提高性能</li>
+<li><a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础概念</a> - 深入理解中断</li>
+<li>系统可靠性设计 - 全面的可靠性设计</li>
+</ol>
+<p><strong>学习路线图</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[看门狗驱动] --&gt; B[中断系统]
+    A --&gt; C[定时器驱动]
+    B --&gt; D[系统可靠性]
+    C --&gt; D
+    D --&gt; E[RTOS应用]
+    E --&gt; F[工业控制]
+</code></pre>
+<p>祝你学习顺利！如有问题，欢迎在社区讨论。</p>
+<hr />
+<p><strong>文档信息</strong>：
+- 最后更新：2024-01-15
+- 版本：v1.0
+- 作者：嵌入式知识平台
+- 许可：CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

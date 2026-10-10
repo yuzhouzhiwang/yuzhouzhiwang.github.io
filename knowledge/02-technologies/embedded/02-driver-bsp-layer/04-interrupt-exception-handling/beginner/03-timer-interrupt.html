@@ -1,0 +1,1434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>定时器中断实现精确延时 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/04-interrupt-exception-handling/">04-interrupt-exception-handling</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/04-interrupt-exception-handling/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a></li>
+<li><a href="#_4">准备工作</a><ul>
+<li><a href="#_5">硬件准备</a></li>
+<li><a href="#_6">软件准备</a></li>
+<li><a href="#_7">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_8">电路连接</a><ul>
+<li><a href="#_9">连接图</a></li>
+<li><a href="#_10">连接说明</a></li>
+</ul>
+</li>
+<li><a href="#_11">背景知识</a><ul>
+<li><a href="#_12">为什么需要定时器中断？</a></li>
+<li><a href="#_13">定时器中断工作原理</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1：创建项目并配置定时器</a><ul>
+<li><a href="#11">1.1 创建新项目</a></li>
+<li><a href="#12">1.2 配置系统时钟</a></li>
+<li><a href="#13-gpio">1.3 配置GPIO引脚</a></li>
+<li><a href="#14-tim2">1.4 配置定时器TIM2</a></li>
+<li><a href="#15">1.5 配置串口（可选）</a></li>
+<li><a href="#16">1.6 生成代码</a></li>
+</ul>
+</li>
+<li><a href="#2">步骤2：编写基础定时器中断代码</a><ul>
+<li><a href="#21">2.1 启动定时器中断</a></li>
+<li><a href="#22">2.2 实现中断服务函数</a></li>
+<li><a href="#23">2.3 实现定时器回调函数</a></li>
+<li><a href="#24-printf">2.4 添加printf重定向（可选）</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：实现精确延时函数</a><ul>
+<li><a href="#31">3.1 基于定时器中断的延时函数</a></li>
+<li><a href="#32">3.2 使用示例</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：实现软件定时器</a><ul>
+<li><a href="#41">4.1 软件定时器结构设计</a></li>
+<li><a href="#42">4.2 软件定时器处理函数</a></li>
+<li><a href="#43">4.3 软件定时器使用示例</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：编译、下载和测试</a><ul>
+<li><a href="#51">5.1 编译项目</a></li>
+<li><a href="#52">5.2 下载程序</a></li>
+<li><a href="#53">5.3 功能测试</a><ul>
+<li><a href="#1_1">测试1：基本定时功能</a></li>
+<li><a href="#2_1">测试2：串口输出</a></li>
+<li><a href="#3_1">测试3：时间精度测试</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#6">步骤6：调试和优化</a><ul>
+<li><a href="#61">6.1 使用调试器验证</a></li>
+<li><a href="#62">6.2 性能优化</a></li>
+<li><a href="#63">6.3 中断负载分析</a></li>
+</ul>
+</li>
+<li><a href="#_14">故障排除</a><ul>
+<li><a href="#1_2">问题1：定时器中断不触发</a></li>
+<li><a href="#2_2">问题2：定时不准确</a></li>
+<li><a href="#3_2">问题3：系统运行一段时间后崩溃</a></li>
+<li><a href="#4_1">问题4：软件定时器不工作</a></li>
+<li><a href="#5led">问题5：LED闪烁频率不对</a></li>
+</ul>
+</li>
+<li><a href="#_15">总结</a></li>
+<li><a href="#_16">进阶挑战</a></li>
+<li><a href="#_17">完整代码</a><ul>
+<li><a href="#mainc">main.c 完整代码</a></li>
+</ul>
+</li>
+<li><a href="#_18">下一步</a></li>
+<li><a href="#_19">参考资料</a></li>
+<li><a href="#faq">常见问题FAQ</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">定时器中断实现精确延时</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解定时器中断的工作原理和应用场景</li>
+<li>[ ] 配置STM32定时器产生周期性中断</li>
+<li>[ ] 编写定时器中断服务函数实现精确延时</li>
+<li>[ ] 使用定时器中断实现周期任务调度</li>
+<li>[ ] 实现软件定时器管理多个定时任务</li>
+<li>[ ] 调试和优化定时器中断应用</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 理解中断系统的基本概念（参考<a href="01-interrupt-basics.html">中断系统基础概念</a>）
+- 了解外部中断的配置方法（参考<a href="02-external-interrupt.html">外部中断配置与使用</a>）
+- 掌握C语言基础和指针概念
+- 了解定时器的基本工作原理</p>
+<p><strong>技能要求</strong>：
+- 能够使用STM32CubeIDE或Keil MDK开发环境
+- 会使用HAL库进行基本的外设配置
+- 能够使用调试器查看变量和寄存器</p>
+<p><strong>硬件要求</strong>：
+- STM32开发板（本教程使用STM32F407）
+- LED指示灯（用于可视化定时效果）
+- USB转串口模块（用于调试输出）</p>
+<h2 id="_4">准备工作</h2>
+<h3 id="_5">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>STM32F4系列</td>
+<td>STM32F407VGT6</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>3</td>
+<td>红、绿、蓝各一个</td>
+<td>3mm或5mm</td>
+</tr>
+<tr>
+<td>电阻</td>
+<td>3</td>
+<td>限流电阻</td>
+<td>220Ω-1kΩ</td>
+</tr>
+<tr>
+<td>面包板</td>
+<td>1</td>
+<td>用于搭建电路</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>连接线</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB转串口</td>
+<td>1</td>
+<td>调试输出</td>
+<td>CH340、CP2102</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE v1.10+ 或 Keil MDK v5.30+</li>
+<li><strong>固件库</strong>：STM32CubeF4 HAL库</li>
+<li><strong>调试工具</strong>：ST-Link驱动、串口调试助手</li>
+<li><strong>辅助工具</strong>：逻辑分析仪（可选，用于精确测量）</li>
+</ul>
+<h3 id="_7">环境配置</h3>
+<ol>
+<li>安装STM32CubeIDE开发环境</li>
+<li>安装ST-Link驱动程序</li>
+<li>配置串口调试助手（波特率115200）</li>
+<li>测试开发板连接和下载功能</li>
+</ol>
+<h2 id="_8">电路连接</h2>
+<h3 id="_9">连接图</h3>
+<pre><code>STM32F407开发板
+┌─────────────────┐
+│                 │
+│  PD12 ────┬─────┼──── LED1 (绿色) ──[220Ω]── GND
+│           │     │
+│  PD13 ────┼─────┼──── LED2 (橙色) ──[220Ω]── GND
+│           │     │
+│  PD14 ────┼─────┼──── LED3 (红色)  ──[220Ω]── GND
+│           │     │
+│  PA9  ────┼─────┼──── USART1_TX (串口输出)
+│  PA10 ────┼─────┼──── USART1_RX (串口输入)
+│           │     │
+│  GND  ────┴─────┼──── 公共地
+│                 │
+└─────────────────┘
+</code></pre>
+<h3 id="_10">连接说明</h3>
+<table>
+<thead>
+<tr>
+<th>开发板引脚</th>
+<th>连接到</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PD12</td>
+<td>LED1正极</td>
+<td>通过220Ω电阻连接到GND</td>
+</tr>
+<tr>
+<td>PD13</td>
+<td>LED2正极</td>
+<td>通过220Ω电阻连接到GND</td>
+</tr>
+<tr>
+<td>PD14</td>
+<td>LED3正极</td>
+<td>通过220Ω电阻连接到GND</td>
+</tr>
+<tr>
+<td>PA9</td>
+<td>USB转串口RX</td>
+<td>串口调试输出</td>
+</tr>
+<tr>
+<td>PA10</td>
+<td>USB转串口TX</td>
+<td>串口调试输入</td>
+</tr>
+<tr>
+<td>GND</td>
+<td>公共地</td>
+<td>所有地线连接在一起</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意事项</strong>：
+- LED的长脚为正极，短脚为负极
+- 确保电阻连接正确，防止LED烧毁
+- 串口连接时注意TX接RX，RX接TX
+- 连接电路前请断开电源</p>
+<h2 id="_11">背景知识</h2>
+<h3 id="_12">为什么需要定时器中断？</h3>
+<p>在嵌入式系统中，精确的时间控制至关重要。使用<code>HAL_Delay()</code>等阻塞延时函数存在以下问题：</p>
+<p><strong>阻塞延时的缺点</strong>：
+- CPU在延时期间无法执行其他任务
+- 无法实现多个并发的定时任务
+- 时间精度受系统负载影响
+- 不适合实时性要求高的应用</p>
+<p><strong>定时器中断的优势</strong>：
+- CPU可以在等待期间执行其他任务
+- 支持多个独立的定时任务
+- 时间精度高，不受主程序影响
+- 适合实时系统和周期性任务</p>
+<h3 id="_13">定时器中断工作原理</h3>
+<pre><code>定时器计数器从0开始递增
+    ↓
+计数器达到预设值（ARR）
+    ↓
+触发更新中断
+    ↓
+计数器清零，重新开始计数
+    ↓
+执行中断服务函数
+    ↓
+返回主程序继续执行
+</code></pre>
+<p><strong>关键参数</strong>：
+- <strong>预分频器（Prescaler）</strong>：降低计数频率
+- <strong>自动重装载值（ARR）</strong>：计数目标值
+- <strong>计数模式</strong>：向上计数、向下计数、中心对齐</p>
+<p><strong>中断周期计算公式</strong>：</p>
+<pre><code>中断周期 = (Prescaler + 1) × (ARR + 1) / 定时器时钟频率
+
+例如：
+定时器时钟 = 84MHz
+Prescaler = 8399
+ARR = 9999
+中断周期 = (8399 + 1) × (9999 + 1) / 84000000 = 1秒
+</code></pre>
+<h2 id="1">步骤1：创建项目并配置定时器</h2>
+<h3 id="11">1.1 创建新项目</h3>
+<ol>
+<li>打开STM32CubeIDE</li>
+<li>选择 <code>File → New → STM32 Project</code></li>
+<li>选择目标芯片：<code>STM32F407VGT6</code></li>
+<li>输入项目名称：<code>timer_interrupt_tutorial</code></li>
+<li>点击 <code>Finish</code></li>
+</ol>
+<h3 id="12">1.2 配置系统时钟</h3>
+<p>在CubeMX配置界面中：</p>
+<ol>
+<li>点击 <code>Clock Configuration</code> 标签</li>
+<li>设置HCLK（系统时钟）为168MHz</li>
+<li>确认APB1时钟为42MHz，APB2时钟为84MHz</li>
+<li>TIM2-TIM7使用APB1时钟（84MHz，经过倍频）</li>
+</ol>
+<p><strong>时钟树说明</strong>：</p>
+<pre><code>HSE (8MHz) → PLL → SYSCLK (168MHz)
+    ↓
+APB1 Prescaler (/4) → APB1 (42MHz) → TIM2-7 Clock (84MHz, ×2)
+APB2 Prescaler (/2) → APB2 (84MHz) → TIM1,8-11 Clock (168MHz, ×2)
+</code></pre>
+<h3 id="13-gpio">1.3 配置GPIO引脚</h3>
+<p>配置LED控制引脚：</p>
+<ol>
+<li>在Pinout视图中找到PD12、PD13、PD14</li>
+<li>右键选择 <code>GPIO_Output</code></li>
+<li>
+<p>在GPIO配置中设置：
+   - GPIO output level: Low（初始状态为低电平）
+   - GPIO mode: Output Push Pull
+   - GPIO Pull-up/Pull-down: No pull-up and no pull-down
+   - Maximum output speed: Low</p>
+</li>
+<li>
+<p>为引脚设置用户标签：
+   - PD12 → <code>LED_GREEN</code>
+   - PD13 → <code>LED_ORANGE</code>
+   - PD14 → <code>LED_RED</code></p>
+</li>
+</ol>
+<h3 id="14-tim2">1.4 配置定时器TIM2</h3>
+<p>配置TIM2产生1ms周期的中断：</p>
+<ol>
+<li>在Pinout视图左侧找到 <code>Timers → TIM2</code></li>
+<li>勾选 <code>Activated</code></li>
+<li>在Configuration标签中配置TIM2：</li>
+</ol>
+<p><strong>Parameter Settings</strong>：
+- Prescaler (PSC): <code>8399</code>
+  - 计算：84MHz / (8399 + 1) = 10kHz
+- Counter Period (ARR): <code>9</code>
+  - 计算：10kHz / (9 + 1) = 1kHz = 1ms周期
+- Counter Mode: <code>Up</code>（向上计数）
+- auto-reload preload: <code>Enable</code></p>
+<p><strong>NVIC Settings</strong>：
+- 勾选 <code>TIM2 global interrupt</code>
+- Priority: <code>2</code>（中等优先级）</p>
+<p><strong>计算说明</strong>：</p>
+<pre><code>定时器时钟频率 = 84MHz
+预分频后频率 = 84MHz / (8399 + 1) = 10kHz
+中断周期 = 1 / [10kHz / (9 + 1)] = 1ms
+</code></pre>
+<h3 id="15">1.5 配置串口（可选）</h3>
+<p>配置USART1用于调试输出：</p>
+<ol>
+<li>在Pinout视图中找到 <code>USART1</code></li>
+<li>Mode选择 <code>Asynchronous</code></li>
+<li>
+<p>Configuration配置：
+   - Baud Rate: <code>115200</code>
+   - Word Length: <code>8 Bits</code>
+   - Parity: <code>None</code>
+   - Stop Bits: <code>1</code></p>
+</li>
+<li>
+<p>NVIC Settings：
+   - 不勾选中断（使用轮询方式）</p>
+</li>
+</ol>
+<h3 id="16">1.6 生成代码</h3>
+<ol>
+<li>点击 <code>Project → Generate Code</code></li>
+<li>等待代码生成完成</li>
+<li>打开生成的项目</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 项目结构创建成功
+- TIM2初始化代码已生成
+- GPIO和USART初始化代码已生成</p>
+<h2 id="2">步骤2：编写基础定时器中断代码</h2>
+<h3 id="21">2.1 启动定时器中断</h3>
+<p>打开 <code>Core/Src/main.c</code> 文件，在主函数中启动定时器：</p>
+<pre><code class="language-c">int main(void)
+{
+    /* 系统初始化 */
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_TIM2_Init();
+    MX_USART1_UART_Init();
+
+    /* USER CODE BEGIN 2 */
+
+    // 启动定时器中断
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+
+    printf(&quot;Timer Interrupt Tutorial Started\r\n&quot;);
+    printf(&quot;TIM2 configured for 1ms interrupt\r\n&quot;);
+
+    /* USER CODE END 2 */
+
+    while (1)
+    {
+        /* USER CODE BEGIN 3 */
+
+        // 主循环可以执行其他任务
+        HAL_Delay(1000);
+        printf(&quot;Main loop running...\r\n&quot;);
+
+        /* USER CODE END 3 */
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>HAL_TIM_Base_Start_IT(&amp;htim2)</code>：启动定时器并使能中断
+- 定时器开始计数，每1ms触发一次中断
+- 主循环可以继续执行其他任务</p>
+<h3 id="22">2.2 实现中断服务函数</h3>
+<p>在 <code>Core/Src/stm32f4xx_it.c</code> 文件中，找到TIM2的中断服务函数：</p>
+<pre><code class="language-c">/**
+  * @brief This function handles TIM2 global interrupt.
+  */
+void TIM2_IRQHandler(void)
+{
+    /* USER CODE BEGIN TIM2_IRQn 0 */
+
+    /* USER CODE END TIM2_IRQn 0 */
+    HAL_TIM_IRQHandler(&amp;htim2);
+    /* USER CODE BEGIN TIM2_IRQn 1 */
+
+    /* USER CODE END TIM2_IRQn 1 */
+}
+</code></pre>
+<p>这个函数会自动调用HAL库的中断处理函数，我们需要实现回调函数。</p>
+<h3 id="23">2.3 实现定时器回调函数</h3>
+<p>在 <code>main.c</code> 文件中添加定时器回调函数：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+// 全局变量：毫秒计数器
+volatile uint32_t millisecond_counter = 0;
+
+/**
+  * @brief  定时器周期回调函数
+  * @param  htim: 定时器句柄
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    // 检查是否是TIM2触发的中断
+    if (htim-&gt;Instance == TIM2)
+    {
+        // 每1ms执行一次
+        millisecond_counter++;
+
+        // 每500ms翻转一次LED（实现500ms闪烁）
+        if (millisecond_counter % 500 == 0)
+        {
+            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);  // 翻转绿色LED
+        }
+    }
+}
+
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>HAL_TIM_PeriodElapsedCallback()</code>：定时器更新中断的回调函数
+- <code>millisecond_counter</code>：毫秒计数器，每1ms递增
+- 使用<code>volatile</code>关键字确保编译器不优化掉这个变量
+- 每500ms翻转一次LED，实现闪烁效果</p>
+<h3 id="24-printf">2.4 添加printf重定向（可选）</h3>
+<p>为了使用printf输出调试信息，需要重定向到串口：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+// 重定向printf到USART1
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>注意</strong>：需要在项目设置中添加 <code>-u _printf_float</code> 链接选项（如果需要打印浮点数）。</p>
+<h2 id="3">步骤3：实现精确延时函数</h2>
+<h3 id="31">3.1 基于定时器中断的延时函数</h3>
+<p>使用定时器中断实现非阻塞的精确延时：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+/**
+  * @brief  精确延时函数（非阻塞）
+  * @param  ms: 延时时间（毫秒）
+  * @retval None
+  */
+void Delay_ms(uint32_t ms)
+{
+    uint32_t start_time = millisecond_counter;
+
+    // 等待指定时间
+    while ((millisecond_counter - start_time) &lt; ms)
+    {
+        // 可以在这里执行其他任务
+        // 或者使用__WFI()进入低功耗模式
+    }
+}
+
+/**
+  * @brief  获取当前毫秒计数
+  * @retval 当前毫秒数
+  */
+uint32_t Get_Milliseconds(void)
+{
+    return millisecond_counter;
+}
+
+/**
+  * @brief  检查是否超时
+  * @param  start_time: 开始时间
+  * @param  timeout: 超时时间（毫秒）
+  * @retval 1: 超时, 0: 未超时
+  */
+uint8_t Is_Timeout(uint32_t start_time, uint32_t timeout)
+{
+    return ((millisecond_counter - start_time) &gt;= timeout);
+}
+
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>Delay_ms()</code>：非阻塞延时函数，可以在等待期间执行其他任务
+- <code>Get_Milliseconds()</code>：获取系统运行的毫秒数
+- <code>Is_Timeout()</code>：检查是否超时，用于超时检测</p>
+<h3 id="32">3.2 使用示例</h3>
+<p>在主循环中使用精确延时：</p>
+<pre><code class="language-c">int main(void)
+{
+    /* 初始化代码... */
+
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+
+    uint32_t last_print_time = 0;
+    uint32_t led_toggle_time = 0;
+
+    while (1)
+    {
+        // 每1秒打印一次信息
+        if (Is_Timeout(last_print_time, 1000))
+        {
+            last_print_time = Get_Milliseconds();
+            printf(&quot;System running: %lu ms\r\n&quot;, Get_Milliseconds());
+        }
+
+        // 每200ms翻转一次LED
+        if (Is_Timeout(led_toggle_time, 200))
+        {
+            led_toggle_time = Get_Milliseconds();
+            HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_13);  // 橙色LED
+        }
+
+        // 可以执行其他任务
+    }
+}
+</code></pre>
+<h2 id="4">步骤4：实现软件定时器</h2>
+<h3 id="41">4.1 软件定时器结构设计</h3>
+<p>设计一个软件定时器系统，支持多个独立的定时任务：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+// 软件定时器结构体
+typedef struct {
+    uint8_t  enabled;        // 定时器使能标志
+    uint8_t  auto_reload;    // 自动重装载标志
+    uint32_t period;         // 定时周期（毫秒）
+    uint32_t counter;        // 当前计数值
+    void (*callback)(void);  // 回调函数指针
+} SoftTimer_t;
+
+// 定义最多支持的软件定时器数量
+#define MAX_SOFT_TIMERS  8
+
+// 软件定时器数组
+SoftTimer_t soft_timers[MAX_SOFT_TIMERS];
+
+/**
+  * @brief  初始化软件定时器系统
+  * @retval None
+  */
+void SoftTimer_Init(void)
+{
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        soft_timers[i].enabled = 0;
+        soft_timers[i].auto_reload = 0;
+        soft_timers[i].period = 0;
+        soft_timers[i].counter = 0;
+        soft_timers[i].callback = NULL;
+    }
+}
+
+/**
+  * @brief  创建软件定时器
+  * @param  period: 定时周期（毫秒）
+  * @param  auto_reload: 是否自动重装载（1:是, 0:否）
+  * @param  callback: 回调函数指针
+  * @retval 定时器ID（0-7），失败返回-1
+  */
+int SoftTimer_Create(uint32_t period, uint8_t auto_reload, void (*callback)(void))
+{
+    // 查找空闲的定时器
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        if (soft_timers[i].enabled == 0)
+        {
+            soft_timers[i].period = period;
+            soft_timers[i].auto_reload = auto_reload;
+            soft_timers[i].counter = 0;
+            soft_timers[i].callback = callback;
+            soft_timers[i].enabled = 1;
+            return i;
+        }
+    }
+    return -1;  // 没有空闲定时器
+}
+
+/**
+  * @brief  删除软件定时器
+  * @param  timer_id: 定时器ID
+  * @retval None
+  */
+void SoftTimer_Delete(int timer_id)
+{
+    if (timer_id &gt;= 0 &amp;&amp; timer_id &lt; MAX_SOFT_TIMERS)
+    {
+        soft_timers[timer_id].enabled = 0;
+    }
+}
+
+/* USER CODE END 0 */
+</code></pre>
+<h3 id="42">4.2 软件定时器处理函数</h3>
+<p>在定时器中断回调中处理所有软件定时器：</p>
+<pre><code class="language-c">/**
+  * @brief  软件定时器处理函数（在定时器中断中调用）
+  * @retval None
+  */
+void SoftTimer_Process(void)
+{
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        if (soft_timers[i].enabled)
+        {
+            soft_timers[i].counter++;
+
+            // 检查是否到达周期
+            if (soft_timers[i].counter &gt;= soft_timers[i].period)
+            {
+                // 执行回调函数
+                if (soft_timers[i].callback != NULL)
+                {
+                    soft_timers[i].callback();
+                }
+
+                // 重装载或停止
+                if (soft_timers[i].auto_reload)
+                {
+                    soft_timers[i].counter = 0;  // 重新开始计数
+                }
+                else
+                {
+                    soft_timers[i].enabled = 0;  // 停止定时器
+                }
+            }
+        }
+    }
+}
+
+/**
+  * @brief  定时器周期回调函数（修改版）
+  * @param  htim: 定时器句柄
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim-&gt;Instance == TIM2)
+    {
+        millisecond_counter++;
+
+        // 处理所有软件定时器
+        SoftTimer_Process();
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>SoftTimer_Process()</code>：遍历所有软件定时器，检查是否到期
+- 到期后执行回调函数
+- 根据<code>auto_reload</code>标志决定是否重新开始计数
+- 在定时器中断中调用，确保精确的时间控制</p>
+<h3 id="43">4.3 软件定时器使用示例</h3>
+<p>创建多个定时任务：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+// 定时任务1：每100ms翻转绿色LED
+void Task_LED_Green(void)
+{
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+}
+
+// 定时任务2：每300ms翻转橙色LED
+void Task_LED_Orange(void)
+{
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_13);
+}
+
+// 定时任务3：每1000ms打印信息
+void Task_Print_Info(void)
+{
+    printf(&quot;System uptime: %lu ms\r\n&quot;, Get_Milliseconds());
+}
+
+// 定时任务4：5秒后执行一次（单次定时器）
+void Task_OneShot(void)
+{
+    printf(&quot;One-shot timer triggered!\r\n&quot;);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);  // 点亮红色LED
+}
+
+/* USER CODE END 0 */
+
+int main(void)
+{
+    /* 初始化代码... */
+
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+
+    // 初始化软件定时器系统
+    SoftTimer_Init();
+
+    // 创建周期性定时器
+    SoftTimer_Create(100, 1, Task_LED_Green);    // 100ms周期，自动重装载
+    SoftTimer_Create(300, 1, Task_LED_Orange);   // 300ms周期，自动重装载
+    SoftTimer_Create(1000, 1, Task_Print_Info);  // 1000ms周期，自动重装载
+
+    // 创建单次定时器
+    SoftTimer_Create(5000, 0, Task_OneShot);     // 5000ms后执行一次
+
+    printf(&quot;Software Timer System Started\r\n&quot;);
+    printf(&quot;Task1: LED Green toggle every 100ms\r\n&quot;);
+    printf(&quot;Task2: LED Orange toggle every 300ms\r\n&quot;);
+    printf(&quot;Task3: Print info every 1000ms\r\n&quot;);
+    printf(&quot;Task4: One-shot timer after 5000ms\r\n&quot;);
+
+    while (1)
+    {
+        // 主循环可以执行其他任务
+        // 所有定时任务由软件定时器自动管理
+    }
+}
+</code></pre>
+<p><strong>运行效果</strong>：
+- 绿色LED以100ms周期闪烁（5Hz）
+- 橙色LED以300ms周期闪烁（1.67Hz）
+- 每1秒打印一次系统运行时间
+- 5秒后红色LED点亮（单次触发）</p>
+<h2 id="5">步骤5：编译、下载和测试</h2>
+<h3 id="51">5.1 编译项目</h3>
+<ol>
+<li>点击工具栏的 🔨 Build 按钮</li>
+<li>查看控制台输出</li>
+<li>确认编译成功（0 errors, 0 warnings）</li>
+</ol>
+<p><strong>可能的错误</strong>：
+- 如果出现 <code>undefined reference to _write</code>，检查printf重定向代码
+- 如果出现 <code>TIM2_IRQHandler multiple definition</code>，检查是否重复定义</p>
+<h3 id="52">5.2 下载程序</h3>
+<ol>
+<li>连接ST-Link调试器到开发板</li>
+<li>点击 ▶️ Run 按钮</li>
+<li>等待下载完成</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 程序下载成功
+- LED开始按照设定的周期闪烁</p>
+<h3 id="53">5.3 功能测试</h3>
+<h4 id="1_1">测试1：基本定时功能</h4>
+<p>观察LED的闪烁情况：</p>
+<ul>
+<li>[ ] 绿色LED以100ms周期闪烁</li>
+<li>[ ] 橙色LED以300ms周期闪烁</li>
+<li>[ ] 红色LED在5秒后点亮</li>
+</ul>
+<h4 id="2_1">测试2：串口输出</h4>
+<p>打开串口调试助手（115200波特率）：</p>
+<ul>
+<li>[ ] 看到启动信息</li>
+<li>[ ] 每1秒输出一次系统运行时间</li>
+<li>[ ] 5秒后看到单次定时器触发信息</li>
+</ul>
+<p><strong>预期输出</strong>：</p>
+<pre><code>Software Timer System Started
+Task1: LED Green toggle every 100ms
+Task2: LED Orange toggle every 300ms
+Task3: Print info every 1000ms
+Task4: One-shot timer after 5000ms
+System uptime: 1000 ms
+System uptime: 2000 ms
+System uptime: 3000 ms
+System uptime: 4000 ms
+System uptime: 5000 ms
+One-shot timer triggered!
+System uptime: 6000 ms
+...
+</code></pre>
+<h4 id="3_1">测试3：时间精度测试</h4>
+<p>使用逻辑分析仪或示波器测量LED翻转周期：</p>
+<ol>
+<li>将探头连接到PD12（绿色LED）</li>
+<li>测量高电平和低电平的持续时间</li>
+<li>验证周期是否为200ms（100ms高+100ms低）</li>
+</ol>
+<p><strong>精度要求</strong>：
+- 误差应小于±1%
+- 长时间运行不应有累积误差</p>
+<h2 id="6">步骤6：调试和优化</h2>
+<h3 id="61">6.1 使用调试器验证</h3>
+<p>设置断点验证定时器中断：</p>
+<ol>
+<li>在 <code>HAL_TIM_PeriodElapsedCallback()</code> 函数中设置断点</li>
+<li>启动调试模式（🐛 Debug）</li>
+<li>观察程序是否每1ms进入一次中断</li>
+<li>查看 <code>millisecond_counter</code> 变量的值</li>
+</ol>
+<p><strong>调试技巧</strong>：
+- 使用 <code>Expressions</code> 窗口监视变量
+- 使用 <code>SWV ITM Data Console</code> 查看printf输出
+- 使用 <code>Live Expressions</code> 实时监视变量变化</p>
+<h3 id="62">6.2 性能优化</h3>
+<p>优化中断服务函数的执行时间：</p>
+<pre><code class="language-c">/**
+  * @brief  优化后的定时器回调函数
+  * @param  htim: 定时器句柄
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim-&gt;Instance == TIM2)
+    {
+        // 快速递增计数器
+        millisecond_counter++;
+
+        // 只处理软件定时器，不在ISR中执行复杂操作
+        SoftTimer_Process();
+
+        // 不要在ISR中使用printf、HAL_Delay等耗时函数
+    }
+}
+</code></pre>
+<p><strong>优化原则</strong>：
+- ISR应该尽可能短（建议&lt;10μs）
+- 避免在ISR中使用阻塞函数
+- 避免在ISR中使用浮点运算
+- 使用标志位延迟处理复杂任务</p>
+<h3 id="63">6.3 中断负载分析</h3>
+<p>计算中断占用的CPU时间：</p>
+<pre><code class="language-c">/* USER CODE BEGIN 0 */
+
+volatile uint32_t isr_enter_time = 0;
+volatile uint32_t isr_total_time = 0;
+volatile uint32_t isr_max_time = 0;
+
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim-&gt;Instance == TIM2)
+    {
+        // 记录进入时间（使用DWT计数器）
+        uint32_t start = DWT-&gt;CYCCNT;
+
+        millisecond_counter++;
+        SoftTimer_Process();
+
+        // 计算执行时间
+        uint32_t elapsed = DWT-&gt;CYCCNT - start;
+        isr_total_time += elapsed;
+
+        if (elapsed &gt; isr_max_time)
+        {
+            isr_max_time = elapsed;
+        }
+    }
+}
+
+/* USER CODE END 0 */
+</code></pre>
+<p><strong>分析结果</strong>：
+- 平均ISR执行时间 = <code>isr_total_time / millisecond_counter</code>
+- 最大ISR执行时间 = <code>isr_max_time</code>
+- CPU占用率 = <code>(平均ISR时间 × 1000) / 系统时钟周期</code></p>
+<h2 id="_14">故障排除</h2>
+<h3 id="1_2">问题1：定时器中断不触发</h3>
+<p><strong>可能原因</strong>：
+- 定时器未启动
+- NVIC中断未使能
+- 时钟配置错误</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>检查定时器是否启动：</li>
+</ol>
+<pre><code class="language-c">// 确保调用了启动函数
+HAL_TIM_Base_Start_IT(&amp;htim2);
+</code></pre>
+<ol start="2">
+<li>检查NVIC配置：</li>
+</ol>
+<pre><code class="language-c">// 在CubeMX中确认勾选了TIM2 global interrupt
+// 或手动使能：
+HAL_NVIC_SetPriority(TIM2_IRQn, 2, 0);
+HAL_NVIC_EnableIRQ(TIM2_IRQn);
+</code></pre>
+<ol start="3">
+<li>检查时钟配置：</li>
+</ol>
+<pre><code class="language-c">// 在调试器中查看TIM2-&gt;PSC和TIM2-&gt;ARR寄存器
+// 确认值是否正确
+</code></pre>
+<h3 id="2_2">问题2：定时不准确</h3>
+<p><strong>可能原因</strong>：
+- 预分频器或ARR值计算错误
+- 系统时钟配置错误
+- 中断优先级过低被其他中断抢占</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>重新计算定时器参数：</li>
+</ol>
+<pre><code class="language-c">// 公式：中断周期 = (PSC + 1) × (ARR + 1) / 定时器时钟
+// 例如：1ms = (8399 + 1) × (9 + 1) / 84000000
+</code></pre>
+<ol start="2">
+<li>验证系统时钟：</li>
+</ol>
+<pre><code class="language-c">// 在main函数中打印系统时钟
+printf(&quot;SYSCLK: %lu Hz\r\n&quot;, HAL_RCC_GetSysClockFreq());
+printf(&quot;HCLK: %lu Hz\r\n&quot;, HAL_RCC_GetHCLKFreq());
+printf(&quot;PCLK1: %lu Hz\r\n&quot;, HAL_RCC_GetPCLK1Freq());
+</code></pre>
+<ol start="3">
+<li>提高中断优先级：</li>
+</ol>
+<pre><code class="language-c">// 设置更高的优先级
+HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);  // 最高优先级
+</code></pre>
+<h3 id="3_2">问题3：系统运行一段时间后崩溃</h3>
+<p><strong>可能原因</strong>：
+- 栈溢出（ISR嵌套过深）
+- 在ISR中使用了不安全的函数
+- 变量溢出（millisecond_counter）</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>增加栈大小：</li>
+</ol>
+<pre><code class="language-c">// 在启动文件中修改栈大小
+Stack_Size      EQU     0x1000  ; 增加到4KB
+</code></pre>
+<ol start="2">
+<li>避免在ISR中使用危险函数：</li>
+</ol>
+<pre><code class="language-c">// 不要在ISR中使用：
+// - printf()（除非使用DMA）
+// - malloc()/free()
+// - HAL_Delay()
+// - 浮点运算
+</code></pre>
+<ol start="3">
+<li>处理计数器溢出：</li>
+</ol>
+<pre><code class="language-c">// uint32_t最大值约为49天
+// 如果需要更长时间，使用64位计数器
+volatile uint64_t millisecond_counter = 0;
+</code></pre>
+<h3 id="4_1">问题4：软件定时器不工作</h3>
+<p><strong>可能原因</strong>：
+- 未初始化软件定时器系统
+- 回调函数指针为NULL
+- 定时器ID超出范围</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>确保初始化：</li>
+</ol>
+<pre><code class="language-c">// 在main函数开始时调用
+SoftTimer_Init();
+</code></pre>
+<ol start="2">
+<li>检查创建返回值：</li>
+</ol>
+<pre><code class="language-c">int timer_id = SoftTimer_Create(1000, 1, Task_Print_Info);
+if (timer_id &lt; 0)
+{
+    printf(&quot;Failed to create timer!\r\n&quot;);
+}
+</code></pre>
+<ol start="3">
+<li>验证回调函数：</li>
+</ol>
+<pre><code class="language-c">// 确保回调函数不为NULL且正确定义
+void Task_Print_Info(void)
+{
+    printf(&quot;Timer callback executed\r\n&quot;);
+}
+</code></pre>
+<h3 id="5led">问题5：LED闪烁频率不对</h3>
+<p><strong>可能原因</strong>：
+- 定时器周期配置错误
+- LED翻转逻辑错误
+- 硬件连接问题</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>使用示波器或逻辑分析仪测量实际频率</li>
+<li>检查LED翻转代码：</li>
+</ol>
+<pre><code class="language-c">// 正确的翻转方式
+HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+
+// 或者
+if (HAL_GPIO_ReadPin(GPIOD, GPIO_PIN_12) == GPIO_PIN_SET)
+{
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET);
+}
+else
+{
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_SET);
+}
+</code></pre>
+<ol start="3">
+<li>检查硬件连接：
+   - 确认LED极性正确
+   - 确认限流电阻值合适
+   - 使用万用表测试引脚电压</li>
+</ol>
+<h2 id="_15">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ 定时器中断的工作原理和配置方法</li>
+<li>✅ 如何计算定时器的预分频器和重装载值</li>
+<li>✅ 实现基于定时器中断的精确延时函数</li>
+<li>✅ 设计和实现软件定时器系统</li>
+<li>✅ 管理多个并发的定时任务</li>
+<li>✅ 调试和优化定时器中断应用</li>
+</ul>
+<p><strong>核心要点</strong>：</p>
+<ol>
+<li>
+<p><strong>定时器配置</strong>：
+   - 中断周期 = (PSC + 1) × (ARR + 1) / 定时器时钟
+   - 选择合适的预分频器和重装载值
+   - 使能定时器更新中断</p>
+</li>
+<li>
+<p><strong>中断服务函数</strong>：
+   - ISR应该尽可能短
+   - 避免在ISR中使用阻塞函数
+   - 使用回调函数处理定时事件</p>
+</li>
+<li>
+<p><strong>软件定时器</strong>：
+   - 支持多个独立的定时任务
+   - 支持周期性和单次定时
+   - 在硬件定时器中断中统一管理</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>：
+   - 使用volatile关键字修饰共享变量
+   - 合理设置中断优先级
+   - 监控中断执行时间和CPU占用率</p>
+</li>
+</ol>
+<h2 id="_16">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1：实现微秒级定时器</strong>
+   - 配置定时器产生10μs周期的中断
+   - 实现微秒级的精确延时函数
+   - 测量实际精度</p>
+</li>
+<li>
+<p><strong>挑战2：实现定时器级联</strong>
+   - 使用TIM2和TIM3级联
+   - 实现更长周期的定时（如1小时）
+   - 避免计数器溢出问题</p>
+</li>
+<li>
+<p><strong>挑战3：实现任务调度器</strong>
+   - 基于软件定时器实现简单的任务调度器
+   - 支持任务优先级
+   - 支持任务挂起和恢复</p>
+</li>
+<li>
+<p><strong>挑战4：低功耗定时器</strong>
+   - 在定时器中断中使用低功耗模式
+   - 测量功耗降低效果
+   - 实现唤醒机制</p>
+</li>
+<li>
+<p><strong>挑战5：定时器性能测试</strong>
+   - 测试最大支持的软件定时器数量
+   - 测试中断响应延迟
+   - 优化软件定时器算法</p>
+</li>
+</ol>
+<h2 id="_17">完整代码</h2>
+<h3 id="mainc">main.c 完整代码</h3>
+<pre><code class="language-c">/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : 定时器中断实现精确延时教程
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include &quot;main.h&quot;
+#include &lt;stdio.h&gt;
+
+/* Private variables ---------------------------------------------------------*/
+TIM_HandleTypeDef htim2;
+UART_HandleTypeDef huart1;
+
+/* USER CODE BEGIN PV */
+
+// 全局变量：毫秒计数器
+volatile uint32_t millisecond_counter = 0;
+
+// 软件定时器结构体
+typedef struct {
+    uint8_t  enabled;
+    uint8_t  auto_reload;
+    uint32_t period;
+    uint32_t counter;
+    void (*callback)(void);
+} SoftTimer_t;
+
+#define MAX_SOFT_TIMERS  8
+SoftTimer_t soft_timers[MAX_SOFT_TIMERS];
+
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+static void MX_GPIO_Init(void);
+static void MX_TIM2_Init(void);
+static void MX_USART1_UART_Init(void);
+
+/* USER CODE BEGIN PFP */
+
+// 软件定时器函数声明
+void SoftTimer_Init(void);
+int SoftTimer_Create(uint32_t period, uint8_t auto_reload, void (*callback)(void));
+void SoftTimer_Delete(int timer_id);
+void SoftTimer_Process(void);
+
+// 定时任务函数声明
+void Task_LED_Green(void);
+void Task_LED_Orange(void);
+void Task_Print_Info(void);
+void Task_OneShot(void);
+
+// 工具函数声明
+uint32_t Get_Milliseconds(void);
+uint8_t Is_Timeout(uint32_t start_time, uint32_t timeout);
+
+/* USER CODE END PFP */
+
+/* USER CODE BEGIN 0 */
+
+// printf重定向到USART1
+int _write(int file, char *ptr, int len)
+{
+    HAL_UART_Transmit(&amp;huart1, (uint8_t *)ptr, len, HAL_MAX_DELAY);
+    return len;
+}
+
+// 软件定时器实现
+void SoftTimer_Init(void)
+{
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        soft_timers[i].enabled = 0;
+        soft_timers[i].auto_reload = 0;
+        soft_timers[i].period = 0;
+        soft_timers[i].counter = 0;
+        soft_timers[i].callback = NULL;
+    }
+}
+
+int SoftTimer_Create(uint32_t period, uint8_t auto_reload, void (*callback)(void))
+{
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        if (soft_timers[i].enabled == 0)
+        {
+            soft_timers[i].period = period;
+            soft_timers[i].auto_reload = auto_reload;
+            soft_timers[i].counter = 0;
+            soft_timers[i].callback = callback;
+            soft_timers[i].enabled = 1;
+            return i;
+        }
+    }
+    return -1;
+}
+
+void SoftTimer_Delete(int timer_id)
+{
+    if (timer_id &gt;= 0 &amp;&amp; timer_id &lt; MAX_SOFT_TIMERS)
+    {
+        soft_timers[timer_id].enabled = 0;
+    }
+}
+
+void SoftTimer_Process(void)
+{
+    for (int i = 0; i &lt; MAX_SOFT_TIMERS; i++)
+    {
+        if (soft_timers[i].enabled)
+        {
+            soft_timers[i].counter++;
+
+            if (soft_timers[i].counter &gt;= soft_timers[i].period)
+            {
+                if (soft_timers[i].callback != NULL)
+                {
+                    soft_timers[i].callback();
+                }
+
+                if (soft_timers[i].auto_reload)
+                {
+                    soft_timers[i].counter = 0;
+                }
+                else
+                {
+                    soft_timers[i].enabled = 0;
+                }
+            }
+        }
+    }
+}
+
+// 定时任务实现
+void Task_LED_Green(void)
+{
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_12);
+}
+
+void Task_LED_Orange(void)
+{
+    HAL_GPIO_TogglePin(GPIOD, GPIO_PIN_13);
+}
+
+void Task_Print_Info(void)
+{
+    printf(&quot;System uptime: %lu ms\r\n&quot;, Get_Milliseconds());
+}
+
+void Task_OneShot(void)
+{
+    printf(&quot;One-shot timer triggered!\r\n&quot;);
+    HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_SET);
+}
+
+// 工具函数实现
+uint32_t Get_Milliseconds(void)
+{
+    return millisecond_counter;
+}
+
+uint8_t Is_Timeout(uint32_t start_time, uint32_t timeout)
+{
+    return ((millisecond_counter - start_time) &gt;= timeout);
+}
+
+// 定时器回调函数
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim-&gt;Instance == TIM2)
+    {
+        millisecond_counter++;
+        SoftTimer_Process();
+    }
+}
+
+/* USER CODE END 0 */
+
+int main(void)
+{
+    /* MCU Configuration--------------------------------------------------------*/
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_TIM2_Init();
+    MX_USART1_UART_Init();
+
+    /* USER CODE BEGIN 2 */
+
+    // 启动定时器中断
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+
+    // 初始化软件定时器系统
+    SoftTimer_Init();
+
+    // 创建定时任务
+    SoftTimer_Create(100, 1, Task_LED_Green);
+    SoftTimer_Create(300, 1, Task_LED_Orange);
+    SoftTimer_Create(1000, 1, Task_Print_Info);
+    SoftTimer_Create(5000, 0, Task_OneShot);
+
+    printf(&quot;\r\n=== Timer Interrupt Tutorial ===\r\n&quot;);
+    printf(&quot;Software Timer System Started\r\n&quot;);
+    printf(&quot;Task1: LED Green toggle every 100ms\r\n&quot;);
+    printf(&quot;Task2: LED Orange toggle every 300ms\r\n&quot;);
+    printf(&quot;Task3: Print info every 1000ms\r\n&quot;);
+    printf(&quot;Task4: One-shot timer after 5000ms\r\n&quot;);
+    printf(&quot;================================\r\n\r\n&quot;);
+
+    /* USER CODE END 2 */
+
+    /* Infinite loop */
+    while (1)
+    {
+        /* USER CODE BEGIN 3 */
+
+        // 主循环可以执行其他任务
+        // 所有定时任务由软件定时器自动管理
+
+        /* USER CODE END 3 */
+    }
+}
+
+// 其他初始化函数省略...
+</code></pre>
+<p>完整的项目代码可以从以下链接下载：
+- GitHub仓库：<a href="https://github.com/embedded-knowledge/timer-interrupt-tutorial">timer-interrupt-tutorial</a>
+- 包含完整的CubeMX配置文件和源代码</p>
+<h2 id="_18">下一步</h2>
+<p>建议继续学习以下内容：</p>
+<ul>
+<li><a href="04-interrupt-debugging.html">中断调试技巧与常见问题</a> - 学习如何调试中断相关问题</li>
+<li><a href="../intermediate/01-interrupt-priority.html">中断优先级配置与抢占机制</a> - 深入理解中断优先级</li>
+<li><a href="../../02-device-driver-development/beginner/05-timer-driver.html">定时器驱动基础与应用</a> - 学习定时器的更多功能</li>
+<li><a href="../../02-device-driver-development/beginner/07-pwm-driver.html">PWM驱动开发</a> - 使用定时器实现PWM输出</li>
+</ul>
+<h2 id="_19">参考资料</h2>
+<ol>
+<li>
+<p><strong>官方文档</strong>：
+   - <a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4 Reference Manual</a> - 第18章：通用定时器
+   - <a href="https://www.st.com/resource/en/user_manual/dm00105879.pdf">STM32F4 HAL库用户手册</a> - TIM HAL驱动
+   - <a href="https://www.st.com/resource/en/application_note/dm00042534.pdf">AN4013: STM32定时器应用笔记</a></p>
+</li>
+<li>
+<p><strong>技术文章</strong>：
+   - "Understanding STM32 Timer Interrupts" - 定时器中断详解
+   - "Software Timer Implementation" - 软件定时器实现方法
+   - "Real-Time Task Scheduling with Timers" - 基于定时器的任务调度</p>
+</li>
+<li>
+<p><strong>视频教程</strong>：
+   - <a href="https://www.bilibili.com/video/BV1xx411x7xx">STM32定时器中断配置</a> - B站视频教程
+   - <a href="https://www.bilibili.com/video/BV1yy4y1x7xx">软件定时器设计与实现</a> - 实战演示</p>
+</li>
+<li>
+<p><strong>开源项目</strong>：
+   - <a href="https://www.freertos.org/">FreeRTOS</a> - 专业的实时操作系统，参考其定时器实现
+   - <a href="https://www.rt-thread.org/">RT-Thread</a> - 国产实时操作系统，学习软件定时器设计</p>
+</li>
+</ol>
+<h2 id="faq">常见问题FAQ</h2>
+<p><strong>Q1: 定时器中断和SysTick中断有什么区别？</strong></p>
+<p>A: 
+- SysTick是ARM Cortex-M内核的系统定时器，主要用于操作系统的时间片调度
+- 通用定时器（TIM2-TIM7）是STM32外设，功能更丰富，可以配置不同的中断周期
+- SysTick通常用于系统时基，通用定时器用于应用层定时任务
+- 一个系统可以同时使用SysTick和多个通用定时器</p>
+<p><strong>Q2: 为什么要使用软件定时器而不是多个硬件定时器？</strong></p>
+<p>A:
+- 硬件定时器数量有限（STM32F407有14个定时器）
+- 软件定时器可以创建任意数量的定时任务
+- 软件定时器更灵活，易于管理和调试
+- 节省硬件资源，硬件定时器可用于PWM、输入捕获等其他功能</p>
+<p><strong>Q3: 定时器中断的优先级应该设置多高？</strong></p>
+<p>A:
+- 取决于应用的实时性要求
+- 一般设置为中等优先级（2-3）
+- 如果需要精确的时间控制，可以设置为高优先级（0-1）
+- 避免设置为最高优先级，以免影响其他紧急中断</p>
+<p><strong>Q4: 如何处理定时器计数器溢出问题？</strong></p>
+<p>A:
+- uint32_t类型的计数器，最大值为4,294,967,295ms（约49.7天）
+- 如果需要更长时间，使用uint64_t类型
+- 或者使用两个uint32_t变量，一个记录溢出次数
+- 在实际应用中，49天通常足够，系统会定期重启</p>
+<p><strong>Q5: 定时器中断会影响系统性能吗？</strong></p>
+<p>A:
+- 会占用一定的CPU时间，但通常很小（&lt;1%）
+- 1ms中断周期，ISR执行10μs，占用率 = 10μs / 1000μs = 1%
+- 如果ISR执行时间过长，会影响系统响应性
+- 优化ISR代码，保持执行时间在10μs以内</p>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题或有改进建议，欢迎通过以下方式反馈：
+- GitHub Issues: <a href="https://github.com/embedded-knowledge/content/issues">提交问题</a>
+- 邮箱: feedback@embedded-knowledge.com
+- 社区论坛: <a href="https://forum.embedded-knowledge.com">讨论区</a></p>
+<p><strong>贡献</strong>：欢迎贡献代码示例、改进建议或错误修正！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

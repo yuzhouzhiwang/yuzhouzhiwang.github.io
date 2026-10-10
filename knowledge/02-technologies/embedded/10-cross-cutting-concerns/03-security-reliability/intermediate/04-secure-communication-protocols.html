@@ -1,0 +1,1654 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>安全通信协议实现 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/">10-cross-cutting-concerns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/03-security-reliability/">03-security-reliability</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/03-security-reliability/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a><ul>
+<li><a href="#_4">知识要求</a></li>
+<li><a href="#_5">环境要求</a></li>
+</ul>
+</li>
+<li><a href="#_6">准备工作</a><ul>
+<li><a href="#1">1. 硬件准备</a></li>
+<li><a href="#2">2. 软件准备</a></li>
+</ul>
+</li>
+<li><a href="#_7">步骤说明</a><ul>
+<li><a href="#1-tlsssl">步骤1: 理解TLS/SSL协议原理</a><ul>
+<li><a href="#11-tls">1.1 TLS协议架构</a></li>
+<li><a href="#12-tls">1.2 TLS握手流程</a></li>
+<li><a href="#13-dtls">1.3 DTLS协议特点</a></li>
+</ul>
+</li>
+<li><a href="#2-mbedtls">步骤2: 配置mbedTLS库</a><ul>
+<li><a href="#21-mbedtls">2.1 mbedTLS配置文件</a></li>
+<li><a href="#22-mbedtls">2.2 mbedTLS初始化</a></li>
+</ul>
+</li>
+<li><a href="#3-tls">步骤3: 实现TLS客户端</a><ul>
+<li><a href="#31">3.1 加载证书</a></li>
+<li><a href="#32-tls">3.2 配置TLS连接</a></li>
+<li><a href="#33-tls">3.3 建立TLS连接</a></li>
+<li><a href="#34-tls">3.4 TLS客户端使用示例</a></li>
+</ul>
+</li>
+<li><a href="#4-dtls">步骤4: 实现DTLS通信</a><ul>
+<li><a href="#41-dtls">4.1 配置DTLS客户端</a></li>
+<li><a href="#42-dtls">4.2 DTLS数据传输</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5: 证书管理</a><ul>
+<li><a href="#51">5.1 证书验证</a></li>
+<li><a href="#52-certificate-pinning">5.2 证书固定(Certificate Pinning)</a></li>
+<li><a href="#53">5.3 证书链验证</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6: 性能优化</a><ul>
+<li><a href="#61">6.1 会话恢复</a></li>
+<li><a href="#62">6.2 内存优化</a></li>
+<li><a href="#63">6.3 加密套件选择</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_8">验证方法</a><ul>
+<li><a href="#1-tls">1. TLS客户端验证</a></li>
+<li><a href="#2-dtls">2. DTLS通信验证</a></li>
+<li><a href="#3">3. 证书验证测试</a></li>
+<li><a href="#4">4. 性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_9">故障排除</a><ul>
+<li><a href="#1_1">问题1: 握手失败</a></li>
+<li><a href="#2_1">问题2: 内存不足</a></li>
+<li><a href="#3-dtls">问题3: DTLS丢包</a></li>
+<li><a href="#4_1">问题4: 证书验证失败</a></li>
+</ul>
+</li>
+<li><a href="#_10">总结</a></li>
+<li><a href="#_11">延伸阅读</a><ul>
+<li><a href="#_12">相关教程</a></li>
+<li><a href="#_13">技术文档</a></li>
+<li><a href="#_14">工具和资源</a></li>
+</ul>
+</li>
+<li><a href="#_15">参考资料</a><ul>
+<li><a href="#_16">标准规范</a></li>
+<li><a href="#_17">技术书籍</a></li>
+<li><a href="#_18">在线资源</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">安全通信协议实现</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解TLS/SSL和DTLS协议的工作原理和安全机制</li>
+<li>掌握mbedTLS库在嵌入式系统中的配置和使用</li>
+<li>能够实现基于TLS的安全TCP通信</li>
+<li>能够实现基于DTLS的安全UDP通信</li>
+<li>掌握数字证书的生成、管理和验证方法</li>
+<li>了解安全通信的性能优化和资源管理技巧</li>
+<li>能够构建完整的安全通信系统</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<h3 id="_4">知识要求</h3>
+<ul>
+<li>掌握C语言编程</li>
+<li>了解TCP/IP网络协议栈</li>
+<li>理解对称加密和非对称加密原理</li>
+<li>熟悉数字证书和PKI体系</li>
+<li>了解哈希算法和数字签名</li>
+</ul>
+<h3 id="_5">环境要求</h3>
+<ul>
+<li>开发板：STM32F4系列或ESP32（支持网络）</li>
+<li>开发工具：STM32CubeIDE或ESP-IDF</li>
+<li>网络环境：以太网或WiFi连接</li>
+<li>测试工具：OpenSSL命令行工具</li>
+<li>抓包工具：Wireshark（用于分析加密流量）</li>
+</ul>
+<h2 id="_6">准备工作</h2>
+<h3 id="1">1. 硬件准备</h3>
+<p><strong>开发板清单</strong>：
+- STM32F407开发板 + W5500以太网模块 或 ESP32开发板 × 1
+- USB数据线 × 1
+- 网线 × 1（如使用以太网）
+- 路由器 × 1</p>
+<p><strong>硬件连接</strong>（STM32 + W5500）：</p>
+<pre><code>W5500      →    STM32F407
+MOSI       →    PA7 (SPI1_MOSI)
+MISO       →    PA6 (SPI1_MISO)
+SCK        →    PA5 (SPI1_SCK)
+CS         →    PA4 (SPI1_NSS)
+RST        →    PC4
+INT        →    PC5
+3.3V       →    3.3V
+GND        →    GND
+</code></pre>
+<h3 id="2">2. 软件准备</h3>
+<p><strong>安装mbedTLS库</strong>：</p>
+<p>对于STM32项目：</p>
+<pre><code class="language-bash"># 下载mbedTLS源码
+git clone https://github.com/ARMmbed/mbedtls.git
+cd mbedtls
+git checkout mbedtls-2.28
+
+# 将以下文件添加到项目：
+# - mbedtls/library/*.c
+# - mbedtls/include/mbedtls/*.h
+</code></pre>
+<p>对于ESP32项目：</p>
+<pre><code class="language-bash"># ESP-IDF已经包含mbedTLS
+# 在menuconfig中启用：
+# Component config → mbedTLS → Enable mbedTLS
+</code></pre>
+<p><strong>生成测试证书</strong>：</p>
+<pre><code class="language-bash"># 生成CA私钥
+openssl genrsa -out ca_key.pem 2048
+
+# 生成CA证书
+openssl req -new -x509 -days 3650 -key ca_key.pem -out ca_cert.pem \
+  -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=Test/CN=Test CA&quot;
+
+# 生成服务器私钥
+openssl genrsa -out server_key.pem 2048
+
+# 生成服务器证书请求
+openssl req -new -key server_key.pem -out server_csr.pem \
+  -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=Test/CN=192.168.1.100&quot;
+
+# 签发服务器证书
+openssl x509 -req -days 365 -in server_csr.pem \
+  -CA ca_cert.pem -CAkey ca_key.pem -CAcreateserial \
+  -out server_cert.pem
+
+# 生成客户端私钥和证书（可选，用于双向认证）
+openssl genrsa -out client_key.pem 2048
+openssl req -new -key client_key.pem -out client_csr.pem \
+  -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=Test/CN=Client&quot;
+openssl x509 -req -days 365 -in client_csr.pem \
+  -CA ca_cert.pem -CAkey ca_key.pem -CAcreateserial \
+  -out client_cert.pem
+</code></pre>
+<h2 id="_7">步骤说明</h2>
+<h3 id="1-tlsssl">步骤1: 理解TLS/SSL协议原理</h3>
+<p>TLS(Transport Layer Security)和SSL(Secure Sockets Layer)是保护网络通信安全的加密协议。</p>
+<h4 id="11-tls">1.1 TLS协议架构</h4>
+<pre><code class="language-mermaid">graph TD
+    A[应用层] --&gt; B[TLS记录协议]
+    B --&gt; C[TLS握手协议]
+    B --&gt; D[TLS密码变更协议]
+    B --&gt; E[TLS警报协议]
+    C --&gt; F[传输层 TCP]
+    D --&gt; F
+    E --&gt; F
+    F --&gt; G[网络层 IP]
+</code></pre>
+<p><strong>核心组件</strong>：
+- <strong>记录协议(Record Protocol)</strong>：提供数据加密、完整性保护和压缩
+- <strong>握手协议(Handshake Protocol)</strong>：协商加密参数、认证通信双方
+- <strong>密码变更协议(Change Cipher Spec)</strong>：通知对方切换加密算法
+- <strong>警报协议(Alert Protocol)</strong>：传递错误和警告信息</p>
+<h4 id="12-tls">1.2 TLS握手流程</h4>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client as 客户端
+    participant Server as 服务器
+
+    Client-&gt;&gt;Server: 1. ClientHello (支持的加密套件)
+    Server-&gt;&gt;Client: 2. ServerHello (选择的加密套件)
+    Server-&gt;&gt;Client: 3. Certificate (服务器证书)
+    Server-&gt;&gt;Client: 4. ServerHelloDone
+
+    Client-&gt;&gt;Client: 5. 验证服务器证书
+    Client-&gt;&gt;Server: 6. ClientKeyExchange (预主密钥)
+    Client-&gt;&gt;Server: 7. ChangeCipherSpec
+    Client-&gt;&gt;Server: 8. Finished (握手完成)
+
+    Server-&gt;&gt;Server: 9. 计算主密钥
+    Server-&gt;&gt;Client: 10. ChangeCipherSpec
+    Server-&gt;&gt;Client: 11. Finished
+
+    Note over Client,Server: 握手完成，开始加密通信
+
+    Client-&gt;&gt;Server: 加密的应用数据
+    Server-&gt;&gt;Client: 加密的应用数据
+</code></pre>
+<p><strong>握手过程详解</strong>：</p>
+<ol>
+<li><strong>ClientHello</strong>：客户端发送支持的TLS版本、加密套件列表、随机数</li>
+<li><strong>ServerHello</strong>：服务器选择TLS版本和加密套件，发送随机数</li>
+<li><strong>Certificate</strong>：服务器发送数字证书（包含公钥）</li>
+<li><strong>ServerHelloDone</strong>：服务器握手消息发送完毕</li>
+<li><strong>证书验证</strong>：客户端验证服务器证书的有效性</li>
+<li><strong>ClientKeyExchange</strong>：客户端生成预主密钥，用服务器公钥加密后发送</li>
+<li><strong>ChangeCipherSpec</strong>：客户端通知切换到加密模式</li>
+<li><strong>Finished</strong>：客户端发送握手完成消息（已加密）</li>
+<li><strong>密钥计算</strong>：服务器用私钥解密预主密钥，计算主密钥</li>
+<li><strong>ChangeCipherSpec</strong>：服务器通知切换到加密模式</li>
+<li><strong>Finished</strong>：服务器发送握手完成消息（已加密）</li>
+</ol>
+<h4 id="13-dtls">1.3 DTLS协议特点</h4>
+<p>DTLS(Datagram TLS)是TLS在UDP上的实现，主要特点：</p>
+<pre><code class="language-c">// DTLS vs TLS 对比
+
+// TLS特点：
+// - 基于TCP，可靠传输
+// - 有序数据流
+// - 连接导向
+// - 适合：HTTPS、FTPS、SMTPS
+
+// DTLS特点：
+// - 基于UDP，不可靠传输
+// - 无序数据报
+// - 无连接
+// - 增加了重传和排序机制
+// - 适合：VoIP、视频流、IoT设备
+</code></pre>
+<p><strong>DTLS关键机制</strong>：
+- <strong>记录序列号</strong>：防止重放攻击
+- <strong>握手重传</strong>：处理UDP丢包
+- <strong>分片重组</strong>：处理大消息
+- <strong>Cookie机制</strong>：防止DoS攻击</p>
+<h3 id="2-mbedtls">步骤2: 配置mbedTLS库</h3>
+<p>mbedTLS是一个轻量级的TLS/SSL库，适合嵌入式系统。</p>
+<h4 id="21-mbedtls">2.1 mbedTLS配置文件</h4>
+<p>创建 <code>mbedtls_config.h</code>：</p>
+<pre><code class="language-c">#ifndef MBEDTLS_CONFIG_H
+#define MBEDTLS_CONFIG_H
+
+// 1. 系统配置
+#define MBEDTLS_PLATFORM_C
+#define MBEDTLS_PLATFORM_MEMORY
+#define MBEDTLS_MEMORY_BUFFER_ALLOC_C
+
+// 2. 加密算法
+#define MBEDTLS_AES_C                    // AES加密
+#define MBEDTLS_SHA256_C                 // SHA-256哈希
+#define MBEDTLS_MD_C                     // 消息摘要
+#define MBEDTLS_CIPHER_C                 // 密码算法
+
+// 3. 公钥算法
+#define MBEDTLS_RSA_C                    // RSA算法
+#define MBEDTLS_PK_C                     // 公钥抽象层
+#define MBEDTLS_PK_PARSE_C               // 公钥解析
+#define MBEDTLS_BIGNUM_C                 // 大数运算
+
+// 4. X.509证书
+#define MBEDTLS_X509_USE_C               // X.509证书
+#define MBEDTLS_X509_CRT_PARSE_C         // 证书解析
+#define MBEDTLS_ASN1_PARSE_C             // ASN.1解析
+#define MBEDTLS_ASN1_WRITE_C             // ASN.1写入
+#define MBEDTLS_OID_C                    // OID支持
+
+// 5. TLS/SSL
+#define MBEDTLS_SSL_TLS_C                // TLS核心
+#define MBEDTLS_SSL_CLI_C                // TLS客户端
+#define MBEDTLS_SSL_SRV_C                // TLS服务器
+#define MBEDTLS_SSL_PROTO_TLS1_2         // TLS 1.2
+
+// 6. DTLS支持（可选）
+#define MBEDTLS_SSL_PROTO_DTLS           // DTLS协议
+#define MBEDTLS_SSL_DTLS_ANTI_REPLAY     // 防重放
+#define MBEDTLS_SSL_DTLS_HELLO_VERIFY    // Hello验证
+
+// 7. 随机数生成
+#define MBEDTLS_ENTROPY_C                // 熵源
+#define MBEDTLS_CTR_DRBG_C               // 随机数生成器
+
+// 8. 网络支持
+#define MBEDTLS_NET_C                    // 网络抽象层
+
+// 9. 调试支持
+#define MBEDTLS_DEBUG_C                  // 调试输出
+#define MBEDTLS_ERROR_C                  // 错误字符串
+
+// 10. 性能优化
+#define MBEDTLS_AES_ROM_TABLES           // 使用ROM表
+#define MBEDTLS_SSL_MAX_CONTENT_LEN 4096 // 最大内容长度
+
+// 11. 内存配置
+#define MBEDTLS_MEM_ALLOC   pvPortMalloc  // 使用FreeRTOS内存分配
+#define MBEDTLS_MEM_FREE    vPortFree
+
+#include &quot;mbedtls/check_config.h&quot;
+
+#endif /* MBEDTLS_CONFIG_H */
+</code></pre>
+<h4 id="22-mbedtls">2.2 mbedTLS初始化</h4>
+<pre><code class="language-c">#include &quot;mbedtls/platform.h&quot;
+#include &quot;mbedtls/net_sockets.h&quot;
+#include &quot;mbedtls/ssl.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &quot;mbedtls/error.h&quot;
+#include &quot;mbedtls/debug.h&quot;
+
+// mbedTLS上下文
+typedef struct {
+    mbedtls_entropy_context entropy;      // 熵源
+    mbedtls_ctr_drbg_context ctr_drbg;   // 随机数生成器
+    mbedtls_ssl_context ssl;              // SSL上下文
+    mbedtls_ssl_config conf;              // SSL配置
+    mbedtls_x509_crt cacert;              // CA证书
+    mbedtls_x509_crt clicert;             // 客户端证书（可选）
+    mbedtls_pk_context pkey;              // 私钥（可选）
+    mbedtls_net_context server_fd;        // 网络连接
+} tls_context_t;
+
+static tls_context_t g_tls_ctx;
+
+/**
+ * @brief 调试回调函数
+ * @param ctx 上下文
+ * @param level 调试级别
+ * @param file 文件名
+ * @param line 行号
+ * @param str 调试信息
+ */
+static void tls_debug_callback(void *ctx, int level,
+                               const char *file, int line,
+                               const char *str) {
+    printf(&quot;%s:%04d: %s&quot;, file, line, str);
+}
+
+/**
+ * @brief 初始化mbedTLS
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_init(void) {
+    int ret;
+    const char *pers = &quot;tls_client&quot;;
+
+    printf(&quot;Initializing mbedTLS...\n&quot;);
+
+    // 1. 初始化上下文
+    mbedtls_net_init(&amp;g_tls_ctx.server_fd);
+    mbedtls_ssl_init(&amp;g_tls_ctx.ssl);
+    mbedtls_ssl_config_init(&amp;g_tls_ctx.conf);
+    mbedtls_x509_crt_init(&amp;g_tls_ctx.cacert);
+    mbedtls_x509_crt_init(&amp;g_tls_ctx.clicert);
+    mbedtls_pk_init(&amp;g_tls_ctx.pkey);
+    mbedtls_ctr_drbg_init(&amp;g_tls_ctx.ctr_drbg);
+    mbedtls_entropy_init(&amp;g_tls_ctx.entropy);
+
+    // 2. 初始化随机数生成器
+    ret = mbedtls_ctr_drbg_seed(&amp;g_tls_ctx.ctr_drbg,
+                                mbedtls_entropy_func,
+                                &amp;g_tls_ctx.entropy,
+                                (const unsigned char *)pers,
+                                strlen(pers));
+    if (ret != 0) {
+        printf(&quot;mbedtls_ctr_drbg_seed failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;mbedTLS initialized successfully\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief 清理mbedTLS资源
+ */
+void tls_cleanup(void) {
+    mbedtls_net_free(&amp;g_tls_ctx.server_fd);
+    mbedtls_x509_crt_free(&amp;g_tls_ctx.cacert);
+    mbedtls_x509_crt_free(&amp;g_tls_ctx.clicert);
+    mbedtls_pk_free(&amp;g_tls_ctx.pkey);
+    mbedtls_ssl_free(&amp;g_tls_ctx.ssl);
+    mbedtls_ssl_config_free(&amp;g_tls_ctx.conf);
+    mbedtls_ctr_drbg_free(&amp;g_tls_ctx.ctr_drbg);
+    mbedtls_entropy_free(&amp;g_tls_ctx.entropy);
+
+    printf(&quot;mbedTLS cleaned up\n&quot;);
+}
+</code></pre>
+<h3 id="3-tls">步骤3: 实现TLS客户端</h3>
+<p>实现一个完整的TLS客户端，连接到HTTPS服务器。</p>
+<h4 id="31">3.1 加载证书</h4>
+<pre><code class="language-c">// CA证书（PEM格式）
+const char *ca_cert_pem = 
+&quot;-----BEGIN CERTIFICATE-----\n&quot;
+&quot;MIIDXTCCAkWgAwIBAgIJAKL0UG+mRKSzMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV\n&quot;
+// ... 证书内容 ...
+&quot;-----END CERTIFICATE-----\n&quot;;
+
+/**
+ * @brief 加载CA证书
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_load_ca_cert(void) {
+    int ret;
+
+    printf(&quot;Loading CA certificate...\n&quot;);
+
+    // 解析CA证书
+    ret = mbedtls_x509_crt_parse(&amp;g_tls_ctx.cacert,
+                                 (const unsigned char *)ca_cert_pem,
+                                 strlen(ca_cert_pem) + 1);
+    if (ret != 0) {
+        printf(&quot;mbedtls_x509_crt_parse failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;CA certificate loaded successfully\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief 加载客户端证书和私钥（用于双向认证）
+ * @param cert_pem 客户端证书（PEM格式）
+ * @param key_pem 客户端私钥（PEM格式）
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_load_client_cert(const char *cert_pem, const char *key_pem) {
+    int ret;
+
+    printf(&quot;Loading client certificate and key...\n&quot;);
+
+    // 1. 解析客户端证书
+    ret = mbedtls_x509_crt_parse(&amp;g_tls_ctx.clicert,
+                                 (const unsigned char *)cert_pem,
+                                 strlen(cert_pem) + 1);
+    if (ret != 0) {
+        printf(&quot;mbedtls_x509_crt_parse failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 2. 解析私钥
+    ret = mbedtls_pk_parse_key(&amp;g_tls_ctx.pkey,
+                               (const unsigned char *)key_pem,
+                               strlen(key_pem) + 1,
+                               NULL, 0);  // 无密码保护
+    if (ret != 0) {
+        printf(&quot;mbedtls_pk_parse_key failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;Client certificate and key loaded successfully\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h4 id="32-tls">3.2 配置TLS连接</h4>
+<pre><code class="language-c">/**
+ * @brief 配置TLS客户端
+ * @param hostname 服务器主机名（用于SNI和证书验证）
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_config_client(const char *hostname) {
+    int ret;
+
+    printf(&quot;Configuring TLS client...\n&quot;);
+
+    // 1. 设置默认配置
+    ret = mbedtls_ssl_config_defaults(&amp;g_tls_ctx.conf,
+                                      MBEDTLS_SSL_IS_CLIENT,
+                                      MBEDTLS_SSL_TRANSPORT_STREAM,
+                                      MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_config_defaults failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 2. 设置认证模式
+    mbedtls_ssl_conf_authmode(&amp;g_tls_ctx.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+
+    // 3. 设置CA证书
+    mbedtls_ssl_conf_ca_chain(&amp;g_tls_ctx.conf, &amp;g_tls_ctx.cacert, NULL);
+
+    // 4. 设置客户端证书（可选，用于双向认证）
+    // mbedtls_ssl_conf_own_cert(&amp;g_tls_ctx.conf, 
+    //                          &amp;g_tls_ctx.clicert, 
+    //                          &amp;g_tls_ctx.pkey);
+
+    // 5. 设置随机数生成器
+    mbedtls_ssl_conf_rng(&amp;g_tls_ctx.conf,
+                        mbedtls_ctr_drbg_random,
+                        &amp;g_tls_ctx.ctr_drbg);
+
+    // 6. 设置调试回调
+    mbedtls_ssl_conf_dbg(&amp;g_tls_ctx.conf, tls_debug_callback, NULL);
+    mbedtls_debug_set_threshold(2);  // 调试级别：0-4
+
+    // 7. 设置超时（DTLS需要）
+    // mbedtls_ssl_conf_handshake_timeout(&amp;g_tls_ctx.conf, 1000, 60000);
+
+    // 8. 应用配置到SSL上下文
+    ret = mbedtls_ssl_setup(&amp;g_tls_ctx.ssl, &amp;g_tls_ctx.conf);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_setup failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 9. 设置主机名（用于SNI和证书验证）
+    ret = mbedtls_ssl_set_hostname(&amp;g_tls_ctx.ssl, hostname);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_set_hostname failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;TLS client configured successfully\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h4 id="33-tls">3.3 建立TLS连接</h4>
+<pre><code class="language-c">/**
+ * @brief 连接到TLS服务器
+ * @param host 服务器地址
+ * @param port 服务器端口
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_connect(const char *host, const char *port) {
+    int ret;
+
+    printf(&quot;Connecting to %s:%s...\n&quot;, host, port);
+
+    // 1. 建立TCP连接
+    ret = mbedtls_net_connect(&amp;g_tls_ctx.server_fd, host, port,
+                             MBEDTLS_NET_PROTO_TCP);
+    if (ret != 0) {
+        printf(&quot;mbedtls_net_connect failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;TCP connection established\n&quot;);
+
+    // 2. 设置BIO回调
+    mbedtls_ssl_set_bio(&amp;g_tls_ctx.ssl, &amp;g_tls_ctx.server_fd,
+                       mbedtls_net_send, mbedtls_net_recv, NULL);
+
+    // 3. 执行TLS握手
+    printf(&quot;Performing TLS handshake...\n&quot;);
+
+    while ((ret = mbedtls_ssl_handshake(&amp;g_tls_ctx.ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &amp;&amp;
+            ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            printf(&quot;mbedtls_ssl_handshake failed: -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+    }
+
+    printf(&quot;TLS handshake completed\n&quot;);
+
+    // 4. 验证服务器证书
+    uint32_t flags = mbedtls_ssl_get_verify_result(&amp;g_tls_ctx.ssl);
+    if (flags != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf),
+                                     &quot;  ! &quot;, flags);
+        printf(&quot;Certificate verification failed:\n%s\n&quot;, vrfy_buf);
+        return -1;
+    }
+
+    printf(&quot;Certificate verification passed\n&quot;);
+
+    // 5. 打印连接信息
+    printf(&quot;TLS connection established:\n&quot;);
+    printf(&quot;  Protocol: %s\n&quot;, mbedtls_ssl_get_version(&amp;g_tls_ctx.ssl));
+    printf(&quot;  Ciphersuite: %s\n&quot;, 
+           mbedtls_ssl_get_ciphersuite(&amp;g_tls_ctx.ssl));
+
+    return 0;
+}
+
+/**
+ * @brief 发送TLS数据
+ * @param data 数据缓冲区
+ * @param len 数据长度
+ * @return 发送的字节数，负数表示错误
+ */
+int tls_send(const unsigned char *data, size_t len) {
+    int ret;
+
+    while ((ret = mbedtls_ssl_write(&amp;g_tls_ctx.ssl, data, len)) &lt;= 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &amp;&amp;
+            ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            printf(&quot;mbedtls_ssl_write failed: -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 接收TLS数据
+ * @param buf 接收缓冲区
+ * @param len 缓冲区大小
+ * @return 接收的字节数，负数表示错误
+ */
+int tls_recv(unsigned char *buf, size_t len) {
+    int ret;
+
+    do {
+        ret = mbedtls_ssl_read(&amp;g_tls_ctx.ssl, buf, len);
+
+        if (ret == MBEDTLS_ERR_SSL_WANT_READ ||
+            ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+            continue;
+        }
+
+        if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+            printf(&quot;Connection closed by peer\n&quot;);
+            return 0;
+        }
+
+        if (ret &lt; 0) {
+            printf(&quot;mbedtls_ssl_read failed: -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+
+        if (ret == 0) {
+            printf(&quot;EOF\n&quot;);
+            return 0;
+        }
+
+        break;
+    } while (1);
+
+    return ret;
+}
+
+/**
+ * @brief 关闭TLS连接
+ */
+void tls_close(void) {
+    int ret;
+
+    printf(&quot;Closing TLS connection...\n&quot;);
+
+    // 发送关闭通知
+    do {
+        ret = mbedtls_ssl_close_notify(&amp;g_tls_ctx.ssl);
+    } while (ret == MBEDTLS_ERR_SSL_WANT_WRITE);
+
+    // 关闭TCP连接
+    mbedtls_net_free(&amp;g_tls_ctx.server_fd);
+
+    printf(&quot;TLS connection closed\n&quot;);
+}
+</code></pre>
+<h4 id="34-tls">3.4 TLS客户端使用示例</h4>
+<pre><code class="language-c">/**
+ * @brief TLS客户端示例
+ */
+void tls_client_example(void) {
+    int ret;
+    unsigned char buf[1024];
+
+    // 1. 初始化mbedTLS
+    ret = tls_init();
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 2. 加载CA证书
+    ret = tls_load_ca_cert();
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 3. 配置TLS客户端
+    ret = tls_config_client(&quot;www.example.com&quot;);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 4. 连接到服务器
+    ret = tls_connect(&quot;www.example.com&quot;, &quot;443&quot;);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 5. 发送HTTPS请求
+    const char *request = 
+        &quot;GET / HTTP/1.1\r\n&quot;
+        &quot;Host: www.example.com\r\n&quot;
+        &quot;Connection: close\r\n&quot;
+        &quot;\r\n&quot;;
+
+    ret = tls_send((const unsigned char *)request, strlen(request));
+    if (ret &lt; 0) {
+        goto exit;
+    }
+
+    printf(&quot;Sent %d bytes\n&quot;, ret);
+
+    // 6. 接收响应
+    printf(&quot;\nReceiving response:\n&quot;);
+    printf(&quot;-----------------------------------\n&quot;);
+
+    do {
+        ret = tls_recv(buf, sizeof(buf) - 1);
+        if (ret &lt;= 0) {
+            break;
+        }
+
+        buf[ret] = '\0';
+        printf(&quot;%s&quot;, buf);
+    } while (1);
+
+    printf(&quot;\n-----------------------------------\n&quot;);
+
+    // 7. 关闭连接
+    tls_close();
+
+exit:
+    // 8. 清理资源
+    tls_cleanup();
+}
+</code></pre>
+<h3 id="4-dtls">步骤4: 实现DTLS通信</h3>
+<p>DTLS用于保护UDP通信，适合实时性要求高的场景。</p>
+<h4 id="41-dtls">4.1 配置DTLS客户端</h4>
+<pre><code class="language-c">/**
+ * @brief 配置DTLS客户端
+ * @param hostname 服务器主机名
+ * @return 0: 成功, 负数: 错误码
+ */
+int dtls_config_client(const char *hostname) {
+    int ret;
+
+    printf(&quot;Configuring DTLS client...\n&quot;);
+
+    // 1. 设置DTLS配置
+    ret = mbedtls_ssl_config_defaults(&amp;g_tls_ctx.conf,
+                                      MBEDTLS_SSL_IS_CLIENT,
+                                      MBEDTLS_SSL_TRANSPORT_DATAGRAM,  // UDP
+                                      MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_config_defaults failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 2. 设置认证模式
+    mbedtls_ssl_conf_authmode(&amp;g_tls_ctx.conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+
+    // 3. 设置CA证书
+    mbedtls_ssl_conf_ca_chain(&amp;g_tls_ctx.conf, &amp;g_tls_ctx.cacert, NULL);
+
+    // 4. 设置随机数生成器
+    mbedtls_ssl_conf_rng(&amp;g_tls_ctx.conf,
+                        mbedtls_ctr_drbg_random,
+                        &amp;g_tls_ctx.ctr_drbg);
+
+    // 5. 设置握手超时（DTLS特有）
+    mbedtls_ssl_conf_handshake_timeout(&amp;g_tls_ctx.conf,
+                                       1000,   // 最小超时：1秒
+                                       60000); // 最大超时：60秒
+
+    // 6. 设置DTLS Cookie（防DoS攻击）
+    // 服务器端需要
+
+    // 7. 设置防重放攻击
+    mbedtls_ssl_conf_dtls_anti_replay(&amp;g_tls_ctx.conf,
+                                      MBEDTLS_SSL_ANTI_REPLAY_ENABLED);
+
+    // 8. 应用配置
+    ret = mbedtls_ssl_setup(&amp;g_tls_ctx.ssl, &amp;g_tls_ctx.conf);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_setup failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    // 9. 设置主机名
+    ret = mbedtls_ssl_set_hostname(&amp;g_tls_ctx.ssl, hostname);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_set_hostname failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;DTLS client configured successfully\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief 连接到DTLS服务器
+ * @param host 服务器地址
+ * @param port 服务器端口
+ * @return 0: 成功, 负数: 错误码
+ */
+int dtls_connect(const char *host, const char *port) {
+    int ret;
+
+    printf(&quot;Connecting to DTLS server %s:%s...\n&quot;, host, port);
+
+    // 1. 建立UDP连接
+    ret = mbedtls_net_connect(&amp;g_tls_ctx.server_fd, host, port,
+                             MBEDTLS_SSL_TRANSPORT_DATAGRAM);
+    if (ret != 0) {
+        printf(&quot;mbedtls_net_connect failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;UDP connection established\n&quot;);
+
+    // 2. 设置BIO回调（DTLS使用特殊的recv_timeout）
+    mbedtls_ssl_set_bio(&amp;g_tls_ctx.ssl, &amp;g_tls_ctx.server_fd,
+                       mbedtls_net_send, mbedtls_net_recv,
+                       mbedtls_net_recv_timeout);
+
+    // 3. 设置定时器回调（DTLS需要）
+    mbedtls_ssl_set_timer_cb(&amp;g_tls_ctx.ssl,
+                            &amp;g_timer,
+                            mbedtls_timing_set_delay,
+                            mbedtls_timing_get_delay);
+
+    // 4. 执行DTLS握手
+    printf(&quot;Performing DTLS handshake...\n&quot;);
+
+    while ((ret = mbedtls_ssl_handshake(&amp;g_tls_ctx.ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &amp;&amp;
+            ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            printf(&quot;mbedtls_ssl_handshake failed: -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+    }
+
+    printf(&quot;DTLS handshake completed\n&quot;);
+
+    // 5. 验证证书
+    uint32_t flags = mbedtls_ssl_get_verify_result(&amp;g_tls_ctx.ssl);
+    if (flags != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf),
+                                     &quot;  ! &quot;, flags);
+        printf(&quot;Certificate verification failed:\n%s\n&quot;, vrfy_buf);
+        return -1;
+    }
+
+    printf(&quot;DTLS connection established\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h4 id="42-dtls">4.2 DTLS数据传输</h4>
+<pre><code class="language-c">/**
+ * @brief 发送DTLS数据
+ * @param data 数据缓冲区
+ * @param len 数据长度
+ * @return 发送的字节数，负数表示错误
+ */
+int dtls_send(const unsigned char *data, size_t len) {
+    int ret;
+
+    // DTLS发送（与TLS类似，但处理UDP特性）
+    while ((ret = mbedtls_ssl_write(&amp;g_tls_ctx.ssl, data, len)) &lt;= 0) {
+        if (ret == MBEDTLS_ERR_SSL_WANT_READ ||
+            ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+            continue;
+        }
+
+        if (ret == MBEDTLS_ERR_SSL_TIMEOUT) {
+            printf(&quot;DTLS send timeout\n&quot;);
+            return ret;
+        }
+
+        printf(&quot;mbedtls_ssl_write failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+/**
+ * @brief 接收DTLS数据
+ * @param buf 接收缓冲区
+ * @param len 缓冲区大小
+ * @param timeout_ms 超时时间（毫秒）
+ * @return 接收的字节数，负数表示错误
+ */
+int dtls_recv(unsigned char *buf, size_t len, uint32_t timeout_ms) {
+    int ret;
+
+    // 设置接收超时
+    mbedtls_ssl_conf_read_timeout(&amp;g_tls_ctx.conf, timeout_ms);
+
+    ret = mbedtls_ssl_read(&amp;g_tls_ctx.ssl, buf, len);
+
+    if (ret == MBEDTLS_ERR_SSL_TIMEOUT) {
+        return 0;  // 超时，无数据
+    }
+
+    if (ret == MBEDTLS_ERR_SSL_WANT_READ ||
+        ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        return 0;  // 需要重试
+    }
+
+    if (ret &lt; 0) {
+        printf(&quot;mbedtls_ssl_read failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    return ret;
+}
+
+/**
+ * @brief DTLS通信示例
+ */
+void dtls_example(void) {
+    int ret;
+    unsigned char send_buf[256];
+    unsigned char recv_buf[256];
+
+    // 1. 初始化
+    ret = tls_init();
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 2. 加载证书
+    ret = tls_load_ca_cert();
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 3. 配置DTLS
+    ret = dtls_config_client(&quot;dtls.server.com&quot;);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 4. 连接
+    ret = dtls_connect(&quot;192.168.1.100&quot;, &quot;4433&quot;);
+    if (ret != 0) {
+        goto exit;
+    }
+
+    // 5. 发送数据
+    const char *message = &quot;Hello from DTLS client!&quot;;
+    snprintf((char *)send_buf, sizeof(send_buf), &quot;%s&quot;, message);
+
+    ret = dtls_send(send_buf, strlen((char *)send_buf));
+    if (ret &lt; 0) {
+        goto exit;
+    }
+
+    printf(&quot;Sent: %s\n&quot;, send_buf);
+
+    // 6. 接收响应
+    ret = dtls_recv(recv_buf, sizeof(recv_buf) - 1, 5000);
+    if (ret &gt; 0) {
+        recv_buf[ret] = '\0';
+        printf(&quot;Received: %s\n&quot;, recv_buf);
+    }
+
+    // 7. 关闭连接
+    tls_close();
+
+exit:
+    tls_cleanup();
+}
+</code></pre>
+<h3 id="5">步骤5: 证书管理</h3>
+<p>证书管理是TLS/DTLS安全的关键。</p>
+<h4 id="51">5.1 证书验证</h4>
+<pre><code class="language-c">/**
+ * @brief 自定义证书验证回调
+ * @param data 用户数据
+ * @param crt 证书
+ * @param depth 证书链深度
+ * @param flags 验证标志
+ * @return 0: 通过, 非0: 失败
+ */
+static int cert_verify_callback(void *data, mbedtls_x509_crt *crt,
+                                int depth, uint32_t *flags) {
+    char buf[1024];
+
+    printf(&quot;\nVerifying certificate at depth %d:\n&quot;, depth);
+
+    // 打印证书信息
+    mbedtls_x509_crt_info(buf, sizeof(buf) - 1, &quot;  &quot;, crt);
+    printf(&quot;%s\n&quot;, buf);
+
+    // 检查证书有效期
+    time_t now = time(NULL);
+    if (now &lt; crt-&gt;valid_from.year ||
+        now &gt; crt-&gt;valid_to.year) {
+        printf(&quot;Certificate expired or not yet valid\n&quot;);
+        *flags |= MBEDTLS_X509_BADCERT_EXPIRED;
+        return -1;
+    }
+
+    // 检查证书用途
+    if (depth == 0) {  // 服务器证书
+        if (!(crt-&gt;ext_types &amp; MBEDTLS_X509_EXT_KEY_USAGE)) {
+            printf(&quot;Certificate missing key usage extension\n&quot;);
+            *flags |= MBEDTLS_X509_BADCERT_KEY_USAGE;
+            return -1;
+        }
+    }
+
+    // 自定义验证逻辑
+    // ...
+
+    return 0;
+}
+
+/**
+ * @brief 设置证书验证回调
+ */
+void tls_set_cert_verify_callback(void) {
+    mbedtls_ssl_conf_verify(&amp;g_tls_ctx.conf,
+                           cert_verify_callback,
+                           NULL);
+}
+</code></pre>
+<h4 id="52-certificate-pinning">5.2 证书固定(Certificate Pinning)</h4>
+<pre><code class="language-c">// 预期的证书指纹（SHA-256）
+const unsigned char expected_cert_hash[32] = {
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0,
+    0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0
+};
+
+/**
+ * @brief 验证证书指纹
+ * @param crt 证书
+ * @return 0: 匹配, -1: 不匹配
+ */
+int verify_cert_pinning(mbedtls_x509_crt *crt) {
+    unsigned char cert_hash[32];
+    int ret;
+
+    // 计算证书的SHA-256哈希
+    ret = mbedtls_sha256_ret(crt-&gt;raw.p, crt-&gt;raw.len, cert_hash, 0);
+    if (ret != 0) {
+        printf(&quot;Failed to calculate certificate hash\n&quot;);
+        return -1;
+    }
+
+    // 比较哈希值
+    if (memcmp(cert_hash, expected_cert_hash, 32) != 0) {
+        printf(&quot;Certificate pinning failed!\n&quot;);
+        printf(&quot;Expected hash: &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, expected_cert_hash[i]);
+        }
+        printf(&quot;\nActual hash:   &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, cert_hash[i]);
+        }
+        printf(&quot;\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;Certificate pinning verified\n&quot;);
+    return 0;
+}
+</code></pre>
+<h4 id="53">5.3 证书链验证</h4>
+<pre><code class="language-c">/**
+ * @brief 验证完整的证书链
+ * @param cert_chain 证书链
+ * @param ca_cert CA证书
+ * @return 0: 成功, 负数: 错误码
+ */
+int verify_cert_chain(mbedtls_x509_crt *cert_chain,
+                     mbedtls_x509_crt *ca_cert) {
+    uint32_t flags;
+    int ret;
+
+    printf(&quot;Verifying certificate chain...\n&quot;);
+
+    // 验证证书链
+    ret = mbedtls_x509_crt_verify(cert_chain, ca_cert, NULL,
+                                  NULL, &amp;flags, NULL, NULL);
+
+    if (ret != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf),
+                                     &quot;  ! &quot;, flags);
+        printf(&quot;Certificate chain verification failed:\n%s\n&quot;, vrfy_buf);
+        return ret;
+    }
+
+    printf(&quot;Certificate chain verified successfully\n&quot;);
+
+    // 打印证书链信息
+    mbedtls_x509_crt *cur = cert_chain;
+    int depth = 0;
+
+    while (cur != NULL) {
+        char buf[1024];
+        mbedtls_x509_crt_info(buf, sizeof(buf) - 1, &quot;  &quot;, cur);
+        printf(&quot;\nCertificate at depth %d:\n%s\n&quot;, depth, buf);
+
+        cur = cur-&gt;next;
+        depth++;
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="6">步骤6: 性能优化</h3>
+<p>在资源受限的嵌入式系统中，需要优化TLS/DTLS性能。</p>
+<h4 id="61">6.1 会话恢复</h4>
+<pre><code class="language-c">// 会话缓存
+static mbedtls_ssl_session saved_session;
+
+/**
+ * @brief 保存TLS会话
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_save_session(void) {
+    int ret;
+
+    printf(&quot;Saving TLS session...\n&quot;);
+
+    // 获取当前会话
+    ret = mbedtls_ssl_get_session(&amp;g_tls_ctx.ssl, &amp;saved_session);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_get_session failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;TLS session saved\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief 恢复TLS会话
+ * @return 0: 成功, 负数: 错误码
+ */
+int tls_resume_session(void) {
+    int ret;
+
+    printf(&quot;Resuming TLS session...\n&quot;);
+
+    // 设置会话
+    ret = mbedtls_ssl_set_session(&amp;g_tls_ctx.ssl, &amp;saved_session);
+    if (ret != 0) {
+        printf(&quot;mbedtls_ssl_set_session failed: -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;TLS session resumed\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief 使用会话恢复的连接示例
+ */
+void tls_session_resume_example(void) {
+    int ret;
+
+    // 第一次连接
+    printf(&quot;\n=== First Connection ===\n&quot;);
+    ret = tls_connect(&quot;www.example.com&quot;, &quot;443&quot;);
+    if (ret != 0) {
+        return;
+    }
+
+    // 保存会话
+    tls_save_session();
+
+    // 关闭连接
+    tls_close();
+
+    // 第二次连接（使用会话恢复）
+    printf(&quot;\n=== Second Connection (Session Resume) ===\n&quot;);
+
+    // 恢复会话
+    tls_resume_session();
+
+    // 重新连接（握手会更快）
+    ret = tls_connect(&quot;www.example.com&quot;, &quot;443&quot;);
+    if (ret != 0) {
+        return;
+    }
+
+    // 检查是否成功恢复会话
+    if (mbedtls_ssl_session_reused(&amp;g_tls_ctx.ssl)) {
+        printf(&quot;Session successfully resumed!\n&quot;);
+        printf(&quot;Handshake time reduced significantly\n&quot;);
+    } else {
+        printf(&quot;Session resume failed, full handshake performed\n&quot;);
+    }
+
+    tls_close();
+}
+</code></pre>
+<h4 id="62">6.2 内存优化</h4>
+<pre><code class="language-c">/**
+ * @brief 配置mbedTLS内存使用
+ */
+void tls_config_memory(void) {
+    // 1. 使用静态内存池
+    static unsigned char memory_buf[40000];
+    mbedtls_memory_buffer_alloc_init(memory_buf, sizeof(memory_buf));
+
+    // 2. 限制最大内容长度
+    // 在mbedtls_config.h中设置：
+    // #define MBEDTLS_SSL_MAX_CONTENT_LEN 4096
+
+    // 3. 禁用不需要的加密套件
+    // 只保留必要的加密算法
+
+    // 4. 使用ROM表（减少RAM使用）
+    // #define MBEDTLS_AES_ROM_TABLES
+
+    printf(&quot;Memory configuration:\n&quot;);
+    printf(&quot;  Buffer size: %d bytes\n&quot;, sizeof(memory_buf));
+    printf(&quot;  Max content length: %d bytes\n&quot;, MBEDTLS_SSL_MAX_CONTENT_LEN);
+}
+
+/**
+ * @brief 获取内存使用情况
+ */
+void tls_print_memory_usage(void) {
+    size_t max_used, max_blocks;
+
+    mbedtls_memory_buffer_alloc_max_get(&amp;max_used, &amp;max_blocks);
+
+    printf(&quot;\nMemory usage:\n&quot;);
+    printf(&quot;  Peak usage: %zu bytes\n&quot;, max_used);
+    printf(&quot;  Peak blocks: %zu\n&quot;, max_blocks);
+}
+</code></pre>
+<h4 id="63">6.3 加密套件选择</h4>
+<pre><code class="language-c">/**
+ * @brief 配置加密套件（优先选择性能好的）
+ */
+void tls_config_ciphersuites(void) {
+    // 推荐的加密套件（按优先级排序）
+    static const int ciphersuites[] = {
+        // 1. ECDHE + AES-GCM（推荐，提供前向安全）
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+
+        // 2. ECDHE + AES-CBC（兼容性好）
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
+
+        // 3. RSA + AES-GCM（无前向安全，但性能好）
+        MBEDTLS_TLS_RSA_WITH_AES_128_GCM_SHA256,
+        MBEDTLS_TLS_RSA_WITH_AES_256_GCM_SHA384,
+
+        0  // 结束标记
+    };
+
+    // 设置加密套件
+    mbedtls_ssl_conf_ciphersuites(&amp;g_tls_ctx.conf, ciphersuites);
+
+    printf(&quot;Configured ciphersuites:\n&quot;);
+    for (int i = 0; ciphersuites[i] != 0; i++) {
+        printf(&quot;  %s\n&quot;, 
+               mbedtls_ssl_get_ciphersuite_name(ciphersuites[i]));
+    }
+}
+
+/**
+ * @brief 选择适合嵌入式的加密套件
+ */
+void tls_config_embedded_ciphersuites(void) {
+    // 嵌入式优化的加密套件
+    static const int embedded_ciphersuites[] = {
+        // 使用AES硬件加速（如果MCU支持）
+        MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA256,
+
+        // 使用较小的密钥长度（平衡安全性和性能）
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+
+        0
+    };
+
+    mbedtls_ssl_conf_ciphersuites(&amp;g_tls_ctx.conf, embedded_ciphersuites);
+}
+</code></pre>
+<h2 id="_8">验证方法</h2>
+<h3 id="1-tls">1. TLS客户端验证</h3>
+<p><strong>测试步骤</strong>：
+1. 编译并下载程序到开发板
+2. 确保开发板已连接到网络
+3. 运行TLS客户端示例
+4. 观察串口输出的连接过程
+5. 验证是否成功建立TLS连接
+6. 验证是否能正确收发数据</p>
+<p><strong>预期结果</strong>：</p>
+<pre><code>Initializing mbedTLS...
+mbedTLS initialized successfully
+Loading CA certificate...
+CA certificate loaded successfully
+Configuring TLS client...
+TLS client configured successfully
+Connecting to www.example.com:443...
+TCP connection established
+Performing TLS handshake...
+TLS handshake completed
+Certificate verification passed
+TLS connection established:
+  Protocol: TLSv1.2
+  Ciphersuite: TLS-ECDHE-RSA-WITH-AES-128-GCM-SHA256
+Sent 78 bytes
+
+Receiving response:
+-----------------------------------
+HTTP/1.1 200 OK
+Content-Type: text/html
+...
+-----------------------------------
+
+Closing TLS connection...
+TLS connection closed
+</code></pre>
+<h3 id="2-dtls">2. DTLS通信验证</h3>
+<p><strong>测试步骤</strong>：
+1. 在PC上启动DTLS测试服务器：</p>
+<pre><code class="language-bash">openssl s_server -dtls1_2 -accept 4433 \
+  -cert server_cert.pem -key server_key.pem \
+  -CAfile ca_cert.pem -Verify 0
+</code></pre>
+<ol start="2">
+<li>运行DTLS客户端程序</li>
+<li>观察握手过程</li>
+<li>发送测试数据</li>
+<li>验证数据是否正确加密传输</li>
+</ol>
+<p><strong>预期结果</strong>：</p>
+<pre><code>Configuring DTLS client...
+DTLS client configured successfully
+Connecting to DTLS server 192.168.1.100:4433...
+UDP connection established
+Performing DTLS handshake...
+DTLS handshake completed
+DTLS connection established
+Sent: Hello from DTLS client!
+Received: Hello from DTLS server!
+</code></pre>
+<h3 id="3">3. 证书验证测试</h3>
+<p><strong>测试步骤</strong>：
+1. 使用有效证书连接，验证通过
+2. 使用过期证书连接，验证失败
+3. 使用自签名证书连接，验证失败
+4. 使用证书固定，验证指纹匹配</p>
+<p><strong>预期结果</strong>：</p>
+<pre><code>Verifying certificate at depth 0:
+  cert. version     : 3
+  serial number     : 01
+  issuer name       : C=CN, ST=Beijing, L=Beijing, O=Test, CN=Test CA
+  subject name      : C=CN, ST=Beijing, L=Beijing, O=Test, CN=192.168.1.100
+  issued  on        : 2024-01-01 00:00:00
+  expires on        : 2025-01-01 00:00:00
+  signed using      : RSA with SHA-256
+  RSA key size      : 2048 bits
+
+Certificate verification passed
+Certificate pinning verified
+</code></pre>
+<h3 id="4">4. 性能测试</h3>
+<p><strong>测试指标</strong>：
+- 握手时间：首次连接 vs 会话恢复
+- 内存使用：峰值内存占用
+- 吞吐量：加密数据传输速率
+- CPU使用率：加密解密开销</p>
+<p><strong>测试方法</strong>：</p>
+<pre><code class="language-c">void tls_performance_test(void) {
+    uint32_t start_time, end_time;
+
+    // 1. 测试握手时间
+    start_time = HAL_GetTick();
+    tls_connect(&quot;www.example.com&quot;, &quot;443&quot;);
+    end_time = HAL_GetTick();
+    printf(&quot;Handshake time: %lu ms\n&quot;, end_time - start_time);
+
+    // 2. 测试吞吐量
+    unsigned char data[1024];
+    memset(data, 0xAA, sizeof(data));
+
+    start_time = HAL_GetTick();
+    for (int i = 0; i &lt; 100; i++) {
+        tls_send(data, sizeof(data));
+    }
+    end_time = HAL_GetTick();
+
+    uint32_t total_bytes = 100 * 1024;
+    uint32_t elapsed_ms = end_time - start_time;
+    float throughput = (float)total_bytes / elapsed_ms;  // KB/s
+
+    printf(&quot;Throughput: %.2f KB/s\n&quot;, throughput);
+
+    // 3. 打印内存使用
+    tls_print_memory_usage();
+
+    tls_close();
+}
+</code></pre>
+<p><strong>预期结果</strong>：</p>
+<pre><code>=== Performance Test Results ===
+Handshake time: 1250 ms
+Throughput: 45.6 KB/s
+
+Memory usage:
+  Peak usage: 28672 bytes
+  Peak blocks: 42
+================================
+</code></pre>
+<h2 id="_9">故障排除</h2>
+<h3 id="1_1">问题1: 握手失败</h3>
+<p><strong>现象</strong>：TLS握手过程中断，返回错误码</p>
+<p><strong>可能原因</strong>：
+1. 证书验证失败
+2. 加密套件不匹配
+3. 网络连接不稳定
+4. 时间不同步</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 启用详细调试
+mbedtls_debug_set_threshold(4);  // 最高调试级别
+
+// 2. 检查错误码
+if (ret != 0) {
+    char error_buf[100];
+    mbedtls_strerror(ret, error_buf, sizeof(error_buf));
+    printf(&quot;Error: %s\n&quot;, error_buf);
+}
+
+// 3. 临时禁用证书验证（仅用于调试）
+mbedtls_ssl_conf_authmode(&amp;g_tls_ctx.conf, MBEDTLS_SSL_VERIFY_NONE);
+
+// 4. 检查系统时间
+time_t now = time(NULL);
+printf(&quot;Current time: %s&quot;, ctime(&amp;now));
+</code></pre>
+<h3 id="2_1">问题2: 内存不足</h3>
+<p><strong>现象</strong>：程序运行一段时间后崩溃或握手失败</p>
+<p><strong>可能原因</strong>：
+1. 内存池太小
+2. 内存泄漏
+3. 缓冲区配置过大</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 增加内存池大小
+static unsigned char memory_buf[60000];  // 从40000增加到60000
+
+// 2. 减小最大内容长度
+#define MBEDTLS_SSL_MAX_CONTENT_LEN 2048  // 从4096减小到2048
+
+// 3. 检查内存泄漏
+void check_memory_leak(void) {
+    size_t before_used, before_blocks;
+    size_t after_used, after_blocks;
+
+    mbedtls_memory_buffer_alloc_cur_get(&amp;before_used, &amp;before_blocks);
+
+    // 执行TLS操作
+    tls_connect(&quot;www.example.com&quot;, &quot;443&quot;);
+    tls_close();
+
+    mbedtls_memory_buffer_alloc_cur_get(&amp;after_used, &amp;after_blocks);
+
+    if (after_used &gt; before_used) {
+        printf(&quot;Memory leak detected: %zu bytes\n&quot;, 
+               after_used - before_used);
+    }
+}
+
+// 4. 使用内存分析工具
+mbedtls_memory_buffer_alloc_status();
+</code></pre>
+<h3 id="3-dtls">问题3: DTLS丢包</h3>
+<p><strong>现象</strong>：DTLS通信不稳定，频繁超时</p>
+<p><strong>可能原因</strong>：
+1. 网络质量差
+2. 超时时间设置不合理
+3. MTU配置问题</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 增加握手超时时间
+mbedtls_ssl_conf_handshake_timeout(&amp;g_tls_ctx.conf,
+                                   2000,    // 最小2秒
+                                   120000); // 最大120秒
+
+// 2. 设置合适的MTU
+mbedtls_ssl_set_mtu(&amp;g_tls_ctx.ssl, 1200);  // 考虑网络MTU
+
+// 3. 启用重传
+// DTLS会自动重传，但可以调整参数
+
+// 4. 监控丢包率
+static uint32_t sent_packets = 0;
+static uint32_t recv_packets = 0;
+
+void dtls_monitor_packet_loss(void) {
+    float loss_rate = 1.0f - (float)recv_packets / sent_packets;
+    printf(&quot;Packet loss rate: %.2f%%\n&quot;, loss_rate * 100);
+
+    if (loss_rate &gt; 0.1f) {  // 丢包率超过10%
+        printf(&quot;Warning: High packet loss!\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="4_1">问题4: 证书验证失败</h3>
+<p><strong>现象</strong>：证书验证返回错误标志</p>
+<p><strong>可能原因</strong>：
+1. CA证书不正确
+2. 证书链不完整
+3. 证书已过期
+4. 主机名不匹配</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 打印详细的验证错误
+uint32_t flags = mbedtls_ssl_get_verify_result(&amp;g_tls_ctx.ssl);
+if (flags != 0) {
+    char vrfy_buf[512];
+    mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), &quot;  ! &quot;, flags);
+    printf(&quot;Verification failed:\n%s\n&quot;, vrfy_buf);
+
+    // 分析具体错误
+    if (flags &amp; MBEDTLS_X509_BADCERT_EXPIRED) {
+        printf(&quot;Certificate has expired\n&quot;);
+    }
+    if (flags &amp; MBEDTLS_X509_BADCERT_CN_MISMATCH) {
+        printf(&quot;CN mismatch\n&quot;);
+    }
+    if (flags &amp; MBEDTLS_X509_BADCERT_NOT_TRUSTED) {
+        printf(&quot;Certificate not trusted\n&quot;);
+    }
+}
+
+// 2. 检查证书链
+mbedtls_x509_crt *cert = mbedtls_ssl_get_peer_cert(&amp;g_tls_ctx.ssl);
+if (cert) {
+    char buf[1024];
+    mbedtls_x509_crt_info(buf, sizeof(buf) - 1, &quot;  &quot;, cert);
+    printf(&quot;Server certificate:\n%s\n&quot;, buf);
+}
+
+// 3. 验证主机名
+const char *expected_cn = &quot;www.example.com&quot;;
+if (mbedtls_x509_crt_check_cn(cert, expected_cn, strlen(expected_cn)) != 0) {
+    printf(&quot;CN mismatch: expected %s\n&quot;, expected_cn);
+}
+</code></pre>
+<h2 id="_10">总结</h2>
+<p>本教程详细介绍了在嵌入式系统中实现安全通信协议的方法：</p>
+<ol>
+<li><strong>TLS/SSL协议</strong>：理解握手流程、加密机制和安全特性</li>
+<li><strong>DTLS协议</strong>：掌握UDP上的安全通信实现</li>
+<li><strong>mbedTLS库</strong>：配置和使用轻量级TLS库</li>
+<li><strong>证书管理</strong>：生成、验证和管理数字证书</li>
+<li><strong>性能优化</strong>：会话恢复、内存优化、加密套件选择</li>
+<li><strong>故障排除</strong>：常见问题的诊断和解决方法</li>
+</ol>
+<p>通过本教程的学习，你应该能够在嵌入式设备上实现安全可靠的网络通信，保护数据传输的机密性和完整性。</p>
+<h2 id="_11">延伸阅读</h2>
+<h3 id="_12">相关教程</h3>
+<ul>
+<li>信息安全基础知识 - 加密算法和安全原理</li>
+<li>密钥管理与存储 - 密钥安全管理</li>
+<li>安全启动与固件验证 - 固件安全</li>
+<li>渗透测试与漏洞分析 - 安全测试方法</li>
+</ul>
+<h3 id="_13">技术文档</h3>
+<ul>
+<li><a href="https://tls.mbed.org/kb">mbedTLS官方文档</a> - mbedTLS知识库</li>
+<li><a href="https://tools.ietf.org/html/rfc5246">RFC 5246 - TLS 1.2</a> - TLS协议规范</li>
+<li><a href="https://tools.ietf.org/html/rfc6347">RFC 6347 - DTLS 1.2</a> - DTLS协议规范</li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Transport_Layer_Protection_Cheat_Sheet.html">OWASP TLS Cheat Sheet</a> - TLS最佳实践</li>
+</ul>
+<h3 id="_14">工具和资源</h3>
+<ul>
+<li><a href="https://www.openssl.org/">OpenSSL</a> - 证书生成和测试工具</li>
+<li><a href="https://www.wireshark.org/">Wireshark</a> - 网络抓包分析</li>
+<li><a href="https://www.ssllabs.com/ssltest/">SSL Labs</a> - SSL/TLS配置测试</li>
+<li><a href="https://testssl.sh/">testssl.sh</a> - TLS/SSL测试脚本</li>
+</ul>
+<h2 id="_15">参考资料</h2>
+<h3 id="_16">标准规范</h3>
+<ol>
+<li>RFC 5246 - The Transport Layer Security (TLS) Protocol Version 1.2</li>
+<li>RFC 6347 - Datagram Transport Layer Security Version 1.2</li>
+<li>RFC 5280 - Internet X.509 Public Key Infrastructure Certificate</li>
+<li>RFC 2818 - HTTP Over TLS</li>
+</ol>
+<h3 id="_17">技术书籍</h3>
+<ol>
+<li>"Bulletproof SSL and TLS" by Ivan Ristić</li>
+<li>"Network Security with OpenSSL" by John Viega et al.</li>
+<li>"Implementing SSL/TLS Using Cryptography and PKI" by Joshua Davies</li>
+</ol>
+<h3 id="_18">在线资源</h3>
+<ol>
+<li>mbedTLS GitHub: https://github.com/ARMmbed/mbedtls</li>
+<li>TLS 1.3 RFC: https://tools.ietf.org/html/rfc8446</li>
+<li>Mozilla SSL Configuration Generator: https://ssl-config.mozilla.org/</li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

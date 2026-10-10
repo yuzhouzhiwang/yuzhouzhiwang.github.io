@@ -1,0 +1,1819 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>CAN总线硬件设计 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/">06-communication-interface-hardware</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#can-vs">CAN vs 其他总线</a></li>
+<li><a href="#can_1">CAN总线的优势</a></li>
+</ul>
+</li>
+<li><a href="#can_2">CAN总线工作原理</a><ul>
+<li><a href="#_3">信号线定义</a></li>
+<li><a href="#_4">基本连接方式</a></li>
+<li><a href="#_5">差分信号原理</a></li>
+<li><a href="#_6">位时序和波特率</a></li>
+<li><a href="#_7">显性位和隐性位</a></li>
+</ul>
+</li>
+<li><a href="#can_3">CAN收发器选型</a><ul>
+<li><a href="#can_4">常用CAN收发器</a></li>
+<li><a href="#_8">收发器引脚定义</a></li>
+</ul>
+</li>
+<li><a href="#_9">终端电阻配置</a><ul>
+<li><a href="#_10">为什么需要终端电阻</a></li>
+<li><a href="#_11">终端电阻值计算</a></li>
+<li><a href="#_12">终端电阻类型</a></li>
+<li><a href="#_13">终端电阻测试</a></li>
+</ul>
+</li>
+<li><a href="#_14">总线拓扑设计</a><ul>
+<li><a href="#_15">标准线性拓扑（推荐）</a></li>
+<li><a href="#_16">错误拓扑（避免）</a></li>
+<li><a href="#_17">布线要求</a></li>
+<li><a href="#pcb">PCB布线建议</a></li>
+</ul>
+</li>
+<li><a href="#_18">硬件电路设计</a><ul>
+<li><a href="#can_5">基本CAN节点电路</a></li>
+<li><a href="#can_6">隔离CAN电路（高可靠性）</a></li>
+<li><a href="#cmc">共模扼流圈（CMC）</a></li>
+<li><a href="#_19">完整节点电路示例</a></li>
+</ul>
+</li>
+<li><a href="#stm32-can">STM32 CAN配置实例</a><ul>
+<li><a href="#_20">硬件初始化</a></li>
+<li><a href="#_21">发送数据</a></li>
+<li><a href="#_22">接收数据</a></li>
+<li><a href="#_23">过滤器配置</a></li>
+</ul>
+</li>
+<li><a href="#_24">常见问题与调试</a><ul>
+<li><a href="#1">问题1：无法通信</a></li>
+<li><a href="#2">问题2：数据错误</a></li>
+<li><a href="#3bus-off">问题3：总线关闭（Bus-Off）</a></li>
+<li><a href="#4">问题4：波形质量差</a></li>
+</ul>
+</li>
+<li><a href="#_25">实用技巧</a><ul>
+<li><a href="#1-can">1. CAN总线监控</a></li>
+<li><a href="#2_1">2. 时间戳功能</a></li>
+<li><a href="#3">3. 自动重传控制</a></li>
+<li><a href="#4_1">4. 优先级管理</a></li>
+</ul>
+</li>
+<li><a href="#_26">性能优化</a><ul>
+<li><a href="#_27">提高吞吐量</a></li>
+<li><a href="#_28">降低延迟</a></li>
+<li><a href="#_29">提高可靠性</a></li>
+</ul>
+</li>
+<li><a href="#_30">总结</a><ul>
+<li><a href="#_31">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_32">实践建议</a><ul>
+<li><a href="#_33">初学者练习</a></li>
+<li><a href="#_34">进阶项目</a></li>
+</ul>
+</li>
+<li><a href="#_35">延伸阅读</a><ul>
+<li><a href="#_36">相关文章</a></li>
+<li><a href="#_37">协议标准</a></li>
+<li><a href="#_38">硬件设计</a></li>
+</ul>
+</li>
+<li><a href="#_39">参考资料</a><ul>
+<li><a href="#_40">数据手册</a></li>
+<li><a href="#_41">技术标准</a></li>
+<li><a href="#_42">在线工具</a></li>
+<li><a href="#_43">开源项目</a></li>
+</ul>
+</li>
+<li><a href="#_44">常见应用场景</a><ul>
+<li><a href="#1_1">1. 汽车电子</a></li>
+<li><a href="#2_2">2. 工业自动化</a></li>
+<li><a href="#3_1">3. 医疗设备</a></li>
+<li><a href="#4_2">4. 农业机械</a></li>
+<li><a href="#5">5. 能源管理</a></li>
+</ul>
+</li>
+<li><a href="#_45">附录</a><ul>
+<li><a href="#a">A. 常用波特率配置表</a></li>
+<li><a href="#b">B. 收发器对比表</a></li>
+<li><a href="#c">C. 故障排查检查清单</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="can">CAN总线硬件设计</h1>
+<h2 id="_1">概述</h2>
+<p>CAN（Controller Area Network，控制器局域网）是由德国Bosch公司开发的一种串行通信协议，专为汽车和工业控制系统设计。CAN总线以其高可靠性、实时性强、抗干扰能力出色的特点，成为汽车电子、工业自动化、医疗设备等领域的标准通信协议。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解CAN总线的工作原理和硬件特性</li>
+<li>掌握差分信号传输和终端电阻配置</li>
+<li>学会CAN收发器的选型和应用</li>
+<li>理解总线拓扑和布线要求</li>
+<li>实现STM32的CAN通信</li>
+<li>掌握CAN总线的调试和故障排查</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="can-vs">CAN vs 其他总线</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>CAN</th>
+<th>UART</th>
+<th>SPI</th>
+<th>I2C</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>通信方式</td>
+<td>多主机</td>
+<td>点对点</td>
+<td>主从</td>
+<td>多主机</td>
+</tr>
+<tr>
+<td>数据线</td>
+<td>2根（CAN_H/CAN_L）</td>
+<td>2根（TX/RX）</td>
+<td>4根</td>
+<td>2根</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>最高1Mbps</td>
+<td>kbps级</td>
+<td>MHz级</td>
+<td>kHz-MHz</td>
+</tr>
+<tr>
+<td>传输距离</td>
+<td>最远10km</td>
+<td>数米</td>
+<td>&lt;1米</td>
+<td>&lt;1米</td>
+</tr>
+<tr>
+<td>抗干扰</td>
+<td>极强</td>
+<td>中等</td>
+<td>弱</td>
+<td>弱</td>
+</tr>
+<tr>
+<td>实时性</td>
+<td>优秀</td>
+<td>一般</td>
+<td>好</td>
+<td>一般</td>
+</tr>
+<tr>
+<td>错误检测</td>
+<td>强大</td>
+<td>简单</td>
+<td>无</td>
+<td>简单</td>
+</tr>
+<tr>
+<td>应用领域</td>
+<td>汽车、工业</td>
+<td>通用</td>
+<td>高速外设</td>
+<td>传感器</td>
+</tr>
+</tbody>
+</table>
+<h3 id="can_1">CAN总线的优势</h3>
+<p><strong>高可靠性</strong>：
+- 差分信号传输，抗干扰能力强
+- 完善的错误检测机制（5种错误检测）
+- 自动重传机制
+- 错误节点自动隔离</p>
+<p><strong>实时性强</strong>：
+- 非破坏性仲裁机制
+- 优先级管理
+- 确定性延迟</p>
+<p><strong>灵活性高</strong>：
+- 多主机架构
+- 支持广播和多播
+- 节点可热插拔
+- 最多支持110个节点</p>
+<p><strong>成本低</strong>：
+- 只需2根线
+- 简化布线
+- 降低连接器成本</p>
+<h2 id="can_2">CAN总线工作原理</h2>
+<h3 id="_3">信号线定义</h3>
+<p>CAN总线使用2根差分信号线进行通信：</p>
+<p><strong>1. CAN_H（CAN High）- 高电平线</strong>
+- 显性位时为高电平（约3.5V）
+- 隐性位时为中间电平（约2.5V）</p>
+<p><strong>2. CAN_L（CAN Low）- 低电平线</strong>
+- 显性位时为低电平（约1.5V）
+- 隐性位时为中间电平（约2.5V）</p>
+<p><strong>差分电压</strong>：</p>
+<pre><code>显性位（逻辑0）：
+CAN_H = 3.5V, CAN_L = 1.5V
+差分电压 = CAN_H - CAN_L = 2.0V
+
+隐性位（逻辑1）：
+CAN_H = 2.5V, CAN_L = 2.5V
+差分电压 = CAN_H - CAN_L = 0V
+
+判决阈值：
+|CAN_H - CAN_L| &gt; 0.9V → 显性位（0）
+|CAN_H - CAN_L| &lt; 0.5V → 隐性位（1）
+</code></pre>
+<h3 id="_4">基本连接方式</h3>
+<p><strong>标准CAN总线拓扑</strong>：</p>
+<pre><code>节点1              节点2              节点3              节点4
+
+MCU                MCU                MCU                MCU
+CAN_TX ──→ TXD    CAN_TX ──→ TXD    CAN_TX ──→ TXD    CAN_TX ──→ TXD
+CAN_RX ←── RXD    CAN_RX ←── RXD    CAN_RX ←── RXD    CAN_RX ←── RXD
+           │                 │                 │                 │
+        收发器            收发器            收发器            收发器
+           │                 │                 │                 │
+        CAN_H ───────────────┼─────────────────┼─────────────────┤
+        CAN_L ───────────────┼─────────────────┼─────────────────┤
+           │                 │                 │                 │
+         120Ω                                                   120Ω
+           │                                                     │
+          GND                                                   GND
+
+终端电阻：总线两端各一个120Ω电阻
+</code></pre>
+<p><strong>关键要点</strong>：
+- 使用双绞线连接
+- 总线两端必须有120Ω终端电阻
+- 所有节点并联连接到主干线
+- 支线长度应尽量短（&lt;30cm）</p>
+<h3 id="_5">差分信号原理</h3>
+<p><strong>为什么使用差分信号</strong>：</p>
+<pre><code>单端信号（如UART）：
+信号线 ────┬─── 接收端
+           │
+干扰 ──→ ──┴─── 干扰直接影响信号
+
+差分信号（CAN）：
+CAN_H ────┬─── 接收端
+          │    （检测差值）
+CAN_L ────┴───
+          │
+干扰 ──→ 同时影响两根线，差值不变
+
+优势：
+- 共模干扰被抵消
+- 抗电磁干扰能力强
+- 可以长距离传输
+- 减少电磁辐射
+</code></pre>
+<p><strong>差分信号波形</strong>：</p>
+<pre><code>显性位（0）和隐性位（1）：
+
+CAN_H: ────┐       ┌────┐       ┌────
+       3.5V│       │2.5V│       │
+           └───────┘    └───────┘
+           显性(0)      隐性(1)
+
+CAN_L: ────┐       ┌────┐       ┌────
+       1.5V│       │2.5V│       │
+           └───────┘    └───────┘
+
+差分:  ────┐       ┌────┐       ┌────
+       2.0V│       │ 0V │       │
+           └───────┘    └───────┘
+            0        1    0
+</code></pre>
+<h3 id="_6">位时序和波特率</h3>
+<p><strong>CAN位时序结构</strong>：</p>
+<pre><code>一个位时间分为4个时间段：
+
+|&lt;────────── 1 Bit Time ──────────&gt;|
+|                                   |
+| SS | PTS | PBS1 | PBS2 |
+|    |     |      |      |
+同步段 传播段 相位段1 相位段2
+     采样点↑
+
+SS (Sync Segment): 同步段，1 TQ
+PTS (Propagation Time Segment): 传播时间段，1-8 TQ
+PBS1 (Phase Buffer Segment 1): 相位缓冲段1，1-8 TQ
+PBS2 (Phase Buffer Segment 2): 相位缓冲段2，2-8 TQ
+
+TQ (Time Quantum): 时间量子，最小时间单位
+</code></pre>
+<p><strong>波特率计算</strong>：</p>
+<pre><code>波特率 = CAN时钟频率 / (预分频器 × 位时间)
+位时间 = SS + PTS + PBS1 + PBS2 (单位：TQ)
+
+示例（STM32，36MHz APB1时钟，500kbps）：
+预分频器 = 4
+位时间 = 1 + 6 + 7 + 4 = 18 TQ
+波特率 = 36MHz / (4 × 18) = 500kbps
+</code></pre>
+<p><strong>标准波特率</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>波特率</th>
+<th>最大距离</th>
+<th>应用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 Mbps</td>
+<td>40m</td>
+<td>高速应用</td>
+</tr>
+<tr>
+<td>500 kbps</td>
+<td>100m</td>
+<td>汽车CAN</td>
+</tr>
+<tr>
+<td>250 kbps</td>
+<td>250m</td>
+<td>工业控制</td>
+</tr>
+<tr>
+<td>125 kbps</td>
+<td>500m</td>
+<td>长距离</td>
+</tr>
+<tr>
+<td>50 kbps</td>
+<td>1km</td>
+<td>超长距离</td>
+</tr>
+<tr>
+<td>20 kbps</td>
+<td>2.5km</td>
+<td>极长距离</td>
+</tr>
+<tr>
+<td>10 kbps</td>
+<td>5km</td>
+<td>最大距离</td>
+</tr>
+<tr>
+<td>5 kbps</td>
+<td>10km</td>
+<td>理论极限</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_7">显性位和隐性位</h3>
+<p><strong>线与逻辑</strong>：</p>
+<pre><code>CAN总线使用&quot;线与&quot;逻辑：
+- 显性位（0）优先于隐性位（1）
+- 任何节点发送显性位，总线就是显性
+- 只有所有节点都发送隐性位，总线才是隐性
+
+节点1发送：  1    0    1    1    0
+节点2发送：  1    1    1    0    1
+总线实际：   1    0    1    0    0
+                  ↑         ↑
+               显性优先   显性优先
+</code></pre>
+<p><strong>仲裁机制</strong>：</p>
+<pre><code>基于标识符的非破坏性仲裁：
+
+节点1 (ID=0x123): 0 0 0 1 0 0 1 0 0 0 1 1
+节点2 (ID=0x456): 0 1 0 0 0 1 0 1 0 1 1 0
+总线实际：        0 0 0 0 0 0 0 0 0 0 1 0
+                    ↑
+                 节点2检测到冲突，停止发送
+                 节点1继续发送（ID更小，优先级更高）
+
+规则：
+- ID越小，优先级越高
+- 失败的节点自动重试
+- 无数据丢失
+</code></pre>
+<h2 id="can_3">CAN收发器选型</h2>
+<h3 id="can_4">常用CAN收发器</h3>
+<p><strong>1. TJA1050（最常用）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>4.75V - 5.25V</td>
+</tr>
+<tr>
+<td>最高速率</td>
+<td>1 Mbps</td>
+</tr>
+<tr>
+<td>节点数</td>
+<td>最多110个</td>
+</tr>
+<tr>
+<td>工作温度</td>
+<td>-40°C ~ +125°C</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>成本低，应用广泛</td>
+</tr>
+</tbody>
+</table>
+<p><strong>2. TJA1051（改进版）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>4.75V - 5.25V</td>
+</tr>
+<tr>
+<td>最高速率</td>
+<td>1 Mbps</td>
+</tr>
+<tr>
+<td>节点数</td>
+<td>最多110个</td>
+</tr>
+<tr>
+<td>工作温度</td>
+<td>-40°C ~ +125°C</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>更好的EMC性能</td>
+</tr>
+</tbody>
+</table>
+<p><strong>3. SN65HVD230（3.3V）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>3.0V - 3.6V</td>
+</tr>
+<tr>
+<td>最高速率</td>
+<td>1 Mbps</td>
+</tr>
+<tr>
+<td>节点数</td>
+<td>最多120个</td>
+</tr>
+<tr>
+<td>工作温度</td>
+<td>-40°C ~ +125°C</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>3.3V供电，低功耗</td>
+</tr>
+</tbody>
+</table>
+<p><strong>4. MCP2551（Microchip）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>4.5V - 5.5V</td>
+</tr>
+<tr>
+<td>最高速率</td>
+<td>1 Mbps</td>
+</tr>
+<tr>
+<td>节点数</td>
+<td>最多112个</td>
+</tr>
+<tr>
+<td>工作温度</td>
+<td>-40°C ~ +125°C</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>兼容TJA1050</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">收发器引脚定义</h3>
+<p><strong>TJA1050引脚图</strong>：</p>
+<pre><code>        TJA1050
+     ┌──────────┐
+TXD ─┤1       8├─ VCC (5V)
+GND ─┤2       7├─ CANH
+VCC ─┤3       6├─ CANL
+RXD ─┤4       5├─ VREF (2.5V)
+     └──────────┘
+
+引脚功能：
+1. TXD: 发送数据输入（来自MCU）
+2. GND: 地
+3. VCC: 电源（5V）
+4. RXD: 接收数据输出（到MCU）
+5. VREF: 参考电压输出（2.5V）
+6. CANL: CAN低电平线
+7. CANH: CAN高电平线
+8. VCC: 电源（5V）
+</code></pre>
+<p><strong>SN65HVD230引脚图</strong>：</p>
+<pre><code>      SN65HVD230
+     ┌──────────┐
+  D ─┤1       8├─ VCC (3.3V)
+GND ─┤2       7├─ CANH
+VCC ─┤3       6├─ CANL
+  R ─┤4       5├─ VREF (1.65V)
+     └──────────┘
+
+引脚功能：
+1. D: 发送数据输入
+2. GND: 地
+3. VCC: 电源（3.3V）
+4. R: 接收数据输出
+5. VREF: 参考电压输出
+6. CANL: CAN低电平线
+7. CANH: CAN高电平线
+8. VCC: 电源（3.3V）
+</code></pre>
+<h2 id="_9">终端电阻配置</h2>
+<h3 id="_10">为什么需要终端电阻</h3>
+<p><strong>信号反射问题</strong>：</p>
+<pre><code>没有终端电阻：
+发送端 ──────────────────→ 开路端
+        信号反射 ←──────────
+
+结果：
+- 信号振铃
+- 波形失真
+- 通信错误
+
+有终端电阻：
+发送端 ──────────────────→ 120Ω ─ GND
+        信号被吸收
+
+结果：
+- 波形清晰
+- 无反射
+- 通信可靠
+</code></pre>
+<h3 id="_11">终端电阻值计算</h3>
+<p><strong>理论计算</strong>：</p>
+<pre><code>CAN总线特性阻抗 ≈ 120Ω
+
+终端电阻 = 特性阻抗 = 120Ω
+
+两个120Ω并联：
+总阻抗 = 120Ω || 120Ω = 60Ω
+
+总线空闲时电流：
+I = 5V / 60Ω ≈ 83mA
+</code></pre>
+<p><strong>标准配置</strong>：</p>
+<pre><code>总线两端各一个120Ω电阻：
+
+节点1                                    节点N
+  │                                        │
+120Ω ─┬─ CAN_H ─────────────────────┬─ 120Ω
+      │                              │
+120Ω ─┴─ CAN_L ─────────────────────┴─ 120Ω
+  │                                    │
+ GND                                  GND
+
+注意：
+- 只在总线两端放置
+- 中间节点不需要终端电阻
+- 使用1/4W或更高功率的电阻
+</code></pre>
+<h3 id="_12">终端电阻类型</h3>
+<p><strong>1. 标准终端（最常用）</strong>：</p>
+<pre><code>CAN_H ─┬─ 120Ω ─┬─ GND
+       │        │
+CAN_L ─┴────────┘
+
+优点：简单、可靠
+缺点：功耗较高（83mA）
+</code></pre>
+<p><strong>2. 分压终端（低功耗）</strong>：</p>
+<pre><code>VCC (5V)
+  │
+  ├─ 60Ω ─┬─ CAN_H
+  │       │
+  ├─ 60Ω ─┴─ CAN_L
+  │       │
+  └─ 60Ω ─┴─ GND
+
+优点：降低功耗
+缺点：需要3个电阻
+</code></pre>
+<p><strong>3. 可切换终端</strong>：</p>
+<pre><code>CAN_H ─┬─ 开关 ─┬─ 120Ω ─┬─ GND
+       │        │        │
+CAN_L ─┴────────┴────────┘
+
+优点：灵活配置
+缺点：增加复杂度
+应用：可移动节点
+</code></pre>
+<h3 id="_13">终端电阻测试</h3>
+<p><strong>测量方法</strong>：</p>
+<pre><code class="language-c">// 1. 断电测量
+// 用万用表测量CAN_H和CAN_L之间的电阻
+// 应该约为60Ω（两个120Ω并联）
+
+// 2. 上电测量
+// 测量CAN_H和CAN_L的电压
+// 空闲时应该都约为2.5V
+
+// 3. 示波器观察
+// 观察CAN信号波形
+// 应该无振铃、无过冲
+</code></pre>
+<p><strong>常见问题</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>可能原因</th>
+<th>解决方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>通信不稳定</td>
+<td>缺少终端电阻</td>
+<td>添加120Ω电阻</td>
+</tr>
+<tr>
+<td>波形振铃</td>
+<td>终端电阻值不对</td>
+<td>使用标准120Ω</td>
+</tr>
+<tr>
+<td>功耗过高</td>
+<td>终端电阻过小</td>
+<td>检查电阻值</td>
+</tr>
+<tr>
+<td>信号幅度小</td>
+<td>终端电阻过大</td>
+<td>使用120Ω</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_14">总线拓扑设计</h2>
+<h3 id="_15">标准线性拓扑（推荐）</h3>
+<pre><code>主干线（双绞线）
+═══════════════════════════════════════════════
+120Ω                                        120Ω
+  │                                           │
+节点1    节点2    节点3    节点4    节点5    节点6
+  │       │        │        │        │        │
+支线     支线     支线     支线     支线     支线
+(&lt;30cm) (&lt;30cm) (&lt;30cm) (&lt;30cm) (&lt;30cm) (&lt;30cm)
+
+优点：
+- 信号质量好
+- 易于布线
+- 易于维护
+
+要求：
+- 主干线使用双绞线
+- 支线尽量短（&lt;30cm）
+- 两端有终端电阻
+</code></pre>
+<h3 id="_16">错误拓扑（避免）</h3>
+<p><strong>星型拓扑（不推荐）</strong>：</p>
+<pre><code>        节点1
+          │
+    节点2─┼─节点3
+          │
+        节点4
+
+问题：
+- 信号反射严重
+- 通信不可靠
+- 不符合CAN标准
+</code></pre>
+<p><strong>环形拓扑（不推荐）</strong>：</p>
+<pre><code>节点1 ─ 节点2
+  │       │
+节点4 ─ 节点3
+
+问题：
+- 无法正确终端
+- 信号环路
+- 不符合标准
+</code></pre>
+<h3 id="_17">布线要求</h3>
+<p><strong>1. 使用双绞线</strong>：</p>
+<pre><code>推荐规格：
+- 特性阻抗：120Ω ± 5%
+- 线径：0.5mm² - 0.75mm²
+- 绞距：约20mm
+- 屏蔽：可选（高干扰环境推荐）
+
+常用型号：
+- CANBUS线缆
+- CAT5网线（应急）
+</code></pre>
+<p><strong>2. 长度限制</strong>：</p>
+<pre><code>波特率与最大长度的关系：
+
+1 Mbps  → 40m
+500 kbps → 100m
+250 kbps → 250m
+125 kbps → 500m
+50 kbps  → 1km
+20 kbps  → 2.5km
+10 kbps  → 5km
+5 kbps   → 10km
+
+公式（近似）：
+最大长度(m) ≈ 50,000 / 波特率(kbps)
+</code></pre>
+<p><strong>3. 支线长度</strong>：</p>
+<pre><code>支线（Stub）长度限制：
+
+波特率      最大支线长度
+1 Mbps      30cm
+500 kbps    30cm
+250 kbps    60cm
+125 kbps    120cm
+50 kbps     300cm
+
+建议：
+- 尽量短
+- 所有支线长度总和 &lt; 主干线长度
+</code></pre>
+<p><strong>4. 节点数量</strong>：</p>
+<pre><code>理论最大：110个节点
+实际推荐：&lt;32个节点
+
+限制因素：
+- 总线负载
+- 收发器驱动能力
+- 信号延迟
+</code></pre>
+<h3 id="pcb">PCB布线建议</h3>
+<p><strong>1. 差分对布线</strong>：</p>
+<pre><code>CAN_H和CAN_L应该：
+- 平行走线
+- 等长（误差&lt;5mm）
+- 间距一致（5-10mil）
+- 避免分叉
+</code></pre>
+<p><strong>2. 地平面</strong>：</p>
+<pre><code>信号线下方保留完整地平面：
+- 提供回流路径
+- 减少EMI
+- 改善信号完整性
+</code></pre>
+<p><strong>3. 去耦电容</strong>：</p>
+<pre><code>收发器电源引脚附近：
+VCC ─┬─ 0.1μF ─┬─ GND
+     └─ 10μF ──┘
+
+位置：
+- 尽量靠近芯片
+- 0.1μF高频去耦
+- 10μF低频去耦
+</code></pre>
+<p><strong>4. ESD保护</strong>：</p>
+<pre><code>外部接口处添加TVS二极管：
+
+CAN_H ──┬─────────→ 接口
+        │
+        ├─ TVS ─┬─ GND
+        │       │
+CAN_L ──┴───────┘
+
+推荐型号：
+- PESD2CAN（双通道）
+- TPD2ECAN（双通道）
+</code></pre>
+<h2 id="_18">硬件电路设计</h2>
+<h3 id="can_5">基本CAN节点电路</h3>
+<p><strong>STM32 + TJA1050电路</strong>：</p>
+<pre><code>STM32F103                TJA1050              CAN总线
+
+PA11 (CAN_RX) ──→ RXD ─┤4                    
+PA12 (CAN_TX) ──→ TXD ─┤1                    
+                        │                     
+5V ──┬─ 0.1μF ─┬─ VCC ─┤3,8                  
+     └─ 10μF ──┘        │                     
+                        │                     
+GND ────────────── GND ─┤2                    
+                        │                     
+                     CANH┤7 ──┬─────────→ CAN_H
+                        │    │
+                     CANL┤6 ──┴─────────→ CAN_L
+                        │
+                    VREF┤5 (悬空或接0.1μF到GND)
+
+终端电阻（总线两端）：
+CAN_H ─┬─ 120Ω ─┬─ GND
+       │        │
+CAN_L ─┴────────┘
+</code></pre>
+<p><strong>3.3V系统 + SN65HVD230电路</strong>：</p>
+<pre><code>STM32F103              SN65HVD230            CAN总线
+
+PA11 (CAN_RX) ──→ R ───┤4                    
+PA12 (CAN_TX) ──→ D ───┤1                    
+                        │                     
+3.3V ─┬─ 0.1μF ─┬─ VCC ┤3,8                  
+      └─ 10μF ──┘       │                     
+                        │                     
+GND ───────────── GND ──┤2                    
+                        │                     
+                    CANH┤7 ──┬─────────→ CAN_H
+                        │    │
+                    CANL┤6 ──┴─────────→ CAN_L
+                        │
+                   VREF ┤5 (悬空或接0.1μF到GND)
+</code></pre>
+<h3 id="can_6">隔离CAN电路（高可靠性）</h3>
+<p><strong>光耦隔离方案</strong>：</p>
+<pre><code>MCU侧（3.3V）          隔离侧（5V）          CAN总线
+
+CAN_TX ──→ 光耦 ──→ TXD ─┤TJA1050            
+CAN_RX ←── 光耦 ←── RXD ─┤                   
+                          │                   
+3.3V                   5V ┤VCC                
+                          │                   
+GND1                  GND2┤GND ──→ CAN_H/CAN_L
+
+隔离电源：
+- DC-DC隔离模块
+- 或独立5V电源
+
+优点：
+- 保护MCU
+- 隔离地环路
+- 提高可靠性
+
+应用：
+- 工业控制
+- 医疗设备
+- 高压环境
+</code></pre>
+<h3 id="cmc">共模扼流圈（CMC）</h3>
+<p><strong>EMC改善电路</strong>：</p>
+<pre><code>收发器                CMC                  接口
+
+CANH ──→ ┌───┐ ──→ TVS ──→ 接口
+         │CMC│
+CANL ──→ └───┘ ──→ TVS ──→ 接口
+
+共模扼流圈参数：
+- 阻抗：&gt;100Ω @ 100MHz
+- 差模阻抗：&lt;5Ω
+- 额定电流：&gt;100mA
+
+作用：
+- 抑制共模干扰
+- 改善EMC性能
+- 保护总线
+</code></pre>
+<h3 id="_19">完整节点电路示例</h3>
+<pre><code>┌─────────────────────────────────────────────┐
+│                 CAN节点                      │
+│                                              │
+│  STM32F103                                   │
+│  ┌────────┐                                  │
+│  │        │ PA11 ──→ RXD                     │
+│  │  MCU   │ PA12 ──→ TXD                     │
+│  │        │              ┌──────────┐        │
+│  └────────┘              │ TJA1050  │        │
+│                          │          │        │
+│  5V ─┬─ 0.1μF ─┬─ VCC ──┤VCC       │        │
+│      └─ 10μF ──┘         │          │        │
+│                          │      CANH├──┬─→ 接口
+│  GND ──────────── GND ───┤GND       │  │     │
+│                          │      CANL├──┴─→ 接口
+│                          └──────────┘  │     │
+│                                        │     │
+│  终端电阻（可选）：                     │     │
+│  ┌─ 跳线 ─┬─ 120Ω ─┬─ GND             │     │
+│  │        │        │                   │     │
+│  └────────┴────────┘                   │     │
+│                                        │     │
+│  ESD保护：                              │     │
+│  CAN_H ──┬─ TVS ─┬─ GND               │     │
+│          │       │                     │     │
+│  CAN_L ──┴───────┘                     │     │
+│                                        │     │
+└────────────────────────────────────────┼─────┘
+                                         │
+                                    CAN总线
+</code></pre>
+<h2 id="stm32-can">STM32 CAN配置实例</h2>
+<h3 id="_20">硬件初始化</h3>
+<p><strong>GPIO和CAN外设配置</strong>：</p>
+<pre><code class="language-c">// 1. 使能时钟
+RCC-&gt;APB1ENR |= RCC_APB1ENR_CAN1EN;   // CAN1时钟
+RCC-&gt;APB2ENR |= RCC_APB2ENR_IOPAEN;   // GPIOA时钟
+
+// 2. 配置GPIO（复用推挽输出）
+// PA11 (CAN_RX) - 浮空输入
+GPIOA-&gt;CRH &amp;= ~(0xF &lt;&lt; 12);
+GPIOA-&gt;CRH |= (0x4 &lt;&lt; 12);
+
+// PA12 (CAN_TX) - 复用推挽输出，50MHz
+GPIOA-&gt;CRH &amp;= ~(0xF &lt;&lt; 16);
+GPIOA-&gt;CRH |= (0xB &lt;&lt; 16);
+
+// 3. 进入初始化模式
+CAN1-&gt;MCR |= CAN_MCR_INRQ;
+while (!(CAN1-&gt;MSR &amp; CAN_MSR_INAK));  // 等待进入初始化模式
+
+// 4. 退出睡眠模式
+CAN1-&gt;MCR &amp;= ~CAN_MCR_SLEEP;
+while (CAN1-&gt;MSR &amp; CAN_MSR_SLAK);
+
+// 5. 配置位时序（500kbps，36MHz APB1时钟）
+// 预分频器 = 4, BS1 = 6, BS2 = 7, SJW = 1
+// 位时间 = (1 + 6 + 7) × 4 / 36MHz = 1.556μs ≈ 500kbps
+CAN1-&gt;BTR = (3 &lt;&lt; 0) |   // BRP: 预分频器-1 = 3 (分频4)
+            (6 &lt;&lt; 16) |  // TS1: 时间段1 = 6
+            (7 &lt;&lt; 20) |  // TS2: 时间段2 = 7
+            (0 &lt;&lt; 24);   // SJW: 重同步跳跃宽度 = 1
+
+// 6. 配置工作模式
+CAN1-&gt;MCR &amp;= ~CAN_MCR_TTCM;  // 禁用时间触发模式
+CAN1-&gt;MCR &amp;= ~CAN_MCR_ABOM;  // 禁用自动离线管理
+CAN1-&gt;MCR &amp;= ~CAN_MCR_AWUM;  // 禁用自动唤醒
+CAN1-&gt;MCR &amp;= ~CAN_MCR_NART;  // 使能自动重传
+CAN1-&gt;MCR &amp;= ~CAN_MCR_RFLM;  // 接收FIFO锁定模式
+CAN1-&gt;MCR &amp;= ~CAN_MCR_TXFP;  // 发送FIFO优先级
+
+// 7. 配置过滤器（接收所有消息）
+CAN1-&gt;FMR |= CAN_FMR_FINIT;  // 进入过滤器初始化模式
+
+// 过滤器0：接收所有标准帧
+CAN1-&gt;FA1R |= (1 &lt;&lt; 0);      // 激活过滤器0
+CAN1-&gt;FM1R &amp;= ~(1 &lt;&lt; 0);     // 标识符屏蔽模式
+CAN1-&gt;FS1R |= (1 &lt;&lt; 0);      // 32位模式
+CAN1-&gt;FFA1R &amp;= ~(1 &lt;&lt; 0);    // 分配到FIFO0
+
+CAN1-&gt;sFilterRegister[0].FR1 = 0x00000000;  // 标识符
+CAN1-&gt;sFilterRegister[0].FR2 = 0x00000000;  // 屏蔽码（接收所有）
+
+CAN1-&gt;FMR &amp;= ~CAN_FMR_FINIT;  // 退出过滤器初始化模式
+
+// 8. 退出初始化模式
+CAN1-&gt;MCR &amp;= ~CAN_MCR_INRQ;
+while (CAN1-&gt;MSR &amp; CAN_MSR_INAK);  // 等待退出初始化模式
+</code></pre>
+<h3 id="_21">发送数据</h3>
+<pre><code class="language-c">// CAN发送函数
+bool CAN_Transmit(uint32_t id, uint8_t *data, uint8_t len) {
+    // 检查发送邮箱是否空闲
+    if (!(CAN1-&gt;TSR &amp; CAN_TSR_TME0)) {
+        return false;  // 邮箱0忙
+    }
+
+    // 配置标识符（标准帧）
+    CAN1-&gt;sTxMailBox[0].TIR = (id &lt;&lt; 21);  // 标准ID
+
+    // 配置数据长度
+    CAN1-&gt;sTxMailBox[0].TDTR = len;
+
+    // 填充数据
+    CAN1-&gt;sTxMailBox[0].TDLR = (data[3] &lt;&lt; 24) | (data[2] &lt;&lt; 16) |
+                                (data[1] &lt;&lt; 8)  | data[0];
+    CAN1-&gt;sTxMailBox[0].TDHR = (data[7] &lt;&lt; 24) | (data[6] &lt;&lt; 16) |
+                                (data[5] &lt;&lt; 8)  | data[4];
+
+    // 请求发送
+    CAN1-&gt;sTxMailBox[0].TIR |= CAN_TI0R_TXRQ;
+
+    // 等待发送完成（可选）
+    uint32_t timeout = 1000;
+    while (!(CAN1-&gt;TSR &amp; CAN_TSR_RQCP0) &amp;&amp; timeout--);
+
+    if (timeout == 0) {
+        return false;  // 超时
+    }
+
+    // 清除请求完成标志
+    CAN1-&gt;TSR |= CAN_TSR_RQCP0;
+
+    return true;
+}
+
+// 使用示例
+void CAN_SendExample(void) {
+    uint8_t data[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+
+    if (CAN_Transmit(0x123, data, 8)) {
+        printf(&quot;CAN message sent\n&quot;);
+    } else {
+        printf(&quot;CAN send failed\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="_22">接收数据</h3>
+<pre><code class="language-c">// CAN接收函数
+bool CAN_Receive(uint32_t *id, uint8_t *data, uint8_t *len) {
+    // 检查FIFO0是否有消息
+    if (!(CAN1-&gt;RF0R &amp; CAN_RF0R_FMP0)) {
+        return false;  // FIFO0空
+    }
+
+    // 读取标识符
+    *id = (CAN1-&gt;sFIFOMailBox[0].RIR &gt;&gt; 21) &amp; 0x7FF;
+
+    // 读取数据长度
+    *len = CAN1-&gt;sFIFOMailBox[0].RDTR &amp; 0x0F;
+
+    // 读取数据
+    uint32_t low = CAN1-&gt;sFIFOMailBox[0].RDLR;
+    uint32_t high = CAN1-&gt;sFIFOMailBox[0].RDHR;
+
+    data[0] = (low &gt;&gt; 0) &amp; 0xFF;
+    data[1] = (low &gt;&gt; 8) &amp; 0xFF;
+    data[2] = (low &gt;&gt; 16) &amp; 0xFF;
+    data[3] = (low &gt;&gt; 24) &amp; 0xFF;
+    data[4] = (high &gt;&gt; 0) &amp; 0xFF;
+    data[5] = (high &gt;&gt; 8) &amp; 0xFF;
+    data[6] = (high &gt;&gt; 16) &amp; 0xFF;
+    data[7] = (high &gt;&gt; 24) &amp; 0xFF;
+
+    // 释放FIFO
+    CAN1-&gt;RF0R |= CAN_RF0R_RFOM0;
+
+    return true;
+}
+
+// 使用示例（轮询方式）
+void CAN_ReceiveExample(void) {
+    uint32_t id;
+    uint8_t data[8];
+    uint8_t len;
+
+    if (CAN_Receive(&amp;id, data, &amp;len)) {
+        printf(&quot;Received CAN message:\n&quot;);
+        printf(&quot;ID: 0x%03X\n&quot;, id);
+        printf(&quot;Length: %d\n&quot;, len);
+        printf(&quot;Data: &quot;);
+        for (int i = 0; i &lt; len; i++) {
+            printf(&quot;%02X &quot;, data[i]);
+        }
+        printf(&quot;\n&quot;);
+    }
+}
+
+// 中断方式接收
+void CAN1_RX0_IRQHandler(void) {
+    uint32_t id;
+    uint8_t data[8];
+    uint8_t len;
+
+    if (CAN_Receive(&amp;id, data, &amp;len)) {
+        // 处理接收到的数据
+        ProcessCANMessage(id, data, len);
+    }
+}
+</code></pre>
+<h3 id="_23">过滤器配置</h3>
+<pre><code class="language-c">// 配置过滤器接收特定ID
+void CAN_FilterConfig(uint32_t id, uint32_t mask) {
+    CAN1-&gt;FMR |= CAN_FMR_FINIT;  // 进入过滤器初始化模式
+
+    // 过滤器0：标识符列表模式
+    CAN1-&gt;FA1R |= (1 &lt;&lt; 0);      // 激活过滤器0
+    CAN1-&gt;FM1R |= (1 &lt;&lt; 0);      // 标识符列表模式
+    CAN1-&gt;FS1R |= (1 &lt;&lt; 0);      // 32位模式
+    CAN1-&gt;FFA1R &amp;= ~(1 &lt;&lt; 0);    // 分配到FIFO0
+
+    // 设置标识符（标准帧）
+    CAN1-&gt;sFilterRegister[0].FR1 = (id &lt;&lt; 21);
+    CAN1-&gt;sFilterRegister[0].FR2 = (mask &lt;&lt; 21);
+
+    CAN1-&gt;FMR &amp;= ~CAN_FMR_FINIT;  // 退出过滤器初始化模式
+}
+
+// 配置多个ID过滤
+void CAN_FilterMultipleIDs(void) {
+    CAN1-&gt;FMR |= CAN_FMR_FINIT;
+
+    // 过滤器0：接收ID 0x100-0x10F
+    CAN1-&gt;FA1R |= (1 &lt;&lt; 0);
+    CAN1-&gt;FM1R &amp;= ~(1 &lt;&lt; 0);     // 屏蔽模式
+    CAN1-&gt;FS1R |= (1 &lt;&lt; 0);      // 32位
+    CAN1-&gt;FFA1R &amp;= ~(1 &lt;&lt; 0);    // FIFO0
+
+    CAN1-&gt;sFilterRegister[0].FR1 = (0x100 &lt;&lt; 21);  // ID
+    CAN1-&gt;sFilterRegister[0].FR2 = (0x7F0 &lt;&lt; 21);  // Mask (低4位不关心)
+
+    // 过滤器1：接收ID 0x200
+    CAN1-&gt;FA1R |= (1 &lt;&lt; 1);
+    CAN1-&gt;FM1R |= (1 &lt;&lt; 1);      // 列表模式
+    CAN1-&gt;FS1R |= (1 &lt;&lt; 1);      // 32位
+    CAN1-&gt;FFA1R |= (1 &lt;&lt; 1);     // FIFO1
+
+    CAN1-&gt;sFilterRegister[1].FR1 = (0x200 &lt;&lt; 21);
+    CAN1-&gt;sFilterRegister[1].FR2 = (0x300 &lt;&lt; 21);
+
+    CAN1-&gt;FMR &amp;= ~CAN_FMR_FINIT;
+}
+</code></pre>
+<h2 id="_24">常见问题与调试</h2>
+<h3 id="1">问题1：无法通信</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>缺少终端电阻</strong>
+   - 检查：用万用表测量CAN_H和CAN_L之间电阻
+   - 应该约为60Ω
+   - 解决：在总线两端添加120Ω电阻</p>
+</li>
+<li>
+<p><strong>波特率不匹配</strong>
+   - 检查：所有节点波特率必须一致
+   - 解决：统一配置为相同波特率</p>
+</li>
+<li>
+<p><strong>接线错误</strong>
+   - 检查：CAN_H连CAN_H，CAN_L连CAN_L
+   - 解决：检查并纠正接线</p>
+</li>
+<li>
+<p><strong>收发器故障</strong>
+   - 检查：测量收发器电源和信号
+   - 解决：更换收发器</p>
+</li>
+</ol>
+<p><strong>调试步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查CAN控制器状态
+void Debug_CheckCANStatus(void) {
+    if (CAN1-&gt;MSR &amp; CAN_MSR_INAK) {
+        printf(&quot;CAN in initialization mode\n&quot;);
+    }
+    if (CAN1-&gt;ESR &amp; CAN_ESR_BOFF) {
+        printf(&quot;CAN bus-off\n&quot;);
+    }
+    if (CAN1-&gt;ESR &amp; CAN_ESR_EPVF) {
+        printf(&quot;CAN error passive\n&quot;);
+    }
+    if (CAN1-&gt;ESR &amp; CAN_ESR_EWGF) {
+        printf(&quot;CAN error warning\n&quot;);
+    }
+}
+
+// 2. 测量总线电压
+void Debug_MeasureBusVoltage(void) {
+    printf(&quot;Measure CAN_H and CAN_L voltage:\n&quot;);
+    printf(&quot;Idle: Both should be ~2.5V\n&quot;);
+    printf(&quot;Dominant: CAN_H ~3.5V, CAN_L ~1.5V\n&quot;);
+}
+
+// 3. 回环测试
+void Debug_LoopbackTest(void) {
+    // 配置为回环模式
+    CAN1-&gt;BTR |= CAN_BTR_LBKM;
+
+    // 发送测试消息
+    uint8_t data[8] = {0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA, 0x55, 0xAA};
+    CAN_Transmit(0x123, data, 8);
+
+    // 尝试接收
+    uint32_t id;
+    uint8_t rx_data[8];
+    uint8_t len;
+
+    if (CAN_Receive(&amp;id, rx_data, &amp;len)) {
+        printf(&quot;Loopback test OK\n&quot;);
+    } else {
+        printf(&quot;Loopback test FAILED\n&quot;);
+    }
+
+    // 退出回环模式
+    CAN1-&gt;BTR &amp;= ~CAN_BTR_LBKM;
+}
+</code></pre>
+<h3 id="2">问题2：数据错误</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>EMI干扰</strong>
+   - 检查：走线是否靠近干扰源
+   - 解决：重新布线，添加共模扼流圈</p>
+</li>
+<li>
+<p><strong>总线过长</strong>
+   - 检查：总线长度是否超过限制
+   - 解决：降低波特率或缩短总线</p>
+</li>
+<li>
+<p><strong>节点过多</strong>
+   - 检查：节点数量是否过多
+   - 解决：减少节点或使用中继器</p>
+</li>
+</ol>
+<p><strong>错误计数器监控</strong>：</p>
+<pre><code class="language-c">void Monitor_ErrorCounters(void) {
+    uint8_t tec = (CAN1-&gt;ESR &gt;&gt; 16) &amp; 0xFF;  // 发送错误计数
+    uint8_t rec = (CAN1-&gt;ESR &gt;&gt; 24) &amp; 0xFF;  // 接收错误计数
+
+    printf(&quot;TEC: %d, REC: %d\n&quot;, tec, rec);
+
+    if (tec &gt; 127 || rec &gt; 127) {
+        printf(&quot;Warning: Error passive state\n&quot;);
+    }
+    if (tec &gt; 255) {
+        printf(&quot;Error: Bus-off state\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="3bus-off">问题3：总线关闭（Bus-Off）</h3>
+<p><strong>原因</strong>：
+- 发送错误计数器 &gt; 255
+- 通常由于硬件故障或配置错误</p>
+<p><strong>恢复方法</strong>：</p>
+<pre><code class="language-c">void CAN_BusOffRecovery(void) {
+    // 检查是否处于Bus-Off状态
+    if (CAN1-&gt;ESR &amp; CAN_ESR_BOFF) {
+        printf(&quot;Bus-Off detected, attempting recovery...\n&quot;);
+
+        // 方法1：软件复位
+        CAN1-&gt;MCR |= CAN_MCR_RESET;
+        HAL_Delay(10);
+
+        // 重新初始化
+        CAN_Init();
+
+        // 方法2：自动离线管理（ABOM）
+        // CAN1-&gt;MCR |= CAN_MCR_ABOM;
+        // 硬件会自动尝试恢复
+    }
+}
+</code></pre>
+<h3 id="4">问题4：波形质量差</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>终端电阻不正确</strong>
+   - 检查：测量总线阻抗
+   - 解决：使用标准120Ω电阻</p>
+</li>
+<li>
+<p><strong>走线过长或不规范</strong>
+   - 检查：支线长度、双绞线使用
+   - 解决：优化布线</p>
+</li>
+<li>
+<p><strong>地环路</strong>
+   - 检查：多点接地
+   - 解决：单点接地或使用隔离</p>
+</li>
+</ol>
+<p><strong>示波器测试</strong>：</p>
+<pre><code>理想波形：
+CAN_H: ────┐       ┌────
+       3.5V│       │2.5V
+           └───────┘
+
+CAN_L: ────┐       ┌────
+       1.5V│       │2.5V
+           └───────┘
+
+检查项：
+- 上升/下降时间 &lt; 50ns
+- 无振铃
+- 无过冲
+- 差分电压 ≈ 2V（显性位）
+</code></pre>
+<h2 id="_25">实用技巧</h2>
+<h3 id="1-can">1. CAN总线监控</h3>
+<pre><code class="language-c">// 静默模式（只监听，不发送）
+void CAN_SilentMode(void) {
+    CAN1-&gt;BTR |= CAN_BTR_SILM;
+
+    // 现在可以接收但不能发送
+    // 用于总线监控和分析
+}
+
+// 监控所有消息
+void CAN_MonitorAll(void) {
+    // 配置过滤器接收所有消息
+    CAN1-&gt;FMR |= CAN_FMR_FINIT;
+
+    CAN1-&gt;FA1R |= (1 &lt;&lt; 0);
+    CAN1-&gt;FM1R &amp;= ~(1 &lt;&lt; 0);     // 屏蔽模式
+    CAN1-&gt;FS1R |= (1 &lt;&lt; 0);
+    CAN1-&gt;FFA1R &amp;= ~(1 &lt;&lt; 0);
+
+    CAN1-&gt;sFilterRegister[0].FR1 = 0x00000000;
+    CAN1-&gt;sFilterRegister[0].FR2 = 0x00000000;  // 接收所有
+
+    CAN1-&gt;FMR &amp;= ~CAN_FMR_FINIT;
+
+    // 进入静默模式
+    CAN_SilentMode();
+}
+</code></pre>
+<h3 id="2_1">2. 时间戳功能</h3>
+<pre><code class="language-c">// 使能时间触发通信模式
+void CAN_EnableTimestamp(void) {
+    CAN1-&gt;MCR |= CAN_MCR_TTCM;
+
+    // 读取消息时间戳
+    uint16_t timestamp = CAN1-&gt;sFIFOMailBox[0].RDTR &gt;&gt; 16;
+    printf(&quot;Message timestamp: %d\n&quot;, timestamp);
+}
+</code></pre>
+<h3 id="3">3. 自动重传控制</h3>
+<pre><code class="language-c">// 禁用自动重传（单次发送）
+void CAN_DisableAutoRetransmit(void) {
+    CAN1-&gt;MCR |= CAN_MCR_NART;
+
+    // 发送失败后不会自动重传
+    // 适用于实时性要求高的场景
+}
+
+// 使能自动重传（默认）
+void CAN_EnableAutoRetransmit(void) {
+    CAN1-&gt;MCR &amp;= ~CAN_MCR_NART;
+}
+</code></pre>
+<h3 id="4_1">4. 优先级管理</h3>
+<pre><code class="language-c">// 配置发送优先级
+void CAN_SetTxPriority(uint8_t mailbox, uint8_t priority) {
+    // 优先级：0-3，数字越小优先级越高
+    CAN1-&gt;sTxMailBox[mailbox].TDTR &amp;= ~(0x3 &lt;&lt; 0);
+    CAN1-&gt;sTxMailBox[mailbox].TDTR |= (priority &lt;&lt; 0);
+}
+
+// 使用标识符优先级
+void CAN_UseIDPriority(void) {
+    CAN1-&gt;MCR |= CAN_MCR_TXFP;
+
+    // 现在按标识符优先级发送
+    // ID越小，优先级越高
+}
+</code></pre>
+<h2 id="_26">性能优化</h2>
+<h3 id="_27">提高吞吐量</h3>
+<p><strong>1. 使用DMA</strong>：</p>
+<pre><code class="language-c">// 配置DMA接收
+void CAN_DMA_Config(void) {
+    // 使能DMA时钟
+    RCC-&gt;AHBENR |= RCC_AHBENR_DMA1EN;
+
+    // 配置DMA通道
+    // （具体配置取决于MCU型号）
+
+    // 使能CAN的DMA请求
+    // 注意：并非所有MCU的CAN都支持DMA
+}
+</code></pre>
+<p><strong>2. 批量发送</strong>：</p>
+<pre><code class="language-c">// 使用多个发送邮箱
+void CAN_BatchTransmit(void) {
+    uint8_t data1[8] = {0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08};
+    uint8_t data2[8] = {0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18};
+    uint8_t data3[8] = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28};
+
+    // 同时填充3个邮箱
+    CAN_TransmitMailbox(0, 0x100, data1, 8);
+    CAN_TransmitMailbox(1, 0x101, data2, 8);
+    CAN_TransmitMailbox(2, 0x102, data3, 8);
+
+    // 硬件会自动按优先级发送
+}
+</code></pre>
+<h3 id="_28">降低延迟</h3>
+<p><strong>1. 使用中断</strong>：</p>
+<pre><code class="language-c">// 配置接收中断
+void CAN_EnableRxInterrupt(void) {
+    // 使能FIFO0消息挂起中断
+    CAN1-&gt;IER |= CAN_IER_FMPIE0;
+
+    // 配置NVIC
+    NVIC_EnableIRQ(CAN1_RX0_IRQn);
+    NVIC_SetPriority(CAN1_RX0_IRQn, 0);  // 最高优先级
+}
+
+// 中断处理函数
+void CAN1_RX0_IRQHandler(void) {
+    // 立即处理接收到的消息
+    // 延迟最小
+}
+</code></pre>
+<p><strong>2. 提高波特率</strong>：</p>
+<pre><code class="language-c">// 配置为1Mbps（最高速度）
+void CAN_SetHighSpeed(void) {
+    // 预分频器 = 2, BS1 = 6, BS2 = 7
+    // 位时间 = (1 + 6 + 7) × 2 / 36MHz = 0.778μs ≈ 1Mbps
+    CAN1-&gt;BTR = (1 &lt;&lt; 0) |   // BRP = 1 (分频2)
+                (6 &lt;&lt; 16) |  // TS1 = 6
+                (7 &lt;&lt; 20) |  // TS2 = 7
+                (0 &lt;&lt; 24);   // SJW = 1
+}
+</code></pre>
+<h3 id="_29">提高可靠性</h3>
+<p><strong>1. 错误处理</strong>：</p>
+<pre><code class="language-c">// 完善的错误处理
+bool CAN_TransmitReliable(uint32_t id, uint8_t *data, uint8_t len) {
+    int retry = 3;
+
+    while (retry &gt; 0) {
+        if (CAN_Transmit(id, data, len)) {
+            return true;
+        }
+
+        // 检查错误状态
+        if (CAN1-&gt;ESR &amp; CAN_ESR_BOFF) {
+            CAN_BusOffRecovery();
+        }
+
+        retry--;
+        HAL_Delay(10);
+    }
+
+    return false;
+}
+</code></pre>
+<p><strong>2. 看门狗监控</strong>：</p>
+<pre><code class="language-c">// CAN总线看门狗
+void CAN_Watchdog(void) {
+    static uint32_t last_rx_time = 0;
+    uint32_t current_time = HAL_GetTick();
+
+    // 如果超过1秒没有收到消息
+    if (current_time - last_rx_time &gt; 1000) {
+        printf(&quot;CAN bus timeout!\n&quot;);
+
+        // 尝试恢复
+        CAN_BusOffRecovery();
+
+        last_rx_time = current_time;
+    }
+}
+</code></pre>
+<h2 id="_30">总结</h2>
+<p>通过本文学习，你已经掌握了：</p>
+<ul>
+<li>✅ <strong>CAN基础</strong>：差分信号、显性位/隐性位、仲裁机制</li>
+<li>✅ <strong>硬件设计</strong>：收发器选型、终端电阻配置、总线拓扑</li>
+<li>✅ <strong>电路设计</strong>：基本电路、隔离电路、ESD保护</li>
+<li>✅ <strong>STM32配置</strong>：初始化、发送接收、过滤器配置</li>
+<li>✅ <strong>故障排查</strong>：常见问题诊断和解决方法</li>
+<li>✅ <strong>性能优化</strong>：提高吞吐量、降低延迟、提高可靠性</li>
+</ul>
+<h3 id="_31">关键要点</h3>
+<ol>
+<li>
+<p><strong>CAN总线特点</strong>：
+   - 差分信号传输，抗干扰能力强
+   - 多主机架构，非破坏性仲裁
+   - 完善的错误检测和处理机制</p>
+</li>
+<li>
+<p><strong>硬件要求</strong>：
+   - 使用双绞线
+   - 总线两端必须有120Ω终端电阻
+   - 支线长度尽量短（&lt;30cm）</p>
+</li>
+<li>
+<p><strong>波特率与距离</strong>：
+   - 1 Mbps → 40m
+   - 500 kbps → 100m
+   - 125 kbps → 500m
+   - 10 kbps → 5km</p>
+</li>
+<li>
+<p><strong>可靠性保证</strong>：
+   - 添加ESD保护
+   - 使用隔离（高可靠性应用）
+   - 实现错误处理和恢复机制</p>
+</li>
+</ol>
+<h2 id="_32">实践建议</h2>
+<h3 id="_33">初学者练习</h3>
+<ol>
+<li>
+<p><strong>基础通信</strong>：
+   - 搭建两节点CAN网络
+   - 实现简单的数据收发
+   - 测试不同波特率</p>
+</li>
+<li>
+<p><strong>过滤器配置</strong>：
+   - 配置接收特定ID
+   - 实现多ID过滤
+   - 测试过滤效果</p>
+</li>
+<li>
+<p><strong>错误处理</strong>：
+   - 模拟总线错误
+   - 实现错误检测
+   - 测试恢复机制</p>
+</li>
+</ol>
+<h3 id="_34">进阶项目</h3>
+<ol>
+<li>
+<p><strong>CAN网关</strong>：
+   - 实现多CAN总线互联
+   - 协议转换
+   - 数据路由</p>
+</li>
+<li>
+<p><strong>CAN分析仪</strong>：
+   - 监控总线流量
+   - 解析CAN消息
+   - 统计分析</p>
+</li>
+<li>
+<p><strong>CANopen协议</strong>：
+   - 实现CANopen从站
+   - 支持SDO/PDO
+   - 网络管理</p>
+</li>
+</ol>
+<h2 id="_35">延伸阅读</h2>
+<h3 id="_36">相关文章</h3>
+<ul>
+<li><a href="../beginner/01-uart-hardware.html">UART/USART硬件接口详解</a> - 学习串口通信基础</li>
+<li><a href="../beginner/02-spi-hardware.html">SPI硬件接口与应用</a> - 学习高速同步通信</li>
+<li><a href="../beginner/03-i2c-hardware.html">I2C硬件接口实战</a> - 学习两线总线通信</li>
+</ul>
+<h3 id="_37">协议标准</h3>
+<ul>
+<li>CANopen协议实现</li>
+<li>J1939协议应用</li>
+</ul>
+<h3 id="_38">硬件设计</h3>
+<ul>
+<li><a href="../../02-hardware-design-fundamentals/intermediate/01-signal-integrity.html">信号完整性分析</a></li>
+<li><a href="../../02-hardware-design-fundamentals/intermediate/02-emc-design.html">EMC设计实战</a></li>
+</ul>
+<h2 id="_39">参考资料</h2>
+<h3 id="_40">数据手册</h3>
+<ol>
+<li><a href="https://www.nxp.com/docs/en/data-sheet/TJA1050.pdf">TJA1050 Datasheet</a> - NXP CAN收发器</li>
+<li><a href="https://www.ti.com/lit/ds/symlink/sn65hvd230.pdf">SN65HVD230 Datasheet</a> - TI 3.3V CAN收发器</li>
+<li><a href="https://www.st.com/resource/en/reference_manual/cd00171190.pdf">STM32F1 Reference Manual</a> - bxCAN章节</li>
+</ol>
+<h3 id="_41">技术标准</h3>
+<ol>
+<li><strong>ISO 11898-1</strong>：CAN数据链路层和物理信令</li>
+<li><strong>ISO 11898-2</strong>：CAN高速物理层</li>
+<li><strong>ISO 11898-3</strong>：CAN低速容错物理层</li>
+</ol>
+<h3 id="_42">在线工具</h3>
+<ol>
+<li><a href="https://www.kvaser.com/support/calculators/bit-timing-calculator/">CAN Bit Timing Calculator</a> - 位时序计算器</li>
+<li><a href="https://www.can-cia.org/can-knowledge/canopen/canopen-tools/">CANopen Calculator</a> - CANopen工具</li>
+<li><a href="https://www.peak-system.com/PCAN-View.242.0.html">CAN Bus Analyzer</a> - CAN总线分析软件</li>
+</ol>
+<h3 id="_43">开源项目</h3>
+<ol>
+<li><a href="https://github.com/linux-can/can-utils">SocketCAN</a> - Linux CAN工具集</li>
+<li><a href="https://github.com/hardbyte/python-can">python-can</a> - Python CAN库</li>
+<li><a href="https://github.com/GENIVI/CANdevStudio">CANdevStudio</a> - CAN开发工具</li>
+</ol>
+<h2 id="_44">常见应用场景</h2>
+<h3 id="1_1">1. 汽车电子</h3>
+<p><strong>应用</strong>：
+- 发动机控制
+- 车身控制
+- 仪表通信
+- 诊断系统</p>
+<p><strong>配置</strong>：500 kbps, 标准帧</p>
+<h3 id="2_2">2. 工业自动化</h3>
+<p><strong>应用</strong>：
+- PLC通信
+- 传感器网络
+- 运动控制
+- 过程控制</p>
+<p><strong>配置</strong>：250 kbps, CANopen协议</p>
+<h3 id="3_1">3. 医疗设备</h3>
+<p><strong>应用</strong>：
+- 设备互联
+- 参数监控
+- 数据采集</p>
+<p><strong>配置</strong>：125 kbps, 隔离设计</p>
+<h3 id="4_2">4. 农业机械</h3>
+<p><strong>应用</strong>：
+- 车辆总线
+- 设备控制
+- 远程监控</p>
+<p><strong>配置</strong>：250 kbps, J1939协议</p>
+<h3 id="5">5. 能源管理</h3>
+<p><strong>应用</strong>：
+- 电池管理系统
+- 充电桩通信
+- 储能系统</p>
+<p><strong>配置</strong>：500 kbps, 标准帧</p>
+<h2 id="_45">附录</h2>
+<h3 id="a">A. 常用波特率配置表</h3>
+<p><strong>36MHz APB1时钟</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>波特率</th>
+<th>BRP</th>
+<th>TS1</th>
+<th>TS2</th>
+<th>SJW</th>
+<th>采样点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1 Mbps</td>
+<td>2</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>500 kbps</td>
+<td>4</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>250 kbps</td>
+<td>8</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>125 kbps</td>
+<td>16</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>100 kbps</td>
+<td>20</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+<tr>
+<td>50 kbps</td>
+<td>40</td>
+<td>6</td>
+<td>7</td>
+<td>1</td>
+<td>78.6%</td>
+</tr>
+</tbody>
+</table>
+<h3 id="b">B. 收发器对比表</h3>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>电压</th>
+<th>速率</th>
+<th>节点数</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>TJA1050</td>
+<td>5V</td>
+<td>1Mbps</td>
+<td>110</td>
+<td>标准，广泛使用</td>
+</tr>
+<tr>
+<td>TJA1051</td>
+<td>5V</td>
+<td>1Mbps</td>
+<td>110</td>
+<td>改进EMC</td>
+</tr>
+<tr>
+<td>TJA1055</td>
+<td>5V</td>
+<td>1Mbps</td>
+<td>110</td>
+<td>低功耗</td>
+</tr>
+<tr>
+<td>SN65HVD230</td>
+<td>3.3V</td>
+<td>1Mbps</td>
+<td>120</td>
+<td>3.3V供电</td>
+</tr>
+<tr>
+<td>MCP2551</td>
+<td>5V</td>
+<td>1Mbps</td>
+<td>112</td>
+<td>兼容TJA1050</td>
+</tr>
+<tr>
+<td>ISO1050</td>
+<td>5V</td>
+<td>1Mbps</td>
+<td>110</td>
+<td>集成隔离</td>
+</tr>
+</tbody>
+</table>
+<h3 id="c">C. 故障排查检查清单</h3>
+<p><strong>硬件检查</strong>：
+- [ ] 终端电阻已安装（120Ω × 2）
+- [ ] 总线阻抗约60Ω
+- [ ] CAN_H和CAN_L空闲电压约2.5V
+- [ ] 使用双绞线
+- [ ] 支线长度&lt;30cm
+- [ ] 总线长度符合波特率要求</p>
+<p><strong>软件检查</strong>：
+- [ ] 波特率配置正确
+- [ ] 位时序配置正确
+- [ ] 过滤器配置正确
+- [ ] 中断使能
+- [ ] 错误处理完善</p>
+<p><strong>测试方法</strong>：
+- [ ] 回环测试通过
+- [ ] 示波器波形正常
+- [ ] 错误计数器正常
+- [ ] 通信稳定可靠</p>
+<hr />
+<p><strong>反馈与支持</strong>：
+- 如果你在学习过程中遇到问题，欢迎在评论区留言
+- 分享你的项目经验，与其他学习者交流
+- 发现文档错误？请提交Issue帮助我们改进</p>
+<p><strong>版权声明</strong>：本文采用 CC BY-SA 4.0 协议，欢迎分享和改编，但请注明出处。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

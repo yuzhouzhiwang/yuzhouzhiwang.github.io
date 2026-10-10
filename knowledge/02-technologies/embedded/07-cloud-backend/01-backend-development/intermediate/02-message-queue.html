@@ -1,0 +1,2081 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>消息队列应用实践：RabbitMQ与Kafka入门到实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/">07-cloud-backend</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/01-backend-development/">01-backend-development</a> / <a href="/knowledge/02-technologies/embedded/07-cloud-backend/01-backend-development/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">概述</a></li>
+<li><a href="#_4">背景知识</a><ul>
+<li><a href="#_5">什么是消息队列？</a></li>
+<li><a href="#vs">消息队列 vs 直接调用</a><ul>
+<li><a href="#_6">同步调用（传统方式）</a></li>
+<li><a href="#_7">异步调用（消息队列）</a></li>
+</ul>
+</li>
+<li><a href="#_8">消息队列的特性</a><ul>
+<li><a href="#1">1. 异步通信</a></li>
+<li><a href="#2">2. 解耦</a></li>
+<li><a href="#3">3. 削峰填谷</a></li>
+<li><a href="#4">4. 可靠性</a></li>
+<li><a href="#5">5. 顺序保证</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_9">消息模式</a><ul>
+<li><a href="#1-point-to-point">1. 点对点模式（Point-to-Point）</a></li>
+<li><a href="#2-publish-subscribe">2. 发布订阅模式（Publish-Subscribe）</a></li>
+<li><a href="#3-topic">3. 主题模式（Topic）</a></li>
+</ul>
+</li>
+<li><a href="#_10">准备工作</a><ul>
+<li><a href="#_11">环境准备</a></li>
+<li><a href="#docker">安装Docker</a></li>
+<li><a href="#_12">创建项目目录</a></li>
+<li><a href="#python">安装Python依赖</a></li>
+</ul>
+</li>
+<li><a href="#1rabbitmq">步骤1：RabbitMQ入门</a><ul>
+<li><a href="#11-rabbitmq">1.1 启动RabbitMQ</a></li>
+<li><a href="#12-rabbitmq">1.2 RabbitMQ基本概念</a></li>
+<li><a href="#13">1.3 创建生产者</a></li>
+<li><a href="#14">1.4 创建消费者</a></li>
+<li><a href="#15">1.5 测试运行</a></li>
+</ul>
+</li>
+<li><a href="#2rabbitmq">步骤2：RabbitMQ发布订阅模式</a><ul>
+<li><a href="#21">2.1 创建发布者</a></li>
+<li><a href="#22">2.2 创建订阅者</a></li>
+<li><a href="#23">2.3 测试发布订阅</a></li>
+</ul>
+</li>
+<li><a href="#3rabbitmq">步骤3：RabbitMQ主题模式</a><ul>
+<li><a href="#31">3.1 创建主题发布者</a></li>
+<li><a href="#32">3.2 创建主题订阅者</a></li>
+<li><a href="#33">3.3 测试主题模式</a></li>
+</ul>
+</li>
+<li><a href="#4kafka">步骤4：Kafka入门</a><ul>
+<li><a href="#41-kafka">4.1 启动Kafka</a></li>
+<li><a href="#42-kafka">4.2 Kafka基本概念</a></li>
+<li><a href="#43-kafka">4.3 创建Kafka生产者</a></li>
+<li><a href="#44-kafka">4.4 创建Kafka消费者</a></li>
+<li><a href="#45-kafka">4.5 测试Kafka</a></li>
+</ul>
+</li>
+<li><a href="#5-">步骤5：实战案例 - 订单处理系统</a><ul>
+<li><a href="#51">5.1 系统架构</a></li>
+<li><a href="#52">5.2 订单服务（生产者）</a></li>
+<li><a href="#53">5.3 库存服务（消费者）</a></li>
+<li><a href="#54">5.4 支付服务（消费者）</a></li>
+<li><a href="#55">5.5 通知服务（消费者）</a></li>
+<li><a href="#56">5.6 运行完整系统</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：消息可靠性保证</a><ul>
+<li><a href="#61">6.1 消息持久化</a></li>
+<li><a href="#62">6.2 消息确认机制</a></li>
+<li><a href="#63">6.3 消息幂等性</a></li>
+<li><a href="#64">6.4 死信队列</a></li>
+<li><a href="#65">6.5 消息重试机制</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7：性能优化</a><ul>
+<li><a href="#71">7.1 批量发送</a></li>
+<li><a href="#72">7.2 并发消费</a></li>
+<li><a href="#73">7.3 消息压缩</a></li>
+<li><a href="#74">7.4 监控和指标</a></li>
+</ul>
+</li>
+<li><a href="#_13">故障排除</a><ul>
+<li><a href="#1rabbitmq_1">问题1：RabbitMQ连接失败</a></li>
+<li><a href="#2kafka">问题2：Kafka消费者无法接收消息</a></li>
+<li><a href="#3_1">问题3：消息丢失</a></li>
+<li><a href="#4_1">问题4：消息堆积</a></li>
+<li><a href="#5_1">问题5：消息重复消费</a></li>
+</ul>
+</li>
+<li><a href="#_14">总结</a></li>
+<li><a href="#_15">进阶挑战</a></li>
+<li><a href="#_16">完整代码</a></li>
+<li><a href="#_17">下一步</a></li>
+<li><a href="#_18">参考资料</a><ul>
+<li><a href="#_19">官方文档</a></li>
+<li><a href="#_20">推荐书籍</a></li>
+<li><a href="#_21">在线资源</a></li>
+<li><a href="#_22">相关技术</a></li>
+</ul>
+</li>
+<li><a href="#_23">实践建议</a><ul>
+<li><a href="#_24">学习路径</a></li>
+<li><a href="#_25">实践项目建议</a></li>
+<li><a href="#_26">生产环境注意事项</a></li>
+</ul>
+</li>
+<li><a href="#_27">常见应用场景</a><ul>
+<li><a href="#1_1">1. 异步任务处理</a></li>
+<li><a href="#2_1">2. 系统解耦</a></li>
+<li><a href="#3_2">3. 削峰填谷</a></li>
+<li><a href="#4_2">4. 日志收集</a></li>
+<li><a href="#5_2">5. 数据同步</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rabbitmqkafka">消息队列应用实践：RabbitMQ与Kafka入门到实战</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解消息队列的核心概念和工作原理</li>
+<li>[ ] 掌握RabbitMQ的安装、配置和基本使用</li>
+<li>[ ] 掌握Kafka的安装、配置和基本使用</li>
+<li>[ ] 理解不同的消息模式（点对点、发布订阅、主题）</li>
+<li>[ ] 实现异步任务处理和系统解耦</li>
+<li>[ ] 应用消息队列实现削峰填谷</li>
+<li>[ ] 处理消息可靠性和幂等性问题</li>
+<li>[ ] 在实际项目中选择合适的消息队列方案</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 熟悉Python或Java编程语言
+- 了解RESTful API设计
+- 理解微服务架构基本概念
+- 了解Docker基础知识（推荐）</p>
+<p><strong>技能要求</strong>：
+- 能够使用命令行工具
+- 会使用文本编辑器或IDE
+- 了解基本的网络通信概念
+- 能够阅读和理解技术文档</p>
+<h2 id="_3">概述</h2>
+<p>消息队列（Message Queue）是现代分布式系统和微服务架构中的核心组件。它通过异步消息传递实现系统解耦、削峰填谷和可靠通信。</p>
+<p><strong>为什么需要消息队列？</strong></p>
+<p>在传统的同步调用中，服务A直接调用服务B，如果服务B不可用或响应慢，会直接影响服务A。消息队列通过引入中间层，实现了：</p>
+<ul>
+<li><strong>异步处理</strong>：提高系统响应速度</li>
+<li><strong>系统解耦</strong>：服务之间松耦合</li>
+<li><strong>削峰填谷</strong>：应对流量高峰</li>
+<li><strong>可靠通信</strong>：保证消息不丢失</li>
+<li><strong>负载均衡</strong>：多个消费者分担负载</li>
+</ul>
+<p><strong>消息队列的应用场景</strong>：</p>
+<ul>
+<li>订单处理系统</li>
+<li>日志收集和分析</li>
+<li>实时数据流处理</li>
+<li>邮件和短信发送</li>
+<li>任务调度系统</li>
+<li>物联网数据采集</li>
+</ul>
+<h2 id="_4">背景知识</h2>
+<h3 id="_5">什么是消息队列？</h3>
+<p>消息队列是一种应用程序间的通信方法，通过在消息的传输过程中保存消息来实现异步通信。</p>
+<p><strong>核心组件</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[生产者 Producer] --&gt;|发送消息| B[消息队列 Queue]
+    B --&gt;|接收消息| C[消费者 Consumer]
+</code></pre>
+<ul>
+<li><strong>生产者（Producer）</strong>：发送消息的应用程序</li>
+<li><strong>消息队列（Queue）</strong>：存储消息的中间件</li>
+<li><strong>消费者（Consumer）</strong>：接收和处理消息的应用程序</li>
+<li><strong>消息（Message）</strong>：传输的数据单元</li>
+</ul>
+<h3 id="vs">消息队列 vs 直接调用</h3>
+<h4 id="_6">同步调用（传统方式）</h4>
+<pre><code class="language-python"># 订单服务直接调用库存服务
+def create_order(order_data):
+    # 创建订单
+    order = save_order(order_data)
+
+    # 同步调用库存服务（阻塞）
+    inventory_service.deduct_stock(order.product_id, order.quantity)
+
+    # 同步调用支付服务（阻塞）
+    payment_service.create_payment(order.id, order.amount)
+
+    return order
+</code></pre>
+<p><strong>问题</strong>：
+- 响应时间长（需要等待所有服务完成）
+- 服务耦合度高
+- 任何一个服务故障都会影响整体
+- 无法应对流量高峰</p>
+<h4 id="_7">异步调用（消息队列）</h4>
+<pre><code class="language-python"># 订单服务通过消息队列异步通知
+def create_order(order_data):
+    # 创建订单
+    order = save_order(order_data)
+
+    # 发送消息到队列（非阻塞）
+    message_queue.publish('order.created', {
+        'order_id': order.id,
+        'product_id': order.product_id,
+        'quantity': order.quantity
+    })
+
+    # 立即返回
+    return order
+</code></pre>
+<p><strong>优势</strong>：
+- 快速响应（不等待其他服务）
+- 服务解耦（通过消息通信）
+- 容错性强（消息持久化）
+- 可以削峰填谷</p>
+<h3 id="_8">消息队列的特性</h3>
+<h4 id="1">1. 异步通信</h4>
+<p>生产者发送消息后立即返回，不需要等待消费者处理。</p>
+<h4 id="2">2. 解耦</h4>
+<p>生产者和消费者不需要知道对方的存在，只需要知道消息格式。</p>
+<h4 id="3">3. 削峰填谷</h4>
+<p>在流量高峰期，消息暂存在队列中，消费者按照自己的处理能力消费。</p>
+<pre><code>流量高峰：1000 req/s → 消息队列 → 消费者处理：100 req/s
+</code></pre>
+<h4 id="4">4. 可靠性</h4>
+<p>消息持久化到磁盘，即使系统崩溃也不会丢失。</p>
+<h4 id="5">5. 顺序保证</h4>
+<p>某些消息队列可以保证消息的顺序性。</p>
+<h2 id="_9">消息模式</h2>
+<h3 id="1-point-to-point">1. 点对点模式（Point-to-Point）</h3>
+<p>一个消息只能被一个消费者消费。</p>
+<pre><code class="language-mermaid">graph LR
+    A[生产者] --&gt;|消息| B[队列]
+    B --&gt;|消息| C[消费者1]
+    B -.消息已被消费.-&gt; D[消费者2]
+</code></pre>
+<p><strong>特点</strong>：
+- 每条消息只被消费一次
+- 消费者之间竞争消息
+- 适合任务分发场景</p>
+<p><strong>应用场景</strong>：
+- 任务队列
+- 订单处理
+- 邮件发送</p>
+<h3 id="2-publish-subscribe">2. 发布订阅模式（Publish-Subscribe）</h3>
+<p>一个消息可以被多个消费者消费。</p>
+<pre><code class="language-mermaid">graph LR
+    A[发布者] --&gt;|消息| B[主题/交换机]
+    B --&gt;|消息副本| C[订阅者1]
+    B --&gt;|消息副本| D[订阅者2]
+    B --&gt;|消息副本| E[订阅者3]
+</code></pre>
+<p><strong>特点</strong>：
+- 每个订阅者都收到消息副本
+- 发布者和订阅者解耦
+- 适合广播场景</p>
+<p><strong>应用场景</strong>：
+- 系统通知
+- 日志收集
+- 数据同步</p>
+<h3 id="3-topic">3. 主题模式（Topic）</h3>
+<p>基于主题的路由，消费者订阅感兴趣的主题。</p>
+<pre><code class="language-mermaid">graph LR
+    A[发布者] --&gt;|order.created| B[主题路由]
+    A --&gt;|order.paid| B
+    A --&gt;|order.shipped| B
+    B --&gt;|order.*| C[订阅者1]
+    B --&gt;|order.paid| D[订阅者2]
+    B --&gt;|order.shipped| E[订阅者3]
+</code></pre>
+<p><strong>特点</strong>：
+- 支持通配符匹配
+- 灵活的路由规则
+- 适合复杂的消息分发</p>
+<p><strong>应用场景</strong>：
+- 事件驱动架构
+- 微服务通信
+- 实时数据流</p>
+<h2 id="_10">准备工作</h2>
+<h3 id="_11">环境准备</h3>
+<p>本教程将使用Docker来快速搭建RabbitMQ和Kafka环境。</p>
+<p><strong>软件要求</strong>：
+- Docker Desktop 或 Docker Engine
+- Python 3.8+ 或 Java 11+
+- 文本编辑器或IDE</p>
+<h3 id="docker">安装Docker</h3>
+<p>如果还没有安装Docker，请参考官方文档：
+- Windows/Mac: <a href="https://www.docker.com/products/docker-desktop">Docker Desktop</a>
+- Linux: <a href="https://docs.docker.com/engine/install/">Docker Engine</a></p>
+<p>验证Docker安装：</p>
+<pre><code class="language-bash">docker --version
+docker-compose --version
+</code></pre>
+<h3 id="_12">创建项目目录</h3>
+<pre><code class="language-bash">mkdir message-queue-tutorial
+cd message-queue-tutorial
+</code></pre>
+<h3 id="python">安装Python依赖</h3>
+<p>创建虚拟环境并安装依赖：</p>
+<pre><code class="language-bash"># 创建虚拟环境
+python -m venv venv
+
+# 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+# Linux/Mac:
+source venv/bin/activate
+
+# 安装依赖
+pip install pika kafka-python
+</code></pre>
+<p><strong>依赖说明</strong>：
+- <code>pika</code>: RabbitMQ的Python客户端
+- <code>kafka-python</code>: Kafka的Python客户端</p>
+<h2 id="1rabbitmq">步骤1：RabbitMQ入门</h2>
+<h3 id="11-rabbitmq">1.1 启动RabbitMQ</h3>
+<p>使用Docker启动RabbitMQ服务：</p>
+<pre><code class="language-bash">docker run -d --name rabbitmq \
+  -p 5672:5672 \
+  -p 15672:15672 \
+  rabbitmq:3-management
+</code></pre>
+<p><strong>参数说明</strong>：
+- <code>-d</code>: 后台运行
+- <code>--name rabbitmq</code>: 容器名称
+- <code>-p 5672:5672</code>: AMQP协议端口
+- <code>-p 15672:15672</code>: Web管理界面端口
+- <code>rabbitmq:3-management</code>: 带管理界面的镜像</p>
+<p><strong>验证安装</strong>：</p>
+<p>访问管理界面：http://localhost:15672
+- 用户名：<code>guest</code>
+- 密码：<code>guest</code></p>
+<h3 id="12-rabbitmq">1.2 RabbitMQ基本概念</h3>
+<p><strong>核心组件</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[Producer] --&gt;|发送| B[Exchange]
+    B --&gt;|路由| C[Queue1]
+    B --&gt;|路由| D[Queue2]
+    C --&gt;|消费| E[Consumer1]
+    D --&gt;|消费| F[Consumer2]
+</code></pre>
+<ul>
+<li><strong>Exchange（交换机）</strong>：接收消息并路由到队列</li>
+<li><strong>Queue（队列）</strong>：存储消息</li>
+<li><strong>Binding（绑定）</strong>：Exchange和Queue之间的路由规则</li>
+<li><strong>Routing Key（路由键）</strong>：消息的路由标识</li>
+</ul>
+<p><strong>Exchange类型</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>说明</th>
+<th>使用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Direct</td>
+<td>精确匹配routing key</td>
+<td>点对点消息</td>
+</tr>
+<tr>
+<td>Fanout</td>
+<td>广播到所有绑定的队列</td>
+<td>发布订阅</td>
+</tr>
+<tr>
+<td>Topic</td>
+<td>通配符匹配routing key</td>
+<td>主题订阅</td>
+</tr>
+<tr>
+<td>Headers</td>
+<td>根据消息头路由</td>
+<td>复杂路由</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13">1.3 创建生产者</h3>
+<p>创建 <code>rabbitmq_producer.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+import time
+
+class RabbitMQProducer:
+    def __init__(self, host='localhost'):
+        # 建立连接
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明队列
+        self.channel.queue_declare(
+            queue='task_queue',
+            durable=True  # 队列持久化
+        )
+
+    def send_message(self, message):
+        &quot;&quot;&quot;发送消息到队列&quot;&quot;&quot;
+        self.channel.basic_publish(
+            exchange='',
+            routing_key='task_queue',
+            body=json.dumps(message),
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # 消息持久化
+            )
+        )
+        print(f&quot;[x] 发送消息: {message}&quot;)
+
+    def close(self):
+        &quot;&quot;&quot;关闭连接&quot;&quot;&quot;
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    producer = RabbitMQProducer()
+
+    # 发送10条消息
+    for i in range(10):
+        message = {
+            'task_id': i,
+            'task_type': 'process_order',
+            'data': f'Order #{i}',
+            'timestamp': time.time()
+        }
+        producer.send_message(message)
+        time.sleep(1)
+
+    producer.close()
+    print(&quot;[✓] 所有消息已发送&quot;)
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>queue_declare(durable=True)</code>: 声明持久化队列
+- <code>delivery_mode=2</code>: 设置消息持久化
+- <code>json.dumps()</code>: 将消息序列化为JSON</p>
+<h3 id="14">1.4 创建消费者</h3>
+<p>创建 <code>rabbitmq_consumer.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+import time
+
+class RabbitMQConsumer:
+    def __init__(self, host='localhost'):
+        # 建立连接
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明队列（确保队列存在）
+        self.channel.queue_declare(
+            queue='task_queue',
+            durable=True
+        )
+
+        # 设置公平分发（每次只处理一条消息）
+        self.channel.basic_qos(prefetch_count=1)
+
+    def callback(self, ch, method, properties, body):
+        &quot;&quot;&quot;消息处理回调函数&quot;&quot;&quot;
+        message = json.loads(body)
+        print(f&quot;[x] 接收到消息: {message}&quot;)
+
+        # 模拟处理任务
+        task_type = message.get('task_type')
+        print(f&quot;[*] 处理任务: {task_type}&quot;)
+        time.sleep(2)  # 模拟耗时操作
+
+        print(f&quot;[✓] 任务完成: {message['task_id']}&quot;)
+
+        # 手动确认消息
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    def start_consuming(self):
+        &quot;&quot;&quot;开始消费消息&quot;&quot;&quot;
+        self.channel.basic_consume(
+            queue='task_queue',
+            on_message_callback=self.callback,
+            auto_ack=False  # 手动确认
+        )
+
+        print('[*] 等待消息。按 CTRL+C 退出')
+        self.channel.start_consuming()
+
+    def close(self):
+        &quot;&quot;&quot;关闭连接&quot;&quot;&quot;
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    consumer = RabbitMQConsumer()
+    try:
+        consumer.start_consuming()
+    except KeyboardInterrupt:
+        print('\n[!] 停止消费')
+        consumer.close()
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>basic_qos(prefetch_count=1)</code>: 公平分发，每次只取一条消息
+- <code>auto_ack=False</code>: 关闭自动确认，改为手动确认
+- <code>basic_ack()</code>: 手动确认消息已处理</p>
+<h3 id="15">1.5 测试运行</h3>
+<p><strong>启动消费者</strong>（在一个终端）：</p>
+<pre><code class="language-bash">python rabbitmq_consumer.py
+</code></pre>
+<p><strong>启动生产者</strong>（在另一个终端）：</p>
+<pre><code class="language-bash">python rabbitmq_producer.py
+</code></pre>
+<p><strong>预期结果</strong>：
+- 生产者发送10条消息
+- 消费者逐条接收并处理消息
+- 每条消息处理耗时约2秒</p>
+<h2 id="2rabbitmq">步骤2：RabbitMQ发布订阅模式</h2>
+<h3 id="21">2.1 创建发布者</h3>
+<p>创建 <code>rabbitmq_publisher.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+import sys
+
+class RabbitMQPublisher:
+    def __init__(self, host='localhost'):
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明fanout类型的交换机
+        self.channel.exchange_declare(
+            exchange='logs',
+            exchange_type='fanout'
+        )
+
+    def publish(self, message):
+        &quot;&quot;&quot;发布消息到交换机&quot;&quot;&quot;
+        self.channel.basic_publish(
+            exchange='logs',
+            routing_key='',  # fanout类型忽略routing_key
+            body=json.dumps(message)
+        )
+        print(f&quot;[x] 发布消息: {message}&quot;)
+
+    def close(self):
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    publisher = RabbitMQPublisher()
+
+    # 发布日志消息
+    log_levels = ['INFO', 'WARNING', 'ERROR']
+    for i in range(5):
+        message = {
+            'level': log_levels[i % 3],
+            'message': f'这是第 {i+1} 条日志',
+            'service': 'order-service'
+        }
+        publisher.publish(message)
+
+    publisher.close()
+</code></pre>
+<h3 id="22">2.2 创建订阅者</h3>
+<p>创建 <code>rabbitmq_subscriber.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+import sys
+
+class RabbitMQSubscriber:
+    def __init__(self, host='localhost', subscriber_name='subscriber'):
+        self.subscriber_name = subscriber_name
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明交换机
+        self.channel.exchange_declare(
+            exchange='logs',
+            exchange_type='fanout'
+        )
+
+        # 声明临时队列（独占队列，连接断开后自动删除）
+        result = self.channel.queue_declare(queue='', exclusive=True)
+        self.queue_name = result.method.queue
+
+        # 绑定队列到交换机
+        self.channel.queue_bind(
+            exchange='logs',
+            queue=self.queue_name
+        )
+
+    def callback(self, ch, method, properties, body):
+        &quot;&quot;&quot;消息处理回调&quot;&quot;&quot;
+        message = json.loads(body)
+        print(f&quot;[{self.subscriber_name}] 收到消息: {message}&quot;)
+
+    def start_consuming(self):
+        &quot;&quot;&quot;开始订阅&quot;&quot;&quot;
+        self.channel.basic_consume(
+            queue=self.queue_name,
+            on_message_callback=self.callback,
+            auto_ack=True
+        )
+
+        print(f'[*] [{self.subscriber_name}] 等待消息。按 CTRL+C 退出')
+        self.channel.start_consuming()
+
+    def close(self):
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    subscriber_name = sys.argv[1] if len(sys.argv) &gt; 1 else 'subscriber'
+    subscriber = RabbitMQSubscriber(subscriber_name=subscriber_name)
+
+    try:
+        subscriber.start_consuming()
+    except KeyboardInterrupt:
+        print(f'\n[!] [{subscriber_name}] 停止订阅')
+        subscriber.close()
+</code></pre>
+<h3 id="23">2.3 测试发布订阅</h3>
+<p><strong>启动多个订阅者</strong>：</p>
+<pre><code class="language-bash"># 终端1
+python rabbitmq_subscriber.py subscriber1
+
+# 终端2
+python rabbitmq_subscriber.py subscriber2
+
+# 终端3
+python rabbitmq_subscriber.py subscriber3
+</code></pre>
+<p><strong>发布消息</strong>：</p>
+<pre><code class="language-bash"># 终端4
+python rabbitmq_publisher.py
+</code></pre>
+<p><strong>预期结果</strong>：
+- 所有订阅者都收到相同的消息
+- 每个订阅者独立处理消息</p>
+<h2 id="3rabbitmq">步骤3：RabbitMQ主题模式</h2>
+<h3 id="31">3.1 创建主题发布者</h3>
+<p>创建 <code>rabbitmq_topic_publisher.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+
+class TopicPublisher:
+    def __init__(self, host='localhost'):
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明topic类型的交换机
+        self.channel.exchange_declare(
+            exchange='events',
+            exchange_type='topic'
+        )
+
+    def publish(self, routing_key, message):
+        &quot;&quot;&quot;发布消息到指定主题&quot;&quot;&quot;
+        self.channel.basic_publish(
+            exchange='events',
+            routing_key=routing_key,
+            body=json.dumps(message)
+        )
+        print(f&quot;[x] 发布到 {routing_key}: {message}&quot;)
+
+    def close(self):
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    publisher = TopicPublisher()
+
+    # 发布不同类型的事件
+    events = [
+        ('order.created', {'order_id': 1, 'amount': 100}),
+        ('order.paid', {'order_id': 1, 'payment_id': 'PAY001'}),
+        ('order.shipped', {'order_id': 1, 'tracking': 'TRACK001'}),
+        ('user.registered', {'user_id': 1, 'email': 'user@example.com'}),
+        ('user.login', {'user_id': 1, 'ip': '192.168.1.1'}),
+    ]
+
+    for routing_key, message in events:
+        publisher.publish(routing_key, message)
+
+    publisher.close()
+</code></pre>
+<h3 id="32">3.2 创建主题订阅者</h3>
+<p>创建 <code>rabbitmq_topic_subscriber.py</code> 文件：</p>
+<pre><code class="language-python">import pika
+import json
+import sys
+
+class TopicSubscriber:
+    def __init__(self, host='localhost', binding_keys=None):
+        self.connection = pika.BlockingConnection(
+            pika.ConnectionParameters(host=host)
+        )
+        self.channel = self.connection.channel()
+
+        # 声明交换机
+        self.channel.exchange_declare(
+            exchange='events',
+            exchange_type='topic'
+        )
+
+        # 声明队列
+        result = self.channel.queue_declare(queue='', exclusive=True)
+        self.queue_name = result.method.queue
+
+        # 绑定多个routing key
+        if binding_keys:
+            for binding_key in binding_keys:
+                self.channel.queue_bind(
+                    exchange='events',
+                    queue=self.queue_name,
+                    routing_key=binding_key
+                )
+                print(f&quot;[*] 订阅主题: {binding_key}&quot;)
+
+    def callback(self, ch, method, properties, body):
+        &quot;&quot;&quot;消息处理回调&quot;&quot;&quot;
+        message = json.loads(body)
+        print(f&quot;[x] 收到 {method.routing_key}: {message}&quot;)
+
+    def start_consuming(self):
+        &quot;&quot;&quot;开始订阅&quot;&quot;&quot;
+        self.channel.basic_consume(
+            queue=self.queue_name,
+            on_message_callback=self.callback,
+            auto_ack=True
+        )
+
+        print('[*] 等待消息。按 CTRL+C 退出')
+        self.channel.start_consuming()
+
+    def close(self):
+        self.connection.close()
+
+# 使用示例
+if __name__ == '__main__':
+    # 从命令行参数获取订阅的主题
+    binding_keys = sys.argv[1:] if len(sys.argv) &gt; 1 else ['#']
+
+    subscriber = TopicSubscriber(binding_keys=binding_keys)
+
+    try:
+        subscriber.start_consuming()
+    except KeyboardInterrupt:
+        print('\n[!] 停止订阅')
+        subscriber.close()
+</code></pre>
+<h3 id="33">3.3 测试主题模式</h3>
+<p><strong>订阅所有订单事件</strong>：</p>
+<pre><code class="language-bash">python rabbitmq_topic_subscriber.py &quot;order.*&quot;
+</code></pre>
+<p><strong>订阅所有用户事件</strong>：</p>
+<pre><code class="language-bash">python rabbitmq_topic_subscriber.py &quot;user.*&quot;
+</code></pre>
+<p><strong>订阅所有事件</strong>：</p>
+<pre><code class="language-bash">python rabbitmq_topic_subscriber.py &quot;#&quot;
+</code></pre>
+<p><strong>订阅特定事件</strong>：</p>
+<pre><code class="language-bash">python rabbitmq_topic_subscriber.py &quot;order.created&quot; &quot;order.paid&quot;
+</code></pre>
+<p><strong>发布事件</strong>：</p>
+<pre><code class="language-bash">python rabbitmq_topic_publisher.py
+</code></pre>
+<p><strong>通配符说明</strong>：
+- <code>*</code>: 匹配一个单词
+- <code>#</code>: 匹配零个或多个单词</p>
+<p><strong>示例</strong>：
+- <code>order.*</code>: 匹配 <code>order.created</code>, <code>order.paid</code>
+- <code>*.created</code>: 匹配 <code>order.created</code>, <code>user.created</code>
+- <code>order.#</code>: 匹配 <code>order.created</code>, <code>order.paid.success</code>
+- <code>#</code>: 匹配所有消息</p>
+<h2 id="4kafka">步骤4：Kafka入门</h2>
+<h3 id="41-kafka">4.1 启动Kafka</h3>
+<p>使用Docker Compose启动Kafka和Zookeeper。</p>
+<p>创建 <code>docker-compose.yml</code> 文件：</p>
+<pre><code class="language-yaml">version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:latest
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - &quot;2181:2181&quot;
+
+  kafka:
+    image: confluentinc/cp-kafka:latest
+    depends_on:
+      - zookeeper
+    ports:
+      - &quot;9092:9092&quot;
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+</code></pre>
+<p><strong>启动服务</strong>：</p>
+<pre><code class="language-bash">docker-compose up -d
+</code></pre>
+<p><strong>验证安装</strong>：</p>
+<pre><code class="language-bash"># 查看运行状态
+docker-compose ps
+
+# 查看日志
+docker-compose logs kafka
+</code></pre>
+<h3 id="42-kafka">4.2 Kafka基本概念</h3>
+<p><strong>核心组件</strong>：</p>
+<pre><code class="language-mermaid">graph TB
+    A[Producer] --&gt;|发送消息| B[Topic: orders]
+    B --&gt;|Partition 0| C[Consumer Group 1]
+    B --&gt;|Partition 1| C
+    B --&gt;|Partition 0| D[Consumer Group 2]
+    B --&gt;|Partition 1| D
+</code></pre>
+<ul>
+<li><strong>Topic（主题）</strong>：消息的分类，类似于数据库的表</li>
+<li><strong>Partition（分区）</strong>：Topic的物理分组，提高并行度</li>
+<li><strong>Producer（生产者）</strong>：发送消息到Topic</li>
+<li><strong>Consumer（消费者）</strong>：从Topic读取消息</li>
+<li><strong>Consumer Group（消费者组）</strong>：多个消费者组成的组，共同消费Topic</li>
+<li><strong>Offset（偏移量）</strong>：消息在分区中的位置</li>
+</ul>
+<p><strong>Kafka vs RabbitMQ</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>Kafka</th>
+<th>RabbitMQ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>消息模型</td>
+<td>发布订阅</td>
+<td>多种模式</td>
+</tr>
+<tr>
+<td>吞吐量</td>
+<td>极高</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>较低</td>
+<td>很低</td>
+</tr>
+<tr>
+<td>消息顺序</td>
+<td>分区内有序</td>
+<td>队列内有序</td>
+</tr>
+<tr>
+<td>持久化</td>
+<td>默认持久化</td>
+<td>可选持久化</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>大数据、日志、流处理</td>
+<td>任务队列、RPC</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-kafka">4.3 创建Kafka生产者</h3>
+<p>创建 <code>kafka_producer.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaProducer
+import json
+import time
+
+class KafkaMessageProducer:
+    def __init__(self, bootstrap_servers='localhost:9092'):
+        # 创建生产者
+        self.producer = KafkaProducer(
+            bootstrap_servers=bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+            key_serializer=lambda k: k.encode('utf-8') if k else None
+        )
+
+    def send_message(self, topic, message, key=None):
+        &quot;&quot;&quot;发送消息到指定主题&quot;&quot;&quot;
+        future = self.producer.send(
+            topic,
+            value=message,
+            key=key
+        )
+
+        # 等待发送完成
+        record_metadata = future.get(timeout=10)
+
+        print(f&quot;[x] 消息已发送到 {topic}&quot;)
+        print(f&quot;    Topic: {record_metadata.topic}&quot;)
+        print(f&quot;    Partition: {record_metadata.partition}&quot;)
+        print(f&quot;    Offset: {record_metadata.offset}&quot;)
+
+        return record_metadata
+
+    def close(self):
+        &quot;&quot;&quot;关闭生产者&quot;&quot;&quot;
+        self.producer.flush()
+        self.producer.close()
+
+# 使用示例
+if __name__ == '__main__':
+    producer = KafkaMessageProducer()
+
+    # 发送订单事件
+    for i in range(10):
+        message = {
+            'order_id': i,
+            'user_id': 100 + i,
+            'product_id': 200 + i,
+            'amount': 99.99 * (i + 1),
+            'status': 'created',
+            'timestamp': time.time()
+        }
+
+        # 使用order_id作为key，确保同一订单的消息进入同一分区
+        producer.send_message(
+            topic='orders',
+            message=message,
+            key=str(message['order_id'])
+        )
+
+        time.sleep(0.5)
+
+    producer.close()
+    print(&quot;[✓] 所有消息已发送&quot;)
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>value_serializer</code>: 消息值序列化器
+- <code>key_serializer</code>: 消息键序列化器
+- <code>key</code>: 用于分区选择，相同key的消息进入同一分区</p>
+<h3 id="44-kafka">4.4 创建Kafka消费者</h3>
+<p>创建 <code>kafka_consumer.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaConsumer
+import json
+
+class KafkaMessageConsumer:
+    def __init__(self, topic, group_id, bootstrap_servers='localhost:9092'):
+        # 创建消费者
+        self.consumer = KafkaConsumer(
+            topic,
+            bootstrap_servers=bootstrap_servers,
+            group_id=group_id,
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            auto_offset_reset='earliest',  # 从最早的消息开始消费
+            enable_auto_commit=True,  # 自动提交offset
+            auto_commit_interval_ms=1000
+        )
+        self.group_id = group_id
+
+    def consume_messages(self):
+        &quot;&quot;&quot;消费消息&quot;&quot;&quot;
+        print(f'[*] [{self.group_id}] 开始消费消息...')
+
+        try:
+            for message in self.consumer:
+                print(f&quot;\n[{self.group_id}] 收到消息:&quot;)
+                print(f&quot;  Topic: {message.topic}&quot;)
+                print(f&quot;  Partition: {message.partition}&quot;)
+                print(f&quot;  Offset: {message.offset}&quot;)
+                print(f&quot;  Key: {message.key.decode('utf-8') if message.key else None}&quot;)
+                print(f&quot;  Value: {message.value}&quot;)
+
+                # 处理消息
+                self.process_message(message.value)
+
+        except KeyboardInterrupt:
+            print(f'\n[!] [{self.group_id}] 停止消费')
+        finally:
+            self.consumer.close()
+
+    def process_message(self, message):
+        &quot;&quot;&quot;处理消息的业务逻辑&quot;&quot;&quot;
+        order_id = message.get('order_id')
+        amount = message.get('amount')
+        print(f&quot;  [*] 处理订单 #{order_id}, 金额: ${amount:.2f}&quot;)
+
+# 使用示例
+if __name__ == '__main__':
+    import sys
+
+    group_id = sys.argv[1] if len(sys.argv) &gt; 1 else 'order-consumer-group'
+
+    consumer = KafkaMessageConsumer(
+        topic='orders',
+        group_id=group_id
+    )
+
+    consumer.consume_messages()
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>group_id</code>: 消费者组ID，同组消费者共享消费进度
+- <code>auto_offset_reset</code>: 从哪里开始消费（earliest/latest）
+- <code>enable_auto_commit</code>: 是否自动提交offset</p>
+<h3 id="45-kafka">4.5 测试Kafka</h3>
+<p><strong>启动消费者</strong>（在一个终端）：</p>
+<pre><code class="language-bash">python kafka_consumer.py consumer-group-1
+</code></pre>
+<p><strong>启动生产者</strong>（在另一个终端）：</p>
+<pre><code class="language-bash">python kafka_producer.py
+</code></pre>
+<p><strong>启动多个消费者测试负载均衡</strong>：</p>
+<pre><code class="language-bash"># 终端1
+python kafka_consumer.py consumer-group-1
+
+# 终端2（同一个组）
+python kafka_consumer.py consumer-group-1
+
+# 终端3（不同的组）
+python kafka_consumer.py consumer-group-2
+</code></pre>
+<p><strong>预期结果</strong>：
+- 同一消费者组的消费者会分担消息（负载均衡）
+- 不同消费者组的消费者会收到所有消息（发布订阅）</p>
+<h2 id="5-">步骤5：实战案例 - 订单处理系统</h2>
+<h3 id="51">5.1 系统架构</h3>
+<p>我们将构建一个完整的订单处理系统，包含以下服务：</p>
+<pre><code class="language-mermaid">graph TB
+    A[订单服务] --&gt;|order.created| B[消息队列]
+    B --&gt;|消费| C[库存服务]
+    B --&gt;|消费| D[支付服务]
+    B --&gt;|消费| E[通知服务]
+    C --&gt;|inventory.updated| B
+    D --&gt;|payment.completed| B
+    E --&gt;|notification.sent| B
+</code></pre>
+<h3 id="52">5.2 订单服务（生产者）</h3>
+<p>创建 <code>order_service.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaProducer
+import json
+import time
+import uuid
+
+class OrderService:
+    def __init__(self):
+        self.producer = KafkaProducer(
+            bootstrap_servers='localhost:9092',
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+
+    def create_order(self, user_id, product_id, quantity, amount):
+        &quot;&quot;&quot;创建订单&quot;&quot;&quot;
+        order_id = str(uuid.uuid4())
+
+        order = {
+            'order_id': order_id,
+            'user_id': user_id,
+            'product_id': product_id,
+            'quantity': quantity,
+            'amount': amount,
+            'status': 'created',
+            'created_at': time.time()
+        }
+
+        # 保存订单到数据库（这里省略）
+        print(f&quot;[订单服务] 创建订单: {order_id}&quot;)
+
+        # 发布订单创建事件
+        self.producer.send('order-events', {
+            'event_type': 'order.created',
+            'order': order
+        })
+
+        print(f&quot;[订单服务] 发布事件: order.created&quot;)
+
+        return order
+
+    def close(self):
+        self.producer.close()
+
+# 使用示例
+if __name__ == '__main__':
+    service = OrderService()
+
+    # 创建几个测试订单
+    orders = [
+        {'user_id': 1, 'product_id': 101, 'quantity': 2, 'amount': 199.98},
+        {'user_id': 2, 'product_id': 102, 'quantity': 1, 'amount': 299.99},
+        {'user_id': 3, 'product_id': 103, 'quantity': 3, 'amount': 149.97},
+    ]
+
+    for order_data in orders:
+        service.create_order(**order_data)
+        time.sleep(1)
+
+    service.close()
+</code></pre>
+<h3 id="53">5.3 库存服务（消费者）</h3>
+<p>创建 <code>inventory_service.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaConsumer, KafkaProducer
+import json
+
+class InventoryService:
+    def __init__(self):
+        # 消费者
+        self.consumer = KafkaConsumer(
+            'order-events',
+            bootstrap_servers='localhost:9092',
+            group_id='inventory-service',
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            auto_offset_reset='earliest'
+        )
+
+        # 生产者（用于发布库存更新事件）
+        self.producer = KafkaProducer(
+            bootstrap_servers='localhost:9092',
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+
+        # 模拟库存数据
+        self.inventory = {
+            101: 100,
+            102: 50,
+            103: 200
+        }
+
+    def process_order_created(self, order):
+        &quot;&quot;&quot;处理订单创建事件&quot;&quot;&quot;
+        product_id = order['product_id']
+        quantity = order['quantity']
+        order_id = order['order_id']
+
+        print(f&quot;\n[库存服务] 处理订单: {order_id}&quot;)
+        print(f&quot;[库存服务] 商品ID: {product_id}, 数量: {quantity}&quot;)
+
+        # 检查库存
+        if product_id in self.inventory and self.inventory[product_id] &gt;= quantity:
+            # 扣减库存
+            self.inventory[product_id] -= quantity
+            print(f&quot;[库存服务] 库存扣减成功，剩余: {self.inventory[product_id]}&quot;)
+
+            # 发布库存更新事件
+            self.producer.send('order-events', {
+                'event_type': 'inventory.updated',
+                'order_id': order_id,
+                'product_id': product_id,
+                'remaining': self.inventory[product_id],
+                'status': 'success'
+            })
+        else:
+            print(f&quot;[库存服务] 库存不足&quot;)
+
+            # 发布库存不足事件
+            self.producer.send('order-events', {
+                'event_type': 'inventory.insufficient',
+                'order_id': order_id,
+                'product_id': product_id,
+                'status': 'failed'
+            })
+
+    def start(self):
+        &quot;&quot;&quot;开始消费消息&quot;&quot;&quot;
+        print('[库存服务] 启动，等待订单事件...')
+
+        try:
+            for message in self.consumer:
+                event = message.value
+                event_type = event.get('event_type')
+
+                if event_type == 'order.created':
+                    self.process_order_created(event['order'])
+
+        except KeyboardInterrupt:
+            print('\n[库存服务] 停止')
+        finally:
+            self.consumer.close()
+            self.producer.close()
+
+# 使用示例
+if __name__ == '__main__':
+    service = InventoryService()
+    service.start()
+</code></pre>
+<h3 id="54">5.4 支付服务（消费者）</h3>
+<p>创建 <code>payment_service.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaConsumer, KafkaProducer
+import json
+import time
+
+class PaymentService:
+    def __init__(self):
+        self.consumer = KafkaConsumer(
+            'order-events',
+            bootstrap_servers='localhost:9092',
+            group_id='payment-service',
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            auto_offset_reset='earliest'
+        )
+
+        self.producer = KafkaProducer(
+            bootstrap_servers='localhost:9092',
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+
+    def process_inventory_updated(self, event):
+        &quot;&quot;&quot;处理库存更新事件&quot;&quot;&quot;
+        if event.get('status') != 'success':
+            return
+
+        order_id = event['order_id']
+
+        print(f&quot;\n[支付服务] 处理订单: {order_id}&quot;)
+        print(f&quot;[支付服务] 开始处理支付...&quot;)
+
+        # 模拟支付处理
+        time.sleep(2)
+
+        # 假设支付成功
+        print(f&quot;[支付服务] 支付成功&quot;)
+
+        # 发布支付完成事件
+        self.producer.send('order-events', {
+            'event_type': 'payment.completed',
+            'order_id': order_id,
+            'payment_id': f'PAY-{order_id[:8]}',
+            'status': 'success'
+        })
+
+    def start(self):
+        &quot;&quot;&quot;开始消费消息&quot;&quot;&quot;
+        print('[支付服务] 启动，等待库存事件...')
+
+        try:
+            for message in self.consumer:
+                event = message.value
+                event_type = event.get('event_type')
+
+                if event_type == 'inventory.updated':
+                    self.process_inventory_updated(event)
+
+        except KeyboardInterrupt:
+            print('\n[支付服务] 停止')
+        finally:
+            self.consumer.close()
+            self.producer.close()
+
+# 使用示例
+if __name__ == '__main__':
+    service = PaymentService()
+    service.start()
+</code></pre>
+<h3 id="55">5.5 通知服务（消费者）</h3>
+<p>创建 <code>notification_service.py</code> 文件：</p>
+<pre><code class="language-python">from kafka import KafkaConsumer
+import json
+
+class NotificationService:
+    def __init__(self):
+        self.consumer = KafkaConsumer(
+            'order-events',
+            bootstrap_servers='localhost:9092',
+            group_id='notification-service',
+            value_deserializer=lambda m: json.loads(m.decode('utf-8')),
+            auto_offset_reset='earliest'
+        )
+
+    def send_notification(self, event_type, order_id):
+        &quot;&quot;&quot;发送通知&quot;&quot;&quot;
+        notifications = {
+            'order.created': f'订单 {order_id} 已创建',
+            'inventory.updated': f'订单 {order_id} 库存已确认',
+            'inventory.insufficient': f'订单 {order_id} 库存不足',
+            'payment.completed': f'订单 {order_id} 支付成功'
+        }
+
+        message = notifications.get(event_type, f'订单 {order_id} 状态更新')
+        print(f&quot;\n[通知服务] 📧 发送通知: {message}&quot;)
+
+    def start(self):
+        &quot;&quot;&quot;开始消费消息&quot;&quot;&quot;
+        print('[通知服务] 启动，等待事件...')
+
+        try:
+            for message in self.consumer:
+                event = message.value
+                event_type = event.get('event_type')
+                order_id = event.get('order_id') or event.get('order', {}).get('order_id')
+
+                if order_id:
+                    self.send_notification(event_type, order_id)
+
+        except KeyboardInterrupt:
+            print('\n[通知服务] 停止')
+        finally:
+            self.consumer.close()
+
+# 使用示例
+if __name__ == '__main__':
+    service = NotificationService()
+    service.start()
+</code></pre>
+<h3 id="56">5.6 运行完整系统</h3>
+<p><strong>启动所有服务</strong>：</p>
+<pre><code class="language-bash"># 终端1: 库存服务
+python inventory_service.py
+
+# 终端2: 支付服务
+python payment_service.py
+
+# 终端3: 通知服务
+python notification_service.py
+
+# 终端4: 创建订单
+python order_service.py
+</code></pre>
+<p><strong>预期流程</strong>：</p>
+<ol>
+<li>订单服务创建订单并发布 <code>order.created</code> 事件</li>
+<li>库存服务接收事件，扣减库存，发布 <code>inventory.updated</code> 事件</li>
+<li>支付服务接收事件，处理支付，发布 <code>payment.completed</code> 事件</li>
+<li>通知服务接收所有事件，发送相应通知</li>
+</ol>
+<p><strong>系统优势</strong>：</p>
+<ul>
+<li>✅ 服务解耦：各服务独立开发和部署</li>
+<li>✅ 异步处理：订单服务快速响应</li>
+<li>✅ 可扩展：可以轻松添加新的服务</li>
+<li>✅ 容错性：某个服务故障不影响其他服务</li>
+<li>✅ 可追溯：所有事件都有记录</li>
+</ul>
+<h2 id="6">步骤6：消息可靠性保证</h2>
+<h3 id="61">6.1 消息持久化</h3>
+<p><strong>RabbitMQ持久化</strong>：</p>
+<pre><code class="language-python"># 队列持久化
+channel.queue_declare(queue='task_queue', durable=True)
+
+# 消息持久化
+channel.basic_publish(
+    exchange='',
+    routing_key='task_queue',
+    body=message,
+    properties=pika.BasicProperties(
+        delivery_mode=2,  # 持久化消息
+    )
+)
+</code></pre>
+<p><strong>Kafka持久化</strong>：</p>
+<p>Kafka默认将消息持久化到磁盘，可以配置副本数：</p>
+<pre><code class="language-python"># 创建带副本的Topic
+from kafka.admin import KafkaAdminClient, NewTopic
+
+admin_client = KafkaAdminClient(bootstrap_servers='localhost:9092')
+
+topic = NewTopic(
+    name='orders',
+    num_partitions=3,
+    replication_factor=2  # 2个副本
+)
+
+admin_client.create_topics([topic])
+</code></pre>
+<h3 id="62">6.2 消息确认机制</h3>
+<p><strong>RabbitMQ手动确认</strong>：</p>
+<pre><code class="language-python">def callback(ch, method, properties, body):
+    try:
+        # 处理消息
+        process_message(body)
+
+        # 手动确认
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        # 处理失败，拒绝消息并重新入队
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+
+# 关闭自动确认
+channel.basic_consume(
+    queue='task_queue',
+    on_message_callback=callback,
+    auto_ack=False  # 手动确认
+)
+</code></pre>
+<p><strong>Kafka手动提交offset</strong>：</p>
+<pre><code class="language-python">consumer = KafkaConsumer(
+    'orders',
+    enable_auto_commit=False  # 关闭自动提交
+)
+
+for message in consumer:
+    try:
+        # 处理消息
+        process_message(message.value)
+
+        # 手动提交offset
+        consumer.commit()
+    except Exception as e:
+        print(f&quot;处理失败: {e}&quot;)
+        # 不提交offset，下次会重新消费
+</code></pre>
+<h3 id="63">6.3 消息幂等性</h3>
+<p>确保消息被重复消费时不会产生副作用。</p>
+<p><strong>方法1：使用唯一ID</strong></p>
+<pre><code class="language-python">processed_messages = set()
+
+def process_message(message):
+    message_id = message['id']
+
+    # 检查是否已处理
+    if message_id in processed_messages:
+        print(f&quot;消息 {message_id} 已处理，跳过&quot;)
+        return
+
+    # 处理消息
+    do_business_logic(message)
+
+    # 记录已处理
+    processed_messages.add(message_id)
+</code></pre>
+<p><strong>方法2：使用数据库唯一约束</strong></p>
+<pre><code class="language-python">def process_order(order):
+    try:
+        # 使用order_id作为主键，重复插入会失败
+        db.execute(
+            &quot;INSERT INTO orders (order_id, user_id, amount) VALUES (?, ?, ?)&quot;,
+            (order['order_id'], order['user_id'], order['amount'])
+        )
+        print(f&quot;订单 {order['order_id']} 处理成功&quot;)
+    except IntegrityError:
+        print(f&quot;订单 {order['order_id']} 已存在，跳过&quot;)
+</code></pre>
+<h3 id="64">6.4 死信队列</h3>
+<p>处理无法正常消费的消息。</p>
+<p><strong>RabbitMQ死信队列</strong>：</p>
+<pre><code class="language-python"># 声明主队列，配置死信交换机
+channel.queue_declare(
+    queue='main_queue',
+    arguments={
+        'x-dead-letter-exchange': 'dlx_exchange',
+        'x-dead-letter-routing-key': 'dead_letter'
+    }
+)
+
+# 声明死信交换机和队列
+channel.exchange_declare(exchange='dlx_exchange', exchange_type='direct')
+channel.queue_declare(queue='dead_letter_queue')
+channel.queue_bind(
+    exchange='dlx_exchange',
+    queue='dead_letter_queue',
+    routing_key='dead_letter'
+)
+
+# 消息处理失败时拒绝消息
+def callback(ch, method, properties, body):
+    try:
+        process_message(body)
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        # 拒绝消息，不重新入队，进入死信队列
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+</code></pre>
+<h3 id="65">6.5 消息重试机制</h3>
+<pre><code class="language-python">import time
+
+def process_with_retry(message, max_retries=3):
+    &quot;&quot;&quot;带重试的消息处理&quot;&quot;&quot;
+    retry_count = 0
+
+    while retry_count &lt; max_retries:
+        try:
+            # 处理消息
+            process_message(message)
+            return True
+        except Exception as e:
+            retry_count += 1
+            print(f&quot;处理失败，重试 {retry_count}/{max_retries}: {e}&quot;)
+
+            if retry_count &lt; max_retries:
+                # 指数退避
+                time.sleep(2 ** retry_count)
+            else:
+                # 达到最大重试次数，记录错误
+                log_error(message, e)
+                return False
+</code></pre>
+<h2 id="7">步骤7：性能优化</h2>
+<h3 id="71">7.1 批量发送</h3>
+<p><strong>RabbitMQ批量发送</strong>：</p>
+<pre><code class="language-python">def send_batch(messages):
+    &quot;&quot;&quot;批量发送消息&quot;&quot;&quot;
+    for message in messages:
+        channel.basic_publish(
+            exchange='',
+            routing_key='task_queue',
+            body=json.dumps(message)
+        )
+
+    # 等待所有消息确认
+    channel.confirm_delivery()
+</code></pre>
+<p><strong>Kafka批量发送</strong>：</p>
+<pre><code class="language-python">producer = KafkaProducer(
+    bootstrap_servers='localhost:9092',
+    batch_size=16384,  # 批量大小（字节）
+    linger_ms=10,  # 等待时间（毫秒）
+    compression_type='gzip'  # 压缩
+)
+
+# 发送多条消息
+for message in messages:
+    producer.send('orders', message)
+
+# 刷新缓冲区
+producer.flush()
+</code></pre>
+<h3 id="72">7.2 并发消费</h3>
+<p><strong>多线程消费</strong>：</p>
+<pre><code class="language-python">import threading
+
+def consume_worker(worker_id):
+    &quot;&quot;&quot;消费者工作线程&quot;&quot;&quot;
+    consumer = KafkaConsumer(
+        'orders',
+        group_id='order-processors',
+        bootstrap_servers='localhost:9092'
+    )
+
+    print(f&quot;[Worker {worker_id}] 启动&quot;)
+
+    for message in consumer:
+        print(f&quot;[Worker {worker_id}] 处理消息: {message.value}&quot;)
+        process_message(message.value)
+
+# 启动多个消费者线程
+threads = []
+for i in range(4):
+    t = threading.Thread(target=consume_worker, args=(i,))
+    t.start()
+    threads.append(t)
+
+# 等待所有线程
+for t in threads:
+    t.join()
+</code></pre>
+<h3 id="73">7.3 消息压缩</h3>
+<p><strong>Kafka消息压缩</strong>：</p>
+<pre><code class="language-python"># 生产者端压缩
+producer = KafkaProducer(
+    bootstrap_servers='localhost:9092',
+    compression_type='gzip'  # 或 'snappy', 'lz4', 'zstd'
+)
+
+# 消费者自动解压
+consumer = KafkaConsumer(
+    'orders',
+    bootstrap_servers='localhost:9092'
+)
+</code></pre>
+<h3 id="74">7.4 监控和指标</h3>
+<p><strong>RabbitMQ监控</strong>：</p>
+<pre><code class="language-python">import requests
+
+def get_queue_stats(queue_name):
+    &quot;&quot;&quot;获取队列统计信息&quot;&quot;&quot;
+    response = requests.get(
+        f'http://localhost:15672/api/queues/%2F/{queue_name}',
+        auth=('guest', 'guest')
+    )
+
+    stats = response.json()
+    print(f&quot;队列: {queue_name}&quot;)
+    print(f&quot;  消息数: {stats['messages']}&quot;)
+    print(f&quot;  消费者数: {stats['consumers']}&quot;)
+    print(f&quot;  消息速率: {stats['messages_details']['rate']}/s&quot;)
+
+get_queue_stats('task_queue')
+</code></pre>
+<p><strong>Kafka监控</strong>：</p>
+<pre><code class="language-python">from kafka import KafkaConsumer
+
+def get_topic_info(topic):
+    &quot;&quot;&quot;获取Topic信息&quot;&quot;&quot;
+    consumer = KafkaConsumer(bootstrap_servers='localhost:9092')
+
+    partitions = consumer.partitions_for_topic(topic)
+    print(f&quot;Topic: {topic}&quot;)
+    print(f&quot;  分区数: {len(partitions)}&quot;)
+
+    for partition in partitions:
+        beginning = consumer.beginning_offsets({(topic, partition)})
+        end = consumer.end_offsets({(topic, partition)})
+        print(f&quot;  分区 {partition}:&quot;)
+        print(f&quot;    起始offset: {beginning}&quot;)
+        print(f&quot;    结束offset: {end}&quot;)
+
+get_topic_info('orders')
+</code></pre>
+<h2 id="_13">故障排除</h2>
+<h3 id="1rabbitmq_1">问题1：RabbitMQ连接失败</h3>
+<p><strong>现象</strong>：</p>
+<pre><code>pika.exceptions.AMQPConnectionError: Connection refused
+</code></pre>
+<p><strong>可能原因</strong>：
+- RabbitMQ服务未启动
+- 端口被占用
+- 防火墙阻止连接</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-bash"># 检查RabbitMQ状态
+docker ps | grep rabbitmq
+
+# 查看日志
+docker logs rabbitmq
+
+# 重启RabbitMQ
+docker restart rabbitmq
+
+# 检查端口
+netstat -an | grep 5672
+</code></pre>
+<h3 id="2kafka">问题2：Kafka消费者无法接收消息</h3>
+<p><strong>现象</strong>：
+消费者启动后没有收到任何消息。</p>
+<p><strong>可能原因</strong>：
+- <code>auto_offset_reset</code> 设置为 <code>latest</code>，只消费新消息
+- 消费者组已有offset记录
+- Topic不存在</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-python"># 方法1：从最早的消息开始消费
+consumer = KafkaConsumer(
+    'orders',
+    auto_offset_reset='earliest'
+)
+
+# 方法2：重置消费者组offset
+from kafka import KafkaAdminClient
+
+admin = KafkaAdminClient(bootstrap_servers='localhost:9092')
+# 删除消费者组（需要先停止所有消费者）
+admin.delete_consumer_groups(['my-group'])
+</code></pre>
+<h3 id="3_1">问题3：消息丢失</h3>
+<p><strong>现象</strong>：
+发送的消息没有被消费。</p>
+<p><strong>可能原因</strong>：
+- 消息未持久化
+- 消费者处理失败但确认了消息
+- 队列/Topic被删除</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-python"># RabbitMQ: 确保消息和队列都持久化
+channel.queue_declare(queue='task_queue', durable=True)
+channel.basic_publish(
+    exchange='',
+    routing_key='task_queue',
+    body=message,
+    properties=pika.BasicProperties(delivery_mode=2)
+)
+
+# 使用手动确认
+channel.basic_consume(
+    queue='task_queue',
+    on_message_callback=callback,
+    auto_ack=False
+)
+
+# Kafka: 使用手动提交
+consumer = KafkaConsumer(
+    'orders',
+    enable_auto_commit=False
+)
+
+for message in consumer:
+    try:
+        process_message(message.value)
+        consumer.commit()  # 处理成功后才提交
+    except Exception as e:
+        print(f&quot;处理失败: {e}&quot;)
+</code></pre>
+<h3 id="4_1">问题4：消息堆积</h3>
+<p><strong>现象</strong>：
+队列中消息越来越多，消费速度跟不上生产速度。</p>
+<p><strong>可能原因</strong>：
+- 消费者处理速度慢
+- 消费者数量不足
+- 消息处理逻辑有问题</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-bash"># 增加消费者数量
+# 启动多个消费者实例
+
+# 优化消息处理逻辑
+# - 使用批量处理
+# - 异步处理
+# - 减少数据库查询
+
+# 使用多线程/多进程消费
+</code></pre>
+<h3 id="5_1">问题5：消息重复消费</h3>
+<p><strong>现象</strong>：
+同一条消息被处理多次。</p>
+<p><strong>可能原因</strong>：
+- 消费者处理成功但未确认
+- 网络问题导致确认失败
+- 消费者重启</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-python"># 实现幂等性处理
+processed_ids = set()
+
+def process_message(message):
+    message_id = message['id']
+
+    if message_id in processed_ids:
+        print(f&quot;消息 {message_id} 已处理&quot;)
+        return
+
+    # 处理消息
+    do_business_logic(message)
+
+    # 记录已处理
+    processed_ids.add(message_id)
+
+    # 或使用数据库记录
+    db.execute(
+        &quot;INSERT IGNORE INTO processed_messages (message_id) VALUES (?)&quot;,
+        (message_id,)
+    )
+</code></pre>
+<h2 id="_14">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ 消息队列的核心概念和工作原理</li>
+<li>✅ RabbitMQ的安装、配置和使用</li>
+<li>✅ Kafka的安装、配置和使用</li>
+<li>✅ 点对点、发布订阅、主题等消息模式</li>
+<li>✅ 异步处理和系统解耦的实现</li>
+<li>✅ 消息可靠性保证（持久化、确认、幂等性）</li>
+<li>✅ 实战案例：订单处理系统</li>
+<li>✅ 性能优化技巧</li>
+<li>✅ 常见问题的排查和解决</li>
+</ul>
+<p><strong>关键要点</strong>：</p>
+<ol>
+<li>
+<p><strong>选择合适的消息队列</strong>
+   - RabbitMQ：适合任务队列、RPC、复杂路由
+   - Kafka：适合大数据、日志、流处理</p>
+</li>
+<li>
+<p><strong>保证消息可靠性</strong>
+   - 消息持久化
+   - 手动确认机制
+   - 实现幂等性
+   - 使用死信队列</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 批量发送和消费
+   - 并发处理
+   - 消息压缩
+   - 合理配置参数</p>
+</li>
+<li>
+<p><strong>监控和运维</strong>
+   - 监控队列状态
+   - 及时处理消息堆积
+   - 定期清理死信队列
+   - 做好日志记录</p>
+</li>
+</ol>
+<h2 id="_15">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1：实现延迟队列</strong>
+   - 使用RabbitMQ的TTL和死信队列实现延迟消息
+   - 应用场景：订单超时自动取消</p>
+</li>
+<li>
+<p><strong>挑战2：实现消息优先级</strong>
+   - 配置RabbitMQ的优先级队列
+   - 高优先级消息优先处理</p>
+</li>
+<li>
+<p><strong>挑战3：实现Saga模式</strong>
+   - 使用消息队列实现分布式事务
+   - 处理订单创建的完整流程（含补偿）</p>
+</li>
+<li>
+<p><strong>挑战4：实现消息追踪</strong>
+   - 为每条消息添加追踪ID
+   - 记录消息的完整处理链路</p>
+</li>
+<li>
+<p><strong>挑战5：性能测试</strong>
+   - 测试不同配置下的吞吐量
+   - 对比RabbitMQ和Kafka的性能</p>
+</li>
+</ol>
+<h2 id="_16">完整代码</h2>
+<p>完整的项目代码可以在这里下载：</p>
+<pre><code class="language-bash">git clone https://github.com/embedded-platform/message-queue-tutorial.git
+cd message-queue-tutorial
+</code></pre>
+<p><strong>项目结构</strong>：</p>
+<pre><code>message-queue-tutorial/
+├── rabbitmq/
+│   ├── producer.py
+│   ├── consumer.py
+│   ├── publisher.py
+│   ├── subscriber.py
+│   └── topic_example.py
+├── kafka/
+│   ├── producer.py
+│   ├── consumer.py
+│   └── admin.py
+├── order-system/
+│   ├── order_service.py
+│   ├── inventory_service.py
+│   ├── payment_service.py
+│   └── notification_service.py
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+</code></pre>
+<h2 id="_17">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="../intermediate/01-microservices.html">微服务架构设计</a> - 深入理解微服务通信</li>
+<li><a href="link">分布式事务处理</a> - 学习Saga模式和两阶段提交</li>
+<li><a href="link">事件驱动架构</a> - 学习事件溯源和CQRS</li>
+<li><a href="link">Kafka Streams</a> - 学习流式数据处理</li>
+<li><a href="link">消息队列监控</a> - 学习Prometheus和Grafana监控</li>
+</ul>
+<h2 id="_18">参考资料</h2>
+<h3 id="_19">官方文档</h3>
+<ol>
+<li>
+<p><strong>RabbitMQ</strong>
+   - <a href="https://www.rabbitmq.com/documentation.html">官方文档</a>
+   - <a href="https://pika.readthedocs.io/">Python客户端文档</a>
+   - <a href="https://www.rabbitmq.com/management.html">管理界面指南</a></p>
+</li>
+<li>
+<p><strong>Kafka</strong>
+   - <a href="https://kafka.apache.org/documentation/">官方文档</a>
+   - <a href="https://kafka-python.readthedocs.io/">Python客户端文档</a>
+   - <a href="https://kafka.apache.org/documentation/#design">Kafka设计原理</a></p>
+</li>
+</ol>
+<h3 id="_20">推荐书籍</h3>
+<ol>
+<li>《RabbitMQ实战》- Alvaro Videla</li>
+<li>《Kafka权威指南》- Neha Narkhede</li>
+<li>《企业集成模式》- Gregor Hohpe</li>
+</ol>
+<h3 id="_21">在线资源</h3>
+<ol>
+<li><a href="https://www.rabbitmq.com/getstarted.html">RabbitMQ教程</a></li>
+<li><a href="https://kafka.apache.org/quickstart">Kafka快速入门</a></li>
+<li><a href="https://www.cloudamqp.com/blog/index.html">消息队列最佳实践</a></li>
+</ol>
+<h3 id="_22">相关技术</h3>
+<ul>
+<li><strong>消息队列对比</strong>：RabbitMQ vs Kafka vs ActiveMQ vs Redis</li>
+<li><strong>消息协议</strong>：AMQP、MQTT、STOMP</li>
+<li><strong>流处理框架</strong>：Kafka Streams、Apache Flink、Apache Storm</li>
+<li><strong>服务网格</strong>：Istio、Linkerd（用于微服务通信）</li>
+</ul>
+<h2 id="_23">实践建议</h2>
+<h3 id="_24">学习路径</h3>
+<ol>
+<li>
+<p><strong>基础阶段</strong>（1-2周）
+   - 理解消息队列的基本概念
+   - 掌握RabbitMQ的基本使用
+   - 完成简单的生产者-消费者示例</p>
+</li>
+<li>
+<p><strong>进阶阶段</strong>（2-3周）
+   - 学习不同的消息模式
+   - 掌握Kafka的使用
+   - 实现订单处理系统案例</p>
+</li>
+<li>
+<p><strong>高级阶段</strong>（3-4周）
+   - 深入理解消息可靠性
+   - 学习性能优化技巧
+   - 处理生产环境问题</p>
+</li>
+</ol>
+<h3 id="_25">实践项目建议</h3>
+<ol>
+<li>
+<p><strong>日志收集系统</strong>
+   - 使用Kafka收集应用日志
+   - 实现日志聚合和分析</p>
+</li>
+<li>
+<p><strong>实时数据处理</strong>
+   - 使用Kafka Streams处理实时数据
+   - 实现实时统计和告警</p>
+</li>
+<li>
+<p><strong>任务调度系统</strong>
+   - 使用RabbitMQ实现分布式任务队列
+   - 支持任务优先级和延迟执行</p>
+</li>
+<li>
+<p><strong>事件驱动系统</strong>
+   - 使用消息队列实现事件驱动架构
+   - 实现事件溯源和CQRS模式</p>
+</li>
+</ol>
+<h3 id="_26">生产环境注意事项</h3>
+<ol>
+<li>
+<p><strong>高可用部署</strong>
+   - RabbitMQ集群配置
+   - Kafka多副本配置
+   - 使用负载均衡</p>
+</li>
+<li>
+<p><strong>监控和告警</strong>
+   - 监控队列长度
+   - 监控消费延迟
+   - 设置告警阈值</p>
+</li>
+<li>
+<p><strong>容量规划</strong>
+   - 评估消息量和峰值
+   - 规划存储容量
+   - 预留扩展空间</p>
+</li>
+<li>
+<p><strong>安全配置</strong>
+   - 启用认证和授权
+   - 使用SSL/TLS加密
+   - 网络隔离和访问控制</p>
+</li>
+<li>
+<p><strong>备份和恢复</strong>
+   - 定期备份配置
+   - 制定灾难恢复计划
+   - 测试恢复流程</p>
+</li>
+</ol>
+<h2 id="_27">常见应用场景</h2>
+<h3 id="1_1">1. 异步任务处理</h3>
+<p><strong>场景</strong>：用户上传图片后需要生成缩略图</p>
+<pre><code class="language-python"># 上传服务
+def upload_image(image):
+    # 保存原图
+    image_id = save_image(image)
+
+    # 发送消息到队列
+    queue.send({
+        'task': 'generate_thumbnail',
+        'image_id': image_id
+    })
+
+    # 立即返回
+    return {'image_id': image_id, 'status': 'processing'}
+
+# 缩略图服务
+def process_thumbnail_task(message):
+    image_id = message['image_id']
+    generate_thumbnail(image_id)
+</code></pre>
+<h3 id="2_1">2. 系统解耦</h3>
+<p><strong>场景</strong>：订单系统需要通知多个下游系统</p>
+<pre><code class="language-python"># 订单服务
+def create_order(order_data):
+    order = save_order(order_data)
+
+    # 发布订单创建事件
+    event_bus.publish('order.created', order)
+
+    return order
+
+# 各个下游服务独立订阅
+# - 库存服务：扣减库存
+# - 物流服务：创建配送单
+# - 积分服务：增加积分
+# - 通知服务：发送通知
+</code></pre>
+<h3 id="3_2">3. 削峰填谷</h3>
+<p><strong>场景</strong>：秒杀活动流量激增</p>
+<pre><code class="language-python"># 秒杀服务
+def seckill(user_id, product_id):
+    # 快速将请求放入队列
+    queue.send({
+        'user_id': user_id,
+        'product_id': product_id,
+        'timestamp': time.time()
+    })
+
+    return {'status': 'queued'}
+
+# 订单处理服务按照自己的处理能力消费
+# 流量高峰：10000 req/s → 队列 → 处理：1000 req/s
+</code></pre>
+<h3 id="4_2">4. 日志收集</h3>
+<p><strong>场景</strong>：收集分布式系统的日志</p>
+<pre><code class="language-python"># 各个服务发送日志
+logger.send_to_kafka('logs', {
+    'service': 'order-service',
+    'level': 'ERROR',
+    'message': 'Database connection failed',
+    'timestamp': time.time()
+})
+
+# 日志收集服务统一处理
+# - 存储到Elasticsearch
+# - 触发告警
+# - 生成报表
+</code></pre>
+<h3 id="5_2">5. 数据同步</h3>
+<p><strong>场景</strong>：主数据库变更同步到从数据库</p>
+<pre><code class="language-python"># 主数据库服务
+def update_user(user_id, data):
+    # 更新主数据库
+    db.update('users', user_id, data)
+
+    # 发送变更事件
+    queue.send({
+        'event': 'user.updated',
+        'user_id': user_id,
+        'data': data
+    })
+
+# 从数据库服务
+def sync_user_update(message):
+    user_id = message['user_id']
+    data = message['data']
+
+    # 更新从数据库
+    slave_db.update('users', user_id, data)
+</code></pre>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！</p>
+<p><strong>贡献</strong>：欢迎提交Pull Request改进本教程。</p>
+<p><strong>许可</strong>：本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

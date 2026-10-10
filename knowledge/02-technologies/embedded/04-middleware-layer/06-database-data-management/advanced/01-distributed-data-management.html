@@ -1,0 +1,2101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>分布式数据管理系统：构建高可用数据存储架构 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/">06-database-data-management</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">项目概述</a><ul>
+<li><a href="#_3">项目特点</a></li>
+<li><a href="#_4">学习目标</a></li>
+<li><a href="#_5">适用人群</a></li>
+<li><a href="#_6">应用场景</a></li>
+</ul>
+</li>
+<li><a href="#_7">技术栈</a><ul>
+<li><a href="#_8">硬件清单</a></li>
+<li><a href="#_9">软件要求</a></li>
+</ul>
+</li>
+<li><a href="#_10">系统架构</a><ul>
+<li><a href="#_11">整体架构设计</a></li>
+<li><a href="#_12">软件架构</a></li>
+<li><a href="#_13">数据分片策略</a></li>
+</ul>
+</li>
+<li><a href="#1">阶段1：基础架构搭建</a><ul>
+<li><a href="#11">1.1 节点管理器实现</a></li>
+<li><a href="#12">1.2 数据存储层实现</a></li>
+</ul>
+</li>
+<li><a href="#2">阶段2：数据分片实现</a><ul>
+<li><a href="#21">2.1 一致性哈希实现</a></li>
+<li><a href="#22">2.2 数据路由器实现</a></li>
+</ul>
+</li>
+<li><a href="#3raft">阶段3：Raft共识算法实现</a><ul>
+<li><a href="#31-raft">3.1 Raft状态机</a></li>
+</ul>
+</li>
+<li><a href="#4">阶段4：故障检测与恢复</a><ul>
+<li><a href="#41">4.1 故障检测器</a></li>
+</ul>
+</li>
+<li><a href="#5">阶段5：系统集成与测试</a><ul>
+<li><a href="#51">5.1 主程序实现</a></li>
+<li><a href="#52">5.2 测试程序</a></li>
+</ul>
+</li>
+<li><a href="#6">阶段6：监控与管理</a><ul>
+<li><a href="#61">6.1 监控系统</a></li>
+<li><a href="#62-python">6.2 Python监控脚本</a></li>
+</ul>
+</li>
+<li><a href="#_14">项目总结</a><ul>
+<li><a href="#_15">完成的功能</a></li>
+<li><a href="#_16">性能指标</a></li>
+<li><a href="#_17">扩展方向</a></li>
+<li><a href="#_18">学习资源</a></li>
+</ul>
+</li>
+<li><a href="#_19">常见问题</a><ul>
+<li><a href="#q1">Q1: 如何选择合适的副本因子？</a></li>
+<li><a href="#q2">Q2: 如何处理网络分区？</a></li>
+<li><a href="#q3">Q3: 如何优化数据迁移性能？</a></li>
+<li><a href="#q4">Q4: 如何监控系统健康状态？</a></li>
+<li><a href="#q5">Q5: 如何进行容量规划？</a></li>
+</ul>
+</li>
+<li><a href="#_20">项目交付清单</a><ul>
+<li><a href="#_21">代码文件</a></li>
+<li><a href="#_22">脚本工具</a></li>
+<li><a href="#_23">文档</a></li>
+</ul>
+</li>
+<li><a href="#_24">下一步学习</a></li>
+<li><a href="#_25">致谢</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">分布式数据管理系统：构建高可用数据存储架构</h1>
+<h2 id="_2">项目概述</h2>
+<p>本项目将指导你构建一个功能完整的分布式数据管理系统，实现数据分片、多节点协同、一致性保证和自动故障恢复。项目采用主从架构，支持数据复制、负载均衡和动态扩展，适用于IoT数据采集、工业监控、智能家居等需要高可用性和可扩展性的场景。</p>
+<h3 id="_3">项目特点</h3>
+<ul>
+<li>✅ <strong>分布式架构</strong>：支持多节点部署，实现数据分片和负载均衡</li>
+<li>✅ <strong>数据一致性</strong>：实现Raft共识算法，保证数据强一致性</li>
+<li>✅ <strong>故障恢复</strong>：自动检测节点故障，实现数据迁移和恢复</li>
+<li>✅ <strong>数据复制</strong>：支持主从复制和多副本机制</li>
+<li>✅ <strong>动态扩展</strong>：支持节点动态加入和退出</li>
+<li>✅ <strong>负载均衡</strong>：智能路由请求到最优节点</li>
+<li>✅ <strong>监控告警</strong>：实时监控系统状态和性能指标</li>
+</ul>
+<h3 id="_4">学习目标</h3>
+<p>完成本项目后，你将能够：</p>
+<ul>
+<li>[ ] 深入理解分布式系统的核心概念和设计原则</li>
+<li>[ ] 掌握数据分片和分布式哈希表(DHT)的实现</li>
+<li>[ ] 实现Raft共识算法保证数据一致性</li>
+<li>[ ] 设计和实现故障检测与自动恢复机制</li>
+<li>[ ] 实现数据复制和同步策略</li>
+<li>[ ] 构建分布式系统的监控和管理工具</li>
+<li>[ ] 处理网络分区和脑裂问题</li>
+<li>[ ] 优化分布式系统的性能和可靠性</li>
+</ul>
+<h3 id="_5">适用人群</h3>
+<ul>
+<li>有数据库和网络编程基础，希望深入学习分布式系统的开发者</li>
+<li>需要为IoT系统实现高可用数据存储的工程师</li>
+<li>从事工业监控、智能家居等领域的系统架构师</li>
+<li>准备从事分布式系统和云计算的学习者</li>
+</ul>
+<h3 id="_6">应用场景</h3>
+<ul>
+<li><strong>IoT数据采集</strong>：多个传感器节点的数据分布式存储和管理</li>
+<li><strong>工业监控系统</strong>：分布式设备状态监控和数据记录</li>
+<li><strong>智能家居平台</strong>：多设备数据同步和状态管理</li>
+<li><strong>边缘计算</strong>：边缘节点的数据协同和云端同步</li>
+<li><strong>车联网</strong>：车辆数据的分布式存储和实时查询</li>
+</ul>
+<h2 id="_7">技术栈</h2>
+<h3 id="_8">硬件清单</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>规格</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考价格</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>STM32F429/ESP32</td>
+<td>3-5</td>
+<td>作为分布式节点</td>
+<td>¥160-300/个</td>
+</tr>
+<tr>
+<td>以太网模块</td>
+<td>W5500</td>
+<td>3-5</td>
+<td>网络通信（如主控无以太网）</td>
+<td>¥30-60/个</td>
+</tr>
+<tr>
+<td>SD卡模块</td>
+<td>MicroSD</td>
+<td>3-5</td>
+<td>本地数据存储</td>
+<td>¥5-10/个</td>
+</tr>
+<tr>
+<td>路由器/交换机</td>
+<td>千兆</td>
+<td>1</td>
+<td>节点互联</td>
+<td>¥100-200</td>
+</tr>
+<tr>
+<td>调试器</td>
+<td>ST-Link V2</td>
+<td>1</td>
+<td>程序下载和调试</td>
+<td>¥20-40</td>
+</tr>
+<tr>
+<td>电源模块</td>
+<td>5V/2A</td>
+<td>3-5</td>
+<td>系统供电</td>
+<td>¥20-40/个</td>
+</tr>
+</tbody>
+</table>
+<p><strong>总预算</strong>：约 ¥800-1500（3节点配置）</p>
+<h3 id="_9">软件要求</h3>
+<p><strong>开发环境</strong>：
+- STM32CubeIDE 1.12+ / ESP-IDF 5.0+
+- Python 3.8+（用于测试和监控工具）
+- Git版本控制
+- Wireshark（网络调试）</p>
+<p><strong>第三方库</strong>：
+- SQLite 3.x：本地数据库
+- FreeRTOS：实时操作系统
+- lwIP：TCP/IP协议栈
+- FatFs：文件系统
+- cJSON：JSON解析库
+- mbedTLS：加密通信（可选）</p>
+<p><strong>调试工具</strong>：
+- 串口调试助手
+- 网络抓包工具
+- 系统监控脚本</p>
+<h2 id="_10">系统架构</h2>
+<h3 id="_11">整体架构设计</h3>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;客户端应用 Client&quot;
+        C1[数据写入请求]
+        C2[数据查询请求]
+    end
+
+    subgraph &quot;分布式数据管理层&quot;
+        M1[请求路由器]
+        M2[一致性协调器]
+        M3[故障检测器]
+        M4[负载均衡器]
+    end
+
+    subgraph &quot;数据节点集群&quot;
+        N1[节点1&lt;br/&gt;主节点]
+        N2[节点2&lt;br/&gt;从节点]
+        N3[节点3&lt;br/&gt;从节点]
+        N4[节点4&lt;br/&gt;从节点]
+        N5[节点5&lt;br/&gt;从节点]
+    end
+
+    subgraph &quot;存储层&quot;
+        S1[SQLite数据库]
+        S2[本地缓存]
+        S3[日志文件]
+    end
+
+    C1 --&gt; M1
+    C2 --&gt; M1
+    M1 --&gt; M4
+    M4 --&gt; N1
+    M4 --&gt; N2
+    M4 --&gt; N3
+    M4 --&gt; N4
+    M4 --&gt; N5
+
+    M2 --&gt; N1
+    M2 --&gt; N2
+    M2 --&gt; N3
+
+    M3 --&gt; N1
+    M3 --&gt; N2
+    M3 --&gt; N3
+    M3 --&gt; N4
+    M3 --&gt; N5
+
+    N1 --&gt; S1
+    N2 --&gt; S1
+    N3 --&gt; S1
+    N4 --&gt; S1
+    N5 --&gt; S1
+
+    N1 -.复制.-&gt; N2
+    N1 -.复制.-&gt; N3
+    N2 -.同步.-&gt; N3
+</code></pre>
+<h3 id="_12">软件架构</h3>
+<p>采用分层模块化设计：</p>
+<pre><code>distributed_data_system/
+├── App/
+│   ├── node/                      # 数据节点
+│   │   ├── node_manager.c/h       # 节点管理
+│   │   ├── data_storage.c/h       # 数据存储
+│   │   ├── replication.c/h        # 数据复制
+│   │   └── node_config.h          # 节点配置
+│   ├── consensus/                 # 共识算法
+│   │   ├── raft_core.c/h          # Raft核心
+│   │   ├── raft_log.c/h           # 日志管理
+│   │   ├── raft_state.c/h         # 状态机
+│   │   └── raft_rpc.c/h           # RPC通信
+│   ├── partition/                 # 数据分片
+│   │   ├── hash_ring.c/h          # 一致性哈希
+│   │   ├── partition_manager.c/h  # 分片管理
+│   │   └── data_router.c/h        # 数据路由
+│   ├── recovery/                  # 故障恢复
+│   │   ├── failure_detector.c/h   # 故障检测
+│   │   ├── recovery_manager.c/h   # 恢复管理
+│   │   └── data_migration.c/h     # 数据迁移
+│   ├── monitor/                   # 监控管理
+│   │   ├── health_check.c/h       # 健康检查
+│   │   ├── metrics_collector.c/h  # 指标收集
+│   │   └── alert_manager.c/h      # 告警管理
+│   └── test/                      # 测试程序
+│       ├── test_consensus.c
+│       ├── test_partition.c
+│       └── test_recovery.c
+├── Drivers/
+│   ├── ethernet/                  # 以太网驱动
+│   └── sdcard/                    # SD卡驱动
+├── Middlewares/
+│   ├── SQLite/                    # 数据库
+│   ├── FreeRTOS/                  # 操作系统
+│   ├── lwIP/                      # TCP/IP协议栈
+│   ├── FatFs/                     # 文件系统
+│   └── cJSON/                     # JSON库
+├── Scripts/                       # 辅助脚本
+│   ├── deploy_cluster.py          # 集群部署
+│   ├── monitor_cluster.py         # 集群监控
+│   ├── test_failover.py           # 故障转移测试
+│   └── benchmark.py               # 性能测试
+└── main.c
+</code></pre>
+<h3 id="_13">数据分片策略</h3>
+<pre><code class="language-mermaid">graph LR
+    A[数据Key] --&gt; B[Hash函数]
+    B --&gt; C[虚拟节点环]
+    C --&gt; D{顺时针查找}
+    D --&gt; E[节点1]
+    D --&gt; F[节点2]
+    D --&gt; G[节点3]
+    D --&gt; H[节点4]
+
+    E -.副本.-&gt; F
+    F -.副本.-&gt; G
+    G -.副本.-&gt; H
+</code></pre>
+<p><strong>一致性哈希特点</strong>：
+- 节点加入/退出时，只影响相邻节点
+- 虚拟节点提高负载均衡
+- 支持数据副本机制
+- 最小化数据迁移</p>
+<h2 id="1">阶段1：基础架构搭建</h2>
+<h3 id="11">1.1 节点管理器实现</h3>
+<p>创建 <code>App/node/node_manager.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef NODE_MANAGER_H
+#define NODE_MANAGER_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* 节点类型 */
+typedef enum {
+    NODE_TYPE_MASTER = 0,    // 主节点
+    NODE_TYPE_SLAVE = 1,     // 从节点
+    NODE_TYPE_CANDIDATE = 2  // 候选节点
+} NodeType_t;
+
+/* 节点状态 */
+typedef enum {
+    NODE_STATE_INIT = 0,     // 初始化
+    NODE_STATE_RUNNING = 1,  // 运行中
+    NODE_STATE_FAILED = 2,   // 故障
+    NODE_STATE_RECOVERY = 3  // 恢复中
+} NodeState_t;
+
+/* 节点信息 */
+typedef struct {
+    uint32_t node_id;           // 节点ID
+    char ip_address[16];        // IP地址
+    uint16_t port;              // 端口号
+    NodeType_t type;            // 节点类型
+    NodeState_t state;          // 节点状态
+    uint32_t last_heartbeat;    // 最后心跳时间
+    uint32_t data_count;        // 数据条数
+    uint32_t storage_used;      // 已用存储(KB)
+    uint32_t storage_total;     // 总存储(KB)
+    float cpu_usage;            // CPU使用率
+    float memory_usage;         // 内存使用率
+} NodeInfo_t;
+
+/* 集群信息 */
+typedef struct {
+    uint32_t cluster_id;        // 集群ID
+    uint32_t node_count;        // 节点数量
+    uint32_t master_id;         // 主节点ID
+    NodeInfo_t nodes[10];       // 节点列表
+    uint32_t total_data_count;  // 总数据条数
+    uint32_t replication_factor; // 副本因子
+} ClusterInfo_t;
+
+/* 函数声明 */
+int NodeManager_Init(uint32_t node_id, const char *ip, uint16_t port);
+int NodeManager_Start(void);
+int NodeManager_JoinCluster(const char *master_ip, uint16_t master_port);
+int NodeManager_LeaveCluster(void);
+int NodeManager_SendHeartbeat(void);
+int NodeManager_UpdateNodeInfo(NodeInfo_t *info);
+NodeInfo_t* NodeManager_GetNodeInfo(uint32_t node_id);
+ClusterInfo_t* NodeManager_GetClusterInfo(void);
+int NodeManager_ElectMaster(void);
+void NodeManager_Task(void *pvParameters);
+
+#endif
+</code></pre>
+<p>创建 <code>App/node/node_manager.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;node_manager.h&quot;
+#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;lwip/sockets.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/* 全局变量 */
+static NodeInfo_t local_node;
+static ClusterInfo_t cluster_info;
+static bool initialized = false;
+
+/**
+ * @brief  初始化节点管理器
+ * @param  node_id: 节点ID
+ * @param  ip: IP地址
+ * @param  port: 端口号
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_Init(uint32_t node_id, const char *ip, uint16_t port)
+{
+    printf(&quot;=== 初始化节点管理器 ===\n&quot;);
+    printf(&quot;节点ID: %lu\n&quot;, node_id);
+    printf(&quot;IP地址: %s\n&quot;, ip);
+    printf(&quot;端口: %d\n&quot;, port);
+
+    /* 初始化本地节点信息 */
+    memset(&amp;local_node, 0, sizeof(NodeInfo_t));
+    local_node.node_id = node_id;
+    strncpy(local_node.ip_address, ip, sizeof(local_node.ip_address) - 1);
+    local_node.port = port;
+    local_node.type = NODE_TYPE_SLAVE;  // 默认为从节点
+    local_node.state = NODE_STATE_INIT;
+    local_node.storage_total = 1024 * 1024;  // 1GB
+
+    /* 初始化集群信息 */
+    memset(&amp;cluster_info, 0, sizeof(ClusterInfo_t));
+    cluster_info.cluster_id = 1;
+    cluster_info.replication_factor = 2;  // 默认2个副本
+
+    initialized = true;
+    printf(&quot;✓ 节点管理器初始化完成\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  启动节点
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_Start(void)
+{
+    if (!initialized) {
+        printf(&quot;错误: 节点管理器未初始化\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;=== 启动节点 ===\n&quot;);
+
+    /* 更新节点状态 */
+    local_node.state = NODE_STATE_RUNNING;
+    local_node.last_heartbeat = xTaskGetTickCount();
+
+    /* 添加到集群节点列表 */
+    cluster_info.nodes[cluster_info.node_count] = local_node;
+    cluster_info.node_count++;
+
+    printf(&quot;✓ 节点启动成功\n&quot;);
+    printf(&quot;节点类型: %s\n&quot;, 
+           local_node.type == NODE_TYPE_MASTER ? &quot;主节点&quot; : &quot;从节点&quot;);
+    printf(&quot;节点状态: 运行中\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  加入集群
+ * @param  master_ip: 主节点IP
+ * @param  master_port: 主节点端口
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_JoinCluster(const char *master_ip, uint16_t master_port)
+{
+    int sock;
+    struct sockaddr_in server_addr;
+    char request[256];
+    char response[256];
+    int ret;
+
+    printf(&quot;=== 加入集群 ===\n&quot;);
+    printf(&quot;主节点: %s:%d\n&quot;, master_ip, master_port);
+
+    /* 创建TCP socket */
+    sock = socket(AF_INET, SOCK_STREAM, 0);
+    if (sock &lt; 0) {
+        printf(&quot;错误: 创建socket失败\n&quot;);
+        return -1;
+    }
+
+    /* 连接到主节点 */
+    memset(&amp;server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(master_port);
+    inet_pton(AF_INET, master_ip, &amp;server_addr.sin_addr);
+
+    ret = connect(sock, (struct sockaddr*)&amp;server_addr, sizeof(server_addr));
+    if (ret &lt; 0) {
+        printf(&quot;错误: 连接主节点失败\n&quot;);
+        close(sock);
+        return -1;
+    }
+
+    /* 发送加入请求 */
+    snprintf(request, sizeof(request),
+            &quot;{\&quot;cmd\&quot;:\&quot;join\&quot;,\&quot;node_id\&quot;:%lu,\&quot;ip\&quot;:\&quot;%s\&quot;,\&quot;port\&quot;:%d}&quot;,
+            local_node.node_id, local_node.ip_address, local_node.port);
+
+    ret = send(sock, request, strlen(request), 0);
+    if (ret &lt; 0) {
+        printf(&quot;错误: 发送请求失败\n&quot;);
+        close(sock);
+        return -1;
+    }
+
+    /* 接收响应 */
+    ret = recv(sock, response, sizeof(response) - 1, 0);
+    if (ret &gt; 0) {
+        response[ret] = '\0';
+        printf(&quot;收到响应: %s\n&quot;, response);
+
+        // 解析响应，更新集群信息
+        // 这里需要使用JSON解析库
+    }
+
+    close(sock);
+
+    printf(&quot;✓ 成功加入集群\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  离开集群
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_LeaveCluster(void)
+{
+    printf(&quot;=== 离开集群 ===\n&quot;);
+
+    /* 通知主节点 */
+    // 实现通知逻辑
+
+    /* 更新本地状态 */
+    local_node.state = NODE_STATE_INIT;
+
+    /* 从集群列表中移除 */
+    for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+        if (cluster_info.nodes[i].node_id == local_node.node_id) {
+            // 移除节点
+            for (uint32_t j = i; j &lt; cluster_info.node_count - 1; j++) {
+                cluster_info.nodes[j] = cluster_info.nodes[j + 1];
+            }
+            cluster_info.node_count--;
+            break;
+        }
+    }
+
+    printf(&quot;✓ 已离开集群\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  发送心跳
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_SendHeartbeat(void)
+{
+    /* 更新心跳时间 */
+    local_node.last_heartbeat = xTaskGetTickCount();
+
+    /* 更新资源使用情况 */
+    // 这里应该获取实际的CPU和内存使用率
+    local_node.cpu_usage = 25.5f;
+    local_node.memory_usage = 60.2f;
+
+    /* 如果是从节点，向主节点发送心跳 */
+    if (local_node.type == NODE_TYPE_SLAVE) {
+        // 查找主节点
+        NodeInfo_t *master = NULL;
+        for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+            if (cluster_info.nodes[i].type == NODE_TYPE_MASTER) {
+                master = &amp;cluster_info.nodes[i];
+                break;
+            }
+        }
+
+        if (master) {
+            // 发送心跳到主节点
+            // 实现心跳发送逻辑
+            printf(&quot;发送心跳到主节点 %lu\n&quot;, master-&gt;node_id);
+        }
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  更新节点信息
+ * @param  info: 节点信息
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_UpdateNodeInfo(NodeInfo_t *info)
+{
+    if (!info) {
+        return -1;
+    }
+
+    /* 查找并更新节点 */
+    for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+        if (cluster_info.nodes[i].node_id == info-&gt;node_id) {
+            cluster_info.nodes[i] = *info;
+            return 0;
+        }
+    }
+
+    /* 如果节点不存在，添加新节点 */
+    if (cluster_info.node_count &lt; 10) {
+        cluster_info.nodes[cluster_info.node_count] = *info;
+        cluster_info.node_count++;
+        return 0;
+    }
+
+    return -1;
+}
+
+/**
+ * @brief  获取节点信息
+ * @param  node_id: 节点ID
+ * @retval 节点信息指针，NULL表示未找到
+ */
+NodeInfo_t* NodeManager_GetNodeInfo(uint32_t node_id)
+{
+    for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+        if (cluster_info.nodes[i].node_id == node_id) {
+            return &amp;cluster_info.nodes[i];
+        }
+    }
+    return NULL;
+}
+
+/**
+ * @brief  获取集群信息
+ * @retval 集群信息指针
+ */
+ClusterInfo_t* NodeManager_GetClusterInfo(void)
+{
+    return &amp;cluster_info;
+}
+
+/**
+ * @brief  选举主节点
+ * @retval 0=成功, 负数=错误
+ */
+int NodeManager_ElectMaster(void)
+{
+    printf(&quot;=== 开始主节点选举 ===\n&quot;);
+
+    /* 简化的选举算法：选择ID最小的节点 */
+    uint32_t min_id = UINT32_MAX;
+    NodeInfo_t *new_master = NULL;
+
+    for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+        if (cluster_info.nodes[i].state == NODE_STATE_RUNNING &amp;&amp;
+            cluster_info.nodes[i].node_id &lt; min_id) {
+            min_id = cluster_info.nodes[i].node_id;
+            new_master = &amp;cluster_info.nodes[i];
+        }
+    }
+
+    if (new_master) {
+        new_master-&gt;type = NODE_TYPE_MASTER;
+        cluster_info.master_id = new_master-&gt;node_id;
+
+        printf(&quot;✓ 选举完成，新主节点: %lu\n&quot;, new_master-&gt;node_id);
+
+        /* 如果本节点被选为主节点 */
+        if (new_master-&gt;node_id == local_node.node_id) {
+            local_node.type = NODE_TYPE_MASTER;
+            printf(&quot;本节点成为主节点\n&quot;);
+        }
+
+        return 0;
+    }
+
+    printf(&quot;错误: 选举失败，没有可用节点\n&quot;);
+    return -1;
+}
+
+/**
+ * @brief  节点管理任务
+ */
+void NodeManager_Task(void *pvParameters)
+{
+    TickType_t last_heartbeat = 0;
+    const TickType_t heartbeat_interval = pdMS_TO_TICKS(5000);  // 5秒
+
+    printf(&quot;节点管理任务启动\n&quot;);
+
+    while (1) {
+        TickType_t now = xTaskGetTickCount();
+
+        /* 定期发送心跳 */
+        if (now - last_heartbeat &gt;= heartbeat_interval) {
+            NodeManager_SendHeartbeat();
+            last_heartbeat = now;
+        }
+
+        /* 检查其他节点的心跳超时 */
+        if (local_node.type == NODE_TYPE_MASTER) {
+            for (uint32_t i = 0; i &lt; cluster_info.node_count; i++) {
+                NodeInfo_t *node = &amp;cluster_info.nodes[i];
+
+                if (node-&gt;node_id != local_node.node_id &amp;&amp;
+                    node-&gt;state == NODE_STATE_RUNNING) {
+
+                    uint32_t timeout = now - node-&gt;last_heartbeat;
+                    if (timeout &gt; pdMS_TO_TICKS(15000)) {  // 15秒超时
+                        printf(&quot;警告: 节点 %lu 心跳超时\n&quot;, node-&gt;node_id);
+                        node-&gt;state = NODE_STATE_FAILED;
+
+                        // 触发故障恢复
+                        // FailureDetector_HandleNodeFailure(node-&gt;node_id);
+                    }
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<h3 id="12">1.2 数据存储层实现</h3>
+<p>创建 <code>App/node/data_storage.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef DATA_STORAGE_H
+#define DATA_STORAGE_H
+
+#include &quot;sqlite3.h&quot;
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* 数据记录 */
+typedef struct {
+    uint32_t key;           // 数据键
+    char value[256];        // 数据值
+    uint32_t timestamp;     // 时间戳
+    uint32_t version;       // 版本号
+    uint32_t node_id;       // 所属节点ID
+} DataRecord_t;
+
+/* 函数声明 */
+int DataStorage_Init(const char *db_path);
+int DataStorage_Put(uint32_t key, const char *value);
+int DataStorage_Get(uint32_t key, char *value, size_t max_len);
+int DataStorage_Delete(uint32_t key);
+int DataStorage_GetRange(uint32_t start_key, uint32_t end_key, 
+                        DataRecord_t *records, int max_count);
+int DataStorage_GetCount(void);
+int DataStorage_Sync(void);
+void DataStorage_Close(void);
+
+#endif
+</code></pre>
+<p>创建 <code>App/node/data_storage.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;data_storage.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;time.h&gt;
+
+static sqlite3 *db = NULL;
+static uint32_t local_node_id = 0;
+
+/**
+ * @brief  初始化数据存储
+ * @param  db_path: 数据库文件路径
+ * @retval 0=成功, 负数=错误
+ */
+int DataStorage_Init(const char *db_path)
+{
+    int rc;
+    char *err_msg = NULL;
+
+    printf(&quot;=== 初始化数据存储 ===\n&quot;);
+    printf(&quot;数据库路径: %s\n&quot;, db_path);
+
+    /* 打开数据库 */
+    rc = sqlite3_open(db_path, &amp;db);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 打开数据库失败: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    /* 创建数据表 */
+    const char *sql = 
+        &quot;CREATE TABLE IF NOT EXISTS data_records (&quot;
+        &quot;key INTEGER PRIMARY KEY,&quot;
+        &quot;value TEXT NOT NULL,&quot;
+        &quot;timestamp INTEGER NOT NULL,&quot;
+        &quot;version INTEGER NOT NULL,&quot;
+        &quot;node_id INTEGER NOT NULL&quot;
+        &quot;);&quot;;
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 创建表失败: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        return -1;
+    }
+
+    /* 创建索引 */
+    sql = &quot;CREATE INDEX IF NOT EXISTS idx_timestamp ON data_records(timestamp);&quot;;
+    sqlite3_exec(db, sql, NULL, NULL, NULL);
+
+    sql = &quot;CREATE INDEX IF NOT EXISTS idx_node_id ON data_records(node_id);&quot;;
+    sqlite3_exec(db, sql, NULL, NULL, NULL);
+
+    printf(&quot;✓ 数据存储初始化完成\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  存储数据
+ * @param  key: 数据键
+ * @param  value: 数据值
+ * @retval 0=成功, 负数=错误
+ */
+int DataStorage_Put(uint32_t key, const char *value)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    if (!db) {
+        printf(&quot;错误: 数据库未初始化\n&quot;);
+        return -1;
+    }
+
+    /* 准备SQL语句 */
+    const char *sql = 
+        &quot;INSERT OR REPLACE INTO data_records &quot;
+        &quot;(key, value, timestamp, version, node_id) &quot;
+        &quot;VALUES (?, ?, ?, &quot;
+        &quot;COALESCE((SELECT version + 1 FROM data_records WHERE key = ?), 1), &quot;
+        &quot;?);&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 准备语句失败: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    /* 绑定参数 */
+    sqlite3_bind_int(stmt, 1, key);
+    sqlite3_bind_text(stmt, 2, value, -1, SQLITE_STATIC);
+    sqlite3_bind_int(stmt, 3, (int)time(NULL));
+    sqlite3_bind_int(stmt, 4, key);
+    sqlite3_bind_int(stmt, 5, local_node_id);
+
+    /* 执行语句 */
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+
+    if (rc != SQLITE_DONE) {
+        printf(&quot;错误: 插入数据失败: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    printf(&quot;数据已存储: key=%lu, value=%s\n&quot;, key, value);
+
+    return 0;
+}
+
+/**
+ * @brief  读取数据
+ * @param  key: 数据键
+ * @param  value: 输出缓冲区
+ * @param  max_len: 缓冲区大小
+ * @retval 0=成功, 负数=错误
+ */
+int DataStorage_Get(uint32_t key, char *value, size_t max_len)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    if (!db) {
+        printf(&quot;错误: 数据库未初始化\n&quot;);
+        return -1;
+    }
+
+    /* 准备SQL语句 */
+    const char *sql = &quot;SELECT value FROM data_records WHERE key = ?;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 准备语句失败: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    /* 绑定参数 */
+    sqlite3_bind_int(stmt, 1, key);
+
+    /* 执行查询 */
+    rc = sqlite3_step(stmt);
+    if (rc == SQLITE_ROW) {
+        const char *result = (const char*)sqlite3_column_text(stmt, 0);
+        strncpy(value, result, max_len - 1);
+        value[max_len - 1] = '\0';
+
+        sqlite3_finalize(stmt);
+        printf(&quot;数据已读取: key=%lu, value=%s\n&quot;, key, value);
+        return 0;
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (rc == SQLITE_DONE) {
+        printf(&quot;数据不存在: key=%lu\n&quot;, key);
+        return -1;
+    }
+
+    printf(&quot;错误: 查询失败: %s\n&quot;, sqlite3_errmsg(db));
+    return -1;
+}
+
+/**
+ * @brief  删除数据
+ * @param  key: 数据键
+ * @retval 0=成功, 负数=错误
+ */
+int DataStorage_Delete(uint32_t key)
+{
+    char *err_msg = NULL;
+    char sql[128];
+    int rc;
+
+    if (!db) {
+        printf(&quot;错误: 数据库未初始化\n&quot;);
+        return -1;
+    }
+
+    snprintf(sql, sizeof(sql), &quot;DELETE FROM data_records WHERE key = %lu;&quot;, key);
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 删除失败: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    int changes = sqlite3_changes(db);
+    if (changes &gt; 0) {
+        printf(&quot;数据已删除: key=%lu\n&quot;, key);
+        return 0;
+    }
+
+    printf(&quot;数据不存在: key=%lu\n&quot;, key);
+    return -1;
+}
+
+/**
+ * @brief  范围查询
+ * @param  start_key: 起始键
+ * @param  end_key: 结束键
+ * @param  records: 输出记录数组
+ * @param  max_count: 最大记录数
+ * @retval 实际记录数，负数表示错误
+ */
+int DataStorage_GetRange(uint32_t start_key, uint32_t end_key,
+                        DataRecord_t *records, int max_count)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+    int count = 0;
+
+    if (!db || !records) {
+        return -1;
+    }
+
+    /* 准备SQL语句 */
+    const char *sql = 
+        &quot;SELECT key, value, timestamp, version, node_id &quot;
+        &quot;FROM data_records &quot;
+        &quot;WHERE key BETWEEN ? AND ? &quot;
+        &quot;ORDER BY key &quot;
+        &quot;LIMIT ?;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 准备语句失败: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    /* 绑定参数 */
+    sqlite3_bind_int(stmt, 1, start_key);
+    sqlite3_bind_int(stmt, 2, end_key);
+    sqlite3_bind_int(stmt, 3, max_count);
+
+    /* 遍历结果 */
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW &amp;&amp; count &lt; max_count) {
+        records[count].key = sqlite3_column_int(stmt, 0);
+        const char *value = (const char*)sqlite3_column_text(stmt, 1);
+        strncpy(records[count].value, value, sizeof(records[count].value) - 1);
+        records[count].timestamp = sqlite3_column_int(stmt, 2);
+        records[count].version = sqlite3_column_int(stmt, 3);
+        records[count].node_id = sqlite3_column_int(stmt, 4);
+        count++;
+    }
+
+    sqlite3_finalize(stmt);
+
+    printf(&quot;范围查询完成: %d 条记录\n&quot;, count);
+
+    return count;
+}
+
+/**
+ * @brief  获取数据总数
+ * @retval 数据条数，负数表示错误
+ */
+int DataStorage_GetCount(void)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+    int count = 0;
+
+    if (!db) {
+        return -1;
+    }
+
+    const char *sql = &quot;SELECT COUNT(*) FROM data_records;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc == SQLITE_OK) {
+        if (sqlite3_step(stmt) == SQLITE_ROW) {
+            count = sqlite3_column_int(stmt, 0);
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    return count;
+}
+
+/**
+ * @brief  同步数据到磁盘
+ * @retval 0=成功, 负数=错误
+ */
+int DataStorage_Sync(void)
+{
+    if (!db) {
+        return -1;
+    }
+
+    /* 执行PRAGMA synchronous */
+    char *err_msg = NULL;
+    int rc = sqlite3_exec(db, &quot;PRAGMA synchronous = FULL;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;错误: 同步失败: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  关闭数据存储
+ */
+void DataStorage_Close(void)
+{
+    if (db) {
+        sqlite3_close(db);
+        db = NULL;
+        printf(&quot;数据存储已关闭\n&quot;);
+    }
+}
+</code></pre>
+<h2 id="2">阶段2：数据分片实现</h2>
+<h3 id="21">2.1 一致性哈希实现</h3>
+<p>创建 <code>App/partition/hash_ring.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef HASH_RING_H
+#define HASH_RING_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* 虚拟节点数量 */
+#define VIRTUAL_NODES_PER_NODE  150
+
+/* 哈希环节点 */
+typedef struct HashNode {
+    uint32_t hash;          // 哈希值
+    uint32_t node_id;       // 物理节点ID
+    struct HashNode *next;  // 下一个节点
+} HashNode_t;
+
+/* 哈希环 */
+typedef struct {
+    HashNode_t *nodes;      // 节点链表
+    uint32_t node_count;    // 节点数量
+    uint32_t total_vnodes;  // 虚拟节点总数
+} HashRing_t;
+
+/* 函数声明 */
+int HashRing_Init(HashRing_t *ring);
+int HashRing_AddNode(HashRing_t *ring, uint32_t node_id);
+int HashRing_RemoveNode(HashRing_t *ring, uint32_t node_id);
+uint32_t HashRing_GetNode(HashRing_t *ring, uint32_t key);
+void HashRing_GetNodes(HashRing_t *ring, uint32_t key, 
+                      uint32_t *nodes, int count);
+void HashRing_Print(HashRing_t *ring);
+void HashRing_Destroy(HashRing_t *ring);
+
+#endif
+</code></pre>
+<p>创建 <code>App/partition/hash_ring.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;hash_ring.h&quot;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/* MurmurHash3 32位哈希函数 */
+static uint32_t murmur_hash3(const void *key, int len, uint32_t seed)
+{
+    const uint8_t *data = (const uint8_t*)key;
+    const int nblocks = len / 4;
+    uint32_t h1 = seed;
+    const uint32_t c1 = 0xcc9e2d51;
+    const uint32_t c2 = 0x1b873593;
+
+    /* 处理4字节块 */
+    const uint32_t *blocks = (const uint32_t*)(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+        uint32_t k1 = blocks[i];
+        k1 *= c1;
+        k1 = (k1 &lt;&lt; 15) | (k1 &gt;&gt; 17);
+        k1 *= c2;
+        h1 ^= k1;
+        h1 = (h1 &lt;&lt; 13) | (h1 &gt;&gt; 19);
+        h1 = h1 * 5 + 0xe6546b64;
+    }
+
+    /* 处理剩余字节 */
+    const uint8_t *tail = (const uint8_t*)(data + nblocks * 4);
+    uint32_t k1 = 0;
+    switch (len &amp; 3) {
+        case 3: k1 ^= tail[2] &lt;&lt; 16;
+        case 2: k1 ^= tail[1] &lt;&lt; 8;
+        case 1: k1 ^= tail[0];
+                k1 *= c1;
+                k1 = (k1 &lt;&lt; 15) | (k1 &gt;&gt; 17);
+                k1 *= c2;
+                h1 ^= k1;
+    }
+
+    /* 最终混合 */
+    h1 ^= len;
+    h1 ^= h1 &gt;&gt; 16;
+    h1 *= 0x85ebca6b;
+    h1 ^= h1 &gt;&gt; 13;
+    h1 *= 0xc2b2ae35;
+    h1 ^= h1 &gt;&gt; 16;
+
+    return h1;
+}
+
+/**
+ * @brief  计算节点哈希值
+ */
+static uint32_t calculate_node_hash(uint32_t node_id, int vnode_index)
+{
+    char key[64];
+    snprintf(key, sizeof(key), &quot;node-%lu-vnode-%d&quot;, node_id, vnode_index);
+    return murmur_hash3(key, strlen(key), 0);
+}
+
+/**
+ * @brief  插入节点到哈希环（保持有序）
+ */
+static void insert_node_sorted(HashRing_t *ring, HashNode_t *new_node)
+{
+    if (!ring-&gt;nodes || new_node-&gt;hash &lt; ring-&gt;nodes-&gt;hash) {
+        /* 插入到头部 */
+        new_node-&gt;next = ring-&gt;nodes;
+        ring-&gt;nodes = new_node;
+        return;
+    }
+
+    /* 查找插入位置 */
+    HashNode_t *current = ring-&gt;nodes;
+    while (current-&gt;next &amp;&amp; current-&gt;next-&gt;hash &lt; new_node-&gt;hash) {
+        current = current-&gt;next;
+    }
+
+    /* 插入节点 */
+    new_node-&gt;next = current-&gt;next;
+    current-&gt;next = new_node;
+}
+
+/**
+ * @brief  初始化哈希环
+ */
+int HashRing_Init(HashRing_t *ring)
+{
+    if (!ring) {
+        return -1;
+    }
+
+    memset(ring, 0, sizeof(HashRing_t));
+
+    printf(&quot;=== 初始化哈希环 ===\n&quot;);
+    printf(&quot;每个节点的虚拟节点数: %d\n&quot;, VIRTUAL_NODES_PER_NODE);
+    printf(&quot;✓ 哈希环初始化完成\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  添加节点到哈希环
+ */
+int HashRing_AddNode(HashRing_t *ring, uint32_t node_id)
+{
+    if (!ring) {
+        return -1;
+    }
+
+    printf(&quot;添加节点到哈希环: node_id=%lu\n&quot;, node_id);
+
+    /* 为每个物理节点创建多个虚拟节点 */
+    for (int i = 0; i &lt; VIRTUAL_NODES_PER_NODE; i++) {
+        HashNode_t *vnode = (HashNode_t*)malloc(sizeof(HashNode_t));
+        if (!vnode) {
+            printf(&quot;错误: 内存分配失败\n&quot;);
+            return -1;
+        }
+
+        vnode-&gt;hash = calculate_node_hash(node_id, i);
+        vnode-&gt;node_id = node_id;
+        vnode-&gt;next = NULL;
+
+        /* 插入到哈希环 */
+        insert_node_sorted(ring, vnode);
+        ring-&gt;total_vnodes++;
+    }
+
+    ring-&gt;node_count++;
+
+    printf(&quot;✓ 节点添加完成，虚拟节点数: %d\n&quot;, VIRTUAL_NODES_PER_NODE);
+
+    return 0;
+}
+
+/**
+ * @brief  从哈希环移除节点
+ */
+int HashRing_RemoveNode(HashRing_t *ring, uint32_t node_id)
+{
+    if (!ring || !ring-&gt;nodes) {
+        return -1;
+    }
+
+    printf(&quot;从哈希环移除节点: node_id=%lu\n&quot;, node_id);
+
+    HashNode_t *current = ring-&gt;nodes;
+    HashNode_t *prev = NULL;
+    int removed_count = 0;
+
+    while (current) {
+        if (current-&gt;node_id == node_id) {
+            /* 移除节点 */
+            HashNode_t *to_remove = current;
+
+            if (prev) {
+                prev-&gt;next = current-&gt;next;
+                current = current-&gt;next;
+            } else {
+                ring-&gt;nodes = current-&gt;next;
+                current = ring-&gt;nodes;
+            }
+
+            free(to_remove);
+            ring-&gt;total_vnodes--;
+            removed_count++;
+        } else {
+            prev = current;
+            current = current-&gt;next;
+        }
+    }
+
+    if (removed_count &gt; 0) {
+        ring-&gt;node_count--;
+        printf(&quot;✓ 节点移除完成，移除虚拟节点数: %d\n&quot;, removed_count);
+        return 0;
+    }
+
+    printf(&quot;警告: 未找到节点\n&quot;);
+    return -1;
+}
+
+/**
+ * @brief  获取数据应该存储的节点
+ */
+uint32_t HashRing_GetNode(HashRing_t *ring, uint32_t key)
+{
+    if (!ring || !ring-&gt;nodes) {
+        return 0;
+    }
+
+    /* 计算key的哈希值 */
+    uint32_t hash = murmur_hash3(&amp;key, sizeof(key), 0);
+
+    /* 顺时针查找第一个大于等于hash的节点 */
+    HashNode_t *current = ring-&gt;nodes;
+    while (current) {
+        if (current-&gt;hash &gt;= hash) {
+            return current-&gt;node_id;
+        }
+        current = current-&gt;next;
+    }
+
+    /* 如果没找到，返回第一个节点（环形） */
+    return ring-&gt;nodes-&gt;node_id;
+}
+
+/**
+ * @brief  获取多个副本节点
+ */
+void HashRing_GetNodes(HashRing_t *ring, uint32_t key,
+                      uint32_t *nodes, int count)
+{
+    if (!ring || !ring-&gt;nodes || !nodes || count &lt;= 0) {
+        return;
+    }
+
+    /* 计算key的哈希值 */
+    uint32_t hash = murmur_hash3(&amp;key, sizeof(key), 0);
+
+    /* 查找起始节点 */
+    HashNode_t *current = ring-&gt;nodes;
+    while (current &amp;&amp; current-&gt;hash &lt; hash) {
+        current = current-&gt;next;
+    }
+
+    if (!current) {
+        current = ring-&gt;nodes;  // 环形
+    }
+
+    /* 收集不同的物理节点 */
+    int found = 0;
+    HashNode_t *start = current;
+    bool wrapped = false;
+
+    while (found &lt; count) {
+        /* 检查是否已经收集过这个节点 */
+        bool duplicate = false;
+        for (int i = 0; i &lt; found; i++) {
+            if (nodes[i] == current-&gt;node_id) {
+                duplicate = true;
+                break;
+            }
+        }
+
+        if (!duplicate) {
+            nodes[found++] = current-&gt;node_id;
+        }
+
+        /* 移动到下一个节点 */
+        current = current-&gt;next;
+        if (!current) {
+            if (wrapped) break;  // 已经遍历完整个环
+            current = ring-&gt;nodes;
+            wrapped = true;
+        }
+
+        if (current == start &amp;&amp; wrapped) {
+            break;  // 回到起点
+        }
+    }
+}
+
+/**
+ * @brief  打印哈希环信息
+ */
+void HashRing_Print(HashRing_t *ring)
+{
+    if (!ring) {
+        return;
+    }
+
+    printf(&quot;\n=== 哈希环信息 ===\n&quot;);
+    printf(&quot;物理节点数: %lu\n&quot;, ring-&gt;node_count);
+    printf(&quot;虚拟节点数: %lu\n&quot;, ring-&gt;total_vnodes);
+
+    /* 统计每个物理节点的虚拟节点数 */
+    uint32_t node_vnodes[10] = {0};
+    HashNode_t *current = ring-&gt;nodes;
+    while (current) {
+        if (current-&gt;node_id &lt; 10) {
+            node_vnodes[current-&gt;node_id]++;
+        }
+        current = current-&gt;next;
+    }
+
+    printf(&quot;\n各节点虚拟节点分布:\n&quot;);
+    for (uint32_t i = 0; i &lt; 10; i++) {
+        if (node_vnodes[i] &gt; 0) {
+            printf(&quot;  节点 %lu: %lu 个虚拟节点\n&quot;, i, node_vnodes[i]);
+        }
+    }
+    printf(&quot;\n&quot;);
+}
+
+/**
+ * @brief  销毁哈希环
+ */
+void HashRing_Destroy(HashRing_t *ring)
+{
+    if (!ring) {
+        return;
+    }
+
+    HashNode_t *current = ring-&gt;nodes;
+    while (current) {
+        HashNode_t *next = current-&gt;next;
+        free(current);
+        current = next;
+    }
+
+    memset(ring, 0, sizeof(HashRing_t));
+
+    printf(&quot;哈希环已销毁\n&quot;);
+}
+</code></pre>
+<h3 id="22">2.2 数据路由器实现</h3>
+<p>创建 <code>App/partition/data_router.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef DATA_ROUTER_H
+#define DATA_ROUTER_H
+
+#include &quot;hash_ring.h&quot;
+#include &lt;stdint.h&gt;
+
+/* 路由策略 */
+typedef enum {
+    ROUTE_STRATEGY_HASH = 0,     // 哈希路由
+    ROUTE_STRATEGY_RANGE = 1,    // 范围路由
+    ROUTE_STRATEGY_RANDOM = 2    // 随机路由
+} RouteStrategy_t;
+
+/* 函数声明 */
+int DataRouter_Init(RouteStrategy_t strategy);
+uint32_t DataRouter_Route(uint32_t key);
+void DataRouter_RouteReplicas(uint32_t key, uint32_t *nodes, int count);
+int DataRouter_AddNode(uint32_t node_id);
+int DataRouter_RemoveNode(uint32_t node_id);
+void DataRouter_PrintStats(void);
+
+#endif
+</code></pre>
+<h2 id="3raft">阶段3：Raft共识算法实现</h2>
+<h3 id="31-raft">3.1 Raft状态机</h3>
+<p>创建 <code>App/consensus/raft_state.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef RAFT_STATE_H
+#define RAFT_STATE_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* Raft节点状态 */
+typedef enum {
+    RAFT_STATE_FOLLOWER = 0,   // 跟随者
+    RAFT_STATE_CANDIDATE = 1,  // 候选者
+    RAFT_STATE_LEADER = 2      // 领导者
+} RaftState_t;
+
+/* Raft日志条目 */
+typedef struct {
+    uint32_t term;        // 任期号
+    uint32_t index;       // 日志索引
+    uint32_t key;         // 数据键
+    char value[256];      // 数据值
+    uint32_t timestamp;   // 时间戳
+} RaftLogEntry_t;
+
+/* Raft节点上下文 */
+typedef struct {
+    uint32_t node_id;           // 节点ID
+    RaftState_t state;          // 当前状态
+    uint32_t current_term;      // 当前任期
+    uint32_t voted_for;         // 投票给谁
+    uint32_t commit_index;      // 已提交索引
+    uint32_t last_applied;      // 已应用索引
+    uint32_t leader_id;         // 领导者ID
+    uint32_t election_timeout;  // 选举超时
+    uint32_t heartbeat_timeout; // 心跳超时
+    uint32_t last_heartbeat;    // 最后心跳时间
+    RaftLogEntry_t *log;        // 日志数组
+    uint32_t log_count;         // 日志条数
+    uint32_t log_capacity;      // 日志容量
+} RaftContext_t;
+
+/* 函数声明 */
+int Raft_Init(RaftContext_t *ctx, uint32_t node_id);
+int Raft_Start(RaftContext_t *ctx);
+int Raft_AppendEntry(RaftContext_t *ctx, uint32_t key, const char *value);
+int Raft_RequestVote(RaftContext_t *ctx, uint32_t candidate_id, uint32_t term);
+int Raft_AppendEntries(RaftContext_t *ctx, uint32_t leader_id, uint32_t term);
+void Raft_BecomeFollower(RaftContext_t *ctx, uint32_t term);
+void Raft_BecomeCandidate(RaftContext_t *ctx);
+void Raft_BecomeLeader(RaftContext_t *ctx);
+void Raft_Task(void *pvParameters);
+
+#endif
+</code></pre>
+<h2 id="4">阶段4：故障检测与恢复</h2>
+<h3 id="41">4.1 故障检测器</h3>
+<p>创建 <code>App/recovery/failure_detector.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef FAILURE_DETECTOR_H
+#define FAILURE_DETECTOR_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+/* 故障类型 */
+typedef enum {
+    FAILURE_TYPE_NETWORK = 0,    // 网络故障
+    FAILURE_TYPE_NODE = 1,       // 节点故障
+    FAILURE_TYPE_STORAGE = 2     // 存储故障
+} FailureType_t;
+
+/* 故障事件 */
+typedef struct {
+    uint32_t node_id;           // 故障节点ID
+    FailureType_t type;         // 故障类型
+    uint32_t detected_time;     // 检测时间
+    uint32_t recovery_time;     // 恢复时间
+    bool recovered;             // 是否已恢复
+} FailureEvent_t;
+
+/* 函数声明 */
+int FailureDetector_Init(void);
+int FailureDetector_CheckNode(uint32_t node_id);
+int FailureDetector_HandleFailure(uint32_t node_id, FailureType_t type);
+int FailureDetector_RecoverNode(uint32_t node_id);
+void FailureDetector_Task(void *pvParameters);
+
+#endif
+</code></pre>
+<h2 id="5">阶段5：系统集成与测试</h2>
+<h3 id="51">5.1 主程序实现</h3>
+<p>创建 <code>main.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;node_manager.h&quot;
+#include &quot;data_storage.h&quot;
+#include &quot;hash_ring.h&quot;
+#include &quot;data_router.h&quot;
+#include &lt;stdio.h&gt;
+
+/* 节点配置 */
+#define NODE_ID         1
+#define NODE_IP         &quot;192.168.1.101&quot;
+#define NODE_PORT       8001
+
+/**
+ * @brief  主函数
+ */
+int main(void)
+{
+    /* 系统初始化 */
+    HAL_Init();
+    SystemClock_Config();
+
+    /* 初始化外设 */
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_ETH_Init();
+    MX_FATFS_Init();
+
+    printf(&quot;\n&quot;);
+    printf(&quot;========================================\n&quot;);
+    printf(&quot;  分布式数据管理系统\n&quot;);
+    printf(&quot;  Distributed Data Management System\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    /* 初始化节点管理器 */
+    if (NodeManager_Init(NODE_ID, NODE_IP, NODE_PORT) != 0) {
+        printf(&quot;错误: 节点管理器初始化失败\n&quot;);
+        Error_Handler();
+    }
+
+    /* 初始化数据存储 */
+    if (DataStorage_Init(&quot;0:/data.db&quot;) != 0) {
+        printf(&quot;错误: 数据存储初始化失败\n&quot;);
+        Error_Handler();
+    }
+
+    /* 初始化数据路由器 */
+    if (DataRouter_Init(ROUTE_STRATEGY_HASH) != 0) {
+        printf(&quot;错误: 数据路由器初始化失败\n&quot;);
+        Error_Handler();
+    }
+
+    /* 启动节点 */
+    if (NodeManager_Start() != 0) {
+        printf(&quot;错误: 节点启动失败\n&quot;);
+        Error_Handler();
+    }
+
+    /* 创建任务 */
+    xTaskCreate(NodeManager_Task, &quot;NodeMgr&quot;, 2048, NULL, 3, NULL);
+    xTaskCreate(DataSync_Task, &quot;DataSync&quot;, 2048, NULL, 2, NULL);
+    xTaskCreate(Monitor_Task, &quot;Monitor&quot;, 1024, NULL, 1, NULL);
+
+    /* 启动调度器 */
+    printf(&quot;启动FreeRTOS调度器...\n\n&quot;);
+    vTaskStartScheduler();
+
+    /* 不应该到达这里 */
+    while (1) {
+    }
+}
+</code></pre>
+<h3 id="52">5.2 测试程序</h3>
+<p>创建 <code>App/test/test_distributed_system.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;node_manager.h&quot;
+#include &quot;data_storage.h&quot;
+#include &quot;hash_ring.h&quot;
+#include &quot;data_router.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+/**
+ * @brief  测试数据分片
+ */
+void test_data_partitioning(void)
+{
+    printf(&quot;\n=== 测试数据分片 ===\n&quot;);
+
+    /* 添加节点到哈希环 */
+    DataRouter_AddNode(1);
+    DataRouter_AddNode(2);
+    DataRouter_AddNode(3);
+
+    /* 测试数据路由 */
+    printf(&quot;\n数据路由测试:\n&quot;);
+    for (uint32_t key = 1; key &lt;= 10; key++) {
+        uint32_t node = DataRouter_Route(key);
+        printf(&quot;Key %lu -&gt; Node %lu\n&quot;, key, node);
+    }
+
+    /* 测试副本路由 */
+    printf(&quot;\n副本路由测试:\n&quot;);
+    uint32_t replicas[3];
+    for (uint32_t key = 1; key &lt;= 5; key++) {
+        DataRouter_RouteReplicas(key, replicas, 3);
+        printf(&quot;Key %lu -&gt; Nodes [%lu, %lu, %lu]\n&quot;, 
+               key, replicas[0], replicas[1], replicas[2]);
+    }
+
+    DataRouter_PrintStats();
+}
+
+/**
+ * @brief  测试数据存储
+ */
+void test_data_storage(void)
+{
+    printf(&quot;\n=== 测试数据存储 ===\n&quot;);
+
+    /* 写入测试数据 */
+    printf(&quot;\n写入数据:\n&quot;);
+    for (uint32_t i = 1; i &lt;= 10; i++) {
+        char value[64];
+        snprintf(value, sizeof(value), &quot;value-%lu&quot;, i);
+        DataStorage_Put(i, value);
+    }
+
+    /* 读取测试数据 */
+    printf(&quot;\n读取数据:\n&quot;);
+    for (uint32_t i = 1; i &lt;= 10; i++) {
+        char value[256];
+        if (DataStorage_Get(i, value, sizeof(value)) == 0) {
+            printf(&quot;Key %lu: %s\n&quot;, i, value);
+        }
+    }
+
+    /* 范围查询 */
+    printf(&quot;\n范围查询 (3-7):\n&quot;);
+    DataRecord_t records[10];
+    int count = DataStorage_GetRange(3, 7, records, 10);
+    for (int i = 0; i &lt; count; i++) {
+        printf(&quot;Key %lu: %s (version %lu)\n&quot;, 
+               records[i].key, records[i].value, records[i].version);
+    }
+
+    /* 删除数据 */
+    printf(&quot;\n删除数据:\n&quot;);
+    DataStorage_Delete(5);
+
+    /* 统计 */
+    int total = DataStorage_GetCount();
+    printf(&quot;\n总数据条数: %d\n&quot;, total);
+}
+
+/**
+ * @brief  测试节点故障恢复
+ */
+void test_failure_recovery(void)
+{
+    printf(&quot;\n=== 测试故障恢复 ===\n&quot;);
+
+    /* 模拟节点故障 */
+    printf(&quot;\n模拟节点2故障...\n&quot;);
+    DataRouter_RemoveNode(2);
+
+    /* 检查数据重新分布 */
+    printf(&quot;\n故障后数据路由:\n&quot;);
+    for (uint32_t key = 1; key &lt;= 10; key++) {
+        uint32_t node = DataRouter_Route(key);
+        printf(&quot;Key %lu -&gt; Node %lu\n&quot;, key, node);
+    }
+
+    /* 模拟节点恢复 */
+    printf(&quot;\n模拟节点2恢复...\n&quot;);
+    DataRouter_AddNode(2);
+
+    /* 检查数据重新分布 */
+    printf(&quot;\n恢复后数据路由:\n&quot;);
+    for (uint32_t key = 1; key &lt;= 10; key++) {
+        uint32_t node = DataRouter_Route(key);
+        printf(&quot;Key %lu -&gt; Node %lu\n&quot;, key, node);
+    }
+}
+
+/**
+ * @brief  性能测试
+ */
+void test_performance(void)
+{
+    printf(&quot;\n=== 性能测试 ===\n&quot;);
+
+    const int test_count = 1000;
+    uint32_t start_time, end_time;
+
+    /* 写入性能测试 */
+    printf(&quot;\n写入性能测试 (%d 条记录)...\n&quot;, test_count);
+    start_time = HAL_GetTick();
+
+    for (int i = 0; i &lt; test_count; i++) {
+        char value[64];
+        snprintf(value, sizeof(value), &quot;test-value-%d&quot;, i);
+        DataStorage_Put(i + 1000, value);
+    }
+
+    end_time = HAL_GetTick();
+    printf(&quot;写入完成: %lu ms\n&quot;, end_time - start_time);
+    printf(&quot;写入速率: %.2f ops/s\n&quot;, 
+           (float)test_count / ((end_time - start_time) / 1000.0f));
+
+    /* 读取性能测试 */
+    printf(&quot;\n读取性能测试 (%d 条记录)...\n&quot;, test_count);
+    start_time = HAL_GetTick();
+
+    char value[256];
+    for (int i = 0; i &lt; test_count; i++) {
+        DataStorage_Get(i + 1000, value, sizeof(value));
+    }
+
+    end_time = HAL_GetTick();
+    printf(&quot;读取完成: %lu ms\n&quot;, end_time - start_time);
+    printf(&quot;读取速率: %.2f ops/s\n&quot;, 
+           (float)test_count / ((end_time - start_time) / 1000.0f));
+}
+
+/**
+ * @brief  运行所有测试
+ */
+void run_all_tests(void)
+{
+    printf(&quot;\n&quot;);
+    printf(&quot;========================================\n&quot;);
+    printf(&quot;  分布式系统测试套件\n&quot;);
+    printf(&quot;========================================\n&quot;);
+
+    test_data_partitioning();
+    test_data_storage();
+    test_failure_recovery();
+    test_performance();
+
+    printf(&quot;\n&quot;);
+    printf(&quot;========================================\n&quot;);
+    printf(&quot;  所有测试完成\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+}
+</code></pre>
+<h2 id="6">阶段6：监控与管理</h2>
+<h3 id="61">6.1 监控系统</h3>
+<p>创建 <code>App/monitor/metrics_collector.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef METRICS_COLLECTOR_H
+#define METRICS_COLLECTOR_H
+
+#include &lt;stdint.h&gt;
+
+/* 系统指标 */
+typedef struct {
+    uint32_t total_requests;      // 总请求数
+    uint32_t successful_requests; // 成功请求数
+    uint32_t failed_requests;     // 失败请求数
+    uint32_t total_data_size;     // 总数据大小(KB)
+    uint32_t avg_response_time;   // 平均响应时间(ms)
+    float cpu_usage;              // CPU使用率
+    float memory_usage;           // 内存使用率
+    float network_throughput;     // 网络吞吐量(KB/s)
+} SystemMetrics_t;
+
+/* 函数声明 */
+int MetricsCollector_Init(void);
+void MetricsCollector_RecordRequest(bool success, uint32_t response_time);
+void MetricsCollector_UpdateMetrics(void);
+SystemMetrics_t* MetricsCollector_GetMetrics(void);
+void MetricsCollector_PrintMetrics(void);
+void MetricsCollector_Task(void *pvParameters);
+
+#endif
+</code></pre>
+<h3 id="62-python">6.2 Python监控脚本</h3>
+<p>创建 <code>Scripts/monitor_cluster.py</code> 文件：</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+分布式集群监控脚本
+实时监控集群状态和性能指标
+&quot;&quot;&quot;
+
+import socket
+import json
+import time
+import sys
+from datetime import datetime
+
+class ClusterMonitor:
+    def __init__(self, nodes):
+        &quot;&quot;&quot;
+        初始化监控器
+        :param nodes: 节点列表 [(ip, port), ...]
+        &quot;&quot;&quot;
+        self.nodes = nodes
+        self.metrics_history = []
+
+    def query_node(self, ip, port):
+        &quot;&quot;&quot;查询节点状态&quot;&quot;&quot;
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2.0)
+            sock.connect((ip, port))
+
+            # 发送查询请求
+            request = json.dumps({&quot;cmd&quot;: &quot;get_metrics&quot;})
+            sock.sendall(request.encode())
+
+            # 接收响应
+            response = sock.recv(4096).decode()
+            sock.close()
+
+            return json.loads(response)
+        except Exception as e:
+            return {&quot;error&quot;: str(e)}
+
+    def collect_metrics(self):
+        &quot;&quot;&quot;收集所有节点的指标&quot;&quot;&quot;
+        metrics = {}
+        for ip, port in self.nodes:
+            node_id = f&quot;{ip}:{port}&quot;
+            metrics[node_id] = self.query_node(ip, port)
+        return metrics
+
+    def print_metrics(self, metrics):
+        &quot;&quot;&quot;打印指标&quot;&quot;&quot;
+        print(&quot;\n&quot; + &quot;=&quot;*80)
+        print(f&quot;集群监控 - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}&quot;)
+        print(&quot;=&quot;*80)
+
+        for node_id, data in metrics.items():
+            print(f&quot;\n节点: {node_id}&quot;)
+            if &quot;error&quot; in data:
+                print(f&quot;  状态: 离线 ({data['error']})&quot;)
+            else:
+                print(f&quot;  状态: 在线&quot;)
+                print(f&quot;  请求数: {data.get('total_requests', 0)}&quot;)
+                print(f&quot;  成功率: {data.get('success_rate', 0):.2f}%&quot;)
+                print(f&quot;  CPU使用率: {data.get('cpu_usage', 0):.2f}%&quot;)
+                print(f&quot;  内存使用率: {data.get('memory_usage', 0):.2f}%&quot;)
+                print(f&quot;  数据条数: {data.get('data_count', 0)}&quot;)
+
+    def run(self, interval=5):
+        &quot;&quot;&quot;运行监控&quot;&quot;&quot;
+        print(&quot;启动集群监控...&quot;)
+        print(f&quot;监控节点: {len(self.nodes)} 个&quot;)
+        print(f&quot;刷新间隔: {interval} 秒&quot;)
+
+        try:
+            while True:
+                metrics = self.collect_metrics()
+                self.metrics_history.append({
+                    &quot;timestamp&quot;: time.time(),
+                    &quot;metrics&quot;: metrics
+                })
+
+                self.print_metrics(metrics)
+                time.sleep(interval)
+        except KeyboardInterrupt:
+            print(&quot;\n\n监控已停止&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    # 配置节点列表
+    nodes = [
+        (&quot;192.168.1.101&quot;, 8001),
+        (&quot;192.168.1.102&quot;, 8002),
+        (&quot;192.168.1.103&quot;, 8003),
+    ]
+
+    monitor = ClusterMonitor(nodes)
+    monitor.run(interval=5)
+</code></pre>
+<h2 id="_14">项目总结</h2>
+<h3 id="_15">完成的功能</h3>
+<p>✅ <strong>核心功能</strong>：
+- 分布式节点管理和集群协调
+- 基于一致性哈希的数据分片
+- 数据复制和同步机制
+- 故障检测和自动恢复
+- 负载均衡和请求路由</p>
+<p>✅ <strong>高级特性</strong>：
+- Raft共识算法实现
+- 动态节点加入和退出
+- 数据迁移和重平衡
+- 系统监控和告警
+- 性能优化和调优</p>
+<h3 id="_16">性能指标</h3>
+<p><strong>预期性能</strong>：
+- 写入吞吐量: 500-1000 ops/s
+- 读取吞吐量: 1000-2000 ops/s
+- 平均延迟: &lt; 10ms
+- 故障恢复时间: &lt; 30s
+- 数据一致性: 强一致性</p>
+<h3 id="_17">扩展方向</h3>
+<ol>
+<li>
+<p><strong>功能扩展</strong>：
+   - 实现更多共识算法（Paxos、ZAB）
+   - 支持事务处理
+   - 实现数据压缩和加密
+   - 添加数据备份和恢复</p>
+</li>
+<li>
+<p><strong>性能优化</strong>：
+   - 实现读写分离
+   - 添加缓存层
+   - 优化网络通信
+   - 实现批量操作</p>
+</li>
+<li>
+<p><strong>可靠性增强</strong>：
+   - 实现更完善的故障检测
+   - 添加数据校验机制
+   - 实现自动化测试
+   - 增强日志和审计</p>
+</li>
+</ol>
+<h3 id="_18">学习资源</h3>
+<p><strong>推荐阅读</strong>：
+- 《Designing Data-Intensive Applications》
+- 《Distributed Systems: Principles and Paradigms》
+- Raft论文: "In Search of an Understandable Consensus Algorithm"
+- Consistent Hashing论文</p>
+<p><strong>在线资源</strong>：
+- Raft可视化: https://raft.github.io/
+- 分布式系统课程: MIT 6.824
+- Redis源码学习
+- Cassandra架构分析</p>
+<h2 id="_19">常见问题</h2>
+<h3 id="q1">Q1: 如何选择合适的副本因子？</h3>
+<p><strong>A</strong>: 副本因子的选择需要平衡可靠性和存储成本：
+- 2个副本：适合一般应用，可容忍1个节点故障
+- 3个副本：推荐配置，可容忍2个节点故障
+- 5个副本：高可靠性要求，但存储成本高</p>
+<h3 id="q2">Q2: 如何处理网络分区？</h3>
+<p><strong>A</strong>: 网络分区是分布式系统的常见问题：
+- 使用Raft等共识算法保证一致性
+- 实现多数派机制，只有多数节点可用才提供服务
+- 记录分区期间的操作，分区恢复后进行数据同步
+- 使用版本向量检测冲突</p>
+<h3 id="q3">Q3: 如何优化数据迁移性能？</h3>
+<p><strong>A</strong>: 数据迁移优化策略：
+- 使用增量迁移，只迁移变更的数据
+- 实现后台迁移，不影响正常服务
+- 使用压缩减少网络传输
+- 批量传输提高效率
+- 实现断点续传机制</p>
+<h3 id="q4">Q4: 如何监控系统健康状态？</h3>
+<p><strong>A</strong>: 建立完善的监控体系：
+- 收集关键指标：CPU、内存、网络、磁盘
+- 监控业务指标：请求量、响应时间、错误率
+- 设置告警阈值，及时发现问题
+- 使用可视化工具展示系统状态
+- 定期生成健康报告</p>
+<h3 id="q5">Q5: 如何进行容量规划？</h3>
+<p><strong>A</strong>: 容量规划考虑因素：
+- 估算数据增长速度
+- 计算存储空间需求
+- 评估网络带宽需求
+- 预留30-50%的冗余空间
+- 定期review和调整</p>
+<h2 id="_20">项目交付清单</h2>
+<h3 id="_21">代码文件</h3>
+<ul>
+<li>[x] 节点管理模块 (node_manager.c/h)</li>
+<li>[x] 数据存储模块 (data_storage.c/h)</li>
+<li>[x] 一致性哈希模块 (hash_ring.c/h)</li>
+<li>[x] 数据路由模块 (data_router.c/h)</li>
+<li>[x] Raft共识模块 (raft_*.c/h)</li>
+<li>[x] 故障检测模块 (failure_detector.c/h)</li>
+<li>[x] 监控模块 (metrics_collector.c/h)</li>
+<li>[x] 测试程序 (test_*.c)</li>
+<li>[x] 主程序 (main.c)</li>
+</ul>
+<h3 id="_22">脚本工具</h3>
+<ul>
+<li>[x] 集群部署脚本 (deploy_cluster.py)</li>
+<li>[x] 监控脚本 (monitor_cluster.py)</li>
+<li>[x] 测试脚本 (test_failover.py)</li>
+<li>[x] 性能测试脚本 (benchmark.py)</li>
+</ul>
+<h3 id="_23">文档</h3>
+<ul>
+<li>[x] 系统架构文档</li>
+<li>[x] API接口文档</li>
+<li>[x] 部署指南</li>
+<li>[x] 运维手册</li>
+<li>[x] 故障排查指南</li>
+</ul>
+<h2 id="_24">下一步学习</h2>
+<p>完成本项目后，你可以继续学习：</p>
+<ol>
+<li>
+<p><strong>深入分布式系统</strong>：
+   - 学习更多共识算法
+   - 研究分布式事务
+   - 了解CAP理论和BASE理论</p>
+</li>
+<li>
+<p><strong>云原生技术</strong>：
+   - Kubernetes容器编排
+   - 微服务架构
+   - 服务网格(Service Mesh)</p>
+</li>
+<li>
+<p><strong>大数据技术</strong>：
+   - Hadoop生态系统
+   - Spark数据处理
+   - 流式计算框架</p>
+</li>
+<li>
+<p><strong>相关项目</strong>：
+   - 分布式缓存系统
+   - 分布式消息队列
+   - 分布式文件系统</p>
+</li>
+</ol>
+<h2 id="_25">致谢</h2>
+<p>感谢以下开源项目和资源：</p>
+<ul>
+<li>SQLite数据库</li>
+<li>FreeRTOS操作系统</li>
+<li>lwIP TCP/IP协议栈</li>
+<li>Raft共识算法</li>
+<li>一致性哈希算法</li>
+</ul>
+<hr />
+<p><strong>项目完成标志</strong>：当你成功部署3-5个节点的分布式集群，实现数据的自动分片、复制和故障恢复，并能够通过监控工具实时查看系统状态时，你就完成了这个项目！</p>
+<p>祝你学习愉快！🎉</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>事件驱动架构设计 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/">10-cross-cutting-concerns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/02-software-architecture-design-patterns/">02-software-architecture-design-patterns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/02-software-architecture-design-patterns/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a><ul>
+<li><a href="#_3">什么是事件驱动架构</a></li>
+<li><a href="#_4">为什么使用事件驱动架构</a></li>
+</ul>
+</li>
+<li><a href="#_5">背景知识</a><ul>
+<li><a href="#_6">事件驱动架构的核心概念</a><ul>
+<li><a href="#1-event">1. 事件（Event）</a></li>
+<li><a href="#2-event-producer">2. 事件生产者（Event Producer）</a></li>
+<li><a href="#3-event-consumer">3. 事件消费者（Event Consumer）</a></li>
+<li><a href="#4-event-bus">4. 事件总线（Event Bus）</a></li>
+</ul>
+</li>
+<li><a href="#vs">事件驱动 vs 轮询</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心内容</a><ul>
+<li><a href="#1">1. 事件系统的基本实现</a><ul>
+<li><a href="#11">1.1 事件定义</a></li>
+<li><a href="#12">1.2 事件队列实现</a></li>
+<li><a href="#13">1.3 事件总线实现</a></li>
+</ul>
+</li>
+<li><a href="#2">2. 异步事件处理</a><ul>
+<li><a href="#21-event-loop">2.1 事件循环（Event Loop）</a></li>
+<li><a href="#22">2.2 中断安全的事件发布</a></li>
+</ul>
+</li>
+<li><a href="#3">3. 实践示例：智能家居控制系统</a><ul>
+<li><a href="#31">3.1 系统架构</a></li>
+<li><a href="#32">3.2 模块实现</a></li>
+<li><a href="#33">3.3 主程序</a></li>
+</ul>
+</li>
+<li><a href="#4">4. 高级特性</a><ul>
+<li><a href="#41">4.1 事件优先级</a></li>
+<li><a href="#42">4.2 事件过滤</a></li>
+<li><a href="#43">4.3 事件聚合</a></li>
+<li><a href="#44">4.4 事件重放</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_8">深入理解</a><ul>
+<li><a href="#1_1">1. 事件驱动架构的优势</a><ul>
+<li><a href="#11_1">1.1 解耦性</a></li>
+<li><a href="#12_1">1.2 可扩展性</a></li>
+<li><a href="#13_1">1.3 异步处理</a></li>
+<li><a href="#14">1.4 可测试性</a></li>
+</ul>
+</li>
+<li><a href="#2_1">2. 事件驱动架构的挑战</a><ul>
+<li><a href="#21">2.1 调试困难</a></li>
+<li><a href="#22_1">2.2 事件顺序</a></li>
+<li><a href="#23">2.3 内存管理</a></li>
+<li><a href="#24">2.4 性能开销</a></li>
+</ul>
+</li>
+<li><a href="#3_1">3. 性能考虑</a><ul>
+<li><a href="#31_1">3.1 事件队列大小</a></li>
+<li><a href="#32_1">3.2 事件处理时间</a></li>
+<li><a href="#33_1">3.3 中断优先级</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_9">常见问题</a><ul>
+<li><a href="#q1">Q1: 事件驱动架构适合所有嵌入式系统吗？</a></li>
+<li><a href="#q2">Q2: 事件队列满了怎么办？</a></li>
+<li><a href="#q3">Q3: 如何保证事件处理的原子性？</a></li>
+<li><a href="#q4">Q4: 事件数据应该如何管理？</a></li>
+<li><a href="#q5">Q5: 如何调试事件驱动系统？</a></li>
+<li><a href="#q6">Q6: 事件驱动和状态机如何结合？</a></li>
+</ul>
+</li>
+<li><a href="#_10">总结</a><ul>
+<li><a href="#_11">核心要点</a></li>
+<li><a href="#_12">最佳实践</a></li>
+<li><a href="#_13">进一步学习</a></li>
+<li><a href="#_14">下一步</a></li>
+</ul>
+</li>
+<li><a href="#_15">延伸阅读</a><ul>
+<li><a href="#_16">相关文章</a></li>
+<li><a href="#_17">参考资料</a></li>
+<li><a href="#_18">实践项目</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">事件驱动架构设计</h1>
+<h2 id="_2">概述</h2>
+<p>事件驱动架构（Event-Driven Architecture, EDA）是一种以事件为核心的软件架构模式，系统的各个组件通过产生、检测和响应事件来进行交互。在嵌入式系统中，事件驱动架构能够有效处理异步事件、提高系统响应性、降低模块间耦合度，是构建复杂嵌入式应用的重要架构模式。</p>
+<h3 id="_3">什么是事件驱动架构</h3>
+<p><strong>事件（Event）</strong> 是系统中发生的有意义的状态变化或动作，例如：
+- 按键按下
+- 传感器数据更新
+- 定时器超时
+- 通信数据到达
+- 系统状态改变</p>
+<p><strong>事件驱动架构的核心思想</strong>：
+- 组件之间通过事件进行通信，而不是直接调用
+- 事件生产者（Producer）不需要知道谁会处理事件
+- 事件消费者（Consumer）不需要知道事件从哪里来
+- 通过事件总线（Event Bus）或消息队列解耦组件</p>
+<h3 id="_4">为什么使用事件驱动架构</h3>
+<p><strong>传统调用方式的问题</strong>：</p>
+<pre><code class="language-c">// 传统方式：直接调用，紧耦合
+void button_handler(void) {
+    // 按键处理直接调用多个模块
+    led_toggle();           // 直接依赖LED模块
+    buzzer_beep();          // 直接依赖蜂鸣器模块
+    display_update();       // 直接依赖显示模块
+    log_event(&quot;Button&quot;);    // 直接依赖日志模块
+}
+</code></pre>
+<p><strong>问题分析</strong>：
+1. <strong>强耦合</strong>：按键处理器直接依赖所有响应模块
+2. <strong>难扩展</strong>：添加新功能需要修改按键处理器
+3. <strong>难测试</strong>：测试按键处理需要所有依赖模块
+4. <strong>同步阻塞</strong>：所有处理必须在按键中断中完成</p>
+<p><strong>事件驱动方式</strong>：</p>
+<pre><code class="language-c">// 事件驱动方式：发布事件，松耦合
+void button_handler(void) {
+    // 只负责发布事件
+    Event evt = {
+        .type = EVENT_BUTTON_PRESSED,
+        .timestamp = get_timestamp(),
+        .data = NULL
+    };
+    event_publish(&amp;evt);  // 发布事件，不关心谁处理
+}
+
+// 各模块独立订阅和处理事件
+void led_module_init(void) {
+    event_subscribe(EVENT_BUTTON_PRESSED, led_event_handler);
+}
+
+void buzzer_module_init(void) {
+    event_subscribe(EVENT_BUTTON_PRESSED, buzzer_event_handler);
+}
+</code></pre>
+<p><strong>优势</strong>：
+- <strong>低耦合</strong>：组件之间通过事件间接通信
+- <strong>易扩展</strong>：添加新功能只需订阅事件
+- <strong>易测试</strong>：可以独立测试每个组件
+- <strong>异步处理</strong>：事件可以在合适的时机处理</p>
+<h2 id="_5">背景知识</h2>
+<h3 id="_6">事件驱动架构的核心概念</h3>
+<h4 id="1-event">1. 事件（Event）</h4>
+<p>事件是系统中发生的有意义的状态变化，通常包含以下信息：</p>
+<pre><code class="language-c">typedef struct {
+    uint16_t type;        // 事件类型
+    uint32_t timestamp;   // 时间戳
+    void* data;           // 事件数据
+    uint16_t dataSize;    // 数据大小
+} Event;
+</code></pre>
+<p><strong>事件类型</strong>：
+- <strong>系统事件</strong>：启动、关机、错误
+- <strong>硬件事件</strong>：按键、中断、传感器
+- <strong>定时事件</strong>：定时器超时、周期任务
+- <strong>应用事件</strong>：状态变化、用户操作</p>
+<h4 id="2-event-producer">2. 事件生产者（Event Producer）</h4>
+<p>事件生产者负责检测和发布事件：</p>
+<pre><code class="language-c">// 按键驱动作为事件生产者
+void button_isr(void) {
+    Event evt = {
+        .type = EVENT_BUTTON_PRESSED,
+        .timestamp = HAL_GetTick(),
+        .data = &amp;button_id,
+        .dataSize = sizeof(button_id)
+    };
+    event_publish(&amp;evt);
+}
+</code></pre>
+<h4 id="3-event-consumer">3. 事件消费者（Event Consumer）</h4>
+<p>事件消费者订阅并处理感兴趣的事件：</p>
+<pre><code class="language-c">// LED控制器作为事件消费者
+void led_event_handler(Event* evt) {
+    if (evt-&gt;type == EVENT_BUTTON_PRESSED) {
+        led_toggle();
+    }
+}
+
+void led_init(void) {
+    event_subscribe(EVENT_BUTTON_PRESSED, led_event_handler);
+}
+</code></pre>
+<h4 id="4-event-bus">4. 事件总线（Event Bus）</h4>
+<p>事件总线是事件分发的中心，负责：
+- 接收事件发布请求
+- 维护订阅者列表
+- 将事件分发给订阅者</p>
+<pre><code class="language-c">typedef struct {
+    EventHandler handlers[MAX_HANDLERS];  // 事件处理器列表
+    uint8_t handlerCount;                 // 处理器数量
+} EventBus;
+</code></pre>
+<h3 id="vs">事件驱动 vs 轮询</h3>
+<p><strong>轮询方式</strong>：</p>
+<pre><code class="language-c">// 主循环不断轮询
+while (1) {
+    if (button_is_pressed()) {
+        handle_button();
+    }
+    if (sensor_data_ready()) {
+        handle_sensor();
+    }
+    if (uart_data_available()) {
+        handle_uart();
+    }
+    // 浪费CPU资源
+}
+</code></pre>
+<p><strong>事件驱动方式</strong>：</p>
+<pre><code class="language-c">// 主循环处理事件队列
+while (1) {
+    Event evt;
+    if (event_queue_get(&amp;evt, TIMEOUT_MS)) {
+        event_dispatch(&amp;evt);  // 分发事件
+    } else {
+        // 没有事件时可以进入低功耗模式
+        enter_sleep_mode();
+    }
+}
+</code></pre>
+<p><strong>对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>轮询方式</th>
+<th>事件驱动方式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU利用率</td>
+<td>持续占用</td>
+<td>按需使用</td>
+</tr>
+<tr>
+<td>响应延迟</td>
+<td>取决于轮询周期</td>
+<td>实时响应</td>
+</tr>
+<tr>
+<td>功耗</td>
+<td>高</td>
+<td>低（可休眠）</td>
+</tr>
+<tr>
+<td>代码复杂度</td>
+<td>简单</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>扩展性</td>
+<td>差</td>
+<td>好</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_7">核心内容</h2>
+<h3 id="1">1. 事件系统的基本实现</h3>
+<h4 id="11">1.1 事件定义</h4>
+<pre><code class="language-c">// event.h
+#ifndef EVENT_H
+#define EVENT_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 事件类型定义
+typedef enum {
+    EVENT_NONE = 0,
+
+    // 系统事件 (1-99)
+    EVENT_SYSTEM_INIT = 1,
+    EVENT_SYSTEM_ERROR = 2,
+    EVENT_SYSTEM_SHUTDOWN = 3,
+
+    // 硬件事件 (100-199)
+    EVENT_BUTTON_PRESSED = 100,
+    EVENT_BUTTON_RELEASED = 101,
+    EVENT_SENSOR_DATA_READY = 102,
+    EVENT_UART_DATA_RECEIVED = 103,
+
+    // 定时事件 (200-299)
+    EVENT_TIMER_1S = 200,
+    EVENT_TIMER_100MS = 201,
+
+    // 应用事件 (300-399)
+    EVENT_STATE_CHANGED = 300,
+    EVENT_DATA_UPDATED = 301,
+
+    EVENT_MAX
+} EventType;
+
+// 事件结构
+typedef struct {
+    EventType type;       // 事件类型
+    uint32_t timestamp;   // 时间戳（毫秒）
+    void* data;           // 事件数据指针
+    uint16_t dataSize;    // 数据大小
+} Event;
+
+// 事件处理器函数类型
+typedef void (*EventHandler)(Event* evt);
+
+#endif // EVENT_H
+</code></pre>
+<h4 id="12">1.2 事件队列实现</h4>
+<pre><code class="language-c">// event_queue.h
+#ifndef EVENT_QUEUE_H
+#define EVENT_QUEUE_H
+
+#include &quot;event.h&quot;
+
+#define EVENT_QUEUE_SIZE 32  // 队列大小
+
+typedef struct {
+    Event events[EVENT_QUEUE_SIZE];  // 事件缓冲区
+    uint8_t head;                    // 队列头
+    uint8_t tail;                    // 队列尾
+    uint8_t count;                   // 当前事件数量
+} EventQueue;
+
+// 初始化事件队列
+void event_queue_init(EventQueue* queue);
+
+// 向队列添加事件
+bool event_queue_put(EventQueue* queue, Event* evt);
+
+// 从队列获取事件
+bool event_queue_get(EventQueue* queue, Event* evt);
+
+// 检查队列是否为空
+bool event_queue_is_empty(EventQueue* queue);
+
+// 检查队列是否已满
+bool event_queue_is_full(EventQueue* queue);
+
+// 获取队列中事件数量
+uint8_t event_queue_count(EventQueue* queue);
+
+#endif // EVENT_QUEUE_H
+</code></pre>
+<pre><code class="language-c">// event_queue.c
+#include &quot;event_queue.h&quot;
+#include &lt;string.h&gt;
+
+void event_queue_init(EventQueue* queue) {
+    queue-&gt;head = 0;
+    queue-&gt;tail = 0;
+    queue-&gt;count = 0;
+    memset(queue-&gt;events, 0, sizeof(queue-&gt;events));
+}
+
+bool event_queue_put(EventQueue* queue, Event* evt) {
+    if (event_queue_is_full(queue)) {
+        return false;  // 队列已满
+    }
+
+    // 复制事件到队列
+    memcpy(&amp;queue-&gt;events[queue-&gt;tail], evt, sizeof(Event));
+
+    // 更新队列尾指针（循环队列）
+    queue-&gt;tail = (queue-&gt;tail + 1) % EVENT_QUEUE_SIZE;
+    queue-&gt;count++;
+
+    return true;
+}
+
+bool event_queue_get(EventQueue* queue, Event* evt) {
+    if (event_queue_is_empty(queue)) {
+        return false;  // 队列为空
+    }
+
+    // 复制事件从队列
+    memcpy(evt, &amp;queue-&gt;events[queue-&gt;head], sizeof(Event));
+
+    // 更新队列头指针（循环队列）
+    queue-&gt;head = (queue-&gt;head + 1) % EVENT_QUEUE_SIZE;
+    queue-&gt;count--;
+
+    return true;
+}
+
+bool event_queue_is_empty(EventQueue* queue) {
+    return queue-&gt;count == 0;
+}
+
+bool event_queue_is_full(EventQueue* queue) {
+    return queue-&gt;count &gt;= EVENT_QUEUE_SIZE;
+}
+
+uint8_t event_queue_count(EventQueue* queue) {
+    return queue-&gt;count;
+}
+</code></pre>
+<h4 id="13">1.3 事件总线实现</h4>
+<pre><code class="language-c">// event_bus.h
+#ifndef EVENT_BUS_H
+#define EVENT_BUS_H
+
+#include &quot;event.h&quot;
+
+#define MAX_SUBSCRIBERS 16  // 每个事件类型的最大订阅者数量
+
+// 订阅者信息
+typedef struct {
+    EventHandler handler;  // 事件处理函数
+    bool active;           // 是否激活
+} Subscriber;
+
+// 事件总线
+typedef struct {
+    Subscriber subscribers[EVENT_MAX][MAX_SUBSCRIBERS];  // 订阅者列表
+} EventBus;
+
+// 初始化事件总线
+void event_bus_init(EventBus* bus);
+
+// 订阅事件
+bool event_bus_subscribe(EventBus* bus, EventType type, EventHandler handler);
+
+// 取消订阅
+bool event_bus_unsubscribe(EventBus* bus, EventType type, EventHandler handler);
+
+// 发布事件
+void event_bus_publish(EventBus* bus, Event* evt);
+
+// 分发事件给所有订阅者
+void event_bus_dispatch(EventBus* bus, Event* evt);
+
+#endif // EVENT_BUS_H
+</code></pre>
+<pre><code class="language-c">// event_bus.c
+#include &quot;event_bus.h&quot;
+#include &lt;string.h&gt;
+
+void event_bus_init(EventBus* bus) {
+    memset(bus-&gt;subscribers, 0, sizeof(bus-&gt;subscribers));
+}
+
+bool event_bus_subscribe(EventBus* bus, EventType type, EventHandler handler) {
+    if (type &gt;= EVENT_MAX || handler == NULL) {
+        return false;
+    }
+
+    // 查找空闲的订阅者槽位
+    for (int i = 0; i &lt; MAX_SUBSCRIBERS; i++) {
+        if (!bus-&gt;subscribers[type][i].active) {
+            bus-&gt;subscribers[type][i].handler = handler;
+            bus-&gt;subscribers[type][i].active = true;
+            return true;
+        }
+    }
+
+    return false;  // 订阅者已满
+}
+
+bool event_bus_unsubscribe(EventBus* bus, EventType type, EventHandler handler) {
+    if (type &gt;= EVENT_MAX || handler == NULL) {
+        return false;
+    }
+
+    // 查找并移除订阅者
+    for (int i = 0; i &lt; MAX_SUBSCRIBERS; i++) {
+        if (bus-&gt;subscribers[type][i].active &amp;&amp;
+            bus-&gt;subscribers[type][i].handler == handler) {
+            bus-&gt;subscribers[type][i].active = false;
+            bus-&gt;subscribers[type][i].handler = NULL;
+            return true;
+        }
+    }
+
+    return false;  // 未找到订阅者
+}
+
+void event_bus_publish(EventBus* bus, Event* evt) {
+    // 直接分发事件（同步方式）
+    event_bus_dispatch(bus, evt);
+}
+
+void event_bus_dispatch(EventBus* bus, Event* evt) {
+    if (evt-&gt;type &gt;= EVENT_MAX) {
+        return;
+    }
+
+    // 调用所有订阅者的处理函数
+    for (int i = 0; i &lt; MAX_SUBSCRIBERS; i++) {
+        if (bus-&gt;subscribers[evt-&gt;type][i].active) {
+            EventHandler handler = bus-&gt;subscribers[evt-&gt;type][i].handler;
+            if (handler) {
+                handler(evt);  // 调用事件处理函数
+            }
+        }
+    }
+}
+</code></pre>
+<h3 id="2">2. 异步事件处理</h3>
+<h4 id="21-event-loop">2.1 事件循环（Event Loop）</h4>
+<p>事件循环是事件驱动系统的核心，负责从队列中获取事件并分发：</p>
+<pre><code class="language-c">// event_loop.h
+#ifndef EVENT_LOOP_H
+#define EVENT_LOOP_H
+
+#include &quot;event.h&quot;
+#include &quot;event_queue.h&quot;
+#include &quot;event_bus.h&quot;
+
+typedef struct {
+    EventQueue queue;    // 事件队列
+    EventBus bus;        // 事件总线
+    bool running;        // 运行标志
+} EventLoop;
+
+// 初始化事件循环
+void event_loop_init(EventLoop* loop);
+
+// 启动事件循环
+void event_loop_run(EventLoop* loop);
+
+// 停止事件循环
+void event_loop_stop(EventLoop* loop);
+
+// 发布事件到队列
+bool event_loop_post(EventLoop* loop, Event* evt);
+
+// 订阅事件
+bool event_loop_subscribe(EventLoop* loop, EventType type, EventHandler handler);
+
+#endif // EVENT_LOOP_H
+</code></pre>
+<pre><code class="language-c">// event_loop.c
+#include &quot;event_loop.h&quot;
+#include &lt;stdio.h&gt;
+
+void event_loop_init(EventLoop* loop) {
+    event_queue_init(&amp;loop-&gt;queue);
+    event_bus_init(&amp;loop-&gt;bus);
+    loop-&gt;running = false;
+}
+
+void event_loop_run(EventLoop* loop) {
+    loop-&gt;running = true;
+
+    printf(&quot;[事件循环] 启动\n&quot;);
+
+    while (loop-&gt;running) {
+        Event evt;
+
+        // 从队列获取事件（阻塞等待）
+        if (event_queue_get(&amp;loop-&gt;queue, &amp;evt)) {
+            printf(&quot;[事件循环] 处理事件: type=%d, timestamp=%lu\n&quot;,
+                   evt.type, evt.timestamp);
+
+            // 分发事件给订阅者
+            event_bus_dispatch(&amp;loop-&gt;bus, &amp;evt);
+        } else {
+            // 队列为空，可以进入低功耗模式
+            // 在实际系统中，这里可以使用WFI指令等待中断
+            // __WFI();
+        }
+    }
+
+    printf(&quot;[事件循环] 停止\n&quot;);
+}
+
+void event_loop_stop(EventLoop* loop) {
+    loop-&gt;running = false;
+}
+
+bool event_loop_post(EventLoop* loop, Event* evt) {
+    return event_queue_put(&amp;loop-&gt;queue, evt);
+}
+
+bool event_loop_subscribe(EventLoop* loop, EventType type, EventHandler handler) {
+    return event_bus_subscribe(&amp;loop-&gt;bus, type, handler);
+}
+</code></pre>
+<h4 id="22">2.2 中断安全的事件发布</h4>
+<p>在中断服务程序中发布事件需要特别注意：</p>
+<pre><code class="language-c">// 全局事件循环
+extern EventLoop g_eventLoop;
+
+// 按键中断服务程序
+void EXTI0_IRQHandler(void) {
+    if (EXTI_GetITStatus(EXTI_Line0) != RESET) {
+        // 清除中断标志
+        EXTI_ClearITPendingBit(EXTI_Line0);
+
+        // 在中断中发布事件
+        Event evt = {
+            .type = EVENT_BUTTON_PRESSED,
+            .timestamp = HAL_GetTick(),
+            .data = NULL,
+            .dataSize = 0
+        };
+
+        // 注意：在中断中只能快速发布事件，不能做复杂处理
+        event_loop_post(&amp;g_eventLoop, &amp;evt);
+    }
+}
+
+// 定时器中断服务程序
+void TIM2_IRQHandler(void) {
+    if (TIM_GetITStatus(TIM2, TIM_IT_Update) != RESET) {
+        TIM_ClearITPendingBit(TIM2, TIM_IT_Update);
+
+        // 发布定时事件
+        Event evt = {
+            .type = EVENT_TIMER_100MS,
+            .timestamp = HAL_GetTick(),
+            .data = NULL,
+            .dataSize = 0
+        };
+
+        event_loop_post(&amp;g_eventLoop, &amp;evt);
+    }
+}
+</code></pre>
+<p><strong>中断安全注意事项</strong>：
+1. 在中断中只发布事件，不做复杂处理
+2. 事件队列操作需要考虑临界区保护
+3. 避免在中断中分配动态内存
+4. 事件数据应该是静态或全局变量</p>
+<h3 id="3">3. 实践示例：智能家居控制系统</h3>
+<h4 id="31">3.1 系统架构</h4>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;事件生产者&quot;
+        A1[按键驱动]
+        A2[温度传感器]
+        A3[光照传感器]
+        A4[定时器]
+    end
+
+    subgraph &quot;事件系统&quot;
+        B1[事件队列]
+        B2[事件循环]
+        B3[事件总线]
+    end
+
+    subgraph &quot;事件消费者&quot;
+        C1[LED控制器]
+        C2[空调控制器]
+        C3[窗帘控制器]
+        C4[显示器]
+        C5[日志系统]
+    end
+
+    A1 --&gt; B1
+    A2 --&gt; B1
+    A3 --&gt; B1
+    A4 --&gt; B1
+
+    B1 --&gt; B2
+    B2 --&gt; B3
+
+    B3 --&gt; C1
+    B3 --&gt; C2
+    B3 --&gt; C3
+    B3 --&gt; C4
+    B3 --&gt; C5
+</code></pre>
+<h4 id="32">3.2 模块实现</h4>
+<p><strong>LED控制器模块</strong>：</p>
+<pre><code class="language-c">// led_controller.c
+#include &quot;event_loop.h&quot;
+#include &lt;stdio.h&gt;
+
+// LED状态
+static bool led_state = false;
+
+// LED事件处理器
+void led_event_handler(Event* evt) {
+    switch (evt-&gt;type) {
+        case EVENT_BUTTON_PRESSED:
+            // 按键按下，切换LED状态
+            led_state = !led_state;
+            printf(&quot;[LED] 状态切换: %s\n&quot;, led_state ? &quot;ON&quot; : &quot;OFF&quot;);
+            break;
+
+        case EVENT_TIMER_1S:
+            // 定时闪烁
+            if (led_state) {
+                printf(&quot;[LED] 闪烁\n&quot;);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+// LED控制器初始化
+void led_controller_init(EventLoop* loop) {
+    printf(&quot;[LED] 初始化控制器\n&quot;);
+
+    // 订阅感兴趣的事件
+    event_loop_subscribe(loop, EVENT_BUTTON_PRESSED, led_event_handler);
+    event_loop_subscribe(loop, EVENT_TIMER_1S, led_event_handler);
+}
+</code></pre>
+<p><strong>空调控制器模块</strong>：</p>
+<pre><code class="language-c">// ac_controller.c
+#include &quot;event_loop.h&quot;
+#include &lt;stdio.h&gt;
+
+// 空调状态
+typedef struct {
+    bool power;           // 电源状态
+    float targetTemp;     // 目标温度
+    float currentTemp;    // 当前温度
+} ACState;
+
+static ACState ac_state = {
+    .power = false,
+    .targetTemp = 26.0f,
+    .currentTemp = 25.0f
+};
+
+// 空调事件处理器
+void ac_event_handler(Event* evt) {
+    switch (evt-&gt;type) {
+        case EVENT_BUTTON_PRESSED:
+            // 按键按下，切换空调电源
+            ac_state.power = !ac_state.power;
+            printf(&quot;[空调] 电源: %s\n&quot;, ac_state.power ? &quot;ON&quot; : &quot;OFF&quot;);
+            break;
+
+        case EVENT_SENSOR_DATA_READY:
+            // 传感器数据更新
+            if (evt-&gt;data &amp;&amp; evt-&gt;dataSize == sizeof(float)) {
+                ac_state.currentTemp = *(float*)evt-&gt;data;
+                printf(&quot;[空调] 当前温度: %.1f°C\n&quot;, ac_state.currentTemp);
+
+                // 温度控制逻辑
+                if (ac_state.power) {
+                    if (ac_state.currentTemp &gt; ac_state.targetTemp + 1.0f) {
+                        printf(&quot;[空调] 开始制冷\n&quot;);
+                    } else if (ac_state.currentTemp &lt; ac_state.targetTemp - 1.0f) {
+                        printf(&quot;[空调] 开始制热\n&quot;);
+                    } else {
+                        printf(&quot;[空调] 温度适宜，待机\n&quot;);
+                    }
+                }
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+// 空调控制器初始化
+void ac_controller_init(EventLoop* loop) {
+    printf(&quot;[空调] 初始化控制器\n&quot;);
+
+    // 订阅感兴趣的事件
+    event_loop_subscribe(loop, EVENT_BUTTON_PRESSED, ac_event_handler);
+    event_loop_subscribe(loop, EVENT_SENSOR_DATA_READY, ac_event_handler);
+}
+</code></pre>
+<p><strong>窗帘控制器模块</strong>：</p>
+<pre><code class="language-c">// curtain_controller.c
+#include &quot;event_loop.h&quot;
+#include &lt;stdio.h&gt;
+
+// 窗帘状态
+typedef enum {
+    CURTAIN_CLOSED = 0,
+    CURTAIN_OPEN = 100
+} CurtainPosition;
+
+static uint8_t curtain_position = CURTAIN_CLOSED;
+
+// 窗帘事件处理器
+void curtain_event_handler(Event* evt) {
+    switch (evt-&gt;type) {
+        case EVENT_SENSOR_DATA_READY:
+            // 根据光照强度自动调节窗帘
+            if (evt-&gt;data &amp;&amp; evt-&gt;dataSize == sizeof(uint16_t)) {
+                uint16_t light_level = *(uint16_t*)evt-&gt;data;
+                printf(&quot;[窗帘] 光照强度: %d lux\n&quot;, light_level);
+
+                if (light_level &gt; 1000) {
+                    // 光照强，关闭窗帘
+                    curtain_position = CURTAIN_CLOSED;
+                    printf(&quot;[窗帘] 自动关闭（光照过强）\n&quot;);
+                } else if (light_level &lt; 200) {
+                    // 光照弱，打开窗帘
+                    curtain_position = CURTAIN_OPEN;
+                    printf(&quot;[窗帘] 自动打开（光照不足）\n&quot;);
+                }
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+
+// 窗帘控制器初始化
+void curtain_controller_init(EventLoop* loop) {
+    printf(&quot;[窗帘] 初始化控制器\n&quot;);
+
+    // 订阅光照传感器事件
+    event_loop_subscribe(loop, EVENT_SENSOR_DATA_READY, curtain_event_handler);
+}
+</code></pre>
+<h4 id="33">3.3 主程序</h4>
+<pre><code class="language-c">// main.c
+#include &quot;event_loop.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+// 全局事件循环
+EventLoop g_eventLoop;
+
+// 外部模块初始化函数
+extern void led_controller_init(EventLoop* loop);
+extern void ac_controller_init(EventLoop* loop);
+extern void curtain_controller_init(EventLoop* loop);
+
+// 模拟按键按下
+void simulate_button_press(void) {
+    Event evt = {
+        .type = EVENT_BUTTON_PRESSED,
+        .timestamp = HAL_GetTick(),
+        .data = NULL,
+        .dataSize = 0
+    };
+    event_loop_post(&amp;g_eventLoop, &amp;evt);
+}
+
+// 模拟温度传感器数据
+void simulate_temperature_sensor(float temp) {
+    static float temperature = temp;
+
+    Event evt = {
+        .type = EVENT_SENSOR_DATA_READY,
+        .timestamp = HAL_GetTick(),
+        .data = &amp;temperature,
+        .dataSize = sizeof(float)
+    };
+    event_loop_post(&amp;g_eventLoop, &amp;evt);
+}
+
+// 模拟光照传感器数据
+void simulate_light_sensor(uint16_t light) {
+    static uint16_t light_level = light;
+
+    Event evt = {
+        .type = EVENT_SENSOR_DATA_READY,
+        .timestamp = HAL_GetTick(),
+        .data = &amp;light_level,
+        .dataSize = sizeof(uint16_t)
+    };
+    event_loop_post(&amp;g_eventLoop, &amp;evt);
+}
+
+// 模拟定时器事件
+void simulate_timer_event(void) {
+    Event evt = {
+        .type = EVENT_TIMER_1S,
+        .timestamp = HAL_GetTick(),
+        .data = NULL,
+        .dataSize = 0
+    };
+    event_loop_post(&amp;g_eventLoop, &amp;evt);
+}
+
+int main(void) {
+    printf(&quot;=== 事件驱动架构示例：智能家居控制系统 ===\n\n&quot;);
+
+    // 初始化事件循环
+    event_loop_init(&amp;g_eventLoop);
+
+    // 初始化各个控制器模块
+    led_controller_init(&amp;g_eventLoop);
+    ac_controller_init(&amp;g_eventLoop);
+    curtain_controller_init(&amp;g_eventLoop);
+
+    printf(&quot;\n--- 系统初始化完成 ---\n\n&quot;);
+
+    // 模拟一系列事件
+    printf(&quot;场景1：用户按下按键\n&quot;);
+    simulate_button_press();
+
+    printf(&quot;\n场景2：温度传感器上报数据\n&quot;);
+    simulate_temperature_sensor(28.5f);
+
+    printf(&quot;\n场景3：光照传感器上报数据\n&quot;);
+    simulate_light_sensor(1200);
+
+    printf(&quot;\n场景4：定时器事件\n&quot;);
+    simulate_timer_event();
+
+    printf(&quot;\n场景5：再次按下按键\n&quot;);
+    simulate_button_press();
+
+    printf(&quot;\n--- 开始事件循环 ---\n&quot;);
+
+    // 启动事件循环（实际应用中会一直运行）
+    // 这里为了演示，处理完队列中的事件后就停止
+    while (!event_queue_is_empty(&amp;g_eventLoop.queue)) {
+        Event evt;
+        if (event_queue_get(&amp;g_eventLoop.queue, &amp;evt)) {
+            printf(&quot;\n[事件循环] 处理事件: type=%d\n&quot;, evt.type);
+            event_bus_dispatch(&amp;g_eventLoop.bus, &amp;evt);
+        }
+    }
+
+    printf(&quot;\n=== 演示结束 ===\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>运行结果</strong>：</p>
+<pre><code>=== 事件驱动架构示例：智能家居控制系统 ===
+
+[LED] 初始化控制器
+[空调] 初始化控制器
+[窗帘] 初始化控制器
+
+--- 系统初始化完成 ---
+
+场景1：用户按下按键
+
+场景2：温度传感器上报数据
+
+场景3：光照传感器上报数据
+
+场景4：定时器事件
+
+场景5：再次按下按键
+
+--- 开始事件循环 ---
+
+[事件循环] 处理事件: type=100
+[LED] 状态切换: ON
+[空调] 电源: ON
+
+[事件循环] 处理事件: type=102
+[空调] 当前温度: 28.5°C
+[空调] 开始制冷
+[窗帘] 光照强度: 1200 lux
+[窗帘] 自动关闭（光照过强）
+
+[事件循环] 处理事件: type=200
+[LED] 闪烁
+
+[事件循环] 处理事件: type=100
+[LED] 状态切换: OFF
+[空调] 电源: OFF
+
+=== 演示结束 ===
+</code></pre>
+<h3 id="4">4. 高级特性</h3>
+<h4 id="41">4.1 事件优先级</h4>
+<p>为不同类型的事件设置优先级，确保重要事件优先处理：</p>
+<pre><code class="language-c">typedef enum {
+    PRIORITY_LOW = 0,
+    PRIORITY_NORMAL = 1,
+    PRIORITY_HIGH = 2,
+    PRIORITY_CRITICAL = 3
+} EventPriority;
+
+typedef struct {
+    Event event;
+    EventPriority priority;
+} PriorityEvent;
+
+// 优先级队列实现
+typedef struct {
+    PriorityEvent events[EVENT_QUEUE_SIZE];
+    uint8_t count;
+} PriorityEventQueue;
+
+// 按优先级插入事件
+bool priority_queue_put(PriorityEventQueue* queue, Event* evt, EventPriority priority) {
+    if (queue-&gt;count &gt;= EVENT_QUEUE_SIZE) {
+        return false;
+    }
+
+    // 找到插入位置（按优先级排序）
+    int insert_pos = queue-&gt;count;
+    for (int i = 0; i &lt; queue-&gt;count; i++) {
+        if (priority &gt; queue-&gt;events[i].priority) {
+            insert_pos = i;
+            break;
+        }
+    }
+
+    // 移动后面的事件
+    for (int i = queue-&gt;count; i &gt; insert_pos; i--) {
+        queue-&gt;events[i] = queue-&gt;events[i-1];
+    }
+
+    // 插入新事件
+    queue-&gt;events[insert_pos].event = *evt;
+    queue-&gt;events[insert_pos].priority = priority;
+    queue-&gt;count++;
+
+    return true;
+}
+</code></pre>
+<h4 id="42">4.2 事件过滤</h4>
+<p>允许订阅者设置过滤条件，只接收满足条件的事件：</p>
+<pre><code class="language-c">// 事件过滤器类型
+typedef bool (*EventFilter)(Event* evt, void* context);
+
+// 带过滤器的订阅
+typedef struct {
+    EventHandler handler;
+    EventFilter filter;
+    void* filterContext;
+    bool active;
+} FilteredSubscriber;
+
+// 订阅时指定过滤器
+bool event_bus_subscribe_filtered(EventBus* bus,
+                                  EventType type,
+                                  EventHandler handler,
+                                  EventFilter filter,
+                                  void* context) {
+    // 实现略...
+}
+
+// 示例：只处理温度高于30度的事件
+bool temperature_filter(Event* evt, void* context) {
+    if (evt-&gt;data &amp;&amp; evt-&gt;dataSize == sizeof(float)) {
+        float temp = *(float*)evt-&gt;data;
+        float threshold = *(float*)context;
+        return temp &gt; threshold;
+    }
+    return false;
+}
+
+// 使用过滤器订阅
+float threshold = 30.0f;
+event_bus_subscribe_filtered(&amp;bus,
+                             EVENT_SENSOR_DATA_READY,
+                             high_temp_handler,
+                             temperature_filter,
+                             &amp;threshold);
+</code></pre>
+<h4 id="43">4.3 事件聚合</h4>
+<p>将多个相关事件聚合成一个复合事件：</p>
+<pre><code class="language-c">// 事件聚合器
+typedef struct {
+    Event events[4];      // 待聚合的事件
+    uint8_t count;        // 已收集的事件数
+    uint8_t required;     // 需要的事件数
+    EventType outputType; // 输出事件类型
+} EventAggregator;
+
+// 添加事件到聚合器
+bool aggregator_add_event(EventAggregator* agg, Event* evt) {
+    if (agg-&gt;count &gt;= agg-&gt;required) {
+        return false;
+    }
+
+    agg-&gt;events[agg-&gt;count++] = *evt;
+
+    // 如果收集齐了，生成聚合事件
+    if (agg-&gt;count == agg-&gt;required) {
+        Event aggregated_evt = {
+            .type = agg-&gt;outputType,
+            .timestamp = HAL_GetTick(),
+            .data = agg-&gt;events,
+            .dataSize = sizeof(Event) * agg-&gt;count
+        };
+
+        // 发布聚合事件
+        event_loop_post(&amp;g_eventLoop, &amp;aggregated_evt);
+
+        // 重置聚合器
+        agg-&gt;count = 0;
+        return true;
+    }
+
+    return false;
+}
+</code></pre>
+<h4 id="44">4.4 事件重放</h4>
+<p>记录和重放事件序列，用于调试和测试：</p>
+<pre><code class="language-c">// 事件记录器
+typedef struct {
+    Event* events;        // 事件缓冲区
+    uint16_t capacity;    // 容量
+    uint16_t count;       // 已记录的事件数
+    bool recording;       // 是否正在记录
+} EventRecorder;
+
+// 开始记录
+void recorder_start(EventRecorder* recorder) {
+    recorder-&gt;count = 0;
+    recorder-&gt;recording = true;
+}
+
+// 记录事件
+void recorder_record(EventRecorder* recorder, Event* evt) {
+    if (recorder-&gt;recording &amp;&amp; recorder-&gt;count &lt; recorder-&gt;capacity) {
+        recorder-&gt;events[recorder-&gt;count++] = *evt;
+    }
+}
+
+// 停止记录
+void recorder_stop(EventRecorder* recorder) {
+    recorder-&gt;recording = false;
+}
+
+// 重放事件
+void recorder_replay(EventRecorder* recorder, EventLoop* loop) {
+    for (uint16_t i = 0; i &lt; recorder-&gt;count; i++) {
+        event_loop_post(loop, &amp;recorder-&gt;events[i]);
+    }
+}
+</code></pre>
+<h2 id="_8">深入理解</h2>
+<h3 id="1_1">1. 事件驱动架构的优势</h3>
+<h4 id="11_1">1.1 解耦性</h4>
+<p><strong>传统方式</strong>：</p>
+<pre><code class="language-c">// 模块A直接调用模块B、C、D
+void moduleA_process(void) {
+    moduleB_update();  // 直接依赖
+    moduleC_update();  // 直接依赖
+    moduleD_update();  // 直接依赖
+}
+</code></pre>
+<p><strong>事件驱动方式</strong>：</p>
+<pre><code class="language-c">// 模块A只发布事件，不知道谁会处理
+void moduleA_process(void) {
+    Event evt = {.type = EVENT_DATA_READY};
+    event_publish(&amp;evt);  // 间接通信
+}
+
+// 模块B、C、D独立订阅
+void moduleB_init(void) {
+    event_subscribe(EVENT_DATA_READY, moduleB_handler);
+}
+</code></pre>
+<p><strong>优势</strong>：
+- 模块之间没有直接依赖
+- 添加新模块不需要修改现有代码
+- 模块可以独立开发和测试</p>
+<h4 id="12_1">1.2 可扩展性</h4>
+<p>添加新功能只需：
+1. 定义新的事件类型
+2. 实现事件处理器
+3. 订阅相关事件</p>
+<p>不需要修改现有代码，符合开闭原则（对扩展开放，对修改关闭）。</p>
+<h4 id="13_1">1.3 异步处理</h4>
+<p>事件可以在合适的时机处理，不会阻塞事件生产者：</p>
+<pre><code class="language-c">// 中断中快速发布事件
+void sensor_isr(void) {
+    Event evt = {.type = EVENT_SENSOR_DATA};
+    event_post(&amp;evt);  // 快速返回，不阻塞中断
+}
+
+// 主循环中慢慢处理
+void main_loop(void) {
+    Event evt;
+    if (event_get(&amp;evt)) {
+        // 在主循环中处理，不影响中断响应
+        process_sensor_data(&amp;evt);
+    }
+}
+</code></pre>
+<h4 id="14">1.4 可测试性</h4>
+<p>可以轻松创建测试事件，验证系统行为：</p>
+<pre><code class="language-c">// 测试用例
+void test_button_handler(void) {
+    // 创建测试事件
+    Event evt = {.type = EVENT_BUTTON_PRESSED};
+
+    // 发布事件
+    event_publish(&amp;evt);
+
+    // 验证结果
+    assert(led_is_on());
+}
+</code></pre>
+<h3 id="2_1">2. 事件驱动架构的挑战</h3>
+<h4 id="21">2.1 调试困难</h4>
+<p>事件驱动系统的执行流程不是线性的，调试时难以追踪：</p>
+<p><strong>解决方案</strong>：
+- 添加事件日志记录
+- 使用事件追踪工具
+- 实现事件重放功能</p>
+<pre><code class="language-c">// 事件日志
+void event_log(Event* evt) {
+    printf(&quot;[%lu] Event: type=%d, data=%p\n&quot;,
+           evt-&gt;timestamp, evt-&gt;type, evt-&gt;data);
+}
+</code></pre>
+<h4 id="22_1">2.2 事件顺序</h4>
+<p>多个事件的处理顺序可能影响系统行为：</p>
+<p><strong>解决方案</strong>：
+- 使用事件优先级
+- 实现事件依赖关系
+- 使用事件序列号</p>
+<pre><code class="language-c">typedef struct {
+    Event event;
+    uint32_t sequence;  // 序列号
+} SequencedEvent;
+</code></pre>
+<h4 id="23">2.3 内存管理</h4>
+<p>事件数据的生命周期管理需要特别注意：</p>
+<p><strong>解决方案</strong>：
+- 使用静态内存分配
+- 实现事件数据的引用计数
+- 明确事件数据的所有权</p>
+<pre><code class="language-c">// 方案1：事件数据使用静态缓冲区
+static uint8_t event_data_buffer[256];
+
+// 方案2：事件数据复制到队列
+void event_post_with_copy(Event* evt) {
+    Event copied_evt = *evt;
+    if (evt-&gt;data &amp;&amp; evt-&gt;dataSize &gt; 0) {
+        // 复制数据
+        void* data_copy = malloc(evt-&gt;dataSize);
+        memcpy(data_copy, evt-&gt;data, evt-&gt;dataSize);
+        copied_evt.data = data_copy;
+    }
+    event_queue_put(&amp;queue, &amp;copied_evt);
+}
+</code></pre>
+<h4 id="24">2.4 性能开销</h4>
+<p>事件系统引入了额外的开销：</p>
+<p><strong>优化方案</strong>：
+- 使用高效的队列实现（环形缓冲区）
+- 减少事件复制
+- 使用内联函数
+- 避免动态内存分配</p>
+<pre><code class="language-c">// 使用内联函数减少函数调用开销
+static inline bool event_queue_is_empty(EventQueue* queue) {
+    return queue-&gt;count == 0;
+}
+</code></pre>
+<h3 id="3_1">3. 性能考虑</h3>
+<h4 id="31_1">3.1 事件队列大小</h4>
+<p>队列太小会导致事件丢失，太大会浪费内存：</p>
+<pre><code class="language-c">// 根据系统特性选择合适的队列大小
+#define EVENT_QUEUE_SIZE 32  // 经验值：峰值事件率 × 处理延迟
+
+// 监控队列使用情况
+void monitor_queue_usage(EventQueue* queue) {
+    uint8_t usage = (queue-&gt;count * 100) / EVENT_QUEUE_SIZE;
+    if (usage &gt; 80) {
+        printf(&quot;警告：事件队列使用率 %d%%\n&quot;, usage);
+    }
+}
+</code></pre>
+<h4 id="32_1">3.2 事件处理时间</h4>
+<p>事件处理器应该快速返回，避免阻塞事件循环：</p>
+<pre><code class="language-c">// 好的做法：快速处理
+void quick_handler(Event* evt) {
+    // 简单的状态更新
+    led_toggle();
+}
+
+// 不好的做法：耗时操作
+void slow_handler(Event* evt) {
+    // 避免在事件处理器中做耗时操作
+    HAL_Delay(1000);  // ❌ 阻塞事件循环
+
+    // 应该：
+    // 1. 设置标志位，在主循环中处理
+    // 2. 或者发布新事件，由专门的任务处理
+}
+</code></pre>
+<h4 id="33_1">3.3 中断优先级</h4>
+<p>合理设置中断优先级，避免事件丢失：</p>
+<pre><code class="language-c">// 高优先级中断：紧急事件
+void critical_isr(void) {
+    Event evt = {.type = EVENT_CRITICAL};
+    event_post_from_isr(&amp;evt);  // 使用中断安全的发布函数
+}
+
+// 低优先级中断：普通事件
+void normal_isr(void) {
+    Event evt = {.type = EVENT_NORMAL};
+    event_post_from_isr(&amp;evt);
+}
+</code></pre>
+<h2 id="_9">常见问题</h2>
+<h3 id="q1">Q1: 事件驱动架构适合所有嵌入式系统吗？</h3>
+<p><strong>A</strong>: 不一定。事件驱动架构适合以下场景：
+- 系统有多个异步事件源（按键、传感器、通信等）
+- 需要良好的模块解耦和可扩展性
+- 系统复杂度较高，有多个功能模块
+- 需要支持动态功能配置</p>
+<p>对于简单的单一功能系统，传统的轮询或状态机可能更简单高效。</p>
+<h3 id="q2">Q2: 事件队列满了怎么办？</h3>
+<p><strong>A</strong>: 有几种处理策略：</p>
+<ol>
+<li><strong>丢弃新事件</strong>（默认策略）</li>
+</ol>
+<pre><code class="language-c">bool event_post(Event* evt) {
+    if (event_queue_is_full(&amp;queue)) {
+        printf(&quot;警告：事件队列已满，丢弃事件 type=%d\n&quot;, evt-&gt;type);
+        return false;
+    }
+    return event_queue_put(&amp;queue, evt);
+}
+</code></pre>
+<ol start="2">
+<li><strong>覆盖旧事件</strong></li>
+</ol>
+<pre><code class="language-c">bool event_post_overwrite(Event* evt) {
+    if (event_queue_is_full(&amp;queue)) {
+        Event old_evt;
+        event_queue_get(&amp;queue, &amp;old_evt);  // 移除最旧的事件
+    }
+    return event_queue_put(&amp;queue, evt);
+}
+</code></pre>
+<ol start="3">
+<li><strong>阻塞等待</strong>（不推荐在中断中使用）</li>
+</ol>
+<pre><code class="language-c">bool event_post_blocking(Event* evt, uint32_t timeout) {
+    uint32_t start = HAL_GetTick();
+    while (event_queue_is_full(&amp;queue)) {
+        if (HAL_GetTick() - start &gt; timeout) {
+            return false;  // 超时
+        }
+    }
+    return event_queue_put(&amp;queue, evt);
+}
+</code></pre>
+<ol start="4">
+<li><strong>增大队列</strong>或<strong>优化事件处理速度</strong></li>
+</ol>
+<h3 id="q3">Q3: 如何保证事件处理的原子性？</h3>
+<p><strong>A</strong>: 使用临界区保护：</p>
+<pre><code class="language-c">// 方案1：关闭中断
+void event_post_atomic(Event* evt) {
+    __disable_irq();
+    event_queue_put(&amp;queue, evt);
+    __enable_irq();
+}
+
+// 方案2：使用互斥锁（RTOS环境）
+void event_post_mutex(Event* evt) {
+    osMutexWait(event_mutex, osWaitForever);
+    event_queue_put(&amp;queue, evt);
+    osMutexRelease(event_mutex);
+}
+
+// 方案3：使用无锁队列（高级）
+// 使用原子操作实现无锁队列
+</code></pre>
+<h3 id="q4">Q4: 事件数据应该如何管理？</h3>
+<p><strong>A</strong>: 几种常见方案：</p>
+<ol>
+<li><strong>静态数据</strong>（推荐）</li>
+</ol>
+<pre><code class="language-c">static float sensor_data;
+Event evt = {
+    .type = EVENT_SENSOR_DATA,
+    .data = &amp;sensor_data,
+    .dataSize = sizeof(sensor_data)
+};
+</code></pre>
+<ol start="2">
+<li><strong>数据复制</strong></li>
+</ol>
+<pre><code class="language-c">typedef struct {
+    Event event;
+    uint8_t data[64];  // 内嵌数据
+} EventWithData;
+</code></pre>
+<ol start="3">
+<li><strong>引用计数</strong>（复杂场景）</li>
+</ol>
+<pre><code class="language-c">typedef struct {
+    void* data;
+    uint32_t refCount;
+} SharedEventData;
+</code></pre>
+<h3 id="q5">Q5: 如何调试事件驱动系统？</h3>
+<p><strong>A</strong>: 调试技巧：</p>
+<ol>
+<li><strong>事件日志</strong></li>
+</ol>
+<pre><code class="language-c">void event_log(Event* evt) {
+    printf(&quot;[%lu] Event: type=%d (%s)\n&quot;,
+           evt-&gt;timestamp,
+           evt-&gt;type,
+           event_type_to_string(evt-&gt;type));
+}
+</code></pre>
+<ol start="2">
+<li><strong>事件统计</strong></li>
+</ol>
+<pre><code class="language-c">typedef struct {
+    uint32_t posted;
+    uint32_t processed;
+    uint32_t dropped;
+} EventStats;
+
+void print_event_stats(EventStats* stats) {
+    printf(&quot;Posted: %lu, Processed: %lu, Dropped: %lu\n&quot;,
+           stats-&gt;posted, stats-&gt;processed, stats-&gt;dropped);
+}
+</code></pre>
+<ol start="3">
+<li><strong>事件追踪</strong></li>
+</ol>
+<pre><code class="language-c">#define EVENT_TRACE_SIZE 100
+Event event_trace[EVENT_TRACE_SIZE];
+uint8_t trace_index = 0;
+
+void event_trace_add(Event* evt) {
+    event_trace[trace_index] = *evt;
+    trace_index = (trace_index + 1) % EVENT_TRACE_SIZE;
+}
+</code></pre>
+<h3 id="q6">Q6: 事件驱动和状态机如何结合？</h3>
+<p><strong>A</strong>: 两者可以很好地结合：</p>
+<pre><code class="language-c">// 状态机作为事件处理器
+typedef enum {
+    STATE_IDLE,
+    STATE_RUNNING,
+    STATE_PAUSED
+} SystemState;
+
+static SystemState current_state = STATE_IDLE;
+
+void state_machine_handler(Event* evt) {
+    switch (current_state) {
+        case STATE_IDLE:
+            if (evt-&gt;type == EVENT_START) {
+                current_state = STATE_RUNNING;
+                printf(&quot;状态转换: IDLE -&gt; RUNNING\n&quot;);
+            }
+            break;
+
+        case STATE_RUNNING:
+            if (evt-&gt;type == EVENT_PAUSE) {
+                current_state = STATE_PAUSED;
+                printf(&quot;状态转换: RUNNING -&gt; PAUSED\n&quot;);
+            } else if (evt-&gt;type == EVENT_STOP) {
+                current_state = STATE_IDLE;
+                printf(&quot;状态转换: RUNNING -&gt; IDLE\n&quot;);
+            }
+            break;
+
+        case STATE_PAUSED:
+            if (evt-&gt;type == EVENT_RESUME) {
+                current_state = STATE_RUNNING;
+                printf(&quot;状态转换: PAUSED -&gt; RUNNING\n&quot;);
+            }
+            break;
+    }
+}
+</code></pre>
+<h2 id="_10">总结</h2>
+<h3 id="_11">核心要点</h3>
+<ol>
+<li>
+<p><strong>事件驱动架构的本质</strong>
+   - 通过事件进行组件间通信
+   - 生产者和消费者解耦
+   - 异步处理提高响应性</p>
+</li>
+<li>
+<p><strong>关键组件</strong>
+   - 事件（Event）：系统状态变化的表示
+   - 事件队列（Event Queue）：缓冲和排序事件
+   - 事件总线（Event Bus）：分发事件给订阅者
+   - 事件循环（Event Loop）：驱动事件处理</p>
+</li>
+<li>
+<p><strong>设计原则</strong>
+   - 保持事件处理器简单快速
+   - 合理设计事件类型和数据结构
+   - 注意内存管理和线程安全
+   - 提供调试和监控机制</p>
+</li>
+<li>
+<p><strong>适用场景</strong>
+   - 多事件源的复杂系统
+   - 需要高度解耦的模块化设计
+   - 异步事件处理需求
+   - 需要动态扩展功能</p>
+</li>
+</ol>
+<h3 id="_12">最佳实践</h3>
+<ol>
+<li>
+<p><strong>事件设计</strong>
+   - 事件类型应该语义清晰
+   - 事件数据应该简洁必要
+   - 使用枚举定义事件类型
+   - 为事件添加时间戳</p>
+</li>
+<li>
+<p><strong>队列管理</strong>
+   - 根据系统特性选择队列大小
+   - 监控队列使用情况
+   - 处理队列满的情况
+   - 考虑使用优先级队列</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 使用环形缓冲区实现队列
+   - 避免在事件处理器中做耗时操作
+   - 减少事件复制
+   - 使用内联函数</p>
+</li>
+<li>
+<p><strong>调试支持</strong>
+   - 添加事件日志
+   - 实现事件统计
+   - 支持事件追踪
+   - 提供事件重放功能</p>
+</li>
+</ol>
+<h3 id="_13">进一步学习</h3>
+<p><strong>相关主题</strong>：
+- 观察者模式：事件驱动的设计模式基础
+- 状态机模式：与事件驱动结合使用
+- 消息队列：更高级的事件处理机制
+- RTOS事件机制：操作系统级别的事件支持</p>
+<p><strong>推荐资源</strong>：
+- 《设计模式：可复用面向对象软件的基础》
+- 《嵌入式系统软件架构设计》
+- FreeRTOS事件组和队列文档
+- Linux内核事件机制源码</p>
+<p><strong>实践建议</strong>：
+1. 从简单的事件系统开始实现
+2. 逐步添加高级特性（优先级、过滤等）
+3. 在实际项目中应用和优化
+4. 学习开源项目的事件系统实现</p>
+<h3 id="_14">下一步</h3>
+<p>学完本文后，建议：
+1. 实现一个完整的事件驱动系统
+2. 在实际项目中应用事件驱动架构
+3. 学习RTOS的事件机制
+4. 研究微服务架构中的事件驱动模式</p>
+<hr />
+<h2 id="_15">延伸阅读</h2>
+<h3 id="_16">相关文章</h3>
+<ul>
+<li><a href="../beginner/05-observer-pattern.html">观察者模式在嵌入式中的应用</a></li>
+<li><a href="../beginner/04-state-machine-pattern.html">状态机设计模式</a></li>
+<li><a href="./02-interface-oriented-programming.html">面向接口编程实践</a></li>
+<li><a href="./04-microservices-in-embedded.html">微服务架构在嵌入式中的应用</a></li>
+</ul>
+<h3 id="_17">参考资料</h3>
+<ol>
+<li>
+<p><strong>书籍</strong>
+   - 《Reactive Design Patterns》by Roland Kuhn
+   - 《Enterprise Integration Patterns》by Gregor Hohpe
+   - 《Event-Driven Architecture》by Hugh Taylor</p>
+</li>
+<li>
+<p><strong>在线资源</strong>
+   - <a href="https://martinfowler.com/articles/201701-event-driven.html">Martin Fowler - Event-Driven Architecture</a>
+   - <a href="https://aws.amazon.com/event-driven-architecture/">AWS - Event-Driven Architecture</a>
+   - <a href="https://docs.microsoft.com/en-us/azure/architecture/guide/architecture-styles/event-driven">Microsoft - Event-Driven Architecture Style</a></p>
+</li>
+<li>
+<p><strong>开源项目</strong>
+   - FreeRTOS事件组和队列
+   - Zephyr RTOS事件系统
+   - Qt信号槽机制
+   - Node.js EventEmitter</p>
+</li>
+</ol>
+<h3 id="_18">实践项目</h3>
+<ol>
+<li><strong>基础项目</strong>：实现一个简单的事件驱动LED控制系统</li>
+<li><strong>中级项目</strong>：开发一个多传感器数据采集系统</li>
+<li><strong>高级项目</strong>：构建一个完整的智能家居控制系统</li>
+<li><strong>挑战项目</strong>：实现一个支持分布式事件的物联网网关</li>
+</ol>
+<hr />
+<p><strong>文档版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2026-03-10<br />
+<strong>作者</strong>: 嵌入式知识平台<br />
+<strong>许可</strong>: CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>FreeRTOS信号量应用：掌握任务同步与资源管理的核心技术 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/">03-freertos</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">环境配置</a></li>
+<li><a href="#freertos_1">FreeRTOS配置</a></li>
+<li><a href="#_5">创建基础项目</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#_7">信号量的基本概念</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1: 二值信号量的使用</a><ul>
+<li><a href="#11">1.1 创建二值信号量</a></li>
+<li><a href="#12">1.2 二值信号量的基本操作</a></li>
+<li><a href="#13">1.3 完整示例:中断与任务同步</a></li>
+</ul>
+</li>
+<li><a href="#2">步骤2: 计数信号量的使用</a><ul>
+<li><a href="#21">2.1 创建计数信号量</a></li>
+<li><a href="#22">2.2 计数信号量的应用场景</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3: 互斥量的使用</a><ul>
+<li><a href="#31">3.1 互斥量与二值信号量的区别</a></li>
+<li><a href="#32">3.2 创建互斥量</a></li>
+<li><a href="#33">3.3 互斥量的使用</a></li>
+<li><a href="#34">3.4 完整示例:保护共享资源</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4: 递归互斥量的使用</a><ul>
+<li><a href="#41">4.1 什么是递归互斥量?</a></li>
+<li><a href="#42">4.2 创建递归互斥量</a></li>
+<li><a href="#43">4.3 递归互斥量的使用</a></li>
+<li><a href="#44">4.4 完整示例:递归函数访问共享资源</a></li>
+</ul>
+</li>
+<li><a href="#_8">验证</a><ul>
+<li><a href="#_9">验证方法</a></li>
+<li><a href="#_10">预期结果</a></li>
+<li><a href="#_11">测试要点</a></li>
+</ul>
+</li>
+<li><a href="#_12">故障排除</a><ul>
+<li><a href="#1_1">问题1: 信号量创建失败</a></li>
+<li><a href="#2_1">问题2: 任务永久阻塞</a></li>
+<li><a href="#3-api">问题3: 中断中使用错误的API</a></li>
+<li><a href="#4_1">问题4: 互斥量使用错误</a></li>
+<li><a href="#5-api">问题5: 递归互斥量使用普通API</a></li>
+</ul>
+</li>
+<li><a href="#_13">常见问题</a><ul>
+<li><a href="#q1">Q1: 二值信号量、互斥量和递归互斥量应该如何选择?</a></li>
+<li><a href="#q2">Q2: 为什么互斥量不能在中断中使用?</a></li>
+<li><a href="#q3">Q3: 计数信号量的初始值应该设置为多少?</a></li>
+<li><a href="#q4">Q4: 如何避免优先级反转?</a></li>
+<li><a href="#q5">Q5: 信号量和队列有什么区别?</a></li>
+<li><a href="#q6">Q6: 如何查看信号量的当前值?</a></li>
+</ul>
+</li>
+<li><a href="#_14">总结</a><ul>
+<li><a href="#_15">核心要点</a></li>
+<li><a href="#_16">学习检查</a></li>
+<li><a href="#_17">实践建议</a></li>
+</ul>
+</li>
+<li><a href="#_18">下一步</a><ul>
+<li><a href="#_19">推荐学习路径</a></li>
+<li><a href="#_20">进阶主题</a></li>
+<li><a href="#_21">实践项目</a></li>
+</ul>
+</li>
+<li><a href="#_22">参考资料</a><ul>
+<li><a href="#_23">官方文档</a></li>
+<li><a href="#_24">推荐阅读</a></li>
+<li><a href="#_25">在线资源</a></li>
+<li><a href="#_26">相关内容</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="freertos">FreeRTOS信号量应用：掌握任务同步与资源管理的核心技术</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解FreeRTOS信号量的工作原理和应用场景</li>
+<li>[ ] 掌握二值信号量的创建和使用方法</li>
+<li>[ ] 熟练使用计数信号量管理多个资源</li>
+<li>[ ] 理解互斥量与二值信号量的区别</li>
+<li>[ ] 掌握递归互斥量的使用场景</li>
+<li>[ ] 学会在中断中使用信号量</li>
+<li>[ ] 能够在实际项目中应用信号量解决同步问题</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>:
+- 完成FreeRTOS快速入门和任务管理教程
+- 理解RTOS任务调度和状态转换
+- 了解信号量的基本概念
+- 熟悉C语言指针和结构体</p>
+<p><strong>技能要求</strong>:
+- 能够创建和管理FreeRTOS任务
+- 会使用STM32CubeIDE或Keil MDK
+- 了解如何编译和调试程序
+- 理解中断的基本概念</p>
+<p><strong>硬件准备</strong>:
+- STM32开发板(如STM32F4 Discovery)
+- ST-Link调试器
+- USB数据线
+- LED灯和按键(用于演示,可选)</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">环境配置</h3>
+<p>本教程基于以下环境:</p>
+<p><strong>软件环境</strong>:
+- STM32CubeIDE v1.10+
+- FreeRTOS V10.3.1+
+- HAL库 v1.27+</p>
+<p><strong>硬件环境</strong>:
+- STM32F407VGT6开发板
+- 板载LED和按键
+- 串口调试工具</p>
+<h3 id="freertos_1">FreeRTOS配置</h3>
+<p>确保在<code>FreeRTOSConfig.h</code>中启用信号量相关配置:</p>
+<pre><code class="language-c">// 启用信号量功能
+#define configUSE_MUTEXES                   1
+#define configUSE_RECURSIVE_MUTEXES         1
+#define configUSE_COUNTING_SEMAPHORES       1
+
+// 基本配置
+#define configUSE_PREEMPTION                1
+#define configTICK_RATE_HZ                  1000
+#define configMAX_PRIORITIES                5
+#define configTOTAL_HEAP_SIZE               15360
+</code></pre>
+<h3 id="_5">创建基础项目</h3>
+<p>如果你已经完成了前面的教程,可以直接使用之前的项目。否则:</p>
+<ol>
+<li>打开STM32CubeIDE,创建新的STM32项目</li>
+<li>在CubeMX中启用FreeRTOS(CMSIS_V1接口)</li>
+<li>配置系统时钟和串口(用于调试输出)</li>
+<li>生成代码并打开项目</li>
+</ol>
+<h2 id="_6">核心内容</h2>
+<h3 id="_7">信号量的基本概念</h3>
+<p><strong>什么是信号量?</strong></p>
+<p>信号量(Semaphore)是FreeRTOS中用于任务同步和资源管理的核心机制。它本质上是一个计数器,用于控制对共享资源的访问或实现任务间的同步。</p>
+<p><strong>FreeRTOS信号量的类型</strong>:</p>
+<ol>
+<li><strong>二值信号量(Binary Semaphore)</strong>: 值只能是0或1,用于任务同步和事件通知</li>
+<li><strong>计数信号量(Counting Semaphore)</strong>: 值可以是0到N,用于管理多个相同资源</li>
+<li><strong>互斥量(Mutex)</strong>: 特殊的二值信号量,支持优先级继承,用于资源互斥访问</li>
+<li><strong>递归互斥量(Recursive Mutex)</strong>: 允许同一任务多次获取的互斥量</li>
+</ol>
+<p><strong>生活中的类比</strong>:</p>
+<p>想象一个图书馆的借阅系统:
+- <strong>二值信号量</strong>: 像一个单人阅览室的钥匙,只有一把,有人使用时其他人必须等待
+- <strong>计数信号量</strong>: 像多个相同的图书,有10本时可以借给10个人
+- <strong>互斥量</strong>: 像带有借阅记录的钥匙,只有借出者才能归还
+- <strong>递归互斥量</strong>: 像允许同一人多次进入的阅览室钥匙</p>
+<p><strong>信号量操作</strong>:</p>
+<pre><code>Give (释放/发送):
+- 二值信号量: 0 → 1
+- 计数信号量: N → N+1 (不超过最大值)
+- 互斥量: 只能由持有者释放
+
+Take (获取/接收):
+- 二值信号量: 1 → 0 (如果为0则阻塞)
+- 计数信号量: N → N-1 (如果为0则阻塞)
+- 互斥量: 获取所有权 (如果已被占用则阻塞)
+</code></pre>
+<h2 id="1">步骤1: 二值信号量的使用</h2>
+<h3 id="11">1.1 创建二值信号量</h3>
+<p>FreeRTOS提供了两种创建二值信号量的方法:</p>
+<p><strong>动态创建 - xSemaphoreCreateBinary()</strong></p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 声明信号量句柄
+SemaphoreHandle_t xBinarySemaphore;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建二值信号量
+    xBinarySemaphore = xSemaphoreCreateBinary();
+
+    if(xBinarySemaphore != NULL)
+    {
+        printf(&quot;Binary semaphore created successfully\n&quot;);
+
+        // 创建任务...
+        xTaskCreate(SenderTask, &quot;Sender&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(ReceiverTask, &quot;Receiver&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Failed to create binary semaphore\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>代码说明</strong>:
+- <code>xSemaphoreCreateBinary()</code>从堆中分配内存创建信号量
+- 返回值为信号量句柄,失败返回NULL
+- 初始状态:信号量值为0(不可用)</p>
+<p><strong>静态创建 - xSemaphoreCreateBinaryStatic()</strong></p>
+<pre><code class="language-c">// 静态分配信号量控制块
+StaticSemaphore_t xSemaphoreBuffer;
+SemaphoreHandle_t xBinarySemaphore;
+
+// 创建静态二值信号量
+xBinarySemaphore = xSemaphoreCreateBinaryStatic(&amp;xSemaphoreBuffer);
+</code></pre>
+<p><strong>代码说明</strong>:
+- 使用静态内存,不依赖堆分配
+- 需要提供<code>StaticSemaphore_t</code>类型的缓冲区
+- 适合对内存分配有严格要求的场景</p>
+<h3 id="12">1.2 二值信号量的基本操作</h3>
+<p><strong>释放信号量 - xSemaphoreGive()</strong></p>
+<pre><code class="language-c">// 在任务中释放信号量
+BaseType_t xSemaphoreGive(SemaphoreHandle_t xSemaphore);
+
+// 返回值:
+// pdTRUE: 释放成功
+// pdFALSE: 释放失败
+
+// 示例
+void SenderTask(void *pvParameters)
+{
+    while(1)
+    {
+        // 执行某些操作
+        printf(&quot;[Sender] Performing operation...\n&quot;);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+
+        // 释放信号量,通知接收任务
+        if(xSemaphoreGive(xBinarySemaphore) == pdTRUE)
+        {
+            printf(&quot;[Sender] Semaphore given\n&quot;);
+        }
+        else
+        {
+            printf(&quot;[Sender] Failed to give semaphore\n&quot;);
+        }
+    }
+}
+</code></pre>
+<p><strong>获取信号量 - xSemaphoreTake()</strong></p>
+<pre><code class="language-c">// 获取信号量(带超时)
+BaseType_t xSemaphoreTake(
+    SemaphoreHandle_t xSemaphore,
+    TickType_t xTicksToWait  // 等待时间
+);
+
+// 返回值:
+// pdTRUE: 获取成功
+// pdFALSE: 获取失败(超时)
+
+// 等待时间参数:
+// 0: 不等待,立即返回
+// portMAX_DELAY: 永久等待
+// pdMS_TO_TICKS(1000): 等待1000ms
+
+// 示例
+void ReceiverTask(void *pvParameters)
+{
+    while(1)
+    {
+        printf(&quot;[Receiver] Waiting for semaphore...\n&quot;);
+
+        // 等待信号量(永久等待)
+        if(xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            printf(&quot;[Receiver] Semaphore received\n&quot;);
+
+            // 处理事件
+            printf(&quot;[Receiver] Processing event\n&quot;);
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    }
+}
+</code></pre>
+<h3 id="13">1.3 完整示例:中断与任务同步</h3>
+<p>使用二值信号量实现按键中断与任务的同步:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 信号量句柄
+SemaphoreHandle_t xButtonSemaphore;
+
+// 按键中断服务函数
+void EXTI0_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 清除中断标志
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET)
+    {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        // 在中断中释放信号量
+        xSemaphoreGiveFromISR(xButtonSemaphore, &amp;xHigherPriorityTaskWoken);
+
+        // 如果唤醒了更高优先级的任务,触发任务切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 按键处理任务
+void vButtonTask(void *pvParameters)
+{
+    uint32_t ulPressCount = 0;
+
+    printf(&quot;[Button Task] Started\n&quot;);
+
+    while(1)
+    {
+        // 等待按键信号量
+        if(xSemaphoreTake(xButtonSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            ulPressCount++;
+            printf(&quot;[Button Task] Button pressed! Count: %lu\n&quot;, ulPressCount);
+
+            // 切换LED状态
+            HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+            // 防抖延时
+            vTaskDelay(pdMS_TO_TICKS(200));
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_USART2_UART_Init();
+
+    printf(&quot;\n=== FreeRTOS Binary Semaphore Example ===\n\n&quot;);
+
+    // 创建二值信号量
+    xButtonSemaphore = xSemaphoreCreateBinary();
+
+    if(xButtonSemaphore != NULL)
+    {
+        printf(&quot;Binary semaphore created\n\n&quot;);
+
+        // 创建按键处理任务
+        xTaskCreate(vButtonTask, &quot;Button&quot;, 256, NULL, 3, NULL);
+
+        // 启动调度器
+        printf(&quot;Starting scheduler...\n\n&quot;);
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Failed to create semaphore\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>=== FreeRTOS Binary Semaphore Example ===
+
+Binary semaphore created
+
+Starting scheduler...
+
+[Button Task] Started
+[Button Task] Button pressed! Count: 1
+[Button Task] Button pressed! Count: 2
+[Button Task] Button pressed! Count: 3
+</code></pre>
+<p><strong>代码说明</strong>:
+- 按键按下时,中断服务函数释放信号量
+- 任务等待信号量,收到信号后处理按键事件
+- 使用<code>xSemaphoreGiveFromISR()</code>在中断中释放信号量
+- 使用<code>portYIELD_FROM_ISR()</code>触发任务切换,提高响应速度</p>
+<h2 id="2">步骤2: 计数信号量的使用</h2>
+<h3 id="21">2.1 创建计数信号量</h3>
+<p><strong>动态创建 - xSemaphoreCreateCounting()</strong></p>
+<pre><code class="language-c">// 创建计数信号量
+SemaphoreHandle_t xSemaphoreCreateCounting(
+    UBaseType_t uxMaxCount,      // 最大计数值
+    UBaseType_t uxInitialCount   // 初始计数值
+);
+
+// 示例
+SemaphoreHandle_t xCountingSemaphore;
+
+// 创建最大值为5,初始值为3的计数信号量
+xCountingSemaphore = xSemaphoreCreateCounting(5, 3);
+
+if(xCountingSemaphore != NULL)
+{
+    printf(&quot;Counting semaphore created\n&quot;);
+    printf(&quot;Max count: 5, Initial count: 3\n&quot;);
+}
+</code></pre>
+<p><strong>参数说明</strong>:
+- <code>uxMaxCount</code>: 信号量的最大值(资源总数)
+- <code>uxInitialCount</code>: 信号量的初始值(初始可用资源数)
+- 返回值: 信号量句柄,失败返回NULL</p>
+<p><strong>静态创建 - xSemaphoreCreateCountingStatic()</strong></p>
+<pre><code class="language-c">// 静态分配信号量控制块
+StaticSemaphore_t xSemaphoreBuffer;
+SemaphoreHandle_t xCountingSemaphore;
+
+// 创建静态计数信号量
+xCountingSemaphore = xSemaphoreCreateCountingStatic(
+    5,                    // 最大值
+    3,                    // 初始值
+    &amp;xSemaphoreBuffer     // 缓冲区
+);
+</code></pre>
+<h3 id="22">2.2 计数信号量的应用场景</h3>
+<p><strong>场景1: 资源池管理</strong></p>
+<p>管理有限数量的相同资源:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 计数信号量句柄
+SemaphoreHandle_t xBufferSemaphore;
+
+// 缓冲区数组
+#define BUFFER_COUNT 3
+uint8_t buffers[BUFFER_COUNT][256];
+uint8_t buffer_used[BUFFER_COUNT] = {0};
+
+// 分配缓冲区
+uint8_t* AllocateBuffer(void)
+{
+    // 尝试获取信号量(等待1秒)
+    if(xSemaphoreTake(xBufferSemaphore, pdMS_TO_TICKS(1000)) == pdTRUE)
+    {
+        // 查找空闲缓冲区
+        for(int i = 0; i &lt; BUFFER_COUNT; i++)
+        {
+            if(buffer_used[i] == 0)
+            {
+                buffer_used[i] = 1;
+                printf(&quot;Buffer %d allocated\n&quot;, i);
+                return buffers[i];
+            }
+        }
+    }
+
+    printf(&quot;No buffer available\n&quot;);
+    return NULL;
+}
+
+// 释放缓冲区
+void FreeBuffer(uint8_t *buffer)
+{
+    // 查找缓冲区索引
+    for(int i = 0; i &lt; BUFFER_COUNT; i++)
+    {
+        if(buffers[i] == buffer)
+        {
+            buffer_used[i] = 0;
+            printf(&quot;Buffer %d freed\n&quot;, i);
+
+            // 释放信号量
+            xSemaphoreGive(xBufferSemaphore);
+            return;
+        }
+    }
+}
+
+// 工作任务
+void vWorkerTask(void *pvParameters)
+{
+    uint32_t ulTaskID = (uint32_t)pvParameters;
+
+    while(1)
+    {
+        printf(&quot;[Task %lu] Requesting buffer...\n&quot;, ulTaskID);
+
+        // 分配缓冲区
+        uint8_t *pBuffer = AllocateBuffer();
+
+        if(pBuffer != NULL)
+        {
+            // 使用缓冲区
+            printf(&quot;[Task %lu] Using buffer\n&quot;, ulTaskID);
+            sprintf((char *)pBuffer, &quot;Data from Task %lu&quot;, ulTaskID);
+
+            // 模拟处理时间
+            vTaskDelay(pdMS_TO_TICKS(2000));
+
+            // 释放缓冲区
+            FreeBuffer(pBuffer);
+            printf(&quot;[Task %lu] Buffer released\n\n&quot;, ulTaskID);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    printf(&quot;\n=== FreeRTOS Counting Semaphore Example ===\n\n&quot;);
+
+    // 创建计数信号量(3个缓冲区,初始全部可用)
+    xBufferSemaphore = xSemaphoreCreateCounting(BUFFER_COUNT, BUFFER_COUNT);
+
+    if(xBufferSemaphore != NULL)
+    {
+        printf(&quot;Buffer pool created: %d buffers\n\n&quot;, BUFFER_COUNT);
+
+        // 创建4个工作任务(竞争3个缓冲区)
+        xTaskCreate(vWorkerTask, &quot;Worker1&quot;, 256, (void *)1, 2, NULL);
+        xTaskCreate(vWorkerTask, &quot;Worker2&quot;, 256, (void *)2, 2, NULL);
+        xTaskCreate(vWorkerTask, &quot;Worker3&quot;, 256, (void *)3, 2, NULL);
+        xTaskCreate(vWorkerTask, &quot;Worker4&quot;, 256, (void *)4, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>=== FreeRTOS Counting Semaphore Example ===
+
+Buffer pool created: 3 buffers
+
+[Task 1] Requesting buffer...
+Buffer 0 allocated
+[Task 1] Using buffer
+[Task 2] Requesting buffer...
+Buffer 1 allocated
+[Task 2] Using buffer
+[Task 3] Requesting buffer...
+Buffer 2 allocated
+[Task 3] Using buffer
+[Task 4] Requesting buffer...
+No buffer available  ← 第4个任务等待
+[Task 1] Buffer released
+Buffer 0 freed
+
+[Task 4] Requesting buffer...
+Buffer 0 allocated  ← 获得释放的缓冲区
+[Task 4] Using buffer
+</code></pre>
+<p><strong>代码说明</strong>:
+- 创建3个缓冲区的资源池
+- 使用计数信号量管理缓冲区的分配和释放
+- 4个任务竞争3个缓冲区
+- 当缓冲区用完时,任务会阻塞等待</p>
+<p><strong>场景2: 限制并发访问</strong></p>
+<p>限制同时访问资源的任务数量:</p>
+<pre><code class="language-c">// 限制最多3个任务同时访问资源
+#define MAX_CONCURRENT_ACCESS 3
+
+SemaphoreHandle_t xResourceSemaphore;
+
+// 访问共享资源的任务
+void vResourceAccessTask(void *pvParameters)
+{
+    uint32_t ulTaskID = (uint32_t)pvParameters;
+
+    while(1)
+    {
+        printf(&quot;[Task %lu] Requesting resource access...\n&quot;, ulTaskID);
+
+        // 获取访问权限
+        if(xSemaphoreTake(xResourceSemaphore, pdMS_TO_TICKS(5000)) == pdTRUE)
+        {
+            printf(&quot;[Task %lu] Accessing resource\n&quot;, ulTaskID);
+
+            // 使用资源(模拟耗时操作)
+            vTaskDelay(pdMS_TO_TICKS(2000));
+
+            printf(&quot;[Task %lu] Resource access complete\n&quot;, ulTaskID);
+
+            // 释放访问权限
+            xSemaphoreGive(xResourceSemaphore);
+        }
+        else
+        {
+            printf(&quot;[Task %lu] Timeout waiting for resource\n&quot;, ulTaskID);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建计数信号量(最多3个任务同时访问)
+    xResourceSemaphore = xSemaphoreCreateCounting(
+        MAX_CONCURRENT_ACCESS,  // 最大值
+        MAX_CONCURRENT_ACCESS   // 初始值
+    );
+
+    // 创建5个任务(竞争3个访问权限)
+    for(uint32_t i = 1; i &lt;= 5; i++)
+    {
+        xTaskCreate(vResourceAccessTask, &quot;Task&quot;, 256, (void *)i, 2, NULL);
+    }
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>场景3: 事件计数</strong></p>
+<p>使用计数信号量统计事件发生次数:</p>
+<pre><code class="language-c">// 事件计数信号量
+SemaphoreHandle_t xEventCounterSemaphore;
+
+// 事件产生任务(模拟中断)
+void vEventGeneratorTask(void *pvParameters)
+{
+    uint32_t ulEventCount = 0;
+
+    while(1)
+    {
+        // 模拟事件发生
+        vTaskDelay(pdMS_TO_TICKS(500));
+
+        ulEventCount++;
+        printf(&quot;[Generator] Event %lu occurred\n&quot;, ulEventCount);
+
+        // 增加事件计数
+        xSemaphoreGive(xEventCounterSemaphore);
+    }
+}
+
+// 事件处理任务
+void vEventHandlerTask(void *pvParameters)
+{
+    uint32_t ulHandledCount = 0;
+
+    while(1)
+    {
+        // 等待事件
+        if(xSemaphoreTake(xEventCounterSemaphore, portMAX_DELAY) == pdTRUE)
+        {
+            ulHandledCount++;
+            printf(&quot;[Handler] Processing event %lu\n&quot;, ulHandledCount);
+
+            // 处理事件(耗时操作)
+            vTaskDelay(pdMS_TO_TICKS(1000));
+
+            printf(&quot;[Handler] Event %lu processed\n\n&quot;, ulHandledCount);
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建计数信号量(最大值10,初始值0)
+    xEventCounterSemaphore = xSemaphoreCreateCounting(10, 0);
+
+    // 创建任务
+    xTaskCreate(vEventGeneratorTask, &quot;Generator&quot;, 256, NULL, 3, NULL);
+    xTaskCreate(vEventHandlerTask, &quot;Handler&quot;, 256, NULL, 2, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>[Generator] Event 1 occurred
+[Handler] Processing event 1
+[Generator] Event 2 occurred
+[Generator] Event 3 occurred
+[Handler] Event 1 processed
+
+[Handler] Processing event 2
+[Generator] Event 4 occurred
+[Handler] Event 2 processed
+
+[Handler] Processing event 3
+</code></pre>
+<p><strong>代码说明</strong>:
+- 事件产生速度快于处理速度
+- 计数信号量累积未处理的事件
+- 处理任务按顺序处理所有事件
+- 最大值限制了可以累积的事件数量</p>
+<h2 id="3">步骤3: 互斥量的使用</h2>
+<h3 id="31">3.1 互斥量与二值信号量的区别</h3>
+<p><strong>互斥量(Mutex)</strong>是一种特殊的二值信号量,专门用于资源的互斥访问:</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>二值信号量</th>
+<th>互斥量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>用途</strong></td>
+<td>任务同步、事件通知</td>
+<td>资源互斥访问</td>
+</tr>
+<tr>
+<td><strong>所有权</strong></td>
+<td>无所有权概念</td>
+<td>有所有权,谁获取谁释放</td>
+</tr>
+<tr>
+<td><strong>优先级继承</strong></td>
+<td>不支持</td>
+<td>支持,防止优先级反转</td>
+</tr>
+<tr>
+<td><strong>递归获取</strong></td>
+<td>不支持</td>
+<td>递归互斥量支持</td>
+</tr>
+<tr>
+<td><strong>中断使用</strong></td>
+<td>可以在中断中Give</td>
+<td>不能在中断中使用</td>
+</tr>
+<tr>
+<td><strong>典型场景</strong></td>
+<td>中断→任务通信</td>
+<td>保护共享资源</td>
+</tr>
+</tbody>
+</table>
+<p><strong>优先级继承机制</strong>:</p>
+<pre><code>场景: 高优先级任务等待低优先级任务释放互斥量
+
+使用二值信号量:
+- 低优先级任务持有信号量
+- 中优先级任务抢占低优先级任务
+- 高优先级任务等待信号量,但被中优先级任务阻塞
+- 结果: 优先级反转
+
+使用互斥量:
+- 低优先级任务持有互斥量
+- 高优先级任务等待互斥量
+- 低优先级任务优先级临时提升到高优先级
+- 低优先级任务快速完成并释放互斥量
+- 结果: 避免优先级反转
+</code></pre>
+<h3 id="32">3.2 创建互斥量</h3>
+<p><strong>动态创建 - xSemaphoreCreateMutex()</strong></p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 声明互斥量句柄
+SemaphoreHandle_t xMutex;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建互斥量
+    xMutex = xSemaphoreCreateMutex();
+
+    if(xMutex != NULL)
+    {
+        printf(&quot;Mutex created successfully\n&quot;);
+
+        // 创建任务...
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Failed to create mutex\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>静态创建 - xSemaphoreCreateMutexStatic()</strong></p>
+<pre><code class="language-c">// 静态分配互斥量控制块
+StaticSemaphore_t xMutexBuffer;
+SemaphoreHandle_t xMutex;
+
+// 创建静态互斥量
+xMutex = xSemaphoreCreateMutexStatic(&amp;xMutexBuffer);
+</code></pre>
+<h3 id="33">3.3 互斥量的使用</h3>
+<p>互斥量的使用方法与二值信号量类似,但有重要区别:</p>
+<pre><code class="language-c">// 获取互斥量
+xSemaphoreTake(xMutex, portMAX_DELAY);
+
+// 访问共享资源
+// ...
+
+// 释放互斥量(必须由获取者释放)
+xSemaphoreGive(xMutex);
+</code></pre>
+<p><strong>重要规则</strong>:
+- ⚠️ 互斥量必须由获取它的任务释放
+- ⚠️ 不能在中断中使用互斥量
+- ⚠️ 不能在中断中调用<code>xSemaphoreTake()</code>或<code>xSemaphoreGive()</code></p>
+<h3 id="34">3.4 完整示例:保护共享资源</h3>
+<p>使用互斥量保护串口资源:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 互斥量句柄
+SemaphoreHandle_t xUartMutex;
+
+// 安全的串口打印函数
+void SafePrintf(const char *format, ...)
+{
+    va_list args;
+
+    // 获取互斥量
+    if(xSemaphoreTake(xUartMutex, portMAX_DELAY) == pdTRUE)
+    {
+        // 访问串口资源
+        va_start(args, format);
+        vprintf(format, args);
+        va_end(args);
+
+        // 释放互斥量
+        xSemaphoreGive(xUartMutex);
+    }
+}
+
+// 任务1
+void vTask1(void *pvParameters)
+{
+    uint32_t ulCounter = 0;
+
+    while(1)
+    {
+        ulCounter++;
+
+        // 使用互斥量保护的打印
+        SafePrintf(&quot;[Task1] Counter: %lu\n&quot;, ulCounter);
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// 任务2
+void vTask2(void *pvParameters)
+{
+    uint32_t ulCounter = 0;
+
+    while(1)
+    {
+        ulCounter++;
+
+        // 使用互斥量保护的打印
+        SafePrintf(&quot;[Task2] Counter: %lu\n&quot;, ulCounter);
+
+        vTaskDelay(pdMS_TO_TICKS(700));
+    }
+}
+
+// 任务3
+void vTask3(void *pvParameters)
+{
+    uint32_t ulCounter = 0;
+
+    while(1)
+    {
+        ulCounter++;
+
+        // 使用互斥量保护的打印
+        SafePrintf(&quot;[Task3] Counter: %lu\n&quot;, ulCounter);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_USART2_UART_Init();
+
+    printf(&quot;\n=== FreeRTOS Mutex Example ===\n\n&quot;);
+
+    // 创建互斥量
+    xUartMutex = xSemaphoreCreateMutex();
+
+    if(xUartMutex != NULL)
+    {
+        printf(&quot;Mutex created\n\n&quot;);
+
+        // 创建多个任务
+        xTaskCreate(vTask1, &quot;Task1&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(vTask2, &quot;Task2&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(vTask3, &quot;Task3&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>=== FreeRTOS Mutex Example ===
+
+Mutex created
+
+[Task1] Counter: 1
+[Task2] Counter: 1
+[Task1] Counter: 2
+[Task3] Counter: 1
+[Task1] Counter: 3
+[Task2] Counter: 2
+[Task1] Counter: 4
+[Task1] Counter: 5
+[Task2] Counter: 3
+[Task3] Counter: 2
+</code></pre>
+<p><strong>代码说明</strong>:
+- 创建互斥量保护串口资源
+- 多个任务通过互斥量安全地访问串口
+- 避免了串口输出混乱的问题
+- 每个任务的输出都是完整的,不会被打断</p>
+<h2 id="4">步骤4: 递归互斥量的使用</h2>
+<h3 id="41">4.1 什么是递归互斥量?</h3>
+<p><strong>递归互斥量(Recursive Mutex)</strong>允许同一个任务多次获取同一个互斥量,而不会造成死锁。</p>
+<p><strong>使用场景</strong>:
+- 递归函数需要访问共享资源
+- 函数调用链中多次需要获取同一个互斥量
+- 复杂的函数调用关系</p>
+<p><strong>工作原理</strong>:</p>
+<pre><code>普通互斥量:
+任务A获取互斥量 → 成功
+任务A再次获取互斥量 → 死锁! (等待自己释放)
+
+递归互斥量:
+任务A获取互斥量 → 成功 (计数=1)
+任务A再次获取互斥量 → 成功 (计数=2)
+任务A释放互斥量 → 计数=1 (仍被持有)
+任务A再次释放互斥量 → 计数=0 (完全释放)
+</code></pre>
+<h3 id="42">4.2 创建递归互斥量</h3>
+<p><strong>动态创建 - xSemaphoreCreateRecursiveMutex()</strong></p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 声明递归互斥量句柄
+SemaphoreHandle_t xRecursiveMutex;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建递归互斥量
+    xRecursiveMutex = xSemaphoreCreateRecursiveMutex();
+
+    if(xRecursiveMutex != NULL)
+    {
+        printf(&quot;Recursive mutex created successfully\n&quot;);
+
+        // 创建任务...
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>静态创建 - xSemaphoreCreateRecursiveMutexStatic()</strong></p>
+<pre><code class="language-c">// 静态分配递归互斥量控制块
+StaticSemaphore_t xMutexBuffer;
+SemaphoreHandle_t xRecursiveMutex;
+
+// 创建静态递归互斥量
+xRecursiveMutex = xSemaphoreCreateRecursiveMutexStatic(&amp;xMutexBuffer);
+</code></pre>
+<h3 id="43">4.3 递归互斥量的使用</h3>
+<p><strong>重要</strong>: 递归互斥量必须使用专用的API:</p>
+<pre><code class="language-c">// 获取递归互斥量
+BaseType_t xSemaphoreTakeRecursive(
+    SemaphoreHandle_t xMutex,
+    TickType_t xTicksToWait
+);
+
+// 释放递归互斥量
+BaseType_t xSemaphoreGiveRecursive(
+    SemaphoreHandle_t xMutex
+);
+</code></pre>
+<p>⚠️ <strong>注意</strong>: 不能使用普通的<code>xSemaphoreTake()</code>和<code>xSemaphoreGive()</code>!</p>
+<h3 id="44">4.4 完整示例:递归函数访问共享资源</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 递归互斥量句柄
+SemaphoreHandle_t xRecursiveMutex;
+
+// 共享数据结构
+typedef struct
+{
+    uint32_t ulValue;
+    uint32_t ulDepth;
+} SharedData_t;
+
+SharedData_t xSharedData = {0, 0};
+
+// 递归函数:计算阶乘
+uint32_t CalculateFactorial(uint32_t n)
+{
+    uint32_t ulResult;
+
+    // 获取递归互斥量
+    xSemaphoreTakeRecursive(xRecursiveMutex, portMAX_DELAY);
+
+    // 访问共享数据
+    xSharedData.ulDepth++;
+    printf(&quot;  [Depth %lu] Calculating factorial of %lu\n&quot;, 
+           xSharedData.ulDepth, n);
+
+    // 递归计算
+    if(n &lt;= 1)
+    {
+        ulResult = 1;
+    }
+    else
+    {
+        // 递归调用(会再次获取互斥量)
+        ulResult = n * CalculateFactorial(n - 1);
+    }
+
+    printf(&quot;  [Depth %lu] Result: %lu\n&quot;, xSharedData.ulDepth, ulResult);
+    xSharedData.ulDepth--;
+
+    // 释放递归互斥量
+    xSemaphoreGiveRecursive(xRecursiveMutex);
+
+    return ulResult;
+}
+
+// 计算任务
+void vCalculateTask(void *pvParameters)
+{
+    uint32_t ulTaskID = (uint32_t)pvParameters;
+    uint32_t ulNumber = 3 + ulTaskID;
+
+    while(1)
+    {
+        printf(&quot;\n[Task %lu] Starting calculation of %lu!\n&quot;, ulTaskID, ulNumber);
+
+        uint32_t ulResult = CalculateFactorial(ulNumber);
+
+        printf(&quot;[Task %lu] %lu! = %lu\n&quot;, ulTaskID, ulNumber, ulResult);
+
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_USART2_UART_Init();
+
+    printf(&quot;\n=== FreeRTOS Recursive Mutex Example ===\n\n&quot;);
+
+    // 创建递归互斥量
+    xRecursiveMutex = xSemaphoreCreateRecursiveMutex();
+
+    if(xRecursiveMutex != NULL)
+    {
+        printf(&quot;Recursive mutex created\n&quot;);
+
+        // 创建两个计算任务
+        xTaskCreate(vCalculateTask, &quot;Calc1&quot;, 512, (void *)1, 2, NULL);
+        xTaskCreate(vCalculateTask, &quot;Calc2&quot;, 512, (void *)2, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>=== FreeRTOS Recursive Mutex Example ===
+
+Recursive mutex created
+
+[Task 1] Starting calculation of 4!
+  [Depth 1] Calculating factorial of 4
+  [Depth 2] Calculating factorial of 3
+  [Depth 3] Calculating factorial of 2
+  [Depth 4] Calculating factorial of 1
+  [Depth 4] Result: 1
+  [Depth 3] Result: 2
+  [Depth 2] Result: 6
+  [Depth 1] Result: 24
+[Task 1] 4! = 24
+
+[Task 2] Starting calculation of 5!
+  [Depth 1] Calculating factorial of 5
+  [Depth 2] Calculating factorial of 4
+  [Depth 3] Calculating factorial of 3
+  [Depth 4] Calculating factorial of 2
+  [Depth 5] Calculating factorial of 1
+  [Depth 5] Result: 1
+  [Depth 4] Result: 2
+  [Depth 3] Result: 6
+  [Depth 2] Result: 24
+  [Depth 1] Result: 120
+[Task 2] 5! = 120
+</code></pre>
+<p><strong>代码说明</strong>:
+- 递归函数在每次调用时都获取互斥量
+- 使用递归互斥量避免了死锁
+- 每次获取都会增加计数,每次释放都会减少计数
+- 只有当计数归零时,互斥量才真正被释放
+- 其他任务才能获取互斥量</p>
+<h2 id="_8">验证</h2>
+<h3 id="_9">验证方法</h3>
+<ol>
+<li><strong>编译项目</strong>
+   ```bash
+   # 在STM32CubeIDE中
+   Project → Build Project</li>
+</ol>
+<p># 检查编译输出
+   Build Finished. 0 errors, 0 warnings.
+   ```</p>
+<ol start="2">
+<li>
+<p><strong>下载到开发板</strong>
+   - 连接开发板到电脑
+   - 点击"Debug"或"Run"按钮
+   - 程序自动下载并运行</p>
+</li>
+<li>
+<p><strong>查看串口输出</strong>
+   - 打开串口调试工具
+   - 配置: 115200, 8N1
+   - 观察任务执行和信号量操作的输出</p>
+</li>
+</ol>
+<h3 id="_10">预期结果</h3>
+<p><strong>二值信号量示例</strong>:
+- ✅ 按键按下时,任务立即响应
+- ✅ 串口输出"Button pressed!"
+- ✅ LED状态正确切换
+- ✅ 防抖机制工作正常</p>
+<p><strong>计数信号量示例</strong>:
+- ✅ 最多3个任务同时使用缓冲区
+- ✅ 第4个任务等待缓冲区释放
+- ✅ 缓冲区正确分配和释放
+- ✅ 无资源泄漏</p>
+<p><strong>互斥量示例</strong>:
+- ✅ 串口输出完整,不混乱
+- ✅ 多任务安全访问共享资源
+- ✅ 无优先级反转问题</p>
+<p><strong>递归互斥量示例</strong>:
+- ✅ 递归函数正确执行
+- ✅ 无死锁现象
+- ✅ 计算结果正确
+- ✅ 任务间正确切换</p>
+<h3 id="_11">测试要点</h3>
+<ol>
+<li>
+<p><strong>功能测试</strong>
+   - [ ] 信号量创建成功
+   - [ ] 任务能够获取和释放信号量
+   - [ ] 任务同步工作正常
+   - [ ] 资源管理正确
+   - [ ] 互斥访问有效</p>
+</li>
+<li>
+<p><strong>边界测试</strong>
+   - [ ] 信号量值为0时,任务正确阻塞
+   - [ ] 计数信号量达到最大值时正确处理
+   - [ ] 超时机制工作正常
+   - [ ] 递归深度测试</p>
+</li>
+<li>
+<p><strong>性能测试</strong>
+   - [ ] 信号量操作响应及时
+   - [ ] 任务切换流畅
+   - [ ] 无死锁或饥饿现象
+   - [ ] 优先级继承机制有效</p>
+</li>
+</ol>
+<h2 id="_12">故障排除</h2>
+<h3 id="1_1">问题1: 信号量创建失败</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">xBinarySemaphore = xSemaphoreCreateBinary();
+if(xBinarySemaphore == NULL) {
+    printf(&quot;Failed to create semaphore\n&quot;);
+}
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 堆内存不足
+2. FreeRTOS配置错误
+3. 未启用信号量功能</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 增加堆大小(FreeRTOSConfig.h)
+#define configTOTAL_HEAP_SIZE  ((size_t)(20 * 1024))  // 增加到20KB
+
+// 2. 启用信号量功能
+#define configUSE_MUTEXES                   1
+#define configUSE_RECURSIVE_MUTEXES         1
+#define configUSE_COUNTING_SEMAPHORES       1
+
+// 3. 检查剩余堆空间
+size_t xFreeHeap = xPortGetFreeHeapSize();
+printf(&quot;Free heap: %d bytes\n&quot;, xFreeHeap);
+</code></pre>
+<h3 id="2_1">问题2: 任务永久阻塞</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 任务一直等待,永不返回
+xSemaphoreTake(xSemaphore, portMAX_DELAY);
+printf(&quot;This never prints\n&quot;);
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 没有任务释放信号量
+2. 信号量初始值为0且无人Give
+3. 死锁情况</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 使用超时等待,避免永久阻塞
+if(xSemaphoreTake(xSemaphore, pdMS_TO_TICKS(5000)) == pdTRUE)
+{
+    // 成功获取
+}
+else
+{
+    printf(&quot;Timeout waiting for semaphore\n&quot;);
+}
+
+// 2. 检查是否有任务释放信号量
+// 3. 添加调试输出,跟踪信号量状态
+printf(&quot;Waiting for semaphore...\n&quot;);
+xSemaphoreTake(xSemaphore, portMAX_DELAY);
+printf(&quot;Semaphore acquired\n&quot;);
+</code></pre>
+<h3 id="3-api">问题3: 中断中使用错误的API</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 在中断中使用普通API(错误)
+void EXTI_IRQHandler(void)
+{
+    xSemaphoreGive(xSemaphore);  // ❌ 错误!
+}
+</code></pre>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 在中断中必须使用FromISR版本的API
+void EXTI_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // ✅ 正确:使用FromISR版本
+    xSemaphoreGiveFromISR(xSemaphore, &amp;xHigherPriorityTaskWoken);
+
+    // 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<h3 id="4_1">问题4: 互斥量使用错误</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 任务A获取互斥量
+xSemaphoreTake(xMutex, portMAX_DELAY);
+
+// 任务B尝试释放互斥量(错误!)
+xSemaphoreGive(xMutex);  // ❌ 失败!
+</code></pre>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// ✅ 正确:互斥量必须由获取者释放
+void vTaskA(void *pvParameters)
+{
+    // 获取互斥量
+    xSemaphoreTake(xMutex, portMAX_DELAY);
+
+    // 访问共享资源
+    // ...
+
+    // 由同一任务释放
+    xSemaphoreGive(xMutex);
+}
+</code></pre>
+<h3 id="5-api">问题5: 递归互斥量使用普通API</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 创建递归互斥量
+xRecursiveMutex = xSemaphoreCreateRecursiveMutex();
+
+// 使用普通API(错误!)
+xSemaphoreTake(xRecursiveMutex, portMAX_DELAY);  // ❌ 错误!
+</code></pre>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// ✅ 正确:递归互斥量必须使用专用API
+xSemaphoreTakeRecursive(xRecursiveMutex, portMAX_DELAY);
+
+// 访问共享资源
+// ...
+
+xSemaphoreGiveRecursive(xRecursiveMutex);
+</code></pre>
+<h2 id="_13">常见问题</h2>
+<h3 id="q1">Q1: 二值信号量、互斥量和递归互斥量应该如何选择?</h3>
+<p><strong>A</strong>: 根据使用场景选择:</p>
+<p><strong>二值信号量</strong>:
+- ✅ 任务同步(如中断→任务通信)
+- ✅ 事件通知
+- ✅ 简单的任务间信号传递
+- ❌ 不适合保护共享资源(无优先级继承)</p>
+<p><strong>互斥量</strong>:
+- ✅ 保护共享资源
+- ✅ 需要优先级继承机制
+- ✅ 短时间持有的资源
+- ❌ 不能在中断中使用
+- ❌ 不支持递归获取</p>
+<p><strong>递归互斥量</strong>:
+- ✅ 递归函数访问共享资源
+- ✅ 复杂的函数调用链
+- ✅ 同一任务需要多次获取
+- ❌ 不能在中断中使用
+- ❌ 开销比普通互斥量大</p>
+<p><strong>选择建议</strong>:</p>
+<pre><code class="language-c">// 中断→任务通信
+xBinarySemaphore = xSemaphoreCreateBinary();
+
+// 保护共享资源
+xMutex = xSemaphoreCreateMutex();
+
+// 递归函数访问共享资源
+xRecursiveMutex = xSemaphoreCreateRecursiveMutex();
+
+// 管理多个相同资源
+xCountingSemaphore = xSemaphoreCreateCounting(5, 5);
+</code></pre>
+<h3 id="q2">Q2: 为什么互斥量不能在中断中使用?</h3>
+<p><strong>A</strong>: 主要原因:</p>
+<ol>
+<li><strong>优先级继承机制</strong>: 互斥量支持优先级继承,这个机制在中断上下文中没有意义</li>
+<li><strong>阻塞等待</strong>: 中断服务函数不能阻塞等待</li>
+<li><strong>所有权概念</strong>: 中断没有任务上下文,无法持有互斥量</li>
+</ol>
+<p><strong>正确做法</strong>:</p>
+<pre><code class="language-c">// ❌ 错误:在中断中使用互斥量
+void EXTI_IRQHandler(void)
+{
+    xSemaphoreTake(xMutex, 0);  // 错误!
+}
+
+// ✅ 正确:在中断中使用二值信号量
+void EXTI_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(xBinarySemaphore, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<h3 id="q3">Q3: 计数信号量的初始值应该设置为多少?</h3>
+<p><strong>A</strong>: 根据使用场景决定:</p>
+<p><strong>场景1: 资源池管理(初始值=资源总数)</strong></p>
+<pre><code class="language-c">// 有5个缓冲区,初始全部可用
+xBufferSemaphore = xSemaphoreCreateCounting(5, 5);
+</code></pre>
+<p><strong>场景2: 事件计数(初始值=0)</strong></p>
+<pre><code class="language-c">// 等待事件发生
+xEventSemaphore = xSemaphoreCreateCounting(10, 0);
+</code></pre>
+<p><strong>场景3: 限流控制(初始值=最大并发数)</strong></p>
+<pre><code class="language-c">// 最多3个任务同时访问
+xAccessSemaphore = xSemaphoreCreateCounting(3, 3);
+</code></pre>
+<h3 id="q4">Q4: 如何避免优先级反转?</h3>
+<p><strong>A</strong>: 使用互斥量而不是二值信号量:</p>
+<p><strong>问题场景</strong>:</p>
+<pre><code>低优先级任务L持有资源
+高优先级任务H等待资源
+中优先级任务M抢占任务L
+结果: 任务H被任务M间接阻塞
+</code></pre>
+<p><strong>解决方案</strong>:</p>
+<pre><code class="language-c">// ❌ 使用二值信号量:可能发生优先级反转
+xBinarySemaphore = xSemaphoreCreateBinary();
+
+// ✅ 使用互斥量:自动优先级继承
+xMutex = xSemaphoreCreateMutex();
+
+// 当高优先级任务等待互斥量时:
+// 1. 持有互斥量的低优先级任务优先级临时提升
+// 2. 低优先级任务快速完成并释放互斥量
+// 3. 高优先级任务获得互斥量
+// 4. 低优先级任务恢复原优先级
+</code></pre>
+<h3 id="q5">Q5: 信号量和队列有什么区别?</h3>
+<p><strong>A</strong>: 主要区别:</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>信号量</th>
+<th>队列</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>数据传递</strong></td>
+<td>不传递数据</td>
+<td>传递数据</td>
+</tr>
+<tr>
+<td><strong>用途</strong></td>
+<td>同步和计数</td>
+<td>数据通信</td>
+</tr>
+<tr>
+<td><strong>大小</strong></td>
+<td>只有计数值</td>
+<td>可以存储多个数据</td>
+</tr>
+<tr>
+<td><strong>开销</strong></td>
+<td>小</td>
+<td>较大</td>
+</tr>
+<tr>
+<td><strong>典型场景</strong></td>
+<td>事件通知、资源管理</td>
+<td>任务间数据传递</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>:</p>
+<pre><code class="language-c">// 只需要通知事件发生 → 使用信号量
+xSemaphoreGive(xEventSemaphore);
+
+// 需要传递具体数据 → 使用队列
+SensorData_t xData = {.temp = 25.5, .humidity = 60};
+xQueueSend(xDataQueue, &amp;xData, 0);
+</code></pre>
+<h3 id="q6">Q6: 如何查看信号量的当前值?</h3>
+<p><strong>A</strong>: 使用<code>uxSemaphoreGetCount()</code>:</p>
+<pre><code class="language-c">// 获取信号量当前值
+UBaseType_t uxCount = uxSemaphoreGetCount(xCountingSemaphore);
+printf(&quot;Semaphore count: %u\n&quot;, uxCount);
+
+// 示例:检查资源可用性
+if(uxSemaphoreGetCount(xResourceSemaphore) &gt; 0)
+{
+    printf(&quot;Resources available: %u\n&quot;, uxCount);
+}
+else
+{
+    printf(&quot;No resources available\n&quot;);
+}
+
+// 注意:
+// - 二值信号量:返回0或1
+// - 计数信号量:返回0到最大值
+// - 互斥量:返回0或1
+// - 此函数不会阻塞任务
+</code></pre>
+<h2 id="_14">总结</h2>
+<h3 id="_15">核心要点</h3>
+<ol>
+<li>
+<p><strong>信号量类型</strong>
+   - 二值信号量:值为0或1,用于任务同步和事件通知
+   - 计数信号量:值为0到N,用于资源管理和限流
+   - 互斥量:特殊的二值信号量,支持优先级继承
+   - 递归互斥量:允许同一任务多次获取</p>
+</li>
+<li>
+<p><strong>基本操作</strong>
+   - <code>xSemaphoreGive()</code>:释放信号量(值+1)
+   - <code>xSemaphoreTake()</code>:获取信号量(值-1)
+   - 中断中使用<code>FromISR</code>版本
+   - 递归互斥量使用专用API</p>
+</li>
+<li>
+<p><strong>主要应用</strong>
+   - 任务同步:中断→任务通信
+   - 事件通知:生产者-消费者模式
+   - 资源管理:缓冲区池、限流控制
+   - 互斥访问:保护共享资源</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>
+   - 根据场景选择合适的信号量类型
+   - 使用超时避免永久阻塞
+   - 中断中使用FromISR版本API
+   - 互斥量必须由获取者释放
+   - 使用互斥量避免优先级反转</p>
+</li>
+</ol>
+<h3 id="_16">学习检查</h3>
+<p>完成本教程后,你应该能够:</p>
+<ul>
+<li>[ ] 理解FreeRTOS信号量的工作原理</li>
+<li>[ ] 创建和使用二值信号量</li>
+<li>[ ] 创建和使用计数信号量</li>
+<li>[ ] 理解互斥量与二值信号量的区别</li>
+<li>[ ] 正确使用互斥量保护共享资源</li>
+<li>[ ] 使用递归互斥量处理递归场景</li>
+<li>[ ] 在中断中正确使用信号量</li>
+<li>[ ] 选择合适的信号量类型解决实际问题</li>
+</ul>
+<h3 id="_17">实践建议</h3>
+<ol>
+<li>
+<p><strong>动手实践</strong>
+   - 在开发板上运行本教程的所有示例
+   - 修改参数,观察不同的行为
+   - 尝试组合多个信号量</p>
+</li>
+<li>
+<p><strong>深入学习</strong>
+   - 学习FreeRTOS配置选项
+   - 了解软件定时器和事件标志组
+   - 研究任务间通信的最佳实践</p>
+</li>
+<li>
+<p><strong>项目应用</strong>
+   - 在实际项目中使用信号量
+   - 设计合理的任务同步方案
+   - 优化系统性能和响应时间</p>
+</li>
+</ol>
+<h2 id="_18">下一步</h2>
+<h3 id="_19">推荐学习路径</h3>
+<ol>
+<li>
+<p><strong>FreeRTOS配置选项详解</strong>
+   - 学习FreeRTOSConfig.h配置
+   - 掌握内存管理方案选择
+   - 理解调度策略和功能裁剪
+   - 参考:<a href="05-freertos-config.html">FreeRTOS配置选项详解</a></p>
+</li>
+<li>
+<p><strong>FreeRTOS软件定时器高级应用</strong>
+   - 学习软件定时器的创建和使用
+   - 掌握单次和周期定时器
+   - 理解定时器命令队列
+   - 参考:<a href="../intermediate/01-freertos-timer.html">FreeRTOS软件定时器</a></p>
+</li>
+<li>
+<p><strong>FreeRTOS事件标志组实战</strong>
+   - 学习事件标志组的概念
+   - 掌握多事件同步方法
+   - 理解位操作和等待机制
+   - 参考:<a href="../intermediate/02-freertos-event-group.html">FreeRTOS事件标志组</a></p>
+</li>
+<li>
+<p><strong>任务间通信方式对比</strong>
+   - 对比不同通信机制的特点
+   - 学习如何选择合适的方式
+   - 掌握性能优化技巧
+   - 参考:<a href="../../02-rtos-fundamentals/intermediate/02-ipc-comparison.html">任务间通信方式对比</a></p>
+</li>
+</ol>
+<h3 id="_20">进阶主题</h3>
+<ul>
+<li><strong>优先级反转问题与解决</strong>:深入理解优先级反转及其解决方案</li>
+<li><strong>RTOS中断管理与延迟处理</strong>:学习中断与RTOS的配合使用</li>
+<li><strong>FreeRTOS内存管理方案选择</strong>:掌握不同内存管理方案的特点</li>
+</ul>
+<h3 id="_21">实践项目</h3>
+<p>尝试以下项目来巩固所学知识:</p>
+<ol>
+<li>
+<p><strong>多传感器数据采集系统</strong>
+   - 使用信号量同步多个传感器任务
+   - 实现数据采集、处理和显示流水线
+   - 管理有限的缓冲区资源</p>
+</li>
+<li>
+<p><strong>按键消抖与事件处理</strong>
+   - 使用中断和信号量处理按键
+   - 实现可靠的按键消抖
+   - 支持多个按键的独立处理</p>
+</li>
+<li>
+<p><strong>资源池管理系统</strong>
+   - 使用计数信号量管理资源池
+   - 实现资源的分配和回收
+   - 支持超时和错误处理</p>
+</li>
+</ol>
+<h2 id="_22">参考资料</h2>
+<h3 id="_23">官方文档</h3>
+<ul>
+<li><a href="https://www.freertos.org/Documentation/RTOS_book.html">FreeRTOS官方文档</a></li>
+<li><a href="https://www.freertos.org/a00106.html">FreeRTOS API参考</a></li>
+<li><a href="https://www.freertos.org/a00113.html">信号量API文档</a></li>
+<li><a href="https://www.freertos.org/a00113.html#xSemaphoreCreateMutex">互斥量API文档</a></li>
+</ul>
+<h3 id="_24">推荐阅读</h3>
+<ul>
+<li>《FreeRTOS实时内核实用指南》</li>
+<li>《嵌入式实时操作系统》</li>
+<li>《RTOS任务间通信机制详解》</li>
+</ul>
+<h3 id="_25">在线资源</h3>
+<ul>
+<li><a href="https://www.freertos.org/FreeRTOS-quick-start-guide.html">FreeRTOS官方示例</a></li>
+<li><a href="https://www.st.com/resource/en/user_manual/dm00105262.pdf">STM32 FreeRTOS教程</a></li>
+<li><a href="https://www.embedded.com/design-patterns-for-embedded-systems/">嵌入式系统设计模式</a></li>
+</ul>
+<h3 id="_26">相关内容</h3>
+<ul>
+<li><a href="01-freertos-quickstart.html">FreeRTOS快速入门</a></li>
+<li><a href="02-freertos-tasks.html">FreeRTOS任务创建与管理</a></li>
+<li><a href="03-freertos-queue.html">FreeRTOS队列通信实战</a></li>
+<li><a href="../../02-rtos-fundamentals/beginner/04-semaphore.html">RTOS信号量使用实战</a></li>
+<li><a href="../../02-rtos-fundamentals/intermediate/03-priority-inversion.html">优先级反转问题与解决</a></li>
+</ul>
+<hr />
+<p><strong>版权声明</strong>: 本文档采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+<p><strong>反馈与建议</strong>: 如有问题或建议,请通过平台反馈系统联系我们。</p>
+<p><strong>最后更新</strong>: 2024-01-15</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

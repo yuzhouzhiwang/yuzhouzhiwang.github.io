@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>CoAP轻量级协议详解与应用 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/">06-communication-networking</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/">02-network-protocols</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#rest">REST架构风格</a></li>
+<li><a href="#udp-vs-tcp">UDP vs TCP</a></li>
+<li><a href="#http-vs-coap">HTTP vs CoAP对比</a></li>
+</ul>
+</li>
+<li><a href="#coap_1">CoAP协议详解</a><ul>
+<li><a href="#_3">协议架构</a></li>
+<li><a href="#_4">消息格式</a></li>
+<li><a href="#_5">消息类型</a><ul>
+<li><a href="#1-con-confirmable-">1. CON (Confirmable) - 可确认消息</a></li>
+<li><a href="#2-non-non-confirmable-">2. NON (Non-confirmable) - 不可确认消息</a></li>
+<li><a href="#3-ack-acknowledgement-">3. ACK (Acknowledgement) - 确认消息</a></li>
+<li><a href="#4-rst-reset-">4. RST (Reset) - 重置消息</a></li>
+</ul>
+</li>
+<li><a href="#_6">请求方法</a></li>
+<li><a href="#_7">响应码</a></li>
+</ul>
+</li>
+<li><a href="#coap_2">CoAP核心特性</a><ul>
+<li><a href="#1-uri">1. URI和资源</a></li>
+<li><a href="#2-options">2. 选项（Options）</a></li>
+<li><a href="#3">3. 可靠性机制</a><ul>
+<li><a href="#_8">确认和重传</a></li>
+<li><a href="#_9">去重</a></li>
+</ul>
+</li>
+<li><a href="#4-observe">4. 观察模式（Observe）</a></li>
+<li><a href="#5">5. 资源发现</a></li>
+<li><a href="#6-block-wise-transfer">6. 块传输（Block-wise Transfer）</a></li>
+</ul>
+</li>
+<li><a href="#_10">实践示例</a><ul>
+<li><a href="#1get">示例1：基本GET请求</a></li>
+<li><a href="#2post">示例2：POST创建资源</a></li>
+<li><a href="#3put">示例3：PUT更新资源</a></li>
+<li><a href="#4">示例4：观察资源</a></li>
+<li><a href="#5_1">示例5：资源发现</a></li>
+<li><a href="#6esp32-coap">示例6：ESP32 CoAP服务器</a></li>
+<li><a href="#7esp32-coap">示例7：ESP32 CoAP客户端</a></li>
+</ul>
+</li>
+<li><a href="#_11">深入理解</a><ul>
+<li><a href="#coap-vs-mqtt">CoAP vs MQTT对比</a></li>
+<li><a href="#coaps">安全性：CoAPS</a></li>
+<li><a href="#_12">代理和缓存</a><ul>
+<li><a href="#coap_3">CoAP代理</a></li>
+<li><a href="#_13">缓存机制</a></li>
+</ul>
+</li>
+<li><a href="#_14">组播支持</a></li>
+<li><a href="#_15">性能优化</a><ul>
+<li><a href="#1">1. 消息大小优化</a></li>
+<li><a href="#2">2. 重传策略优化</a></li>
+<li><a href="#3_1">3. 观察模式优化</a></li>
+<li><a href="#4_1">4. 块传输优化</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_16">应用场景</a><ul>
+<li><a href="#1_1">1. 智能家居</a></li>
+<li><a href="#2_1">2. 工业物联网</a></li>
+<li><a href="#3_2">3. 智慧农业</a></li>
+<li><a href="#4_2">4. 智能城市</a></li>
+<li><a href="#5_2">5. 可穿戴设备</a></li>
+</ul>
+</li>
+<li><a href="#_17">常见问题</a><ul>
+<li><a href="#q1-coaphttp">Q1: CoAP和HTTP有什么区别？</a></li>
+<li><a href="#q2-connon">Q2: 什么时候使用CON消息，什么时候使用NON消息？</a></li>
+<li><a href="#q3-coap">Q3: CoAP如何保证可靠性？</a></li>
+<li><a href="#q4">Q4: 观察模式和轮询有什么区别？</a></li>
+<li><a href="#q5-coap">Q5: CoAP支持哪些数据格式？</a></li>
+<li><a href="#q6-coap">Q6: 如何实现CoAP的安全通信？</a></li>
+<li><a href="#q7-coap">Q7: CoAP适合实时应用吗？</a></li>
+<li><a href="#q8-coapmqtt">Q8: CoAP和MQTT应该如何选择？</a></li>
+</ul>
+</li>
+<li><a href="#_18">总结</a></li>
+<li><a href="#_19">延伸阅读</a><ul>
+<li><a href="#_20">推荐资源</a></li>
+<li><a href="#_21">相关文章</a></li>
+<li><a href="#_22">工具和库</a></li>
+</ul>
+</li>
+<li><a href="#_23">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="coap">CoAP轻量级协议详解与应用</h1>
+<h2 id="_1">概述</h2>
+<p>CoAP (Constrained Application Protocol，受限应用协议) 是专为资源受限的物联网设备设计的轻量级应用层协议。它基于UDP协议，采用类似HTTP的RESTful架构，但针对低功耗、低带宽的嵌入式环境进行了优化。</p>
+<p><strong>为什么需要CoAP？</strong></p>
+<p>传统的HTTP协议虽然功能强大，但对于资源受限的物联网设备来说过于"重量级"：
+- HTTP基于TCP，需要维护连接状态，消耗内存
+- HTTP头部信息冗长，增加带宽开销
+- HTTP不适合低功耗、间歇性连接的场景</p>
+<p>CoAP应运而生，它提供了：
+- <strong>轻量级</strong>：协议开销小，适合低带宽网络
+- <strong>低功耗</strong>：基于UDP，减少连接维护开销
+- <strong>RESTful</strong>：采用熟悉的REST架构，易于理解
+- <strong>可靠性</strong>：提供可选的确认机制
+- <strong>资源发现</strong>：内置服务发现功能
+- <strong>观察模式</strong>：支持服务器主动推送</p>
+<p><strong>学习目标</strong>：</p>
+<p>完成本文学习后，你将能够：
+- 理解CoAP协议的设计理念和核心特点
+- 掌握CoAP消息格式和交互模式
+- 了解RESTful API在CoAP中的应用
+- 理解资源发现和观察模式的工作原理
+- 知道CoAP的典型应用场景</p>
+<h2 id="_2">背景知识</h2>
+<h3 id="rest">REST架构风格</h3>
+<p>REST (Representational State Transfer，表述性状态转移) 是一种软件架构风格，广泛应用于Web服务设计。</p>
+<p><strong>REST核心概念</strong>：
+- <strong>资源（Resource）</strong>：网络上的一个实体，用URI标识
+- <strong>表述（Representation）</strong>：资源的具体表现形式（JSON、XML等）
+- <strong>状态转移（State Transfer）</strong>：通过HTTP方法操作资源状态</p>
+<p><strong>REST的四个基本方法</strong>：
+- <strong>GET</strong>：获取资源
+- <strong>POST</strong>：创建资源
+- <strong>PUT</strong>：更新资源
+- <strong>DELETE</strong>：删除资源</p>
+<h3 id="udp-vs-tcp">UDP vs TCP</h3>
+<p>CoAP选择UDP而非TCP作为传输层协议，原因如下：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>TCP</th>
+<th>UDP</th>
+<th>CoAP选择</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>连接</td>
+<td>面向连接</td>
+<td>无连接</td>
+<td>UDP（减少开销）</td>
+</tr>
+<tr>
+<td>可靠性</td>
+<td>可靠传输</td>
+<td>不可靠</td>
+<td>UDP+应用层确认</td>
+</tr>
+<tr>
+<td>开销</td>
+<td>较大</td>
+<td>较小</td>
+<td>UDP（节省资源）</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>可靠数据传输</td>
+<td>实时通信</td>
+<td>物联网设备</td>
+</tr>
+</tbody>
+</table>
+<p>CoAP在UDP基础上实现了可选的可靠性机制，在轻量级和可靠性之间取得平衡。</p>
+<h3 id="http-vs-coap">HTTP vs CoAP对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>HTTP</th>
+<th>CoAP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>传输层</td>
+<td>TCP</td>
+<td>UDP</td>
+</tr>
+<tr>
+<td>消息格式</td>
+<td>文本</td>
+<td>二进制</td>
+</tr>
+<tr>
+<td>头部大小</td>
+<td>数百字节</td>
+<td>4字节</td>
+</tr>
+<tr>
+<td>方法</td>
+<td>GET, POST, PUT, DELETE等</td>
+<td>GET, POST, PUT, DELETE</td>
+</tr>
+<tr>
+<td>状态码</td>
+<td>3位数字（200, 404等）</td>
+<td>类似但更紧凑</td>
+</tr>
+<tr>
+<td>内容协商</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>缓存</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>观察模式</td>
+<td>需要WebSocket</td>
+<td>内置支持</td>
+</tr>
+<tr>
+<td>资源发现</td>
+<td>无标准</td>
+<td>内置支持</td>
+</tr>
+</tbody>
+</table>
+<h2 id="coap_1">CoAP协议详解</h2>
+<h3 id="_3">协议架构</h3>
+<p>CoAP协议栈分为四层：</p>
+<pre><code class="language-mermaid">graph TB
+    A[应用层&lt;br/&gt;CoAP请求/响应] --&gt; B[消息层&lt;br/&gt;可靠性传输]
+    B --&gt; C[请求/响应层&lt;br/&gt;REST方法]
+    C --&gt; D[UDP层&lt;br/&gt;数据报传输]
+</code></pre>
+<p><strong>各层功能</strong>：
+1. <strong>应用层</strong>：处理CoAP请求和响应
+2. <strong>消息层</strong>：处理消息的可靠传输（重传、去重）
+3. <strong>请求/响应层</strong>：实现REST方法和资源操作
+4. <strong>UDP层</strong>：提供基础的数据报传输</p>
+<h3 id="_4">消息格式</h3>
+<p>CoAP消息采用紧凑的二进制格式，最小头部仅4字节：</p>
+<pre><code> 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|Ver| T |  TKL  |      Code     |          Message ID           |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Token (if any, TKL bytes) ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|   Options (if any) ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|1 1 1 1 1 1 1 1|    Payload (if any) ...
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+</code></pre>
+<p><strong>字段说明</strong>：</p>
+<ul>
+<li><strong>Ver (Version, 2位)</strong>：协议版本，当前为1</li>
+<li><strong>T (Type, 2位)</strong>：消息类型</li>
+<li>0: CON (Confirmable) - 需要确认</li>
+<li>1: NON (Non-confirmable) - 不需要确认</li>
+<li>2: ACK (Acknowledgement) - 确认消息</li>
+<li>3: RST (Reset) - 重置消息</li>
+<li><strong>TKL (Token Length, 4位)</strong>：Token长度（0-8字节）</li>
+<li><strong>Code (8位)</strong>：请求方法或响应状态码</li>
+<li><strong>Message ID (16位)</strong>：消息标识符，用于去重和匹配响应</li>
+<li><strong>Token</strong>：用于匹配请求和响应</li>
+<li><strong>Options</strong>：可选的头部信息</li>
+<li><strong>Payload</strong>：消息负载（数据）</li>
+</ul>
+<h3 id="_5">消息类型</h3>
+<p>CoAP定义了四种消息类型：</p>
+<h4 id="1-con-confirmable-">1. CON (Confirmable) - 可确认消息</h4>
+<p>需要接收方发送ACK确认的消息，用于可靠传输。</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Server
+
+    Client-&gt;&gt;Server: CON [0x1234] GET /temperature
+    Server-&gt;&gt;Client: ACK [0x1234] 2.05 Content &quot;25.5°C&quot;
+</code></pre>
+<h4 id="2-non-non-confirmable-">2. NON (Non-confirmable) - 不可确认消息</h4>
+<p>不需要确认的消息，用于不重要的数据或高频率更新。</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Server
+
+    Client-&gt;&gt;Server: NON [0x5678] GET /sensor
+    Server-&gt;&gt;Client: NON [0x9ABC] 2.05 Content &quot;data&quot;
+</code></pre>
+<h4 id="3-ack-acknowledgement-">3. ACK (Acknowledgement) - 确认消息</h4>
+<p>对CON消息的确认响应。</p>
+<h4 id="4-rst-reset-">4. RST (Reset) - 重置消息</h4>
+<p>表示无法处理收到的消息。</p>
+<h3 id="_6">请求方法</h3>
+<p>CoAP支持四种REST方法：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th>Code</th>
+<th>说明</th>
+<th>等价HTTP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GET</td>
+<td>0.01</td>
+<td>获取资源</td>
+<td>GET</td>
+</tr>
+<tr>
+<td>POST</td>
+<td>0.02</td>
+<td>创建资源</td>
+<td>POST</td>
+</tr>
+<tr>
+<td>PUT</td>
+<td>0.03</td>
+<td>更新资源</td>
+<td>PUT</td>
+</tr>
+<tr>
+<td>DELETE</td>
+<td>0.04</td>
+<td>删除资源</td>
+<td>DELETE</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_7">响应码</h3>
+<p>CoAP响应码采用类似HTTP的分类：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>范围</th>
+<th>说明</th>
+<th>示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>成功</td>
+<td>2.xx</td>
+<td>请求成功</td>
+<td>2.05 Content</td>
+</tr>
+<tr>
+<td>客户端错误</td>
+<td>4.xx</td>
+<td>请求错误</td>
+<td>4.04 Not Found</td>
+</tr>
+<tr>
+<td>服务器错误</td>
+<td>5.xx</td>
+<td>服务器错误</td>
+<td>5.00 Internal Server Error</td>
+</tr>
+</tbody>
+</table>
+<p><strong>常见响应码</strong>：
+- <strong>2.01 Created</strong>：资源已创建
+- <strong>2.02 Deleted</strong>：资源已删除
+- <strong>2.03 Valid</strong>：资源有效（缓存验证）
+- <strong>2.04 Changed</strong>：资源已更改
+- <strong>2.05 Content</strong>：返回资源内容
+- <strong>4.00 Bad Request</strong>：请求格式错误
+- <strong>4.04 Not Found</strong>：资源不存在
+- <strong>4.05 Method Not Allowed</strong>：方法不允许
+- <strong>5.00 Internal Server Error</strong>：服务器内部错误</p>
+<h2 id="coap_2">CoAP核心特性</h2>
+<h3 id="1-uri">1. URI和资源</h3>
+<p>CoAP使用URI来标识资源，格式类似HTTP：</p>
+<pre><code>coap://example.com:5683/sensors/temperature
+</code></pre>
+<p><strong>URI组成</strong>：
+- <strong>Scheme</strong>：<code>coap://</code> 或 <code>coaps://</code>（加密）
+- <strong>Host</strong>：服务器地址
+- <strong>Port</strong>：端口号（默认5683，加密为5684）
+- <strong>Path</strong>：资源路径</p>
+<p><strong>示例</strong>：</p>
+<pre><code>coap://192.168.1.100/sensors/temp      # 温度传感器
+coap://192.168.1.100/actuators/led     # LED控制
+coap://192.168.1.100/.well-known/core  # 资源发现
+</code></pre>
+<h3 id="2-options">2. 选项（Options）</h3>
+<p>CoAP选项用于传递额外的请求/响应信息，类似HTTP头部。</p>
+<p><strong>常用选项</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>选项号</th>
+<th>名称</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3</td>
+<td>Uri-Host</td>
+<td>目标主机</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Uri-Port</td>
+<td>目标端口</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Uri-Path</td>
+<td>URI路径段</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Content-Format</td>
+<td>内容格式</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Uri-Query</td>
+<td>查询参数</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Accept</td>
+<td>接受的内容格式</td>
+</tr>
+<tr>
+<td>35</td>
+<td>Proxy-Uri</td>
+<td>代理URI</td>
+</tr>
+<tr>
+<td>60</td>
+<td>Size1</td>
+<td>请求负载大小</td>
+</tr>
+</tbody>
+</table>
+<p><strong>内容格式</strong>：
+- 0: text/plain
+- 40: application/link-format
+- 41: application/xml
+- 42: application/octet-stream
+- 47: application/exi
+- 50: application/json</p>
+<h3 id="3">3. 可靠性机制</h3>
+<p>CoAP在UDP基础上实现了可靠传输：</p>
+<h4 id="_8">确认和重传</h4>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Server
+
+    Client-&gt;&gt;Server: CON [0x1234] GET /temp
+    Note over Client: 启动重传定时器
+
+    alt 收到ACK
+        Server-&gt;&gt;Client: ACK [0x1234] 2.05 Content
+        Note over Client: 取消重传定时器
+    else 超时
+        Note over Client: 重传（指数退避）
+        Client-&gt;&gt;Server: CON [0x1234] GET /temp
+    end
+</code></pre>
+<p><strong>重传策略</strong>：
+- 初始超时：2-3秒（随机）
+- 最大重传次数：4次
+- 退避算法：指数退避（每次翻倍）</p>
+<h4 id="_9">去重</h4>
+<p>使用Message ID进行消息去重，防止重复处理。</p>
+<h3 id="4-observe">4. 观察模式（Observe）</h3>
+<p>观察模式允许客户端订阅资源，服务器在资源变化时主动推送更新。</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Server
+
+    Client-&gt;&gt;Server: CON GET /temperature&lt;br/&gt;Observe: 0
+    Server-&gt;&gt;Client: ACK 2.05 Content&lt;br/&gt;Observe: 12&lt;br/&gt;&quot;25.5°C&quot;
+
+    Note over Server: 温度变化
+    Server-&gt;&gt;Client: CON 2.05 Content&lt;br/&gt;Observe: 13&lt;br/&gt;&quot;26.0°C&quot;
+    Client-&gt;&gt;Server: ACK
+
+    Note over Server: 温度再次变化
+    Server-&gt;&gt;Client: CON 2.05 Content&lt;br/&gt;Observe: 14&lt;br/&gt;&quot;26.5°C&quot;
+    Client-&gt;&gt;Server: ACK
+</code></pre>
+<p><strong>观察模式特点</strong>：
+- 客户端发送带Observe选项的GET请求
+- 服务器在响应中包含Observe选项
+- 服务器主动推送资源更新
+- 客户端可以取消观察（发送RST或Observe: 1）</p>
+<p><strong>应用场景</strong>：
+- 传感器数据监控
+- 设备状态变化通知
+- 实时数据流</p>
+<h3 id="5">5. 资源发现</h3>
+<p>CoAP定义了标准的资源发现机制，使用<code>.well-known/core</code>端点。</p>
+<p><strong>发现请求</strong>：</p>
+<pre><code>GET coap://192.168.1.100/.well-known/core
+</code></pre>
+<p><strong>响应示例</strong>（application/link-format）：</p>
+<pre><code>&lt;/sensors/temp&gt;;ct=0;title=&quot;Temperature&quot;,
+&lt;/sensors/humidity&gt;;ct=0;title=&quot;Humidity&quot;,
+&lt;/actuators/led&gt;;ct=0;rt=&quot;light&quot;,
+&lt;/actuators/relay&gt;;ct=0;rt=&quot;switch&quot;
+</code></pre>
+<p><strong>链接格式属性</strong>：
+- <code>ct</code>：Content-Type（内容类型）
+- <code>rt</code>：Resource Type（资源类型）
+- <code>if</code>：Interface（接口类型）
+- <code>sz</code>：Size（资源大小）
+- <code>title</code>：标题</p>
+<p><strong>过滤查询</strong>：</p>
+<pre><code>GET /.well-known/core?rt=temperature
+</code></pre>
+<h3 id="6-block-wise-transfer">6. 块传输（Block-wise Transfer）</h3>
+<p>对于大数据传输，CoAP支持分块传输。</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Server
+
+    Client-&gt;&gt;Server: GET /large-file&lt;br/&gt;Block2: 0/0/1024
+    Server-&gt;&gt;Client: 2.05 Content&lt;br/&gt;Block2: 0/1/1024&lt;br/&gt;[数据块0]
+
+    Client-&gt;&gt;Server: GET /large-file&lt;br/&gt;Block2: 1/0/1024
+    Server-&gt;&gt;Client: 2.05 Content&lt;br/&gt;Block2: 1/1/1024&lt;br/&gt;[数据块1]
+
+    Client-&gt;&gt;Server: GET /large-file&lt;br/&gt;Block2: 2/0/1024
+    Server-&gt;&gt;Client: 2.05 Content&lt;br/&gt;Block2: 2/0/1024&lt;br/&gt;[数据块2]
+</code></pre>
+<p><strong>Block选项</strong>：
+- <strong>Block1</strong>：请求负载分块
+- <strong>Block2</strong>：响应负载分块
+- <strong>格式</strong>：块号/更多标志/块大小</p>
+<h2 id="_10">实践示例</h2>
+<h3 id="1get">示例1：基本GET请求</h3>
+<p>使用CoAP客户端工具（如coap-cli）发送GET请求：</p>
+<pre><code class="language-bash"># 安装coap-cli
+npm install coap-cli -g
+
+# 发送GET请求
+coap get coap://coap.me/test
+
+# 带查询参数
+coap get coap://coap.me/test?name=value
+</code></pre>
+<p><strong>响应示例</strong>：</p>
+<pre><code>(2.05)  Content
+Payload: Hello World!
+</code></pre>
+<h3 id="2post">示例2：POST创建资源</h3>
+<pre><code class="language-bash"># 发送POST请求创建资源
+coap post coap://192.168.1.100/sensors -p '{&quot;type&quot;:&quot;temperature&quot;,&quot;value&quot;:25.5}'
+
+# 指定内容格式
+coap post coap://192.168.1.100/sensors -O 50 -p '{&quot;type&quot;:&quot;temperature&quot;}'
+</code></pre>
+<p><strong>响应</strong>：</p>
+<pre><code>(2.01)  Created
+Location-Path: /sensors/001
+</code></pre>
+<h3 id="3put">示例3：PUT更新资源</h3>
+<pre><code class="language-bash"># 更新资源
+coap put coap://192.168.1.100/sensors/001 -p '{&quot;value&quot;:26.0}'
+</code></pre>
+<p><strong>响应</strong>：</p>
+<pre><code>(2.04)  Changed
+</code></pre>
+<h3 id="4">示例4：观察资源</h3>
+<pre><code class="language-bash"># 观察资源变化
+coap get coap://192.168.1.100/sensors/temp -o
+
+# 输出示例：
+# (2.05)  Content, Observe: 12
+# Payload: 25.5
+# 
+# (2.05)  Content, Observe: 13
+# Payload: 26.0
+# 
+# (2.05)  Content, Observe: 14
+# Payload: 26.5
+</code></pre>
+<h3 id="5_1">示例5：资源发现</h3>
+<pre><code class="language-bash"># 发现所有资源
+coap get coap://192.168.1.100/.well-known/core
+
+# 输出：
+# &lt;/sensors/temp&gt;;ct=0;title=&quot;Temperature&quot;,
+# &lt;/sensors/humidity&gt;;ct=0;title=&quot;Humidity&quot;,
+# &lt;/actuators/led&gt;;ct=0;rt=&quot;light&quot;
+
+# 过滤查询
+coap get coap://192.168.1.100/.well-known/core?rt=temperature
+</code></pre>
+<h3 id="6esp32-coap">示例6：ESP32 CoAP服务器</h3>
+<p>使用ESP-IDF实现简单的CoAP服务器：</p>
+<pre><code class="language-c">#include &quot;coap3/coap.h&quot;
+#include &quot;esp_log.h&quot;
+
+static const char *TAG = &quot;CoAP_Server&quot;;
+
+// GET处理函数
+static void temperature_handler(coap_resource_t *resource,
+                                coap_session_t *session,
+                                const coap_pdu_t *request,
+                                const coap_string_t *query,
+                                coap_pdu_t *response) {
+    // 读取温度（这里使用模拟值）
+    float temperature = 25.5;
+
+    // 构建响应
+    char buf[32];
+    snprintf(buf, sizeof(buf), &quot;%.1f&quot;, temperature);
+
+    // 设置响应码
+    coap_pdu_set_code(response, COAP_RESPONSE_CODE_CONTENT);
+
+    // 设置内容格式（text/plain）
+    coap_add_option(response, COAP_OPTION_CONTENT_FORMAT,
+                   coap_encode_var_safe(buf, sizeof(buf), 
+                   COAP_MEDIATYPE_TEXT_PLAIN), (uint8_t *)buf);
+
+    // 添加负载
+    coap_add_data(response, strlen(buf), (uint8_t *)buf);
+
+    ESP_LOGI(TAG, &quot;Temperature requested: %.1f&quot;, temperature);
+}
+
+void coap_server_init(void) {
+    coap_context_t *ctx = NULL;
+    coap_address_t serv_addr;
+    coap_resource_t *resource = NULL;
+
+    // 初始化CoAP上下文
+    coap_address_init(&amp;serv_addr);
+    serv_addr.addr.sin.sin_family = AF_INET;
+    serv_addr.addr.sin.sin_port = htons(COAP_DEFAULT_PORT);
+    serv_addr.addr.sin.sin_addr.s_addr = INADDR_ANY;
+
+    ctx = coap_new_context(NULL);
+    if (!ctx) {
+        ESP_LOGE(TAG, &quot;Failed to create CoAP context&quot;);
+        return;
+    }
+
+    // 创建端点
+    coap_endpoint_t *ep = coap_new_endpoint(ctx, &amp;serv_addr, COAP_PROTO_UDP);
+    if (!ep) {
+        ESP_LOGE(TAG, &quot;Failed to create endpoint&quot;);
+        return;
+    }
+
+    // 创建资源
+    resource = coap_resource_init(coap_make_str_const(&quot;sensors/temp&quot;), 0);
+    coap_register_handler(resource, COAP_REQUEST_GET, temperature_handler);
+
+    // 设置资源属性（用于资源发现）
+    coap_add_attr(resource, coap_make_str_const(&quot;ct&quot;), 
+                 coap_make_str_const(&quot;0&quot;), 0);
+    coap_add_attr(resource, coap_make_str_const(&quot;title&quot;),
+                 coap_make_str_const(&quot;\&quot;Temperature\&quot;&quot;), 0);
+
+    // 添加资源到上下文
+    coap_add_resource(ctx, resource);
+
+    ESP_LOGI(TAG, &quot;CoAP server started on port %d&quot;, COAP_DEFAULT_PORT);
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 创建CoAP上下文和端点
+- 注册<code>/sensors/temp</code>资源
+- 实现GET请求处理函数
+- 返回温度数据（text/plain格式）
+- 添加资源属性用于发现</p>
+<h3 id="7esp32-coap">示例7：ESP32 CoAP客户端</h3>
+<pre><code class="language-c">#include &quot;coap3/coap.h&quot;
+#include &quot;esp_log.h&quot;
+
+static const char *TAG = &quot;CoAP_Client&quot;;
+
+// 响应处理函数
+static void response_handler(coap_session_t *session,
+                            const coap_pdu_t *sent,
+                            const coap_pdu_t *received,
+                            const coap_mid_t mid) {
+    const uint8_t *data;
+    size_t data_len;
+
+    // 获取响应码
+    coap_pdu_code_t code = coap_pdu_get_code(received);
+    ESP_LOGI(TAG, &quot;Response code: %d.%02d&quot;, 
+            COAP_RESPONSE_CLASS(code), code &amp; 0x1F);
+
+    // 获取负载
+    if (coap_get_data(received, &amp;data_len, &amp;data)) {
+        ESP_LOGI(TAG, &quot;Received: %.*s&quot;, (int)data_len, data);
+    }
+}
+
+void coap_client_request(const char *uri) {
+    coap_context_t *ctx = NULL;
+    coap_session_t *session = NULL;
+    coap_pdu_t *pdu = NULL;
+    coap_uri_t coap_uri;
+
+    // 解析URI
+    if (coap_split_uri((const uint8_t *)uri, strlen(uri), &amp;coap_uri) &lt; 0) {
+        ESP_LOGE(TAG, &quot;Invalid URI&quot;);
+        return;
+    }
+
+    // 创建上下文
+    ctx = coap_new_context(NULL);
+    if (!ctx) {
+        ESP_LOGE(TAG, &quot;Failed to create context&quot;);
+        return;
+    }
+
+    // 创建会话
+    coap_address_t dst_addr;
+    coap_address_init(&amp;dst_addr);
+    dst_addr.addr.sin.sin_family = AF_INET;
+    dst_addr.addr.sin.sin_port = htons(coap_uri.port);
+    inet_pton(AF_INET, coap_uri.host.s, &amp;dst_addr.addr.sin.sin_addr);
+
+    session = coap_new_client_session(ctx, NULL, &amp;dst_addr, COAP_PROTO_UDP);
+    if (!session) {
+        ESP_LOGE(TAG, &quot;Failed to create session&quot;);
+        return;
+    }
+
+    // 创建GET请求
+    pdu = coap_pdu_init(COAP_MESSAGE_CON, COAP_REQUEST_CODE_GET,
+                       coap_new_message_id(session), coap_session_max_pdu_size(session));
+
+    // 添加URI路径
+    coap_add_option(pdu, COAP_OPTION_URI_PATH,
+                   coap_uri.path.length, coap_uri.path.s);
+
+    // 注册响应处理函数
+    coap_register_response_handler(ctx, response_handler);
+
+    // 发送请求
+    coap_send(session, pdu);
+
+    ESP_LOGI(TAG, &quot;CoAP request sent to %s&quot;, uri);
+}
+</code></pre>
+<h2 id="_11">深入理解</h2>
+<h3 id="coap-vs-mqtt">CoAP vs MQTT对比</h3>
+<p>CoAP和MQTT都是物联网协议，但设计理念不同：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>CoAP</th>
+<th>MQTT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>架构模式</td>
+<td>请求/响应（RESTful）</td>
+<td>发布/订阅</td>
+</tr>
+<tr>
+<td>传输层</td>
+<td>UDP</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>消息开销</td>
+<td>4字节头部</td>
+<td>2字节头部</td>
+</tr>
+<tr>
+<td>可靠性</td>
+<td>可选确认</td>
+<td>QoS 0/1/2</td>
+</tr>
+<tr>
+<td>资源发现</td>
+<td>内置</td>
+<td>无</td>
+</tr>
+<tr>
+<td>观察模式</td>
+<td>内置</td>
+<td>通过订阅实现</td>
+</tr>
+<tr>
+<td>代理</td>
+<td>可选</td>
+<td>必需（Broker）</td>
+</tr>
+<tr>
+<td>缓存</td>
+<td>支持</td>
+<td>不支持</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>点对点、RESTful API</td>
+<td>多对多、消息队列</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- <strong>选择CoAP</strong>：需要RESTful API、点对点通信、资源发现
+- <strong>选择MQTT</strong>：需要发布订阅、多对多通信、消息队列</p>
+<h3 id="coaps">安全性：CoAPS</h3>
+<p>CoAPS是CoAP的安全版本，使用DTLS（Datagram TLS）加密。</p>
+<p><strong>CoAPS特点</strong>：
+- 基于DTLS 1.2
+- 默认端口：5684
+- 支持PSK（预共享密钥）和证书认证
+- 提供数据加密和完整性保护</p>
+<p><strong>URI格式</strong>：</p>
+<pre><code>coaps://192.168.1.100:5684/sensors/temp
+</code></pre>
+<p><strong>安全模式</strong>：
+1. <strong>NoSec</strong>：无安全（默认）
+2. <strong>PreSharedKey</strong>：预共享密钥
+3. <strong>RawPublicKey</strong>：原始公钥
+4. <strong>Certificate</strong>：X.509证书</p>
+<h3 id="_12">代理和缓存</h3>
+<h4 id="coap_3">CoAP代理</h4>
+<p>CoAP支持两种代理模式：</p>
+<ol>
+<li><strong>正向代理（Forward Proxy）</strong>：
+   - 客户端通过代理访问服务器
+   - 使用Proxy-Uri选项</li>
+</ol>
+<pre><code>Client -&gt; Proxy -&gt; Server
+</code></pre>
+<ol start="2">
+<li><strong>反向代理（Reverse Proxy）</strong>：
+   - 服务器前的代理
+   - 负载均衡、缓存</li>
+</ol>
+<h4 id="_13">缓存机制</h4>
+<p>CoAP支持HTTP风格的缓存：</p>
+<p><strong>缓存控制选项</strong>：
+- <strong>Max-Age</strong>：缓存有效期（秒）
+- <strong>ETag</strong>：实体标签，用于缓存验证</p>
+<p><strong>缓存验证</strong>：</p>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant Client
+    participant Cache
+    participant Server
+
+    Client-&gt;&gt;Cache: GET /temp
+    Cache-&gt;&gt;Server: GET /temp&lt;br/&gt;ETag: &quot;abc123&quot;
+
+    alt 资源未变化
+        Server-&gt;&gt;Cache: 2.03 Valid&lt;br/&gt;Max-Age: 60
+        Cache-&gt;&gt;Client: 2.05 Content&lt;br/&gt;&quot;25.5°C&quot;
+    else 资源已变化
+        Server-&gt;&gt;Cache: 2.05 Content&lt;br/&gt;ETag: &quot;def456&quot;&lt;br/&gt;&quot;26.0°C&quot;
+        Cache-&gt;&gt;Client: 2.05 Content&lt;br/&gt;&quot;26.0°C&quot;
+    end
+</code></pre>
+<h3 id="_14">组播支持</h3>
+<p>CoAP支持IPv4和IPv6组播，用于资源发现和组通信。</p>
+<p><strong>组播地址</strong>：
+- IPv4: 224.0.1.187
+- IPv6: FF0X::FD（X为范围）</p>
+<p><strong>组播示例</strong>：</p>
+<pre><code class="language-bash"># 组播资源发现
+coap get coap://224.0.1.187/.well-known/core
+</code></pre>
+<p><strong>应用场景</strong>：
+- 设备发现
+- 批量配置
+- 组控制（如控制一组灯）</p>
+<h3 id="_15">性能优化</h3>
+<h4 id="1">1. 消息大小优化</h4>
+<ul>
+<li>使用紧凑的数据格式（CBOR、EXI）</li>
+<li>避免冗长的URI路径</li>
+<li>合理使用选项</li>
+</ul>
+<h4 id="2">2. 重传策略优化</h4>
+<pre><code class="language-c">// 调整重传参数
+#define ACK_TIMEOUT 2.0      // 初始超时（秒）
+#define ACK_RANDOM_FACTOR 1.5  // 随机因子
+#define MAX_RETRANSMIT 4     // 最大重传次数
+</code></pre>
+<h4 id="3_1">3. 观察模式优化</h4>
+<ul>
+<li>设置合理的通知间隔</li>
+<li>使用NON消息减少确认开销</li>
+<li>实现智能通知（仅在值变化时发送）</li>
+</ul>
+<h4 id="4_1">4. 块传输优化</h4>
+<ul>
+<li>选择合适的块大小（16/32/64/128/256/512/1024字节）</li>
+<li>考虑网络MTU</li>
+<li>使用早期协商（Early Negotiation）</li>
+</ul>
+<h2 id="_16">应用场景</h2>
+<h3 id="1_1">1. 智能家居</h3>
+<p><strong>场景</strong>：控制和监控家居设备</p>
+<pre><code>GET coap://light.local/status          # 查询灯状态
+PUT coap://light.local/power -p &quot;ON&quot;   # 开灯
+GET coap://sensor.local/temp -o        # 观察温度变化
+</code></pre>
+<p><strong>优势</strong>：
+- 轻量级，适合资源受限设备
+- RESTful API易于理解和使用
+- 观察模式实现实时监控</p>
+<h3 id="2_1">2. 工业物联网</h3>
+<p><strong>场景</strong>：设备监控和数据采集</p>
+<pre><code>GET coap://machine.local/.well-known/core  # 发现设备资源
+GET coap://machine.local/sensors/pressure  # 读取压力传感器
+POST coap://machine.local/config -p &quot;{...}&quot; # 配置设备
+</code></pre>
+<p><strong>优势</strong>：
+- 低延迟
+- 支持组播批量操作
+- 资源发现简化设备管理</p>
+<h3 id="3_2">3. 智慧农业</h3>
+<p><strong>场景</strong>：环境监测和自动控制</p>
+<pre><code>GET coap://soil.local/moisture -o      # 观察土壤湿度
+PUT coap://valve.local/state -p &quot;OPEN&quot; # 开启灌溉阀门
+</code></pre>
+<p><strong>优势</strong>：
+- 低功耗，延长电池寿命
+- 适合间歇性连接
+- 观察模式减少轮询</p>
+<h3 id="4_2">4. 智能城市</h3>
+<p><strong>场景</strong>：路灯控制、停车管理</p>
+<pre><code># 组播控制一组路灯
+PUT coap://[FF05::FD]/lights/brightness -p &quot;50&quot;
+
+# 查询停车位状态
+GET coap://parking.local/spaces/A01
+</code></pre>
+<p><strong>优势</strong>：
+- 组播支持批量控制
+- 低带宽需求
+- 易于集成到现有系统</p>
+<h3 id="5_2">5. 可穿戴设备</h3>
+<p><strong>场景</strong>：健康数据采集</p>
+<pre><code>GET coap://watch.local/heartrate -o   # 观察心率
+GET coap://watch.local/steps          # 读取步数
+</code></pre>
+<p><strong>优势</strong>：
+- 低功耗
+- 小数据包
+- 适合移动场景</p>
+<h2 id="_17">常见问题</h2>
+<h3 id="q1-coaphttp">Q1: CoAP和HTTP有什么区别？</h3>
+<p><strong>A</strong>: 主要区别：
+- <strong>传输层</strong>：CoAP使用UDP，HTTP使用TCP
+- <strong>消息格式</strong>：CoAP是二进制，HTTP是文本
+- <strong>开销</strong>：CoAP头部4字节，HTTP头部数百字节
+- <strong>适用场景</strong>：CoAP适合资源受限设备，HTTP适合通用Web应用</p>
+<h3 id="q2-connon">Q2: 什么时候使用CON消息，什么时候使用NON消息？</h3>
+<p><strong>A</strong>: 
+- <strong>使用CON</strong>：重要数据、控制命令、需要确认送达
+- <strong>使用NON</strong>：高频率数据、不重要的传感器读数、允许偶尔丢失</p>
+<h3 id="q3-coap">Q3: CoAP如何保证可靠性？</h3>
+<p><strong>A</strong>: CoAP通过以下机制保证可靠性：
+- CON消息需要ACK确认
+- 超时重传机制（指数退避）
+- Message ID去重
+- 可选的块传输确认</p>
+<h3 id="q4">Q4: 观察模式和轮询有什么区别？</h3>
+<p><strong>A</strong>: 
+- <strong>观察模式</strong>：服务器主动推送，减少网络流量，实时性好
+- <strong>轮询</strong>：客户端定期请求，增加网络负担，有延迟</p>
+<p>观察模式更高效，特别适合资源变化不频繁的场景。</p>
+<h3 id="q5-coap">Q5: CoAP支持哪些数据格式？</h3>
+<p><strong>A</strong>: CoAP支持多种内容格式：
+- text/plain (0)
+- application/json (50)
+- application/cbor (60)
+- application/xml (41)
+- application/octet-stream (42)</p>
+<p>推荐使用CBOR（Concise Binary Object Representation）以减小数据大小。</p>
+<h3 id="q6-coap">Q6: 如何实现CoAP的安全通信？</h3>
+<p><strong>A</strong>: 使用CoAPS（CoAP over DTLS）：
+- 使用coaps://协议
+- 配置DTLS加密
+- 选择认证方式（PSK或证书）
+- 默认端口5684</p>
+<h3 id="q7-coap">Q7: CoAP适合实时应用吗？</h3>
+<p><strong>A</strong>: CoAP适合对实时性有一定要求的应用：
+- 基于UDP，延迟低
+- 观察模式支持推送
+- 但不保证绝对实时（可能丢包、重传）</p>
+<p>对于严格实时要求，可能需要结合其他机制。</p>
+<h3 id="q8-coapmqtt">Q8: CoAP和MQTT应该如何选择？</h3>
+<p><strong>A</strong>: 
+- <strong>选择CoAP</strong>：
+  - 需要RESTful API
+  - 点对点通信
+  - 资源发现
+  - 缓存支持</p>
+<ul>
+<li><strong>选择MQTT</strong>：</li>
+<li>发布订阅模式</li>
+<li>多对多通信</li>
+<li>需要消息队列</li>
+<li>已有MQTT基础设施</li>
+</ul>
+<h2 id="_18">总结</h2>
+<p>通过本文，你学习了：</p>
+<ul>
+<li>✅ CoAP协议的设计理念和核心特点</li>
+<li>✅ CoAP消息格式和四种消息类型</li>
+<li>✅ RESTful方法和响应码</li>
+<li>✅ 观察模式实现服务器推送</li>
+<li>✅ 资源发现机制</li>
+<li>✅ 块传输处理大数据</li>
+<li>✅ CoAP与MQTT的对比</li>
+<li>✅ 安全性和性能优化</li>
+<li>✅ 典型应用场景</li>
+</ul>
+<p><strong>关键要点</strong>：
+- CoAP是专为物联网设计的轻量级协议
+- 基于UDP但提供可靠性选项
+- 采用RESTful架构，易于理解
+- 观察模式支持实时数据推送
+- 内置资源发现简化设备管理
+- 适合资源受限的嵌入式设备</p>
+<h2 id="_19">延伸阅读</h2>
+<h3 id="_20">推荐资源</h3>
+<ol>
+<li>
+<p><strong>RFC 7252: The Constrained Application Protocol (CoAP)</strong>
+   - CoAP协议官方规范
+   - https://tools.ietf.org/html/rfc7252</p>
+</li>
+<li>
+<p><strong>RFC 7641: Observing Resources in CoAP</strong>
+   - 观察模式详细规范
+   - https://tools.ietf.org/html/rfc7641</p>
+</li>
+<li>
+<p><strong>RFC 7959: Block-Wise Transfers in CoAP</strong>
+   - 块传输规范
+   - https://tools.ietf.org/html/rfc7959</p>
+</li>
+<li>
+<p><strong>libcoap库</strong>
+   - C语言CoAP实现
+   - https://libcoap.net/</p>
+</li>
+<li>
+<p><strong>Californium</strong>
+   - Java CoAP框架
+   - https://www.eclipse.org/californium/</p>
+</li>
+<li>
+<p><strong>CoAP.me</strong>
+   - 公共CoAP测试服务器
+   - http://coap.me/</p>
+</li>
+</ol>
+<h3 id="_21">相关文章</h3>
+<ul>
+<li><a href="01-tcpip-stack.html">TCP/IP协议栈详解</a> - 理解网络基础</li>
+<li><a href="02-mqtt-protocol.html">MQTT协议应用开发</a> - 学习另一种物联网协议</li>
+<li><a href="04-http-https.html">HTTP/HTTPS协议应用</a> - 学习Web通信</li>
+<li><a href="../intermediate/01-websocket.html">WebSocket实时通信</a> - 学习双向通信</li>
+</ul>
+<h3 id="_22">工具和库</h3>
+<ol>
+<li>
+<p><strong>coap-cli</strong>：命令行CoAP客户端
+   <code>bash
+   npm install coap-cli -g</code></p>
+</li>
+<li>
+<p><strong>Copper (Cu)</strong>：Firefox CoAP插件</p>
+</li>
+<li>
+<p><strong>libcoap</strong>：C语言CoAP库</p>
+</li>
+<li>
+<p><strong>aiocoap</strong>：Python异步CoAP库</p>
+</li>
+<li>
+<p><strong>node-coap</strong>：Node.js CoAP库</p>
+</li>
+</ol>
+<h2 id="_23">参考资料</h2>
+<ol>
+<li>RFC 7252 - The Constrained Application Protocol (CoAP)</li>
+<li>RFC 7641 - Observing Resources in the Constrained Application Protocol (CoAP)</li>
+<li>RFC 7959 - Block-Wise Transfers in the Constrained Application Protocol (CoAP)</li>
+<li>RFC 7967 - Constrained Application Protocol (CoAP) Option for No Server Response</li>
+<li>RFC 8323 - CoAP (Constrained Application Protocol) over TCP, TLS, and WebSockets</li>
+<li>IETF CoRE Working Group - https://datatracker.ietf.org/wg/core/</li>
+<li>Eclipse Californium - https://www.eclipse.org/californium/</li>
+<li>libcoap Documentation - https://libcoap.net/doc/</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>解释CoAP为什么选择UDP而不是TCP作为传输层协议？</li>
+<li>描述CoAP观察模式的工作流程，并说明其优势。</li>
+<li>比较CoAP和MQTT的适用场景，给出选择建议。</li>
+<li>设计一个智能家居场景，说明如何使用CoAP实现设备控制和监控。</li>
+<li>解释CoAP如何在UDP基础上实现可靠传输。</li>
+</ol>
+<p><strong>下一步</strong>：建议学习 <a href="04-http-https.html">HTTP/HTTPS协议应用</a>，了解Web通信的标准协议。</p>
+<hr />
+<p><strong>反馈与支持</strong>：
+- 如果你在学习过程中遇到问题，欢迎在评论区留言
+- 发现文档错误或有改进建议，请提交Issue
+- 想要分享你的CoAP项目，欢迎投稿</p>
+<p><strong>版权声明</strong>：
+本文采用 CC BY-NC-SA 4.0 许可协议，欢迎分享和改编，但请注明出处。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

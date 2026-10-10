@@ -1,0 +1,1890 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>安全芯片(SE/TEE)应用开发 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/">10-cross-cutting-concerns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/03-security-reliability/">03-security-reliability</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/03-security-reliability/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a><ul>
+<li><a href="#_3">知识要求</a></li>
+<li><a href="#_4">环境要求</a></li>
+</ul>
+</li>
+<li><a href="#_5">准备工作</a><ul>
+<li><a href="#1">1. 硬件准备</a></li>
+<li><a href="#2">2. 软件准备</a></li>
+<li><a href="#3">3. 理解基础概念</a></li>
+</ul>
+</li>
+<li><a href="#_6">步骤说明</a><ul>
+<li><a href="#1_1">步骤1: 理解安全芯片架构</a><ul>
+<li><a href="#11">1.1 安全芯片的核心特性</a></li>
+<li><a href="#12">1.2 安全芯片通信架构</a></li>
+<li><a href="#13">1.3 密钥槽位配置</a></li>
+</ul>
+</li>
+<li><a href="#2_1">步骤2: 初始化安全芯片</a><ul>
+<li><a href="#21-i2c">2.1 I2C通信初始化</a></li>
+<li><a href="#22">2.2 安全芯片初始化</a></li>
+</ul>
+</li>
+<li><a href="#3_1">步骤3: 密钥生成和存储</a><ul>
+<li><a href="#31-ecc">3.1 生成ECC密钥对</a></li>
+<li><a href="#32">3.2 写入对称密钥</a></li>
+<li><a href="#33">3.3 读取公钥</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4: 使用安全芯片进行加密操作</a><ul>
+<li><a href="#41-ecdsa">4.1 ECDSA签名</a></li>
+<li><a href="#42-ecdsa">4.2 ECDSA验证</a></li>
+<li><a href="#43-ecdh">4.3 ECDH密钥交换</a></li>
+</ul>
+</li>
+<li><a href="#5-tee">步骤5: 理解TEE架构</a><ul>
+<li><a href="#51-arm-trustzone">5.1 ARM TrustZone技术</a></li>
+<li><a href="#52-tee">5.2 TEE系统架构</a></li>
+<li><a href="#53-tee">5.3 TEE内存布局</a></li>
+</ul>
+</li>
+<li><a href="#6-ta">步骤6: 开发可信应用(TA)</a><ul>
+<li><a href="#61">6.1 可信应用结构</a></li>
+<li><a href="#62">6.2 实现加密命令</a></li>
+<li><a href="#63">6.3 实现签名命令</a></li>
+<li><a href="#64">6.4 安全存储</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7: 客户端应用开发</a><ul>
+<li><a href="#71-tee">7.1 初始化TEE客户端</a></li>
+<li><a href="#72-ta">7.2 调用TA生成密钥</a></li>
+<li><a href="#73-ta">7.3 调用TA签名数据</a></li>
+<li><a href="#74">7.4 完整示例程序</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_7">验证方法</a><ul>
+<li><a href="#1_2">1. 测试安全芯片功能</a></li>
+<li><a href="#2-tee">2. 测试TEE功能</a></li>
+<li><a href="#3_2">3. 预期输出</a></li>
+</ul>
+</li>
+<li><a href="#_8">故障排除</a><ul>
+<li><a href="#1_3">问题1: 安全芯片通信失败</a></li>
+<li><a href="#2_2">问题2: 密钥槽位配置错误</a></li>
+<li><a href="#3-tee">问题3: TEE会话打开失败</a></li>
+<li><a href="#4-trustzone">问题4: TrustZone配置错误</a></li>
+<li><a href="#5">问题5: 性能问题</a></li>
+</ul>
+</li>
+<li><a href="#_9">总结</a><ul>
+<li><a href="#_10">核心概念</a></li>
+<li><a href="#_11">关键要点</a></li>
+<li><a href="#_12">最佳实践</a></li>
+<li><a href="#_13">安全注意事项</a></li>
+<li><a href="#_14">性能对比</a></li>
+<li><a href="#_15">技术选择建议</a></li>
+</ul>
+</li>
+<li><a href="#_16">下一步</a><ul>
+<li><a href="#_17">进阶学习</a></li>
+<li><a href="#_18">实践项目</a></li>
+<li><a href="#_19">参考资源</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="setee">安全芯片(SE/TEE)应用开发</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解安全芯片(SE)和可信执行环境(TEE)的核心概念和架构</li>
+<li>掌握ARM TrustZone技术的工作原理和应用</li>
+<li>能够使用安全芯片进行密钥存储和加密操作</li>
+<li>了解TEE应用开发的完整流程</li>
+<li>掌握安全芯片与主处理器的通信机制</li>
+<li>能够设计和实现基于硬件安全的应用方案</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<h3 id="_3">知识要求</h3>
+<ul>
+<li>熟悉嵌入式系统开发</li>
+<li>掌握C语言和汇编语言</li>
+<li>理解信息安全基础概念（加密、签名、证书）</li>
+<li>了解安全启动和固件验证机制</li>
+<li>熟悉密钥管理基础知识</li>
+</ul>
+<h3 id="_4">环境要求</h3>
+<ul>
+<li>开发板：支持TrustZone的ARM Cortex-A或Cortex-M33处理器</li>
+<li>安全芯片：ATECC608A、SE050或类似芯片</li>
+<li>开发工具：Keil MDK、ARM DS或GCC工具链</li>
+<li>调试器：J-Link或CMSIS-DAP</li>
+<li>软件库：OP-TEE或TrustZone SDK</li>
+</ul>
+<h2 id="_5">准备工作</h2>
+<h3 id="1">1. 硬件准备</h3>
+<p><strong>开发板清单</strong>：
+- STM32L5系列开发板（支持TrustZone）或
+- NXP i.MX RT1170开发板 × 1
+- ATECC608A安全芯片模块 × 1
+- I2C连接线 × 4
+- USB数据线 × 1</p>
+<p><strong>硬件连接</strong>：</p>
+<pre><code>ATECC608A    →    MCU
+SDA          →    I2C_SDA (PB7)
+SCL          →    I2C_SCL (PB6)
+VCC          →    3.3V
+GND          →    GND
+</code></pre>
+<h3 id="2">2. 软件准备</h3>
+<p><strong>安装开发环境</strong>：
+1. 下载并安装Keil MDK或STM32CubeIDE
+2. 安装TrustZone开发包
+3. 下载ATECC608A驱动库</p>
+<p><strong>创建工程</strong>：</p>
+<pre><code class="language-bash"># 创建工程目录
+mkdir secure-element-demo
+cd secure-element-demo
+
+# 下载ATECC608A库
+git clone https://github.com/MicrochipTech/cryptoauthlib.git
+cd cryptoauthlib
+</code></pre>
+<h3 id="3">3. 理解基础概念</h3>
+<p><strong>安全芯片(Secure Element, SE)</strong>：
+- 独立的安全硬件芯片
+- 专门用于密钥存储和加密操作
+- 物理隔离，防篡改
+- 常见型号：ATECC608A、SE050、A71CH</p>
+<p><strong>可信执行环境(Trusted Execution Environment, TEE)</strong>：
+- 处理器内部的安全执行环境
+- 与普通环境(REE)隔离
+- 基于硬件支持（如ARM TrustZone）
+- 运行可信应用(TA)</p>
+<h2 id="_6">步骤说明</h2>
+<h3 id="1_1">步骤1: 理解安全芯片架构</h3>
+<h4 id="11">1.1 安全芯片的核心特性</h4>
+<p><strong>ATECC608A安全芯片特性</strong>：</p>
+<pre><code>核心功能:
+├── 密钥存储
+│   ├── 16个密钥槽位
+│   ├── 硬件保护
+│   └── 不可导出
+├── 加密操作
+│   ├── ECDSA签名/验证
+│   ├── ECDH密钥交换
+│   └── SHA-256哈希
+├── 安全存储
+│   ├── 配置区(128字节)
+│   ├── OTP区(64字节)
+│   └── 数据区(416字节)
+└── 安全特性
+    ├── 防篡改检测
+    ├── 安全启动支持
+    └── 单线接口(可选)
+</code></pre>
+<h4 id="12">1.2 安全芯片通信架构</h4>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;主处理器&quot;
+        APP[应用程序]
+        HAL[HAL层]
+        I2C[I2C驱动]
+    end
+
+    subgraph &quot;安全芯片 ATECC608A&quot;
+        CMD[命令处理器]
+        CRYPTO[加密引擎]
+        KEY[密钥存储]
+        MEM[安全存储]
+    end
+
+    APP --&gt; HAL
+    HAL --&gt; I2C
+    I2C &lt;--&gt;|I2C总线| CMD
+    CMD --&gt; CRYPTO
+    CMD --&gt; KEY
+    CMD --&gt; MEM
+    CRYPTO --&gt; KEY
+</code></pre>
+<h4 id="13">1.3 密钥槽位配置</h4>
+<p>ATECC608A提供16个密钥槽位，每个槽位可配置不同的访问权限：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+
+// 密钥槽位配置
+typedef struct {
+    uint8_t slot_id;           // 槽位ID (0-15)
+    uint8_t key_type;          // 密钥类型
+    uint16_t key_config;       // 密钥配置
+    uint8_t read_key;          // 读取密钥ID
+    uint8_t write_key;         // 写入密钥ID
+    uint8_t is_secret;         // 是否为私钥
+    uint8_t encrypt_read;      // 加密读取
+    uint8_t limited_use;       // 限制使用次数
+    uint8_t no_mac;            // 禁用MAC
+} atca_slot_config_t;
+
+// 典型的槽位配置示例
+const atca_slot_config_t slot_configs[] = {
+    // 槽位0: 设备私钥（不可导出）
+    {
+        .slot_id = 0,
+        .key_type = ATCA_KEY_TYPE_ECC,
+        .is_secret = 1,
+        .encrypt_read = 0,
+        .limited_use = 0,
+        .no_mac = 0
+    },
+    // 槽位1: 对称密钥（AES-128）
+    {
+        .slot_id = 1,
+        .key_type = ATCA_KEY_TYPE_AES,
+        .is_secret = 1,
+        .encrypt_read = 1,
+        .limited_use = 0,
+        .no_mac = 0
+    },
+    // 槽位2: 公钥（可读取）
+    {
+        .slot_id = 2,
+        .key_type = ATCA_KEY_TYPE_ECC,
+        .is_secret = 0,
+        .encrypt_read = 0,
+        .limited_use = 0,
+        .no_mac = 1
+    }
+};
+</code></pre>
+<h3 id="2_1">步骤2: 初始化安全芯片</h3>
+<h4 id="21-i2c">2.1 I2C通信初始化</h4>
+<p>首先配置I2C接口与安全芯片通信：</p>
+<pre><code class="language-c">#include &quot;stm32l5xx_hal.h&quot;
+#include &quot;cryptoauthlib.h&quot;
+
+// I2C句柄
+I2C_HandleTypeDef hi2c1;
+
+/**
+ * @brief 初始化I2C接口
+ * @return HAL状态
+ */
+HAL_StatusTypeDef i2c_init(void) {
+    // 1. 使能I2C时钟
+    __HAL_RCC_I2C1_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    // 2. 配置GPIO引脚
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    // I2C1_SCL: PB6
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+    HAL_GPIO_Init(GPIOB, &amp;GPIO_InitStruct);
+
+    // I2C1_SDA: PB7
+    GPIO_InitStruct.Pin = GPIO_PIN_7;
+    HAL_GPIO_Init(GPIOB, &amp;GPIO_InitStruct);
+
+    // 3. 配置I2C参数
+    hi2c1.Instance = I2C1;
+    hi2c1.Init.Timing = 0x00702991;  // 100kHz @ 110MHz
+    hi2c1.Init.OwnAddress1 = 0;
+    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+
+    return HAL_I2C_Init(&amp;hi2c1);
+}
+</code></pre>
+<h4 id="22">2.2 安全芯片初始化</h4>
+<pre><code class="language-c">#include &quot;atca_basic.h&quot;
+#include &quot;atca_hal.h&quot;
+
+// ATECC608A设备地址
+#define ATECC608A_I2C_ADDR  0xC0
+
+/**
+ * @brief 初始化ATECC608A安全芯片
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS atca_init(void) {
+    ATCA_STATUS status;
+
+    // 1. 配置设备接口
+    ATCAIfaceCfg cfg = {
+        .iface_type = ATCA_I2C_IFACE,
+        .devtype = ATECC608A,
+        .atcai2c.slave_address = ATECC608A_I2C_ADDR,
+        .atcai2c.bus = 1,
+        .atcai2c.baud = 100000,
+        .wake_delay = 1500,
+        .rx_retries = 20
+    };
+
+    // 2. 初始化CryptoAuthLib
+    status = atcab_init(&amp;cfg);
+    if (status != ATCA_SUCCESS) {
+        printf(&quot;ATCA init failed: 0x%02X\n&quot;, status);
+        return status;
+    }
+
+    // 3. 唤醒设备
+    status = atcab_wakeup();
+    if (status != ATCA_SUCCESS) {
+        printf(&quot;ATCA wakeup failed: 0x%02X\n&quot;, status);
+        return status;
+    }
+
+    // 4. 读取设备信息
+    uint8_t revision[4];
+    status = atcab_info(revision);
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;ATECC608A detected\n&quot;);
+        printf(&quot;  Revision: %02X %02X %02X %02X\n&quot;,
+               revision[0], revision[1], revision[2], revision[3]);
+    }
+
+    return status;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 配置I2C接口参数（地址、波特率等）
+- 初始化CryptoAuthLib库
+- 唤醒安全芯片（从休眠模式）
+- 读取设备信息验证通信</p>
+<h3 id="3_1">步骤3: 密钥生成和存储</h3>
+<h4 id="31-ecc">3.1 生成ECC密钥对</h4>
+<p>在安全芯片内部生成ECC-P256密钥对：</p>
+<pre><code class="language-c">/**
+ * @brief 在安全芯片中生成ECC密钥对
+ * @param slot_id 密钥槽位ID (0-15)
+ * @param public_key 输出的公钥 (64字节)
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS generate_ecc_keypair(uint8_t slot_id, uint8_t *public_key) {
+    ATCA_STATUS status;
+
+    printf(&quot;Generating ECC keypair in slot %d...\n&quot;, slot_id);
+
+    // 在指定槽位生成密钥对
+    // 私钥保存在芯片内部，永不导出
+    // 公钥返回给主机
+    status = atcab_genkey(slot_id, public_key);
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;Keypair generated successfully\n&quot;);
+        printf(&quot;Public key (X,Y):\n&quot;);
+        printf(&quot;  X: &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, public_key[i]);
+        }
+        printf(&quot;\n  Y: &quot;);
+        for (int i = 32; i &lt; 64; i++) {
+            printf(&quot;%02X&quot;, public_key[i]);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;Keypair generation failed: 0x%02X\n&quot;, status);
+    }
+
+    return status;
+}
+</code></pre>
+<h4 id="32">3.2 写入对称密钥</h4>
+<p>将AES密钥写入安全芯片：</p>
+<pre><code class="language-c">/**
+ * @brief 写入AES密钥到安全芯片
+ * @param slot_id 密钥槽位ID
+ * @param key AES密钥 (16/24/32字节)
+ * @param key_len 密钥长度
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS write_aes_key(uint8_t slot_id, const uint8_t *key, size_t key_len) {
+    ATCA_STATUS status;
+    uint8_t write_key[32] = {0};
+
+    // 检查密钥长度
+    if (key_len != 16 &amp;&amp; key_len != 24 &amp;&amp; key_len != 32) {
+        printf(&quot;Invalid key length: %d\n&quot;, key_len);
+        return ATCA_BAD_PARAM;
+    }
+
+    // 复制密钥数据
+    memcpy(write_key, key, key_len);
+
+    printf(&quot;Writing AES key to slot %d...\n&quot;, slot_id);
+
+    // 写入密钥（加密写入）
+    status = atcab_write_zone(
+        ATCA_ZONE_DATA,      // 数据区
+        slot_id,             // 槽位ID
+        0,                   // 块号
+        0,                   // 偏移
+        write_key,           // 密钥数据
+        32                   // 数据长度
+    );
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;AES key written successfully\n&quot;);
+    } else {
+        printf(&quot;AES key write failed: 0x%02X\n&quot;, status);
+    }
+
+    // 清除内存中的密钥
+    memset(write_key, 0, sizeof(write_key));
+
+    return status;
+}
+</code></pre>
+<h4 id="33">3.3 读取公钥</h4>
+<p>从安全芯片读取公钥：</p>
+<pre><code class="language-c">/**
+ * @brief 从安全芯片读取公钥
+ * @param slot_id 密钥槽位ID
+ * @param public_key 输出的公钥 (64字节)
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS read_public_key(uint8_t slot_id, uint8_t *public_key) {
+    ATCA_STATUS status;
+
+    printf(&quot;Reading public key from slot %d...\n&quot;, slot_id);
+
+    // 读取公钥
+    status = atcab_get_pubkey(slot_id, public_key);
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;Public key read successfully\n&quot;);
+    } else {
+        printf(&quot;Public key read failed: 0x%02X\n&quot;, status);
+    }
+
+    return status;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 私钥在芯片内部生成，永不导出
+- 公钥可以读取并分发
+- 对称密钥通过加密通道写入
+- 所有密钥操作都在安全芯片内完成</p>
+<h3 id="4">步骤4: 使用安全芯片进行加密操作</h3>
+<h4 id="41-ecdsa">4.1 ECDSA签名</h4>
+<p>使用安全芯片中的私钥对数据进行签名：</p>
+<pre><code class="language-c">/**
+ * @brief 使用ECDSA对数据进行签名
+ * @param slot_id 私钥槽位ID
+ * @param message 待签名的消息
+ * @param message_len 消息长度
+ * @param signature 输出的签名 (64字节: R||S)
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS ecdsa_sign(uint8_t slot_id, const uint8_t *message, 
+                       size_t message_len, uint8_t *signature) {
+    ATCA_STATUS status;
+    uint8_t digest[32];
+
+    // 1. 计算消息的SHA-256哈希
+    status = atcab_sha(message_len, message, digest);
+    if (status != ATCA_SUCCESS) {
+        printf(&quot;SHA-256 failed: 0x%02X\n&quot;, status);
+        return status;
+    }
+
+    printf(&quot;Message digest: &quot;);
+    for (int i = 0; i &lt; 32; i++) {
+        printf(&quot;%02X&quot;, digest[i]);
+    }
+    printf(&quot;\n&quot;);
+
+    // 2. 使用私钥对哈希进行签名
+    printf(&quot;Signing with slot %d...\n&quot;, slot_id);
+    status = atcab_sign(slot_id, digest, signature);
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;Signature generated successfully\n&quot;);
+        printf(&quot;  R: &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, signature[i]);
+        }
+        printf(&quot;\n  S: &quot;);
+        for (int i = 32; i &lt; 64; i++) {
+            printf(&quot;%02X&quot;, signature[i]);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;Signing failed: 0x%02X\n&quot;, status);
+    }
+
+    return status;
+}
+</code></pre>
+<h4 id="42-ecdsa">4.2 ECDSA验证</h4>
+<p>验证ECDSA签名：</p>
+<pre><code class="language-c">/**
+ * @brief 验证ECDSA签名
+ * @param public_key 公钥 (64字节)
+ * @param message 原始消息
+ * @param message_len 消息长度
+ * @param signature 签名 (64字节)
+ * @param is_verified 输出: 签名是否有效
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS ecdsa_verify(const uint8_t *public_key, const uint8_t *message,
+                         size_t message_len, const uint8_t *signature,
+                         bool *is_verified) {
+    ATCA_STATUS status;
+    uint8_t digest[32];
+
+    // 1. 计算消息的SHA-256哈希
+    status = atcab_sha(message_len, message, digest);
+    if (status != ATCA_SUCCESS) {
+        printf(&quot;SHA-256 failed: 0x%02X\n&quot;, status);
+        return status;
+    }
+
+    // 2. 验证签名
+    printf(&quot;Verifying signature...\n&quot;);
+    status = atcab_verify_extern(digest, signature, public_key, is_verified);
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;Signature verification: %s\n&quot;, 
+               *is_verified ? &quot;VALID&quot; : &quot;INVALID&quot;);
+    } else {
+        printf(&quot;Verification failed: 0x%02X\n&quot;, status);
+    }
+
+    return status;
+}
+</code></pre>
+<h4 id="43-ecdh">4.3 ECDH密钥交换</h4>
+<p>使用ECDH协议进行密钥交换：</p>
+<pre><code class="language-c">/**
+ * @brief 执行ECDH密钥交换
+ * @param slot_id 本地私钥槽位ID
+ * @param peer_public_key 对方公钥 (64字节)
+ * @param shared_secret 输出的共享密钥 (32字节)
+ * @return ATCA_SUCCESS: 成功, 其他: 失败
+ */
+ATCA_STATUS ecdh_key_exchange(uint8_t slot_id, const uint8_t *peer_public_key,
+                               uint8_t *shared_secret) {
+    ATCA_STATUS status;
+
+    printf(&quot;Performing ECDH key exchange...\n&quot;);
+
+    // 使用本地私钥和对方公钥计算共享密钥
+    status = atcab_ecdh(slot_id, peer_public_key, shared_secret);
+
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;Shared secret generated successfully\n&quot;);
+        printf(&quot;  Secret: &quot;);
+        for (int i = 0; i &lt; 32; i++) {
+            printf(&quot;%02X&quot;, shared_secret[i]);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;ECDH failed: 0x%02X\n&quot;, status);
+    }
+
+    return status;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 所有加密操作在安全芯片内部完成
+- 私钥永不离开安全芯片
+- 支持标准的ECDSA和ECDH算法
+- 使用NIST P-256椭圆曲线</p>
+<h3 id="5-tee">步骤5: 理解TEE架构</h3>
+<h4 id="51-arm-trustzone">5.1 ARM TrustZone技术</h4>
+<p>ARM TrustZone将处理器划分为两个世界：</p>
+<pre><code>+----------------------------------+
+|        Normal World (REE)        |
+|  ┌────────────────────────────┐  |
+|  │   Rich OS (Linux/Android)  │  |
+|  │   ┌──────────────────────┐ │  |
+|  │   │  Normal Applications │ │  |
+|  │   └──────────────────────┘ │  |
+|  └────────────────────────────┘  |
++----------------------------------+
+           ↕ SMC调用
++----------------------------------+
+|        Secure World (TEE)        |
+|  ┌────────────────────────────┐  |
+|  │   Secure OS (OP-TEE)       │  |
+|  │   ┌──────────────────────┐ │  |
+|  │   │  Trusted Applications│ │  |
+|  │   └──────────────────────┘ │  |
+|  └────────────────────────────┘  |
++----------------------------------+
+</code></pre>
+<p><strong>TrustZone核心特性</strong>：</p>
+<ol>
+<li>
+<p><strong>硬件隔离</strong>
+   - 独立的内存空间
+   - 独立的外设访问
+   - 独立的中断处理</p>
+</li>
+<li>
+<p><strong>安全状态切换</strong>
+   - 通过SMC指令切换
+   - 硬件保证安全性
+   - 上下文自动保存/恢复</p>
+</li>
+<li>
+<p><strong>资源保护</strong>
+   - 安全内存（Secure RAM）
+   - 安全外设（Secure Peripherals）
+   - 安全中断（Secure Interrupts）</p>
+</li>
+</ol>
+<h4 id="52-tee">5.2 TEE系统架构</h4>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;Normal World&quot;
+        CA[Client Application]
+        TEE_CLIENT[TEE Client API]
+        KERNEL[Linux Kernel]
+    end
+
+    subgraph &quot;Secure World&quot;
+        TEE_CORE[TEE Core]
+        TA1[Trusted App 1]
+        TA2[Trusted App 2]
+        TA3[Trusted App 3]
+    end
+
+    CA --&gt; TEE_CLIENT
+    TEE_CLIENT --&gt; KERNEL
+    KERNEL --&gt;|SMC| TEE_CORE
+    TEE_CORE --&gt; TA1
+    TEE_CORE --&gt; TA2
+    TEE_CORE --&gt; TA3
+</code></pre>
+<h4 id="53-tee">5.3 TEE内存布局</h4>
+<pre><code class="language-c">// Cortex-M33 TrustZone内存配置
+#define SECURE_FLASH_BASE       0x0C000000
+#define SECURE_FLASH_SIZE       (128 * 1024)  // 128KB
+
+#define NON_SECURE_FLASH_BASE   0x08000000
+#define NON_SECURE_FLASH_SIZE   (384 * 1024)  // 384KB
+
+#define SECURE_SRAM_BASE        0x30000000
+#define SECURE_SRAM_SIZE        (64 * 1024)   // 64KB
+
+#define NON_SECURE_SRAM_BASE    0x20000000
+#define NON_SECURE_SRAM_SIZE    (192 * 1024)  // 192KB
+
+/**
+ * @brief 配置TrustZone内存区域
+ */
+void configure_trustzone_memory(void) {
+    // 1. 配置SAU (Security Attribution Unit)
+    SAU-&gt;CTRL = 0;  // 禁用SAU
+
+    // 配置安全Flash区域
+    SAU-&gt;RNR = 0;
+    SAU-&gt;RBAR = SECURE_FLASH_BASE;
+    SAU-&gt;RLAR = (SECURE_FLASH_BASE + SECURE_FLASH_SIZE - 1) | 
+                SAU_RLAR_ENABLE_Msk;
+
+    // 配置非安全Flash区域
+    SAU-&gt;RNR = 1;
+    SAU-&gt;RBAR = NON_SECURE_FLASH_BASE | SAU_RBAR_NSC_Msk;
+    SAU-&gt;RLAR = (NON_SECURE_FLASH_BASE + NON_SECURE_FLASH_SIZE - 1) | 
+                SAU_RLAR_ENABLE_Msk;
+
+    // 配置安全SRAM区域
+    SAU-&gt;RNR = 2;
+    SAU-&gt;RBAR = SECURE_SRAM_BASE;
+    SAU-&gt;RLAR = (SECURE_SRAM_BASE + SECURE_SRAM_SIZE - 1) | 
+                SAU_RLAR_ENABLE_Msk;
+
+    // 配置非安全SRAM区域
+    SAU-&gt;RNR = 3;
+    SAU-&gt;RBAR = NON_SECURE_SRAM_BASE | SAU_RBAR_NSC_Msk;
+    SAU-&gt;RLAR = (NON_SECURE_SRAM_BASE + NON_SECURE_SRAM_SIZE - 1) | 
+                SAU_RLAR_ENABLE_Msk;
+
+    // 2. 启用SAU
+    SAU-&gt;CTRL = SAU_CTRL_ENABLE_Msk;
+
+    // 3. 配置NVIC安全属性
+    NVIC-&gt;ITNS[0] = 0xFFFFFFFF;  // 所有中断默认为非安全
+
+    printf(&quot;TrustZone memory configured\n&quot;);
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- SAU用于配置内存的安全属性
+- 安全区域只能被安全代码访问
+- 非安全区域可以被两个世界访问
+- NSC (Non-Secure Callable) 区域用于安全函数入口</p>
+<h3 id="6-ta">步骤6: 开发可信应用(TA)</h3>
+<h4 id="61">6.1 可信应用结构</h4>
+<pre><code class="language-c">#include &quot;tee_internal_api.h&quot;
+#include &quot;tee_api_defines.h&quot;
+
+// 可信应用UUID
+#define TA_CRYPTO_UUID \
+    { 0x12345678, 0x1234, 0x5678, \
+      { 0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0xCD, 0xEF } }
+
+// 命令ID
+#define CMD_GENERATE_KEY    1
+#define CMD_SIGN_DATA       2
+#define CMD_VERIFY_SIGN     3
+#define CMD_ENCRYPT_DATA    4
+#define CMD_DECRYPT_DATA    5
+
+/**
+ * @brief TA创建入口点
+ */
+TEE_Result TA_CreateEntryPoint(void) {
+    DMSG(&quot;TA_CreateEntryPoint&quot;);
+    return TEE_SUCCESS;
+}
+
+/**
+ * @brief TA销毁入口点
+ */
+void TA_DestroyEntryPoint(void) {
+    DMSG(&quot;TA_DestroyEntryPoint&quot;);
+}
+
+/**
+ * @brief 打开会话
+ */
+TEE_Result TA_OpenSessionEntryPoint(uint32_t param_types,
+                                    TEE_Param params[4],
+                                    void **sess_ctx) {
+    uint32_t exp_param_types = TEE_PARAM_TYPES(
+        TEE_PARAM_TYPE_NONE,
+        TEE_PARAM_TYPE_NONE,
+        TEE_PARAM_TYPE_NONE,
+        TEE_PARAM_TYPE_NONE
+    );
+
+    if (param_types != exp_param_types) {
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    DMSG(&quot;Session opened&quot;);
+    *sess_ctx = NULL;
+
+    return TEE_SUCCESS;
+}
+
+/**
+ * @brief 关闭会话
+ */
+void TA_CloseSessionEntryPoint(void *sess_ctx) {
+    (void)sess_ctx;
+    DMSG(&quot;Session closed&quot;);
+}
+</code></pre>
+<h4 id="62">6.2 实现加密命令</h4>
+<pre><code class="language-c">/**
+ * @brief 命令调用入口点
+ */
+TEE_Result TA_InvokeCommandEntryPoint(void *sess_ctx,
+                                      uint32_t cmd_id,
+                                      uint32_t param_types,
+                                      TEE_Param params[4]) {
+    (void)sess_ctx;
+
+    switch (cmd_id) {
+    case CMD_GENERATE_KEY:
+        return cmd_generate_key(param_types, params);
+
+    case CMD_SIGN_DATA:
+        return cmd_sign_data(param_types, params);
+
+    case CMD_VERIFY_SIGN:
+        return cmd_verify_signature(param_types, params);
+
+    case CMD_ENCRYPT_DATA:
+        return cmd_encrypt_data(param_types, params);
+
+    case CMD_DECRYPT_DATA:
+        return cmd_decrypt_data(param_types, params);
+
+    default:
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+}
+
+/**
+ * @brief 生成密钥命令
+ */
+static TEE_Result cmd_generate_key(uint32_t param_types, TEE_Param params[4]) {
+    TEE_Result res;
+    TEE_ObjectHandle key_handle;
+    uint32_t key_size = 256;  // ECC-P256
+
+    // 检查参数类型
+    uint32_t exp_param_types = TEE_PARAM_TYPES(
+        TEE_PARAM_TYPE_VALUE_INPUT,   // 密钥类型
+        TEE_PARAM_TYPE_MEMREF_OUTPUT, // 公钥输出
+        TEE_PARAM_TYPE_NONE,
+        TEE_PARAM_TYPE_NONE
+    );
+
+    if (param_types != exp_param_types) {
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    // 1. 分配密钥对象
+    res = TEE_AllocateTransientObject(
+        TEE_TYPE_ECDSA_KEYPAIR,
+        key_size,
+        &amp;key_handle
+    );
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to allocate key object: 0x%x&quot;, res);
+        return res;
+    }
+
+    // 2. 生成密钥对
+    res = TEE_GenerateKey(key_handle, key_size, NULL, 0);
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to generate key: 0x%x&quot;, res);
+        TEE_FreeTransientObject(key_handle);
+        return res;
+    }
+
+    // 3. 导出公钥
+    uint8_t *public_key = params[1].memref.buffer;
+    uint32_t public_key_len = params[1].memref.size;
+
+    res = TEE_GetObjectBufferAttribute(
+        key_handle,
+        TEE_ATTR_ECC_PUBLIC_VALUE_X,
+        public_key,
+        &amp;public_key_len
+    );
+
+    if (res == TEE_SUCCESS) {
+        params[1].memref.size = public_key_len;
+        DMSG(&quot;Key generated successfully&quot;);
+    }
+
+    // 4. 保存私钥到安全存储
+    res = save_key_to_storage(key_handle, &quot;device_key&quot;);
+
+    TEE_FreeTransientObject(key_handle);
+
+    return res;
+}
+</code></pre>
+<h4 id="63">6.3 实现签名命令</h4>
+<pre><code class="language-c">/**
+ * @brief 签名数据命令
+ */
+static TEE_Result cmd_sign_data(uint32_t param_types, TEE_Param params[4]) {
+    TEE_Result res;
+    TEE_ObjectHandle key_handle;
+    TEE_OperationHandle op_handle;
+
+    // 检查参数类型
+    uint32_t exp_param_types = TEE_PARAM_TYPES(
+        TEE_PARAM_TYPE_MEMREF_INPUT,  // 待签名数据
+        TEE_PARAM_TYPE_MEMREF_OUTPUT, // 签名输出
+        TEE_PARAM_TYPE_NONE,
+        TEE_PARAM_TYPE_NONE
+    );
+
+    if (param_types != exp_param_types) {
+        return TEE_ERROR_BAD_PARAMETERS;
+    }
+
+    // 1. 从安全存储加载私钥
+    res = load_key_from_storage(&amp;key_handle, &quot;device_key&quot;);
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to load key: 0x%x&quot;, res);
+        return res;
+    }
+
+    // 2. 分配签名操作
+    res = TEE_AllocateOperation(
+        &amp;op_handle,
+        TEE_ALG_ECDSA_P256,
+        TEE_MODE_SIGN,
+        256
+    );
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to allocate operation: 0x%x&quot;, res);
+        TEE_CloseObject(key_handle);
+        return res;
+    }
+
+    // 3. 设置密钥
+    res = TEE_SetOperationKey(op_handle, key_handle);
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to set key: 0x%x&quot;, res);
+        goto cleanup;
+    }
+
+    // 4. 执行签名
+    uint8_t *data = params[0].memref.buffer;
+    uint32_t data_len = params[0].memref.size;
+    uint8_t *signature = params[1].memref.buffer;
+    uint32_t sig_len = params[1].memref.size;
+
+    res = TEE_AsymmetricSignDigest(
+        op_handle,
+        NULL, 0,
+        data, data_len,
+        signature, &amp;sig_len
+    );
+
+    if (res == TEE_SUCCESS) {
+        params[1].memref.size = sig_len;
+        DMSG(&quot;Data signed successfully&quot;);
+    } else {
+        EMSG(&quot;Signing failed: 0x%x&quot;, res);
+    }
+
+cleanup:
+    TEE_FreeOperation(op_handle);
+    TEE_CloseObject(key_handle);
+
+    return res;
+}
+</code></pre>
+<h4 id="64">6.4 安全存储</h4>
+<pre><code class="language-c">/**
+ * @brief 保存密钥到安全存储
+ */
+static TEE_Result save_key_to_storage(TEE_ObjectHandle key_handle,
+                                      const char *key_name) {
+    TEE_Result res;
+    TEE_ObjectHandle storage_handle;
+    uint32_t flags = TEE_DATA_FLAG_ACCESS_WRITE |
+                    TEE_DATA_FLAG_ACCESS_READ |
+                    TEE_DATA_FLAG_OVERWRITE;
+
+    // 1. 创建持久化对象
+    res = TEE_CreatePersistentObject(
+        TEE_STORAGE_PRIVATE,
+        key_name, strlen(key_name),
+        flags,
+        key_handle,
+        NULL, 0,
+        &amp;storage_handle
+    );
+
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to create persistent object: 0x%x&quot;, res);
+        return res;
+    }
+
+    // 2. 关闭对象
+    TEE_CloseObject(storage_handle);
+
+    DMSG(&quot;Key saved to secure storage: %s&quot;, key_name);
+    return TEE_SUCCESS;
+}
+
+/**
+ * @brief 从安全存储加载密钥
+ */
+static TEE_Result load_key_from_storage(TEE_ObjectHandle *key_handle,
+                                        const char *key_name) {
+    TEE_Result res;
+    TEE_ObjectHandle storage_handle;
+    TEE_ObjectInfo obj_info;
+
+    // 1. 打开持久化对象
+    res = TEE_OpenPersistentObject(
+        TEE_STORAGE_PRIVATE,
+        key_name, strlen(key_name),
+        TEE_DATA_FLAG_ACCESS_READ,
+        &amp;storage_handle
+    );
+
+    if (res != TEE_SUCCESS) {
+        EMSG(&quot;Failed to open persistent object: 0x%x&quot;, res);
+        return res;
+    }
+
+    // 2. 获取对象信息
+    res = TEE_GetObjectInfo1(storage_handle, &amp;obj_info);
+    if (res != TEE_SUCCESS) {
+        TEE_CloseObject(storage_handle);
+        return res;
+    }
+
+    // 3. 分配临时对象
+    res = TEE_AllocateTransientObject(
+        obj_info.objectType,
+        obj_info.maxObjectSize,
+        key_handle
+    );
+
+    if (res != TEE_SUCCESS) {
+        TEE_CloseObject(storage_handle);
+        return res;
+    }
+
+    // 4. 复制密钥数据
+    res = TEE_CopyObjectAttributes1(*key_handle, storage_handle);
+
+    TEE_CloseObject(storage_handle);
+
+    if (res == TEE_SUCCESS) {
+        DMSG(&quot;Key loaded from secure storage: %s&quot;, key_name);
+    }
+
+    return res;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- TA运行在安全世界，与普通应用隔离
+- 密钥存储在安全存储中，加密保护
+- 所有加密操作在TEE内部完成
+- 私钥永不离开安全世界</p>
+<h3 id="7">步骤7: 客户端应用开发</h3>
+<h4 id="71-tee">7.1 初始化TEE客户端</h4>
+<pre><code class="language-c">#include &lt;tee_client_api.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+// TA UUID
+static const TEEC_UUID ta_uuid = TA_CRYPTO_UUID;
+
+// 全局上下文和会话
+static TEEC_Context ctx;
+static TEEC_Session sess;
+
+/**
+ * @brief 初始化TEE客户端
+ * @return TEEC_SUCCESS: 成功, 其他: 失败
+ */
+TEEC_Result tee_client_init(void) {
+    TEEC_Result res;
+    uint32_t err_origin;
+
+    // 1. 初始化上下文
+    res = TEEC_InitializeContext(NULL, &amp;ctx);
+    if (res != TEEC_SUCCESS) {
+        printf(&quot;TEEC_InitializeContext failed: 0x%x\n&quot;, res);
+        return res;
+    }
+
+    // 2. 打开会话
+    res = TEEC_OpenSession(
+        &amp;ctx,
+        &amp;sess,
+        &amp;ta_uuid,
+        TEEC_LOGIN_PUBLIC,
+        NULL,
+        NULL,
+        &amp;err_origin
+    );
+
+    if (res != TEEC_SUCCESS) {
+        printf(&quot;TEEC_OpenSession failed: 0x%x (origin: 0x%x)\n&quot;,
+               res, err_origin);
+        TEEC_FinalizeContext(&amp;ctx);
+        return res;
+    }
+
+    printf(&quot;TEE client initialized successfully\n&quot;);
+    return TEEC_SUCCESS;
+}
+
+/**
+ * @brief 清理TEE客户端
+ */
+void tee_client_cleanup(void) {
+    TEEC_CloseSession(&amp;sess);
+    TEEC_FinalizeContext(&amp;ctx);
+    printf(&quot;TEE client cleaned up\n&quot;);
+}
+</code></pre>
+<h4 id="72-ta">7.2 调用TA生成密钥</h4>
+<pre><code class="language-c">/**
+ * @brief 调用TA生成密钥
+ * @param public_key 输出的公钥缓冲区
+ * @param public_key_len 公钥缓冲区大小
+ * @return TEEC_SUCCESS: 成功, 其他: 失败
+ */
+TEEC_Result tee_generate_key(uint8_t *public_key, uint32_t *public_key_len) {
+    TEEC_Result res;
+    TEEC_Operation op;
+    uint32_t err_origin;
+
+    // 准备操作参数
+    memset(&amp;op, 0, sizeof(op));
+    op.paramTypes = TEEC_PARAM_TYPES(
+        TEEC_VALUE_INPUT,
+        TEEC_MEMREF_TEMP_OUTPUT,
+        TEEC_NONE,
+        TEEC_NONE
+    );
+
+    op.params[0].value.a = 0;  // 密钥类型: ECC
+    op.params[1].tmpref.buffer = public_key;
+    op.params[1].tmpref.size = *public_key_len;
+
+    // 调用TA命令
+    res = TEEC_InvokeCommand(
+        &amp;sess,
+        CMD_GENERATE_KEY,
+        &amp;op,
+        &amp;err_origin
+    );
+
+    if (res == TEEC_SUCCESS) {
+        *public_key_len = op.params[1].tmpref.size;
+        printf(&quot;Key generated in TEE\n&quot;);
+        printf(&quot;Public key (%d bytes):\n&quot;, *public_key_len);
+        for (uint32_t i = 0; i &lt; *public_key_len; i++) {
+            printf(&quot;%02X&quot;, public_key[i]);
+            if ((i + 1) % 32 == 0) printf(&quot;\n&quot;);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;Key generation failed: 0x%x (origin: 0x%x)\n&quot;,
+               res, err_origin);
+    }
+
+    return res;
+}
+</code></pre>
+<h4 id="73-ta">7.3 调用TA签名数据</h4>
+<pre><code class="language-c">/**
+ * @brief 调用TA对数据进行签名
+ * @param data 待签名数据
+ * @param data_len 数据长度
+ * @param signature 输出的签名缓冲区
+ * @param sig_len 签名缓冲区大小
+ * @return TEEC_SUCCESS: 成功, 其他: 失败
+ */
+TEEC_Result tee_sign_data(const uint8_t *data, uint32_t data_len,
+                          uint8_t *signature, uint32_t *sig_len) {
+    TEEC_Result res;
+    TEEC_Operation op;
+    uint32_t err_origin;
+
+    // 准备操作参数
+    memset(&amp;op, 0, sizeof(op));
+    op.paramTypes = TEEC_PARAM_TYPES(
+        TEEC_MEMREF_TEMP_INPUT,
+        TEEC_MEMREF_TEMP_OUTPUT,
+        TEEC_NONE,
+        TEEC_NONE
+    );
+
+    op.params[0].tmpref.buffer = (void*)data;
+    op.params[0].tmpref.size = data_len;
+    op.params[1].tmpref.buffer = signature;
+    op.params[1].tmpref.size = *sig_len;
+
+    // 调用TA命令
+    res = TEEC_InvokeCommand(
+        &amp;sess,
+        CMD_SIGN_DATA,
+        &amp;op,
+        &amp;err_origin
+    );
+
+    if (res == TEEC_SUCCESS) {
+        *sig_len = op.params[1].tmpref.size;
+        printf(&quot;Data signed in TEE\n&quot;);
+        printf(&quot;Signature (%d bytes):\n&quot;, *sig_len);
+        for (uint32_t i = 0; i &lt; *sig_len; i++) {
+            printf(&quot;%02X&quot;, signature[i]);
+            if ((i + 1) % 32 == 0) printf(&quot;\n&quot;);
+        }
+        printf(&quot;\n&quot;);
+    } else {
+        printf(&quot;Signing failed: 0x%x (origin: 0x%x)\n&quot;,
+               res, err_origin);
+    }
+
+    return res;
+}
+</code></pre>
+<h4 id="74">7.4 完整示例程序</h4>
+<pre><code class="language-c">/**
+ * @brief TEE客户端示例程序
+ */
+int main(void) {
+    TEEC_Result res;
+
+    printf(&quot;=== TEE Client Example ===\n\n&quot;);
+
+    // 1. 初始化TEE客户端
+    res = tee_client_init();
+    if (res != TEEC_SUCCESS) {
+        return -1;
+    }
+
+    // 2. 生成密钥
+    uint8_t public_key[64];
+    uint32_t public_key_len = sizeof(public_key);
+
+    printf(&quot;\n1. Generating key in TEE...\n&quot;);
+    res = tee_generate_key(public_key, &amp;public_key_len);
+    if (res != TEEC_SUCCESS) {
+        goto cleanup;
+    }
+
+    // 3. 签名数据
+    const char *message = &quot;Hello, TEE!&quot;;
+    uint8_t signature[64];
+    uint32_t sig_len = sizeof(signature);
+
+    printf(&quot;\n2. Signing data in TEE...\n&quot;);
+    printf(&quot;Message: %s\n&quot;, message);
+    res = tee_sign_data((uint8_t*)message, strlen(message),
+                       signature, &amp;sig_len);
+    if (res != TEEC_SUCCESS) {
+        goto cleanup;
+    }
+
+    printf(&quot;\n=== Test Complete ===\n&quot;);
+
+cleanup:
+    // 4. 清理
+    tee_client_cleanup();
+
+    return (res == TEEC_SUCCESS) ? 0 : -1;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 客户端应用运行在普通世界
+- 通过TEE Client API与TA通信
+- 敏感操作在TEE中执行
+- 数据通过共享内存传递</p>
+<h2 id="_7">验证方法</h2>
+<h3 id="1_2">1. 测试安全芯片功能</h3>
+<p>创建测试程序验证ATECC608A功能：</p>
+<pre><code class="language-c">/**
+ * @brief 测试安全芯片功能
+ */
+void test_secure_element(void) {
+    ATCA_STATUS status;
+
+    printf(&quot;\n=== Secure Element Test ===\n&quot;);
+
+    // 1. 初始化
+    printf(&quot;\n1. Initializing ATECC608A...\n&quot;);
+    status = atca_init();
+    if (status != ATCA_SUCCESS) {
+        printf(&quot;   [FAIL] Initialization failed\n&quot;);
+        return;
+    }
+    printf(&quot;   [PASS] Initialized successfully\n&quot;);
+
+    // 2. 生成密钥对
+    printf(&quot;\n2. Generating ECC keypair...\n&quot;);
+    uint8_t public_key[64];
+    status = generate_ecc_keypair(0, public_key);
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;   [PASS] Keypair generated\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Keypair generation failed\n&quot;);
+    }
+
+    // 3. 签名测试
+    printf(&quot;\n3. Testing ECDSA signing...\n&quot;);
+    const char *message = &quot;Test message&quot;;
+    uint8_t signature[64];
+    status = ecdsa_sign(0, (uint8_t*)message, strlen(message), signature);
+    if (status == ATCA_SUCCESS) {
+        printf(&quot;   [PASS] Signature generated\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Signing failed\n&quot;);
+    }
+
+    // 4. 验证测试
+    printf(&quot;\n4. Testing ECDSA verification...\n&quot;);
+    bool is_verified;
+    status = ecdsa_verify(public_key, (uint8_t*)message, strlen(message),
+                         signature, &amp;is_verified);
+    if (status == ATCA_SUCCESS &amp;&amp; is_verified) {
+        printf(&quot;   [PASS] Signature verified\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Verification failed\n&quot;);
+    }
+
+    printf(&quot;\n=== Test Complete ===\n&quot;);
+}
+</code></pre>
+<h3 id="2-tee">2. 测试TEE功能</h3>
+<p>测试TrustZone和TEE功能：</p>
+<pre><code class="language-c">/**
+ * @brief 测试TEE功能
+ */
+void test_tee(void) {
+    TEEC_Result res;
+
+    printf(&quot;\n=== TEE Test ===\n&quot;);
+
+    // 1. 初始化TEE客户端
+    printf(&quot;\n1. Initializing TEE client...\n&quot;);
+    res = tee_client_init();
+    if (res == TEEC_SUCCESS) {
+        printf(&quot;   [PASS] TEE client initialized\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Initialization failed: 0x%x\n&quot;, res);
+        return;
+    }
+
+    // 2. 生成密钥
+    printf(&quot;\n2. Generating key in TEE...\n&quot;);
+    uint8_t public_key[64];
+    uint32_t public_key_len = sizeof(public_key);
+    res = tee_generate_key(public_key, &amp;public_key_len);
+    if (res == TEEC_SUCCESS) {
+        printf(&quot;   [PASS] Key generated\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Key generation failed\n&quot;);
+    }
+
+    // 3. 签名数据
+    printf(&quot;\n3. Signing data in TEE...\n&quot;);
+    const char *data = &quot;TEE test data&quot;;
+    uint8_t signature[64];
+    uint32_t sig_len = sizeof(signature);
+    res = tee_sign_data((uint8_t*)data, strlen(data), signature, &amp;sig_len);
+    if (res == TEEC_SUCCESS) {
+        printf(&quot;   [PASS] Data signed\n&quot;);
+    } else {
+        printf(&quot;   [FAIL] Signing failed\n&quot;);
+    }
+
+    // 4. 清理
+    tee_client_cleanup();
+
+    printf(&quot;\n=== Test Complete ===\n&quot;);
+}
+</code></pre>
+<h3 id="3_2">3. 预期输出</h3>
+<p><strong>安全芯片测试输出</strong>：</p>
+<pre><code>=== Secure Element Test ===
+
+1. Initializing ATECC608A...
+ATECC608A detected
+  Revision: 00 00 60 02
+   [PASS] Initialized successfully
+
+2. Generating ECC keypair...
+Keypair generated successfully
+Public key (X,Y):
+  X: A1B2C3D4E5F6...
+  Y: 1A2B3C4D5E6F...
+   [PASS] Keypair generated
+
+3. Testing ECDSA signing...
+Message digest: 9F86D081884C7D659A2FEAA0C55AD015...
+Signing with slot 0...
+Signature generated successfully
+  R: 12345678...
+  S: ABCDEF01...
+   [PASS] Signature generated
+
+4. Testing ECDSA verification...
+Verifying signature...
+Signature verification: VALID
+   [PASS] Signature verified
+
+=== Test Complete ===
+</code></pre>
+<p><strong>TEE测试输出</strong>：</p>
+<pre><code>=== TEE Test ===
+
+1. Initializing TEE client...
+TEE client initialized successfully
+   [PASS] TEE client initialized
+
+2. Generating key in TEE...
+Key generated in TEE
+Public key (64 bytes):
+A1B2C3D4E5F6...
+   [PASS] Key generated
+
+3. Signing data in TEE...
+Data signed in TEE
+Signature (64 bytes):
+12345678ABCD...
+   [PASS] Data signed
+
+=== Test Complete ===
+</code></pre>
+<h2 id="_8">故障排除</h2>
+<h3 id="1_3">问题1: 安全芯片通信失败</h3>
+<p><strong>现象</strong>：</p>
+<pre><code>ATCA init failed: 0xF0
+ATCA wakeup failed: 0xF0
+</code></pre>
+<p><strong>可能原因</strong>：
+1. I2C连接问题
+2. 设备地址错误
+3. 上拉电阻缺失
+4. 电源供电不足</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 检查I2C通信
+HAL_StatusTypeDef status = HAL_I2C_IsDeviceReady(
+    &amp;hi2c1,
+    ATECC608A_I2C_ADDR,
+    3,
+    1000
+);
+
+if (status == HAL_OK) {
+    printf(&quot;Device detected at 0x%02X\n&quot;, ATECC608A_I2C_ADDR);
+} else {
+    printf(&quot;Device not found\n&quot;);
+    // 尝试扫描I2C总线
+    for (uint8_t addr = 0x08; addr &lt; 0xF8; addr += 2) {
+        if (HAL_I2C_IsDeviceReady(&amp;hi2c1, addr, 1, 100) == HAL_OK) {
+            printf(&quot;Found device at 0x%02X\n&quot;, addr);
+        }
+    }
+}
+
+// 2. 检查上拉电阻
+// 使用示波器或万用表测量SDA/SCL线电压
+// 应该在空闲时为3.3V
+
+// 3. 增加唤醒延时
+cfg.wake_delay = 2500;  // 增加到2.5ms
+cfg.rx_retries = 50;    // 增加重试次数
+</code></pre>
+<h3 id="2_2">问题2: 密钥槽位配置错误</h3>
+<p><strong>现象</strong>：</p>
+<pre><code>Failed to write key: 0x03 (ATCA_CHECKMAC_VERIFY_FAILED)
+</code></pre>
+<p><strong>原因</strong>：
+- 密钥槽位未正确配置
+- 写保护已启用
+- 槽位已锁定</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 读取槽位配置
+uint8_t config_data[128];
+ATCA_STATUS status = atcab_read_config_zone(config_data);
+
+if (status == ATCA_SUCCESS) {
+    // 检查槽位0的配置
+    uint16_t slot_config = (config_data[20] &lt;&lt; 8) | config_data[21];
+    printf(&quot;Slot 0 config: 0x%04X\n&quot;, slot_config);
+
+    // 检查是否锁定
+    uint8_t lock_config = config_data[87];
+    uint8_t lock_data = config_data[86];
+    printf(&quot;Config locked: %s\n&quot;, lock_config == 0x00 ? &quot;Yes&quot; : &quot;No&quot;);
+    printf(&quot;Data locked: %s\n&quot;, lock_data == 0x00 ? &quot;Yes&quot; : &quot;No&quot;);
+}
+
+// 2. 如果需要重新配置（仅在开发阶段）
+// 注意：配置锁定后无法更改！
+if (lock_config != 0x00) {
+    // 写入新配置
+    // ...
+
+    // 锁定配置
+    status = atcab_lock_config_zone();
+}
+</code></pre>
+<h3 id="3-tee">问题3: TEE会话打开失败</h3>
+<p><strong>现象</strong>：</p>
+<pre><code>TEEC_OpenSession failed: 0xFFFF0008 (origin: 0x00000003)
+</code></pre>
+<p><strong>可能原因</strong>：
+1. TA未正确安装
+2. UUID不匹配
+3. TEE驱动未加载
+4. 权限不足</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-bash"># 1. 检查TA是否安装
+ls -l /lib/optee_armtz/
+# 应该看到对应UUID的.ta文件
+
+# 2. 检查TEE驱动
+lsmod | grep optee
+# 应该看到optee和optee_armtz模块
+
+# 3. 检查设备节点
+ls -l /dev/tee*
+# 应该看到/dev/tee0和/dev/teepriv0
+
+# 4. 检查权限
+sudo chmod 666 /dev/tee0
+
+# 5. 查看TEE日志
+dmesg | grep optee
+</code></pre>
+<h3 id="4-trustzone">问题4: TrustZone配置错误</h3>
+<p><strong>现象</strong>：
+- 系统启动后卡死
+- 访问安全内存时触发异常
+- 非安全代码无法访问外设</p>
+<p><strong>原因</strong>：
+- SAU配置错误
+- 内存区域重叠
+- 外设安全属性配置错误</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 验证SAU配置
+void verify_sau_config(void) {
+    printf(&quot;SAU Configuration:\n&quot;);
+    printf(&quot;  CTRL: 0x%08X\n&quot;, SAU-&gt;CTRL);
+    printf(&quot;  TYPE: 0x%08X\n&quot;, SAU-&gt;TYPE);
+
+    // 遍历所有SAU区域
+    for (int i = 0; i &lt; 8; i++) {
+        SAU-&gt;RNR = i;
+        uint32_t rbar = SAU-&gt;RBAR;
+        uint32_t rlar = SAU-&gt;RLAR;
+
+        if (rlar &amp; SAU_RLAR_ENABLE_Msk) {
+            printf(&quot;  Region %d:\n&quot;, i);
+            printf(&quot;    Base: 0x%08X\n&quot;, rbar &amp; SAU_RBAR_BADDR_Msk);
+            printf(&quot;    Limit: 0x%08X\n&quot;, rlar &amp; SAU_RLAR_LADDR_Msk);
+            printf(&quot;    NSC: %s\n&quot;, (rbar &amp; SAU_RBAR_NSC_Msk) ? &quot;Yes&quot; : &quot;No&quot;);
+        }
+    }
+}
+
+// 2. 检查内存访问
+void test_memory_access(void) {
+    // 测试安全内存访问
+    volatile uint32_t *secure_mem = (uint32_t*)SECURE_SRAM_BASE;
+    *secure_mem = 0x12345678;
+    printf(&quot;Secure memory write: OK\n&quot;);
+
+    // 测试非安全内存访问
+    volatile uint32_t *nonsecure_mem = (uint32_t*)NON_SECURE_SRAM_BASE;
+    *nonsecure_mem = 0xABCDEF01;
+    printf(&quot;Non-secure memory write: OK\n&quot;);
+}
+</code></pre>
+<h3 id="5">问题5: 性能问题</h3>
+<p><strong>现象</strong>：
+- 加密操作耗时过长
+- I2C通信速度慢
+- TEE调用延迟高</p>
+<p><strong>优化方法</strong>：</p>
+<pre><code class="language-c">// 1. 优化I2C速度
+hi2c1.Init.Timing = 0x00300F38;  // 400kHz @ 110MHz
+
+// 2. 使用DMA传输
+HAL_I2C_Master_Transmit_DMA(&amp;hi2c1, addr, data, len);
+
+// 3. 批量操作
+// 避免频繁的小数据传输，尽量批量处理
+
+// 4. 缓存公钥
+static uint8_t cached_public_key[64];
+static bool key_cached = false;
+
+if (!key_cached) {
+    read_public_key(0, cached_public_key);
+    key_cached = true;
+}
+
+// 5. 异步操作
+// 使用回调或事件机制，避免阻塞等待
+</code></pre>
+<h2 id="_9">总结</h2>
+<p>通过本教程，我们学习了：</p>
+<h3 id="_10">核心概念</h3>
+<ol>
+<li>
+<p><strong>安全芯片(SE)</strong>
+   - 独立的硬件安全模块
+   - 专用于密钥存储和加密操作
+   - 物理隔离，防篡改保护
+   - 典型应用：ATECC608A、SE050</p>
+</li>
+<li>
+<p><strong>可信执行环境(TEE)</strong>
+   - 处理器内部的安全执行环境
+   - 基于ARM TrustZone技术
+   - 与普通环境(REE)硬件隔离
+   - 运行可信应用(TA)</p>
+</li>
+<li>
+<p><strong>密钥管理</strong>
+   - 密钥在安全区域生成
+   - 私钥永不导出
+   - 安全存储和访问控制
+   - 密钥生命周期管理</p>
+</li>
+<li>
+<p><strong>加密操作</strong>
+   - ECDSA签名和验证
+   - ECDH密钥交换
+   - AES加密和解密
+   - SHA-256哈希计算</p>
+</li>
+</ol>
+<h3 id="_11">关键要点</h3>
+<p><strong>安全芯片优势</strong>：
+- 硬件级安全保护
+- 独立于主处理器
+- 防物理攻击
+- 低功耗设计
+- 标准化接口</p>
+<p><strong>TEE优势</strong>：
+- 集成在主处理器中
+- 性能更高
+- 灵活性强
+- 支持复杂应用
+- 成本较低</p>
+<p><strong>应用场景</strong>：
+- 设备认证和身份验证
+- 安全启动和固件验证
+- 数据加密和签名
+- 安全通信（TLS/DTLS）
+- 支付和金融应用
+- DRM和内容保护</p>
+<h3 id="_12">最佳实践</h3>
+<ol>
+<li>
+<p><strong>密钥管理</strong>
+   - 使用硬件生成密钥
+   - 私钥永不导出
+   - 定期轮换密钥
+   - 实施密钥备份策略
+   - 记录密钥使用日志</p>
+</li>
+<li>
+<p><strong>安全设计</strong>
+   - 最小权限原则
+   - 纵深防御策略
+   - 安全默认配置
+   - 定期安全审计
+   - 及时更新补丁</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 批量处理操作
+   - 缓存常用数据
+   - 使用DMA传输
+   - 异步操作模式
+   - 合理选择算法</p>
+</li>
+<li>
+<p><strong>开发流程</strong>
+   - 安全需求分析
+   - 威胁建模
+   - 安全编码规范
+   - 代码审查
+   - 渗透测试</p>
+</li>
+</ol>
+<h3 id="_13">安全注意事项</h3>
+<p>⚠️ <strong>重要提醒</strong>：</p>
+<ol>
+<li>
+<p><strong>密钥保护</strong>
+   - 绝不在普通内存中存储私钥
+   - 使用安全芯片或TEE存储密钥
+   - 实施访问控制
+   - 监控异常访问</p>
+</li>
+<li>
+<p><strong>侧信道攻击</strong>
+   - 注意功耗分析攻击
+   - 防止时序攻击
+   - 使用随机延时
+   - 实施掩码技术</p>
+</li>
+<li>
+<p><strong>物理安全</strong>
+   - 防止芯片读取
+   - 使用防篡改封装
+   - 实施物理检测
+   - 安全销毁机制</p>
+</li>
+<li>
+<p><strong>软件安全</strong>
+   - 输入验证
+   - 边界检查
+   - 安全编码
+   - 定期更新</p>
+</li>
+</ol>
+<h3 id="_14">性能对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>安全芯片(SE)</th>
+<th>TEE</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>安全级别</td>
+<td>极高</td>
+<td>高</td>
+</tr>
+<tr>
+<td>性能</td>
+<td>中等</td>
+<td>高</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>较高</td>
+<td>较低</td>
+</tr>
+<tr>
+<td>灵活性</td>
+<td>有限</td>
+<td>高</td>
+</tr>
+<tr>
+<td>功耗</td>
+<td>极低</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>集成度</td>
+<td>外部芯片</td>
+<td>集成在SoC</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>高安全要求</td>
+<td>平衡性能和安全</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_15">技术选择建议</h3>
+<p><strong>选择安全芯片(SE)的场景</strong>：
+- 需要最高级别的安全保护
+- 密钥存储是核心需求
+- 需要通过安全认证（如CC EAL5+）
+- 预算允许增加硬件成本
+- 功耗要求极低</p>
+<p><strong>选择TEE的场景</strong>：
+- 需要运行复杂的安全应用
+- 性能要求较高
+- 成本敏感
+- 需要灵活的开发环境
+- 已有TrustZone支持的处理器</p>
+<p><strong>混合方案</strong>：
+- 使用SE存储根密钥
+- 使用TEE执行复杂加密操作
+- 结合两者优势
+- 提供最佳的安全性和性能平衡</p>
+<h2 id="_16">下一步</h2>
+<h3 id="_17">进阶学习</h3>
+<ol>
+<li>
+<p><strong>高级安全特性</strong>
+   - 安全调试技术
+   - 防篡改检测
+   - 侧信道攻击防护
+   - 故障注入防护</p>
+</li>
+<li>
+<p><strong>安全认证</strong>
+   - Common Criteria认证
+   - FIPS 140-2/140-3认证
+   - PSA认证
+   - GlobalPlatform认证</p>
+</li>
+<li>
+<p><strong>安全协议</strong>
+   - TLS 1.3实现
+   - DTLS for IoT
+   - MQTT安全
+   - CoAP安全</p>
+</li>
+<li>
+<p><strong>行业应用</strong>
+   - 支付终端安全
+   - 汽车安全（ISO 26262）
+   - 医疗设备安全
+   - 工业控制安全</p>
+</li>
+</ol>
+<h3 id="_18">实践项目</h3>
+<ol>
+<li>
+<p><strong>安全物联网设备</strong>
+   - 使用SE进行设备认证
+   - 实现安全OTA更新
+   - 加密数据传输
+   - 安全云连接</p>
+</li>
+<li>
+<p><strong>安全支付终端</strong>
+   - PIN码安全输入
+   - 交易数据加密
+   - 密钥管理
+   - 安全认证</p>
+</li>
+<li>
+<p><strong>安全通信系统</strong>
+   - 端到端加密
+   - 身份认证
+   - 密钥协商
+   - 安全会话管理</p>
+</li>
+</ol>
+<h3 id="_19">参考资源</h3>
+<p><strong>官方文档</strong>：
+- <a href="https://developer.arm.com/ip-products/security-ip/trustzone">ARM TrustZone技术文档</a>
+- <a href="https://optee.readthedocs.io/">OP-TEE文档</a>
+- <a href="https://www.microchip.com/wwwproducts/en/ATECC608A">ATECC608A数据手册</a>
+- <a href="https://globalplatform.org/specs-library/tee-specifications/">GlobalPlatform TEE规范</a></p>
+<p><strong>开源项目</strong>：
+- <a href="https://github.com/OP-TEE/optee_os">OP-TEE OS</a>
+- <a href="https://github.com/MicrochipTech/cryptoauthlib">CryptoAuthLib</a>
+- <a href="https://github.com/ARMmbed/mbedtls">mbedTLS</a>
+- <a href="https://www.trustedfirmware.org/projects/tf-m/">TF-M (Trusted Firmware-M)</a></p>
+<p><strong>学习资源</strong>：
+- <a href="https://www.arm.com/why-arm/security">ARM Security Technology</a>
+- <a href="https://www.microchip.com/design-centers/security-ics/trust-platform">Microchip Trust Platform</a>
+- <a href="https://www.linaro.org/blog/tee-security/">TEE Security Whitepaper</a></p>
+<p><strong>相关教程</strong>：
+- <a href="../beginner/04-secure-boot-firmware-verification.html">安全启动与固件验证</a>
+- <a href="../beginner/05-key-management-storage.html">密钥管理与存储</a>
+- <a href="../intermediate/04-secure-communication-protocols.html">安全通信协议实现</a>
+- <a href="../intermediate/05-penetration-testing.html">渗透测试与漏洞分析</a>
+- <a href="02-high-reliability-system.html">高可靠性系统设计实战</a></p>
+<hr />
+<p><strong>教程版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2024-01-15<br />
+<strong>作者</strong>: 嵌入式知识平台<br />
+<strong>难度等级</strong>: 高级<br />
+<strong>预计学习时间</strong>: 100分钟</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

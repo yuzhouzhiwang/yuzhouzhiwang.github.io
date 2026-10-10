@@ -1,0 +1,3965 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>PMBus电源管理 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/">06-communication-interface-hardware</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#pmbus_1">PMBus的诞生背景</a></li>
+<li><a href="#pmbus_2">PMBus应用领域</a></li>
+<li><a href="#pmbus_3">PMBus版本演进</a></li>
+</ul>
+</li>
+<li><a href="#pmbus_4">PMBus协议架构</a><ul>
+<li><a href="#_3">协议层次结构</a></li>
+<li><a href="#pmbus_5">PMBus设备类型</a></li>
+<li><a href="#pmbus_6">PMBus通信模型</a></li>
+</ul>
+</li>
+<li><a href="#pmbus_7">PMBus数据格式</a><ul>
+<li><a href="#_4">数据类型</a></li>
+<li><a href="#linear-format">线性数据格式（Linear Format）</a></li>
+<li><a href="#linear16">Linear16格式</a></li>
+<li><a href="#direct-format">直接数据格式（Direct Format）</a></li>
+</ul>
+</li>
+<li><a href="#pmbus_8">PMBus命令集</a><ul>
+<li><a href="#_5">命令分类</a></li>
+<li><a href="#_6">命令编码</a></li>
+<li><a href="#_7">核心控制命令</a></li>
+<li><a href="#_8">电压配置命令</a></li>
+<li><a href="#_9">遥测读取命令</a></li>
+<li><a href="#_10">状态监控命令</a></li>
+<li><a href="#_11">故障限制配置命令</a></li>
+</ul>
+</li>
+<li><a href="#pmbus_9">PMBus主机实现</a><ul>
+<li><a href="#_12">硬件接口设计</a></li>
+<li><a href="#_13">软件架构设计</a></li>
+<li><a href="#pmbus_10">PMBus驱动实现</a></li>
+<li><a href="#_14">高级功能实现</a></li>
+</ul>
+</li>
+<li><a href="#_15">实战项目：服务器电源管理系统</a><ul>
+<li><a href="#_16">项目需求</a></li>
+<li><a href="#_17">系统架构设计</a></li>
+<li><a href="#_18">核心代码实现</a></li>
+<li><a href="#_19">主循环实现</a></li>
+</ul>
+</li>
+<li><a href="#_20">调试与故障排除</a><ul>
+<li><a href="#_21">常见问题</a></li>
+<li><a href="#_22">性能优化</a></li>
+</ul>
+</li>
+<li><a href="#_23">最佳实践</a><ul>
+<li><a href="#_24">设计建议</a></li>
+</ul>
+</li>
+<li><a href="#_25">总结</a><ul>
+<li><a href="#_26">关键要点</a></li>
+<li><a href="#_27">学习路径</a></li>
+<li><a href="#_28">下一步学习</a></li>
+</ul>
+</li>
+<li><a href="#_29">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="pmbus">PMBus电源管理</h1>
+<h2 id="_1">概述</h2>
+<p>PMBus（Power Management Bus，电源管理总线）是一种基于SMBus的开放标准数字电源管理协议，专门为数字电源管理和监控而设计。PMBus由PMBus-IF（PMBus Implementers Forum）维护，现已成为服务器、通信设备、工业控制等领域数字电源管理的事实标准。</p>
+<p>PMBus在SMBus的基础上定义了标准化的命令集、数据格式和通信协议，使不同厂商的电源设备能够互操作，并提供统一的管理接口。</p>
+<p>完成本教程学习后，你将能够：</p>
+<ul>
+<li>理解PMBus协议规范和架构设计</li>
+<li>掌握PMBus命令集和数据格式</li>
+<li>实现PMBus电源控制和配置</li>
+<li>掌握PMBus遥测数据读取和处理</li>
+<li>实现PMBus故障检测和管理</li>
+<li>开发PMBus主机控制器和从机设备</li>
+<li>应用PMBus于服务器电源、DC-DC转换器等实际场景</li>
+<li>理解PMBus与其他电源管理协议的区别</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="pmbus_1">PMBus的诞生背景</h3>
+<p><strong>为什么需要PMBus</strong>：</p>
+<ol>
+<li>
+<p><strong>数字电源管理需求</strong>：
+   - 传统模拟电源缺乏灵活性
+   - 需要远程监控和配置能力
+   - 需要精确的遥测数据
+   - 需要智能故障管理</p>
+</li>
+<li>
+<p><strong>标准化需求</strong>：
+   - 不同厂商电源接口不统一
+   - 集成和维护成本高
+   - 需要通用的管理协议
+   - 需要互操作性保证</p>
+</li>
+<li>
+<p><strong>系统复杂度增加</strong>：
+   - 多路电源管理
+   - 动态电压调节（DVS）
+   - 电源排序控制
+   - 功耗优化需求</p>
+</li>
+<li>
+<p><strong>可靠性要求</strong>：
+   - 实时故障检测
+   - 预测性维护
+   - 详细的故障日志
+   - 远程诊断能力</p>
+</li>
+</ol>
+<h3 id="pmbus_2">PMBus应用领域</h3>
+<p><strong>典型应用场景</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>应用领域</th>
+<th>具体应用</th>
+<th>典型设备</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>服务器电源</td>
+<td>机架电源、冗余电源</td>
+<td>PSU、CRPS电源</td>
+</tr>
+<tr>
+<td>数据中心</td>
+<td>电源管理、能效监控</td>
+<td>PDU、电源分配单元</td>
+</tr>
+<tr>
+<td>通信设备</td>
+<td>基站电源、网络设备</td>
+<td>DC-DC转换器、PoE</td>
+</tr>
+<tr>
+<td>工业控制</td>
+<td>PLC电源、工业电源</td>
+<td>工业电源模块</td>
+</tr>
+<tr>
+<td>存储系统</td>
+<td>磁盘阵列电源</td>
+<td>存储电源模块</td>
+</tr>
+<tr>
+<td>计算设备</td>
+<td>工作站、高性能计算</td>
+<td>VRM、多相电源</td>
+</tr>
+</tbody>
+</table>
+<p><strong>PMBus在服务器系统中的应用</strong>：</p>
+<pre><code>服务器主板
+ │
+ ├─ BMC（基板管理控制器）
+ │   │
+ │   ├─ PMBus控制器
+ │   │   │
+ │   │   ├─ PSU #1 (0x58) - 主电源
+ │   │   │   ├─ 12V输出 (600W)
+ │   │   │   ├─ 5V待机 (10W)
+ │   │   │   └─ 遥测：电压、电流、温度、功率
+ │   │   │
+ │   │   ├─ PSU #2 (0x59) - 冗余电源
+ │   │   │   └─ 同PSU #1
+ │   │   │
+ │   │   ├─ VRM #1 (0x60) - CPU电源
+ │   │   │   ├─ Vcore (动态调节)
+ │   │   │   └─ 多相控制
+ │   │   │
+ │   │   ├─ VRM #2 (0x61) - 内存电源
+ │   │   │   └─ DDR电压控制
+ │   │   │
+ │   │   └─ DC-DC (0x62) - 外设电源
+ │   │       ├─ 3.3V
+ │   │       ├─ 1.8V
+ │   │       └─ 1.2V
+ │   │
+ │   └─ 管理功能
+ │       ├─ 实时监控
+ │       ├─ 故障告警
+ │       ├─ 电源排序
+ │       └─ 功耗管理
+ │
+ └─ 操作系统/IPMI
+     └─ 远程管理接口
+
+特点：
+- 统一的PMBus接口管理所有电源
+- 实时监控电压、电流、温度、功率
+- 自动故障检测和保护
+- 支持热插拔和冗余
+- 远程配置和诊断
+</code></pre>
+<h3 id="pmbus_3">PMBus版本演进</h3>
+<p><strong>PMBus规范版本</strong>：</p>
+<ol>
+<li>
+<p><strong>PMBus 1.0 (2005)</strong>：
+   - 初始版本
+   - 定义基本命令集
+   - 基于SMBus 2.0</p>
+</li>
+<li>
+<p><strong>PMBus 1.1 (2007)</strong>：
+   - 增加新命令
+   - 改进数据格式
+   - 增强故障管理</p>
+</li>
+<li>
+<p><strong>PMBus 1.2 (2010)</strong>：
+   - 扩展命令集
+   - 增加AVSBus支持
+   - 改进遥测功能</p>
+</li>
+<li>
+<p><strong>PMBus 1.3 (2015)</strong>：
+   - 增加新的电源管理功能
+   - 改进故障处理
+   - 增强安全特性</p>
+</li>
+<li>
+<p><strong>PMBus 1.3.1 (2020)</strong>：
+   - 修正和澄清
+   - 增加新设备类型
+   - 向后兼容</p>
+</li>
+</ol>
+<h2 id="pmbus_4">PMBus协议架构</h2>
+<h3 id="_3">协议层次结构</h3>
+<p><strong>PMBus协议栈</strong>：</p>
+<pre><code>┌─────────────────────────────────────┐
+│      应用层（Application）           │
+│  - 电源管理策略                      │
+│  - 故障处理逻辑                      │
+│  - 用户界面                          │
+├─────────────────────────────────────┤
+│      PMBus命令层（PMBus Commands）   │
+│  - 标准命令（0x00-0x7F）            │
+│  - 制造商命令（0x80-0xFF）          │
+│  - 数据格式转换                      │
+├─────────────────────────────────────┤
+│      SMBus传输层（SMBus）            │
+│  - 命令协议（Read/Write Byte/Word）  │
+│  - Block Read/Write                 │
+│  - PEC校验                           │
+├─────────────────────────────────────┤
+│      I2C物理层（I2C）                │
+│  - 电气特性                          │
+│  - 时序控制                          │
+│  - 总线仲裁                          │
+└─────────────────────────────────────┘
+</code></pre>
+<h3 id="pmbus_5">PMBus设备类型</h3>
+<p><strong>设备角色分类</strong>：</p>
+<pre><code>1. PMBus主机（Host/Controller）：
+   - 系统管理控制器（BMC）
+   - 嵌入式控制器（EC）
+   - 微控制器（MCU）
+   - 功能：发送命令、读取遥测、配置设备
+
+2. PMBus从机（Device/Slave）：
+   - 电源供应器（PSU）
+   - DC-DC转换器
+   - 电压调节器（VRM）
+   - 功能：执行命令、报告状态、提供遥测
+
+3. PMBus中继器（Repeater）：
+   - 总线扩展器
+   - 隔离器
+   - 功能：扩展总线距离、隔离保护
+
+设备地址分配：
+- 0x08-0x7F：PMBus设备地址范围
+- 常用地址：
+  - 0x58-0x5F：电源供应器（PSU）
+  - 0x60-0x6F：DC-DC转换器
+  - 0x70-0x77：VRM、多相控制器
+</code></pre>
+<h3 id="pmbus_6">PMBus通信模型</h3>
+<p><strong>主从通信模式</strong>：</p>
+<pre><code>主机 → 从机：命令和配置
+┌──────────┐                    ┌──────────┐
+│  PMBus   │  ─── 写命令 ───→   │  电源    │
+│  主机    │  ←── 应答 ────     │  设备    │
+│  (BMC)   │  ─── 读遥测 ───→   │  (PSU)   │
+│          │  ←── 数据 ────     │          │
+└──────────┘                    └──────────┘
+
+通信特点：
+- 主机主动发起通信
+- 从机被动响应
+- 支持轮询和中断
+- 支持多主机（仲裁）
+
+典型通信流程：
+1. 主机发送命令（如READ_VOUT）
+2. 从机处理命令
+3. 从机返回数据（输出电压值）
+4. 主机解析数据
+5. 主机根据数据采取行动
+</code></pre>
+<h2 id="pmbus_7">PMBus数据格式</h2>
+<h3 id="_4">数据类型</h3>
+<p><strong>PMBus定义的数据格式</strong>：</p>
+<pre><code>1. 无符号整数（Unsigned Integer）：
+   - 8位：0-255
+   - 16位：0-65535
+   - 用途：计数、状态位
+
+2. 有符号整数（Signed Integer）：
+   - 8位：-128 to 127
+   - 16位：-32768 to 32767
+   - 用途：温度、相对值
+
+3. 线性数据格式（Linear Format）：
+   - 11位尾数 + 5位指数
+   - 表示范围：±32768
+   - 用途：电压、电流、功率
+
+4. 直接数据格式（Direct Format）：
+   - 用户定义的缩放因子
+   - 更高精度
+   - 用途：高精度测量
+
+5. VID格式（Voltage Identification）：
+   - Intel VID标准
+   - 用途：CPU电压设置
+
+6. 字符串（String）：
+   - ASCII字符串
+   - 用途：设备信息、序列号
+</code></pre>
+<h3 id="linear-format">线性数据格式（Linear Format）</h3>
+<p><strong>Linear11格式详解</strong>：</p>
+<pre><code>格式定义：
+┌─────────────────────────────────┐
+│ 15  14  13  12  11│10  9  8  7  6  5  4  3  2  1  0 │
+├───────────────────┼─────────────────────────────────┤
+│   指数(N)         │        尾数(Y)                  │
+│   5位有符号       │        11位有符号               │
+└───────────────────┴─────────────────────────────────┘
+
+计算公式：
+实际值 = Y × 2^N
+
+其中：
+- N：5位有符号指数（-16 to +15）
+- Y：11位有符号尾数（-1024 to +1023）
+
+表示范围：
+- 最小值：-1024 × 2^-16 = -0.015625
+- 最大值：+1023 × 2^15 = +33521664
+- 精度：取决于指数值
+
+示例1：表示12.5V
+Y = 12.5 / 2^0 = 12.5 ≈ 13 (取整)
+N = 0
+编码：0x000D (N=0, Y=13)
+实际值：13 × 2^0 = 13V
+
+示例2：表示3.3V
+Y = 3.3 / 2^-2 = 13.2 ≈ 13
+N = -2 (0x1E，5位补码)
+编码：0xF00D (N=-2, Y=13)
+实际值：13 × 2^-2 = 3.25V
+
+示例3：表示1000W
+Y = 1000 / 2^5 = 31.25 ≈ 31
+N = 5
+编码：0x281F (N=5, Y=31)
+实际值：31 × 2^5 = 992W
+</code></pre>
+<p><strong>Linear11编解码实现</strong>：</p>
+<pre><code class="language-c">// Linear11数据结构
+typedef union {
+    uint16_t raw;
+    struct {
+        int16_t mantissa : 11;  // 11位尾数（有符号）
+        int16_t exponent : 5;   // 5位指数（有符号）
+    } fields;
+} Linear11_t;
+
+// 将浮点数转换为Linear11格式
+uint16_t Float_To_Linear11(float value) {
+    Linear11_t linear;
+    int exponent = 0;
+    float mantissa = value;
+
+    // 找到合适的指数
+    while (mantissa &gt; 1023.0 &amp;&amp; exponent &lt; 15) {
+        mantissa /= 2.0;
+        exponent++;
+    }
+
+    while (mantissa &lt; -1024.0 &amp;&amp; exponent &lt; 15) {
+        mantissa /= 2.0;
+        exponent++;
+    }
+
+    while (mantissa &lt; 512.0 &amp;&amp; mantissa &gt; -512.0 &amp;&amp; exponent &gt; -16) {
+        mantissa *= 2.0;
+        exponent--;
+    }
+
+    // 设置尾数和指数
+    linear.fields.mantissa = (int16_t)mantissa;
+    linear.fields.exponent = (int16_t)exponent;
+
+    return linear.raw;
+}
+
+// 将Linear11格式转换为浮点数
+float Linear11_To_Float(uint16_t linear_value) {
+    Linear11_t linear;
+    linear.raw = linear_value;
+
+    // 提取尾数和指数
+    int16_t mantissa = linear.fields.mantissa;
+    int16_t exponent = linear.fields.exponent;
+
+    // 计算实际值：Y × 2^N
+    float result = (float)mantissa;
+
+    if (exponent &gt;= 0) {
+        result *= (1 &lt;&lt; exponent);
+    } else {
+        result /= (1 &lt;&lt; (-exponent));
+    }
+
+    return result;
+}
+
+// 使用示例
+void Linear11_Example(void) {
+    float voltage = 12.5;
+    uint16_t linear_voltage;
+    float decoded_voltage;
+
+    // 编码
+    linear_voltage = Float_To_Linear11(voltage);
+    printf(&quot;12.5V encoded as: 0x%04X\n&quot;, linear_voltage);
+
+    // 解码
+    decoded_voltage = Linear11_To_Float(linear_voltage);
+    printf(&quot;Decoded value: %.2fV\n&quot;, decoded_voltage);
+
+    // 更多示例
+    float values[] = {3.3, 5.0, 12.0, 24.0, 48.0};
+    for (int i = 0; i &lt; 5; i++) {
+        uint16_t encoded = Float_To_Linear11(values[i]);
+        float decoded = Linear11_To_Float(encoded);
+        printf(&quot;%.1fV → 0x%04X → %.2fV\n&quot;, 
+               values[i], encoded, decoded);
+    }
+}
+</code></pre>
+<h3 id="linear16">Linear16格式</h3>
+<p><strong>Linear16格式详解</strong>：</p>
+<pre><code>格式定义：
+- 16位有符号尾数
+- 指数存储在VOUT_MODE寄存器中
+- 用于输出电压测量
+
+VOUT_MODE寄存器格式：
+┌───────────────────────────────┐
+│ 7  6  5 │ 4  3  2  1  0       │
+├─────────┼─────────────────────┤
+│  模式   │    指数(N)          │
+│  (010)  │    5位有符号        │
+└─────────┴─────────────────────┘
+
+模式值：
+- 0b010：Linear模式
+- 0b000：VID模式
+- 0b001：Direct模式
+
+计算公式：
+实际值 = Y × 2^N
+
+其中：
+- N：从VOUT_MODE读取的指数
+- Y：16位有符号尾数
+
+示例：
+VOUT_MODE = 0x13 (模式=010, N=-13)
+VOUT = 0x1A00 (Y=6656)
+实际电压 = 6656 × 2^-13 = 0.8125V
+</code></pre>
+<p><strong>Linear16编解码实现</strong>：</p>
+<pre><code class="language-c">// VOUT_MODE寄存器
+typedef union {
+    uint8_t raw;
+    struct {
+        int8_t exponent : 5;  // 5位指数（有符号）
+        uint8_t mode : 3;     // 3位模式
+    } fields;
+} VoutMode_t;
+
+// Linear16上下文
+typedef struct {
+    int8_t exponent;  // 从VOUT_MODE读取的指数
+} Linear16_Context_t;
+
+// 读取VOUT_MODE并初始化上下文
+bool PMBus_InitLinear16Context(uint8_t device_addr, 
+                                Linear16_Context_t *context) {
+    uint8_t vout_mode;
+
+    // 读取VOUT_MODE寄存器
+    if (!PMBus_ReadByte(device_addr, PMBUS_CMD_VOUT_MODE, &amp;vout_mode)) {
+        return false;
+    }
+
+    VoutMode_t mode;
+    mode.raw = vout_mode;
+
+    // 检查模式
+    if (mode.fields.mode != 0x02) {  // 必须是Linear模式
+        printf(&quot;Error: Not in Linear mode\n&quot;);
+        return false;
+    }
+
+    // 保存指数
+    context-&gt;exponent = mode.fields.exponent;
+
+    printf(&quot;VOUT_MODE: 0x%02X, Exponent: %d\n&quot;, 
+           vout_mode, context-&gt;exponent);
+
+    return true;
+}
+
+// 将浮点数转换为Linear16格式
+uint16_t Float_To_Linear16(float value, Linear16_Context_t *context) {
+    // 计算尾数：Y = value / 2^N
+    float mantissa = value;
+
+    if (context-&gt;exponent &gt;= 0) {
+        mantissa /= (1 &lt;&lt; context-&gt;exponent);
+    } else {
+        mantissa *= (1 &lt;&lt; (-context-&gt;exponent));
+    }
+
+    // 限制范围
+    if (mantissa &gt; 32767.0) mantissa = 32767.0;
+    if (mantissa &lt; -32768.0) mantissa = -32768.0;
+
+    return (uint16_t)((int16_t)mantissa);
+}
+
+// 将Linear16格式转换为浮点数
+float Linear16_To_Float(uint16_t linear_value, 
+                        Linear16_Context_t *context) {
+    int16_t mantissa = (int16_t)linear_value;
+    float result = (float)mantissa;
+
+    // 应用指数：result = Y × 2^N
+    if (context-&gt;exponent &gt;= 0) {
+        result *= (1 &lt;&lt; context-&gt;exponent);
+    } else {
+        result /= (1 &lt;&lt; (-context-&gt;exponent));
+    }
+
+    return result;
+}
+
+// 使用示例
+void Linear16_Example(uint8_t device_addr) {
+    Linear16_Context_t context;
+
+    // 初始化上下文（读取VOUT_MODE）
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return;
+    }
+
+    // 读取输出电压
+    uint16_t vout_raw;
+    if (PMBus_ReadWord(device_addr, PMBUS_CMD_READ_VOUT, &amp;vout_raw)) {
+        float voltage = Linear16_To_Float(vout_raw, &amp;context);
+        printf(&quot;Output Voltage: %.4fV (raw: 0x%04X)\n&quot;, 
+               voltage, vout_raw);
+    }
+
+    // 设置输出电压
+    float target_voltage = 1.2;
+    uint16_t vout_command = Float_To_Linear16(target_voltage, &amp;context);
+    PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_COMMAND, vout_command);
+    printf(&quot;Set voltage to %.2fV (command: 0x%04X)\n&quot;, 
+           target_voltage, vout_command);
+}
+</code></pre>
+<h3 id="direct-format">直接数据格式（Direct Format）</h3>
+<p><strong>Direct格式详解</strong>：</p>
+<pre><code>格式定义：
+实际值 = (1/m) × (Y × 10^-R - b)
+
+其中：
+- Y：16位原始数据
+- m：缩放系数（斜率）
+- b：偏移量
+- R：小数位数
+
+系数存储：
+- m, b, R存储在设备的系数寄存器中
+- 或在设备数据手册中定义
+- 主机需要知道这些系数才能转换
+
+示例：
+某电流传感器：
+m = 10
+b = 0
+R = 3
+Y = 1234 (原始读数)
+
+实际电流 = (1/10) × (1234 × 10^-3 - 0)
+         = 0.1 × 1.234
+         = 0.1234 A
+         = 123.4 mA
+</code></pre>
+<p><strong>Direct格式实现</strong>：</p>
+<pre><code class="language-c">// Direct格式系数
+typedef struct {
+    int16_t m;  // 斜率
+    int16_t b;  // 偏移
+    int8_t R;   // 小数位数
+} DirectFormat_Coefficients_t;
+
+// Direct格式上下文
+typedef struct {
+    DirectFormat_Coefficients_t vout;   // 输出电压系数
+    DirectFormat_Coefficients_t iout;   // 输出电流系数
+    DirectFormat_Coefficients_t pout;   // 输出功率系数
+    DirectFormat_Coefficients_t temp;   // 温度系数
+} DirectFormat_Context_t;
+
+// 读取Direct格式系数
+bool PMBus_ReadDirectCoefficients(uint8_t device_addr,
+                                  DirectFormat_Context_t *context) {
+    // 读取VOUT系数
+    uint8_t coef_data[6];
+    if (PMBus_BlockRead(device_addr, PMBUS_CMD_COEFFICIENTS, 
+                        coef_data, 6)) {
+        context-&gt;vout.m = (coef_data[1] &lt;&lt; 8) | coef_data[0];
+        context-&gt;vout.b = (coef_data[3] &lt;&lt; 8) | coef_data[2];
+        context-&gt;vout.R = (int8_t)coef_data[4];
+    }
+
+    // 类似地读取其他系数...
+
+    return true;
+}
+
+// 将原始数据转换为实际值
+float Direct_To_Float(uint16_t raw_value, 
+                      DirectFormat_Coefficients_t *coef) {
+    int16_t Y = (int16_t)raw_value;
+    float result;
+
+    // 计算：(1/m) × (Y × 10^-R - b)
+    result = (float)Y;
+
+    // 应用小数位数：Y × 10^-R
+    for (int i = 0; i &lt; coef-&gt;R; i++) {
+        result /= 10.0;
+    }
+
+    // 减去偏移：Y × 10^-R - b
+    result -= (float)coef-&gt;b;
+
+    // 应用斜率：(1/m) × (...)
+    result /= (float)coef-&gt;m;
+
+    return result;
+}
+
+// 将实际值转换为原始数据
+uint16_t Float_To_Direct(float value,
+                         DirectFormat_Coefficients_t *coef) {
+    float Y;
+
+    // 反向计算：Y = (value × m + b) × 10^R
+    Y = value * (float)coef-&gt;m;
+    Y += (float)coef-&gt;b;
+
+    // 应用小数位数
+    for (int i = 0; i &lt; coef-&gt;R; i++) {
+        Y *= 10.0;
+    }
+
+    // 限制范围
+    if (Y &gt; 32767.0) Y = 32767.0;
+    if (Y &lt; -32768.0) Y = -32768.0;
+
+    return (uint16_t)((int16_t)Y);
+}
+
+// 使用示例
+void DirectFormat_Example(uint8_t device_addr) {
+    DirectFormat_Context_t context;
+
+    // 读取系数
+    PMBus_ReadDirectCoefficients(device_addr, &amp;context);
+
+    printf(&quot;VOUT Coefficients: m=%d, b=%d, R=%d\n&quot;,
+           context.vout.m, context.vout.b, context.vout.R);
+
+    // 读取输出电压
+    uint16_t vout_raw;
+    if (PMBus_ReadWord(device_addr, PMBUS_CMD_READ_VOUT, &amp;vout_raw)) {
+        float voltage = Direct_To_Float(vout_raw, &amp;context.vout);
+        printf(&quot;Output Voltage: %.4fV (raw: 0x%04X)\n&quot;, 
+               voltage, vout_raw);
+    }
+
+    // 读取输出电流
+    uint16_t iout_raw;
+    if (PMBus_ReadWord(device_addr, PMBUS_CMD_READ_IOUT, &amp;iout_raw)) {
+        float current = Direct_To_Float(iout_raw, &amp;context.iout);
+        printf(&quot;Output Current: %.3fA (raw: 0x%04X)\n&quot;, 
+               current, iout_raw);
+    }
+}
+</code></pre>
+<h2 id="pmbus_8">PMBus命令集</h2>
+<h3 id="_5">命令分类</h3>
+<p><strong>PMBus命令按功能分类</strong>：</p>
+<pre><code>1. 控制命令（Control Commands）：
+   - OPERATION：设备操作控制
+   - ON_OFF_CONFIG：开关配置
+   - CLEAR_FAULTS：清除故障
+   - PAGE：页面选择（多路输出）
+
+2. 配置命令（Configuration Commands）：
+   - VOUT_COMMAND：输出电压设置
+   - VOUT_MAX：最大输出电压
+   - VOUT_MARGIN_HIGH/LOW：电压裕度
+   - FREQUENCY_SWITCH：开关频率
+
+3. 遥测命令（Telemetry Commands）：
+   - READ_VOUT：读取输出电压
+   - READ_IOUT：读取输出电流
+   - READ_TEMPERATURE_1/2：读取温度
+   - READ_POUT：读取输出功率
+   - READ_VIN：读取输入电压
+
+4. 状态命令（Status Commands）：
+   - STATUS_WORD：状态字
+   - STATUS_VOUT：输出电压状态
+   - STATUS_IOUT：输出电流状态
+   - STATUS_TEMPERATURE：温度状态
+   - STATUS_CML：通信状态
+
+5. 限制命令（Limit Commands）：
+   - VOUT_OV_FAULT_LIMIT：过压故障限制
+   - VOUT_UV_FAULT_LIMIT：欠压故障限制
+   - IOUT_OC_FAULT_LIMIT：过流故障限制
+   - OT_FAULT_LIMIT：过温故障限制
+
+6. 信息命令（Identification Commands）：
+   - MFR_ID：制造商ID
+   - MFR_MODEL：型号
+   - MFR_REVISION：版本
+   - MFR_SERIAL：序列号
+</code></pre>
+<h3 id="_6">命令编码</h3>
+<p><strong>PMBus命令码定义</strong>：</p>
+<pre><code class="language-c">// PMBus标准命令码（部分）
+#define PMBUS_CMD_PAGE                  0x00
+#define PMBUS_CMD_OPERATION             0x01
+#define PMBUS_CMD_ON_OFF_CONFIG         0x02
+#define PMBUS_CMD_CLEAR_FAULTS          0x03
+#define PMBUS_CMD_PHASE                 0x04
+#define PMBUS_CMD_PAGE_PLUS_WRITE       0x05
+#define PMBUS_CMD_PAGE_PLUS_READ        0x06
+
+#define PMBUS_CMD_WRITE_PROTECT         0x10
+#define PMBUS_CMD_STORE_DEFAULT_ALL     0x11
+#define PMBUS_CMD_RESTORE_DEFAULT_ALL   0x12
+#define PMBUS_CMD_STORE_USER_ALL        0x15
+#define PMBUS_CMD_RESTORE_USER_ALL      0x16
+
+#define PMBUS_CMD_CAPABILITY            0x19
+#define PMBUS_CMD_QUERY                 0x1A
+#define PMBUS_CMD_SMBALERT_MASK         0x1B
+
+#define PMBUS_CMD_VOUT_MODE             0x20
+#define PMBUS_CMD_VOUT_COMMAND          0x21
+#define PMBUS_CMD_VOUT_TRIM             0x22
+#define PMBUS_CMD_VOUT_CAL_OFFSET       0x23
+#define PMBUS_CMD_VOUT_MAX              0x24
+#define PMBUS_CMD_VOUT_MARGIN_HIGH      0x25
+#define PMBUS_CMD_VOUT_MARGIN_LOW       0x26
+#define PMBUS_CMD_VOUT_TRANSITION_RATE  0x27
+#define PMBUS_CMD_VOUT_DROOP            0x28
+#define PMBUS_CMD_VOUT_SCALE_LOOP       0x29
+#define PMBUS_CMD_VOUT_SCALE_MONITOR    0x2A
+
+#define PMBUS_CMD_COEFFICIENTS          0x30
+#define PMBUS_CMD_POUT_MAX              0x31
+
+#define PMBUS_CMD_FREQUENCY_SWITCH      0x33
+
+#define PMBUS_CMD_VIN_ON                0x35
+#define PMBUS_CMD_VIN_OFF               0x36
+
+#define PMBUS_CMD_IOUT_CAL_GAIN         0x38
+#define PMBUS_CMD_IOUT_CAL_OFFSET       0x39
+
+#define PMBUS_CMD_VOUT_OV_FAULT_LIMIT   0x40
+#define PMBUS_CMD_VOUT_OV_FAULT_RESPONSE 0x41
+#define PMBUS_CMD_VOUT_OV_WARN_LIMIT    0x42
+#define PMBUS_CMD_VOUT_UV_WARN_LIMIT    0x43
+#define PMBUS_CMD_VOUT_UV_FAULT_LIMIT   0x44
+#define PMBUS_CMD_VOUT_UV_FAULT_RESPONSE 0x45
+
+#define PMBUS_CMD_IOUT_OC_FAULT_LIMIT   0x46
+#define PMBUS_CMD_IOUT_OC_FAULT_RESPONSE 0x47
+#define PMBUS_CMD_IOUT_OC_LV_FAULT_LIMIT 0x48
+#define PMBUS_CMD_IOUT_OC_LV_FAULT_RESPONSE 0x49
+#define PMBUS_CMD_IOUT_OC_WARN_LIMIT    0x4A
+#define PMBUS_CMD_IOUT_UC_FAULT_LIMIT   0x4B
+#define PMBUS_CMD_IOUT_UC_FAULT_RESPONSE 0x4C
+
+#define PMBUS_CMD_OT_FAULT_LIMIT        0x4F
+#define PMBUS_CMD_OT_FAULT_RESPONSE     0x50
+#define PMBUS_CMD_OT_WARN_LIMIT         0x51
+#define PMBUS_CMD_UT_WARN_LIMIT         0x52
+#define PMBUS_CMD_UT_FAULT_LIMIT        0x53
+#define PMBUS_CMD_UT_FAULT_RESPONSE     0x54
+#define PMBUS_CMD_VIN_OV_FAULT_LIMIT    0x55
+#define PMBUS_CMD_VIN_OV_FAULT_RESPONSE 0x56
+#define PMBUS_CMD_VIN_OV_WARN_LIMIT     0x57
+#define PMBUS_CMD_VIN_UV_WARN_LIMIT     0x58
+#define PMBUS_CMD_VIN_UV_FAULT_LIMIT    0x59
+#define PMBUS_CMD_VIN_UV_FAULT_RESPONSE 0x5A
+
+#define PMBUS_CMD_IIN_OC_FAULT_LIMIT    0x5B
+#define PMBUS_CMD_IIN_OC_FAULT_RESPONSE 0x5C
+#define PMBUS_CMD_IIN_OC_WARN_LIMIT     0x5D
+
+#define PMBUS_CMD_POWER_GOOD_ON         0x5E
+#define PMBUS_CMD_POWER_GOOD_OFF        0x5F
+#define PMBUS_CMD_TON_DELAY             0x60
+#define PMBUS_CMD_TON_RISE              0x61
+#define PMBUS_CMD_TON_MAX_FAULT_LIMIT   0x62
+#define PMBUS_CMD_TON_MAX_FAULT_RESPONSE 0x63
+#define PMBUS_CMD_TOFF_DELAY            0x64
+#define PMBUS_CMD_TOFF_FALL             0x65
+#define PMBUS_CMD_TOFF_MAX_WARN_LIMIT   0x66
+
+#define PMBUS_CMD_STATUS_BYTE           0x78
+#define PMBUS_CMD_STATUS_WORD           0x79
+#define PMBUS_CMD_STATUS_VOUT           0x7A
+#define PMBUS_CMD_STATUS_IOUT           0x7B
+#define PMBUS_CMD_STATUS_INPUT          0x7C
+#define PMBUS_CMD_STATUS_TEMPERATURE    0x7D
+#define PMBUS_CMD_STATUS_CML            0x7E
+#define PMBUS_CMD_STATUS_OTHER          0x7F
+#define PMBUS_CMD_STATUS_MFR_SPECIFIC   0x80
+
+#define PMBUS_CMD_READ_VIN              0x88
+#define PMBUS_CMD_READ_IIN              0x89
+#define PMBUS_CMD_READ_VCAP             0x8A
+#define PMBUS_CMD_READ_VOUT             0x8B
+#define PMBUS_CMD_READ_IOUT             0x8C
+#define PMBUS_CMD_READ_TEMPERATURE_1    0x8D
+#define PMBUS_CMD_READ_TEMPERATURE_2    0x8E
+#define PMBUS_CMD_READ_TEMPERATURE_3    0x8F
+#define PMBUS_CMD_READ_FAN_SPEED_1      0x90
+#define PMBUS_CMD_READ_FAN_SPEED_2      0x91
+#define PMBUS_CMD_READ_FAN_SPEED_3      0x92
+#define PMBUS_CMD_READ_FAN_SPEED_4      0x93
+#define PMBUS_CMD_READ_DUTY_CYCLE       0x94
+#define PMBUS_CMD_READ_FREQUENCY        0x95
+#define PMBUS_CMD_READ_POUT             0x96
+#define PMBUS_CMD_READ_PIN              0x97
+
+#define PMBUS_CMD_PMBUS_REVISION        0x98
+#define PMBUS_CMD_MFR_ID                0x99
+#define PMBUS_CMD_MFR_MODEL             0x9A
+#define PMBUS_CMD_MFR_REVISION          0x9B
+#define PMBUS_CMD_MFR_LOCATION          0x9C
+#define PMBUS_CMD_MFR_DATE              0x9D
+#define PMBUS_CMD_MFR_SERIAL            0x9E
+
+// 制造商特定命令（0xA0-0xFF）
+#define PMBUS_CMD_MFR_SPECIFIC_00       0xD0
+// ... 更多制造商命令
+</code></pre>
+<h3 id="_7">核心控制命令</h3>
+<p><strong>OPERATION命令（0x01）</strong>：</p>
+<pre><code>功能：控制设备操作状态
+
+数据格式：1字节
+
+位定义：
+┌───────────────────────────────────────┐
+│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0       │
+├───┼───┼───┼───┼───┼───┼───┼─────────┤
+│   │   │   │   │   │   │   │ 操作状态 │
+└───┴───┴───┴───┴───┴───┴───┴─────────┘
+
+操作状态值：
+0x00：立即关闭（Immediate Off）
+0x40：软关闭（Soft Off）
+0x80：开启（On）
+0xC0：裕度测试低（Margin Low）
+0xE0：裕度测试高（Margin High）
+
+使用场景：
+- 开启/关闭电源
+- 进入裕度测试模式
+- 紧急关闭
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// OPERATION命令值
+typedef enum {
+    PMBUS_OP_OFF_IMMEDIATE = 0x00,
+    PMBUS_OP_OFF_SOFT      = 0x40,
+    PMBUS_OP_ON            = 0x80,
+    PMBUS_OP_MARGIN_LOW    = 0xC0,
+    PMBUS_OP_MARGIN_HIGH   = 0xE0
+} PMBus_Operation_t;
+
+// 设置设备操作状态
+bool PMBus_SetOperation(uint8_t device_addr, PMBus_Operation_t operation) {
+    return PMBus_SendByte(device_addr, PMBUS_CMD_OPERATION, operation);
+}
+
+// 读取设备操作状态
+bool PMBus_GetOperation(uint8_t device_addr, PMBus_Operation_t *operation) {
+    uint8_t value;
+    if (PMBus_ReadByte(device_addr, PMBUS_CMD_OPERATION, &amp;value)) {
+        *operation = (PMBus_Operation_t)value;
+        return true;
+    }
+    return false;
+}
+
+// 开启电源
+bool PMBus_PowerOn(uint8_t device_addr) {
+    printf(&quot;Turning on power...\n&quot;);
+    return PMBus_SetOperation(device_addr, PMBUS_OP_ON);
+}
+
+// 关闭电源（软关闭）
+bool PMBus_PowerOff(uint8_t device_addr) {
+    printf(&quot;Turning off power (soft)...\n&quot;);
+    return PMBus_SetOperation(device_addr, PMBUS_OP_OFF_SOFT);
+}
+
+// 紧急关闭
+bool PMBus_EmergencyShutdown(uint8_t device_addr) {
+    printf(&quot;Emergency shutdown!\n&quot;);
+    return PMBus_SetOperation(device_addr, PMBUS_OP_OFF_IMMEDIATE);
+}
+
+// 进入裕度测试模式
+bool PMBus_MarginTest(uint8_t device_addr, bool high) {
+    PMBus_Operation_t op = high ? PMBUS_OP_MARGIN_HIGH : PMBUS_OP_MARGIN_LOW;
+    printf(&quot;Entering margin test mode (%s)...\n&quot;, high ? &quot;HIGH&quot; : &quot;LOW&quot;);
+    return PMBus_SetOperation(device_addr, op);
+}
+</code></pre>
+<p><strong>ON_OFF_CONFIG命令（0x02）</strong>：</p>
+<pre><code>功能：配置开关行为
+
+数据格式：1字节
+
+位定义：
+┌───────────────────────────────────────────────┐
+│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0               │
+├───┼───┼───┼───┼───┼───┼───┼─────────────────┤
+│   │   │   │   │PU │CMD│PIN│ CTRL引脚功能    │
+└───┴───┴───┴───┴───┴───┴───┴─────────────────┘
+
+位说明：
+- Bit 4 (PU)：上电时的操作
+  0：保持关闭
+  1：自动开启
+
+- Bit 3 (CMD)：OPERATION命令控制
+  0：禁用
+  1：启用
+
+- Bit 2 (PIN)：CONTROL引脚控制
+  0：禁用
+  1：启用
+
+- Bit 1-0：CONTROL引脚功能
+  00：引脚无效
+  01：引脚高电平开启
+  10：引脚低电平开启
+  11：保留
+
+常用配置：
+0x1E：上电自动开启，支持命令和引脚控制
+0x16：保持关闭，支持命令和引脚控制
+0x0A：仅支持命令控制
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// ON_OFF_CONFIG位定义
+#define PMBUS_ON_OFF_PU_MASK    0x10
+#define PMBUS_ON_OFF_CMD_MASK   0x08
+#define PMBUS_ON_OFF_PIN_MASK   0x04
+#define PMBUS_ON_OFF_CTRL_MASK  0x03
+
+typedef struct {
+    bool power_up_on;       // 上电自动开启
+    bool cmd_control;       // 命令控制使能
+    bool pin_control;       // 引脚控制使能
+    uint8_t pin_function;   // 引脚功能（0-3）
+} PMBus_OnOffConfig_t;
+
+// 配置开关行为
+bool PMBus_ConfigureOnOff(uint8_t device_addr, PMBus_OnOffConfig_t *config) {
+    uint8_t value = 0;
+
+    if (config-&gt;power_up_on) {
+        value |= PMBUS_ON_OFF_PU_MASK;
+    }
+
+    if (config-&gt;cmd_control) {
+        value |= PMBUS_ON_OFF_CMD_MASK;
+    }
+
+    if (config-&gt;pin_control) {
+        value |= PMBUS_ON_OFF_PIN_MASK;
+    }
+
+    value |= (config-&gt;pin_function &amp; PMBUS_ON_OFF_CTRL_MASK);
+
+    return PMBus_SendByte(device_addr, PMBUS_CMD_ON_OFF_CONFIG, value);
+}
+
+// 读取开关配置
+bool PMBus_GetOnOffConfig(uint8_t device_addr, PMBus_OnOffConfig_t *config) {
+    uint8_t value;
+
+    if (!PMBus_ReadByte(device_addr, PMBUS_CMD_ON_OFF_CONFIG, &amp;value)) {
+        return false;
+    }
+
+    config-&gt;power_up_on = (value &amp; PMBUS_ON_OFF_PU_MASK) != 0;
+    config-&gt;cmd_control = (value &amp; PMBUS_ON_OFF_CMD_MASK) != 0;
+    config-&gt;pin_control = (value &amp; PMBUS_ON_OFF_PIN_MASK) != 0;
+    config-&gt;pin_function = value &amp; PMBUS_ON_OFF_CTRL_MASK;
+
+    return true;
+}
+
+// 使用示例
+void OnOffConfig_Example(uint8_t device_addr) {
+    PMBus_OnOffConfig_t config;
+
+    // 配置：上电自动开启，支持命令和引脚控制
+    config.power_up_on = true;
+    config.cmd_control = true;
+    config.pin_control = true;
+    config.pin_function = 1;  // 引脚高电平开启
+
+    if (PMBus_ConfigureOnOff(device_addr, &amp;config)) {
+        printf(&quot;ON_OFF_CONFIG set successfully\n&quot;);
+    }
+
+    // 读取并显示配置
+    if (PMBus_GetOnOffConfig(device_addr, &amp;config)) {
+        printf(&quot;Power-up: %s\n&quot;, config.power_up_on ? &quot;ON&quot; : &quot;OFF&quot;);
+        printf(&quot;CMD control: %s\n&quot;, config.cmd_control ? &quot;Enabled&quot; : &quot;Disabled&quot;);
+        printf(&quot;PIN control: %s\n&quot;, config.pin_control ? &quot;Enabled&quot; : &quot;Disabled&quot;);
+        printf(&quot;PIN function: %d\n&quot;, config.pin_function);
+    }
+}
+</code></pre>
+<p><strong>CLEAR_FAULTS命令（0x03）</strong>：</p>
+<pre><code>功能：清除所有故障状态
+
+数据格式：Send Byte（无数据）
+
+使用方法：
+- 发送此命令清除所有故障标志
+- 清除STATUS寄存器中的故障位
+- 允许设备从故障状态恢复
+
+注意事项：
+- 必须先解决故障原因
+- 某些故障可能需要断电才能清除
+- 清除后设备可能自动重启
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 清除故障
+bool PMBus_ClearFaults(uint8_t device_addr) {
+    printf(&quot;Clearing all faults...\n&quot;);
+    return PMBus_SendByte(device_addr, PMBUS_CMD_CLEAR_FAULTS, 0x00);
+}
+
+// 清除故障并验证
+bool PMBus_ClearFaultsAndVerify(uint8_t device_addr) {
+    uint16_t status_before, status_after;
+
+    // 读取清除前的状态
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_STATUS_WORD, &amp;status_before)) {
+        return false;
+    }
+
+    printf(&quot;Status before clear: 0x%04X\n&quot;, status_before);
+
+    // 清除故障
+    if (!PMBus_ClearFaults(device_addr)) {
+        return false;
+    }
+
+    // 延时等待清除完成
+    HAL_Delay(100);
+
+    // 读取清除后的状态
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_STATUS_WORD, &amp;status_after)) {
+        return false;
+    }
+
+    printf(&quot;Status after clear: 0x%04X\n&quot;, status_after);
+
+    // 检查是否成功清除
+    if (status_after == 0x0000) {
+        printf(&quot;All faults cleared successfully\n&quot;);
+        return true;
+    } else {
+        printf(&quot;Warning: Some faults remain: 0x%04X\n&quot;, status_after);
+        return false;
+    }
+}
+</code></pre>
+<p><strong>PAGE命令（0x00）</strong>：</p>
+<pre><code>功能：选择多路输出的页面
+
+数据格式：1字节
+
+页面值：
+0x00-0x1F：页面0-31（最多32路输出）
+0xFF：所有页面（广播）
+
+使用场景：
+- 多路输出电源
+- 每路输出独立配置
+- 批量配置所有输出
+
+注意：
+- 发送PAGE命令后，后续命令作用于选定页面
+- PAGE=0xFF时，命令作用于所有页面
+- 单路输出设备可能不支持PAGE命令
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 选择页面
+bool PMBus_SelectPage(uint8_t device_addr, uint8_t page) {
+    if (page &gt; 0x1F &amp;&amp; page != 0xFF) {
+        printf(&quot;Error: Invalid page number %d\n&quot;, page);
+        return false;
+    }
+
+    return PMBus_SendByte(device_addr, PMBUS_CMD_PAGE, page);
+}
+
+// 读取当前页面
+bool PMBus_GetCurrentPage(uint8_t device_addr, uint8_t *page) {
+    return PMBus_ReceiveByte(device_addr, PMBUS_CMD_PAGE, page);
+}
+
+// 多页面操作示例
+void MultiPage_Example(uint8_t device_addr) {
+    // 配置第0路输出为3.3V
+    PMBus_SelectPage(device_addr, 0);
+    PMBus_SetVoltage(device_addr, 3.3);
+
+    // 配置第1路输出为5.0V
+    PMBus_SelectPage(device_addr, 1);
+    PMBus_SetVoltage(device_addr, 5.0);
+
+    // 配置第2路输出为12.0V
+    PMBus_SelectPage(device_addr, 2);
+    PMBus_SetVoltage(device_addr, 12.0);
+
+    // 开启所有输出
+    PMBus_SelectPage(device_addr, 0xFF);  // 选择所有页面
+    PMBus_PowerOn(device_addr);
+
+    printf(&quot;All outputs configured and enabled\n&quot;);
+}
+</code></pre>
+<h3 id="_8">电压配置命令</h3>
+<p><strong>VOUT_COMMAND命令（0x21）</strong>：</p>
+<pre><code>功能：设置输出电压目标值
+
+数据格式：2字节（Linear16或Direct格式）
+
+使用方法：
+1. 确定数据格式（读取VOUT_MODE）
+2. 将目标电压转换为对应格式
+3. 写入VOUT_COMMAND
+4. 设备调节输出到目标电压
+
+精度：
+- 取决于数据格式和指数
+- 通常0.1%-1%精度
+- 某些设备支持更高精度
+
+限制：
+- 不能超过VOUT_MAX
+- 受硬件能力限制
+- 可能有步进限制
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 设置输出电压
+bool PMBus_SetVoltage(uint8_t device_addr, float voltage) {
+    Linear16_Context_t context;
+    uint16_t vout_command;
+
+    // 初始化Linear16上下文
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 转换为Linear16格式
+    vout_command = Float_To_Linear16(voltage, &amp;context);
+
+    // 写入VOUT_COMMAND
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_COMMAND, vout_command)) {
+        return false;
+    }
+
+    printf(&quot;Set voltage to %.3fV (command: 0x%04X)\n&quot;, voltage, vout_command);
+
+    return true;
+}
+
+// 读取电压设置
+bool PMBus_GetVoltageCommand(uint8_t device_addr, float *voltage) {
+    Linear16_Context_t context;
+    uint16_t vout_command;
+
+    // 初始化上下文
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 读取VOUT_COMMAND
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_VOUT_COMMAND, &amp;vout_command)) {
+        return false;
+    }
+
+    // 转换为浮点数
+    *voltage = Linear16_To_Float(vout_command, &amp;context);
+
+    return true;
+}
+
+// 电压调节示例
+void VoltageControl_Example(uint8_t device_addr) {
+    float target_voltage = 3.3;
+    float actual_voltage;
+
+    // 设置目标电压
+    if (PMBus_SetVoltage(device_addr, target_voltage)) {
+        printf(&quot;Voltage command set to %.2fV\n&quot;, target_voltage);
+
+        // 等待稳定
+        HAL_Delay(100);
+
+        // 读取实际输出电压
+        if (PMBus_ReadVoltage(device_addr, &amp;actual_voltage)) {
+            printf(&quot;Actual output voltage: %.3fV\n&quot;, actual_voltage);
+
+            // 计算误差
+            float error = (actual_voltage - target_voltage) / target_voltage * 100;
+            printf(&quot;Error: %.2f%%\n&quot;, error);
+        }
+    }
+}
+</code></pre>
+<p><strong>VOUT_MAX命令（0x24）</strong>：</p>
+<pre><code>功能：设置最大输出电压限制
+
+数据格式：2字节（Linear16或Direct格式）
+
+作用：
+- 保护负载免受过压损坏
+- 限制VOUT_COMMAND的最大值
+- 硬件保护的软件补充
+
+典型值：
+- 3.3V输出：VOUT_MAX = 3.6V
+- 5V输出：VOUT_MAX = 5.5V
+- 12V输出：VOUT_MAX = 13.2V
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 设置最大电压限制
+bool PMBus_SetVoltageMax(uint8_t device_addr, float max_voltage) {
+    Linear16_Context_t context;
+    uint16_t vout_max;
+
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    vout_max = Float_To_Linear16(max_voltage, &amp;context);
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_MAX, vout_max)) {
+        return false;
+    }
+
+    printf(&quot;Set maximum voltage to %.2fV\n&quot;, max_voltage);
+
+    return true;
+}
+
+// 读取最大电压限制
+bool PMBus_GetVoltageMax(uint8_t device_addr, float *max_voltage) {
+    Linear16_Context_t context;
+    uint16_t vout_max;
+
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_VOUT_MAX, &amp;vout_max)) {
+        return false;
+    }
+
+    *max_voltage = Linear16_To_Float(vout_max, &amp;context);
+
+    return true;
+}
+</code></pre>
+<p><strong>VOUT_MARGIN_HIGH/LOW命令（0x25/0x26）</strong>：</p>
+<pre><code>功能：设置裕度测试电压
+
+数据格式：2字节（Linear16或Direct格式）
+
+裕度测试：
+- MARGIN_HIGH：高于标称电压的测试值（如+5%）
+- MARGIN_LOW：低于标称电压的测试值（如-5%）
+- 用于测试负载在电压变化时的稳定性
+
+使用流程：
+1. 设置VOUT_MARGIN_HIGH和VOUT_MARGIN_LOW
+2. 发送OPERATION命令进入裕度测试模式
+3. 观察负载行为
+4. 返回正常模式
+
+示例：
+标称电压：3.3V
+MARGIN_HIGH：3.465V (+5%)
+MARGIN_LOW：3.135V (-5%)
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 配置裕度测试
+bool PMBus_ConfigureMarginTest(uint8_t device_addr, 
+                                float nominal_voltage,
+                                float margin_percent) {
+    Linear16_Context_t context;
+    float margin_high, margin_low;
+    uint16_t high_value, low_value;
+
+    // 初始化上下文
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 计算裕度电压
+    margin_high = nominal_voltage * (1.0 + margin_percent / 100.0);
+    margin_low = nominal_voltage * (1.0 - margin_percent / 100.0);
+
+    printf(&quot;Configuring margin test:\n&quot;);
+    printf(&quot;  Nominal: %.3fV\n&quot;, nominal_voltage);
+    printf(&quot;  High: %.3fV (+%.1f%%)\n&quot;, margin_high, margin_percent);
+    printf(&quot;  Low: %.3fV (-%.1f%%)\n&quot;, margin_low, margin_percent);
+
+    // 转换并写入
+    high_value = Float_To_Linear16(margin_high, &amp;context);
+    low_value = Float_To_Linear16(margin_low, &amp;context);
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_MARGIN_HIGH, high_value)) {
+        return false;
+    }
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_MARGIN_LOW, low_value)) {
+        return false;
+    }
+
+    return true;
+}
+
+// 执行裕度测试
+bool PMBus_RunMarginTest(uint8_t device_addr, uint32_t test_duration_ms) {
+    float voltage;
+
+    printf(&quot;\n=== Starting Margin Test ===\n&quot;);
+
+    // 测试高裕度
+    printf(&quot;\nTesting MARGIN HIGH...\n&quot;);
+    PMBus_SetOperation(device_addr, PMBUS_OP_MARGIN_HIGH);
+    HAL_Delay(test_duration_ms);
+
+    if (PMBus_ReadVoltage(device_addr, &amp;voltage)) {
+        printf(&quot;Voltage at MARGIN HIGH: %.3fV\n&quot;, voltage);
+    }
+
+    // 测试低裕度
+    printf(&quot;\nTesting MARGIN LOW...\n&quot;);
+    PMBus_SetOperation(device_addr, PMBUS_OP_MARGIN_LOW);
+    HAL_Delay(test_duration_ms);
+
+    if (PMBus_ReadVoltage(device_addr, &amp;voltage)) {
+        printf(&quot;Voltage at MARGIN LOW: %.3fV\n&quot;, voltage);
+    }
+
+    // 返回正常模式
+    printf(&quot;\nReturning to normal operation...\n&quot;);
+    PMBus_SetOperation(device_addr, PMBUS_OP_ON);
+    HAL_Delay(100);
+
+    if (PMBus_ReadVoltage(device_addr, &amp;voltage)) {
+        printf(&quot;Voltage at normal: %.3fV\n&quot;, voltage);
+    }
+
+    printf(&quot;\n=== Margin Test Complete ===\n&quot;);
+
+    return true;
+}
+</code></pre>
+<h3 id="_9">遥测读取命令</h3>
+<p><strong>READ_VOUT命令（0x8B）</strong>：</p>
+<pre><code>功能：读取实际输出电压
+
+数据格式：2字节（Linear16或Direct格式）
+
+特点：
+- 实时测量值
+- 高精度ADC采样
+- 通常10-12位分辨率
+- 更新频率：10-100Hz
+
+应用：
+- 电压监控
+- 闭环控制
+- 故障检测
+- 数据记录
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 读取输出电压
+bool PMBus_ReadVoltage(uint8_t device_addr, float *voltage) {
+    Linear16_Context_t context;
+    uint16_t vout_raw;
+
+    // 初始化上下文
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 读取原始数据
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_READ_VOUT, &amp;vout_raw)) {
+        return false;
+    }
+
+    // 转换为浮点数
+    *voltage = Linear16_To_Float(vout_raw, &amp;context);
+
+    return true;
+}
+
+// 连续监控电压
+void PMBus_MonitorVoltage(uint8_t device_addr, uint32_t duration_ms) {
+    uint32_t start_time = HAL_GetTick();
+    float voltage;
+    float min_voltage = 999.0;
+    float max_voltage = 0.0;
+    float sum_voltage = 0.0;
+    uint32_t sample_count = 0;
+
+    printf(&quot;Monitoring voltage for %lu ms...\n&quot;, duration_ms);
+
+    while (HAL_GetTick() - start_time &lt; duration_ms) {
+        if (PMBus_ReadVoltage(device_addr, &amp;voltage)) {
+            // 更新统计
+            if (voltage &lt; min_voltage) min_voltage = voltage;
+            if (voltage &gt; max_voltage) max_voltage = voltage;
+            sum_voltage += voltage;
+            sample_count++;
+
+            printf(&quot;%.3fV &quot;, voltage);
+            if (sample_count % 10 == 0) printf(&quot;\n&quot;);
+        }
+
+        HAL_Delay(100);  // 100ms采样间隔
+    }
+
+    // 打印统计信息
+    printf(&quot;\n\n=== Voltage Statistics ===\n&quot;);
+    printf(&quot;Samples: %lu\n&quot;, sample_count);
+    printf(&quot;Min: %.3fV\n&quot;, min_voltage);
+    printf(&quot;Max: %.3fV\n&quot;, max_voltage);
+    printf(&quot;Avg: %.3fV\n&quot;, sum_voltage / sample_count);
+    printf(&quot;Range: %.3fV\n&quot;, max_voltage - min_voltage);
+}
+</code></pre>
+<p><strong>READ_IOUT命令（0x8C）</strong>：</p>
+<pre><code>功能：读取实际输出电流
+
+数据格式：2字节（Linear11格式）
+
+特点：
+- 实时电流测量
+- 通常使用电流检测电阻
+- 精度：1-5%
+- 用于过流保护和功率计算
+
+应用：
+- 负载监控
+- 过流检测
+- 功率计算
+- 效率分析
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 读取输出电流
+bool PMBus_ReadCurrent(uint8_t device_addr, float *current) {
+    uint16_t iout_raw;
+
+    // 读取原始数据
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_READ_IOUT, &amp;iout_raw)) {
+        return false;
+    }
+
+    // 转换为浮点数（Linear11格式）
+    *current = Linear11_To_Float(iout_raw);
+
+    return true;
+}
+
+// 读取输出功率
+bool PMBus_ReadPower(uint8_t device_addr, float *power) {
+    uint16_t pout_raw;
+
+    // 读取原始数据
+    if (!PMBus_ReadWord(device_addr, PMBUS_CMD_READ_POUT, &amp;pout_raw)) {
+        return false;
+    }
+
+    // 转换为浮点数（Linear11格式）
+    *power = Linear11_To_Float(pout_raw);
+
+    return true;
+}
+
+// 计算效率
+float PMBus_CalculateEfficiency(uint8_t device_addr) {
+    float vin, iin, vout, iout;
+    float pin, pout, efficiency;
+
+    // 读取输入参数
+    if (!PMBus_ReadInputVoltage(device_addr, &amp;vin)) return 0.0;
+    if (!PMBus_ReadInputCurrent(device_addr, &amp;iin)) return 0.0;
+
+    // 读取输出参数
+    if (!PMBus_ReadVoltage(device_addr, &amp;vout)) return 0.0;
+    if (!PMBus_ReadCurrent(device_addr, &amp;iout)) return 0.0;
+
+    // 计算功率
+    pin = vin * iin;
+    pout = vout * iout;
+
+    // 计算效率
+    if (pin &gt; 0.0) {
+        efficiency = (pout / pin) * 100.0;
+    } else {
+        efficiency = 0.0;
+    }
+
+    printf(&quot;\n=== Power Analysis ===\n&quot;);
+    printf(&quot;Input: %.2fV × %.3fA = %.2fW\n&quot;, vin, iin, pin);
+    printf(&quot;Output: %.2fV × %.3fA = %.2fW\n&quot;, vout, iout, pout);
+    printf(&quot;Efficiency: %.2f%%\n&quot;, efficiency);
+
+    return efficiency;
+}
+</code></pre>
+<p><strong>READ_TEMPERATURE命令（0x8D/0x8E/0x8F）</strong>：</p>
+<pre><code>功能：读取温度传感器数据
+
+命令：
+- READ_TEMPERATURE_1 (0x8D)：主温度传感器
+- READ_TEMPERATURE_2 (0x8E)：次温度传感器
+- READ_TEMPERATURE_3 (0x8F)：第三温度传感器
+
+数据格式：2字节（Linear11格式）
+
+单位：摄氏度（°C）
+
+传感器位置：
+- 温度1：通常是功率器件温度
+- 温度2：通常是环境温度
+- 温度3：通常是输出端温度
+
+应用：
+- 过温保护
+- 风扇控制
+- 降额运行
+- 可靠性监控
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 读取温度
+bool PMBus_ReadTemperature(uint8_t device_addr, uint8_t sensor, float *temperature) {
+    uint8_t cmd;
+    uint16_t temp_raw;
+
+    // 选择温度传感器命令
+    switch (sensor) {
+        case 1:
+            cmd = PMBUS_CMD_READ_TEMPERATURE_1;
+            break;
+        case 2:
+            cmd = PMBUS_CMD_READ_TEMPERATURE_2;
+            break;
+        case 3:
+            cmd = PMBUS_CMD_READ_TEMPERATURE_3;
+            break;
+        default:
+            return false;
+    }
+
+    // 读取原始数据
+    if (!PMBus_ReadWord(device_addr, cmd, &amp;temp_raw)) {
+        return false;
+    }
+
+    // 转换为浮点数（Linear11格式）
+    *temperature = Linear11_To_Float(temp_raw);
+
+    return true;
+}
+
+// 读取所有温度
+void PMBus_ReadAllTemperatures(uint8_t device_addr) {
+    float temp1, temp2, temp3;
+
+    printf(&quot;\n=== Temperature Readings ===\n&quot;);
+
+    if (PMBus_ReadTemperature(device_addr, 1, &amp;temp1)) {
+        printf(&quot;Temperature 1 (Power): %.1f°C\n&quot;, temp1);
+    }
+
+    if (PMBus_ReadTemperature(device_addr, 2, &amp;temp2)) {
+        printf(&quot;Temperature 2 (Ambient): %.1f°C\n&quot;, temp2);
+    }
+
+    if (PMBus_ReadTemperature(device_addr, 3, &amp;temp3)) {
+        printf(&quot;Temperature 3 (Output): %.1f°C\n&quot;, temp3);
+    }
+}
+
+// 温度监控和保护
+void PMBus_TemperatureMonitor(uint8_t device_addr, float threshold) {
+    float temperature;
+
+    while (1) {
+        if (PMBus_ReadTemperature(device_addr, 1, &amp;temperature)) {
+            printf(&quot;Temperature: %.1f°C\n&quot;, temperature);
+
+            // 检查过温
+            if (temperature &gt; threshold) {
+                printf(&quot;WARNING: Over temperature! (%.1f°C &gt; %.1f°C)\n&quot;,
+                       temperature, threshold);
+
+                // 降额运行或关闭
+                if (temperature &gt; threshold + 10.0) {
+                    printf(&quot;CRITICAL: Emergency shutdown!\n&quot;);
+                    PMBus_EmergencyShutdown(device_addr);
+                    break;
+                }
+            }
+        }
+
+        HAL_Delay(1000);  // 1秒采样间隔
+    }
+}
+</code></pre>
+<h3 id="_10">状态监控命令</h3>
+<p><strong>STATUS_WORD命令（0x79）</strong>：</p>
+<pre><code>功能：读取设备总体状态
+
+数据格式：2字节
+
+位定义：
+┌─────────────────────────────────────────────────────┐
+│ 15 │ 14 │ 13 │ 12 │ 11 │ 10 │ 9 │ 8 │ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0 │
+├────┼────┼────┼────┼────┼────┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+│VOUT│IOUT│INPUT│MFR │POWER│CML│   │TEMP│OFF│BUSY│OTHER│UNKNOWN│NONE│
+└────┴────┴────┴────┴────┴────┴───┴────┴────┴────┴────┴────────┴────┘
+
+位说明：
+Bit 15 (VOUT)：输出电压故障/警告
+Bit 14 (IOUT)：输出电流故障/警告
+Bit 13 (INPUT)：输入故障/警告
+Bit 12 (MFR)：制造商特定故障
+Bit 11 (POWER_GOOD#)：电源好信号无效
+Bit 10 (FANS)：风扇故障/警告
+Bit 9 (OTHER)：其他故障/警告
+Bit 8 (UNKNOWN)：未知故障
+Bit 7 (BUSY)：设备忙
+Bit 6 (OFF)：设备关闭
+Bit 5 (VOUT_OV)：输出过压故障
+Bit 4 (IOUT_OC)：输出过流故障
+Bit 3 (VIN_UV)：输入欠压故障
+Bit 2 (TEMPERATURE)：温度故障/警告
+Bit 1 (CML)：通信/内存/逻辑故障
+Bit 0 (NONE)：无故障（保留）
+
+使用：
+- 快速检查设备状态
+- 确定需要读取哪些详细状态寄存器
+- 故障诊断的起点
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// STATUS_WORD位定义
+#define PMBUS_STATUS_VOUT       (1 &lt;&lt; 15)
+#define PMBUS_STATUS_IOUT       (1 &lt;&lt; 14)
+#define PMBUS_STATUS_INPUT      (1 &lt;&lt; 13)
+#define PMBUS_STATUS_MFR        (1 &lt;&lt; 12)
+#define PMBUS_STATUS_POWER_GOOD (1 &lt;&lt; 11)
+#define PMBUS_STATUS_FANS       (1 &lt;&lt; 10)
+#define PMBUS_STATUS_OTHER      (1 &lt;&lt; 9)
+#define PMBUS_STATUS_UNKNOWN    (1 &lt;&lt; 8)
+#define PMBUS_STATUS_BUSY       (1 &lt;&lt; 7)
+#define PMBUS_STATUS_OFF        (1 &lt;&lt; 6)
+#define PMBUS_STATUS_VOUT_OV    (1 &lt;&lt; 5)
+#define PMBUS_STATUS_IOUT_OC    (1 &lt;&lt; 4)
+#define PMBUS_STATUS_VIN_UV     (1 &lt;&lt; 3)
+#define PMBUS_STATUS_TEMPERATURE (1 &lt;&lt; 2)
+#define PMBUS_STATUS_CML        (1 &lt;&lt; 1)
+
+// 读取状态字
+bool PMBus_ReadStatusWord(uint8_t device_addr, uint16_t *status) {
+    return PMBus_ReadWord(device_addr, PMBUS_CMD_STATUS_WORD, status);
+}
+
+// 解析并打印状态
+void PMBus_PrintStatus(uint16_t status) {
+    printf(&quot;\n=== Device Status (0x%04X) ===\n&quot;, status);
+
+    if (status == 0x0000) {
+        printf(&quot;No faults or warnings\n&quot;);
+        return;
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT) {
+        printf(&quot;[VOUT] Output voltage fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT) {
+        printf(&quot;[IOUT] Output current fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_INPUT) {
+        printf(&quot;[INPUT] Input fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_MFR) {
+        printf(&quot;[MFR] Manufacturer specific fault\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_POWER_GOOD) {
+        printf(&quot;[POWER_GOOD] Power good signal deasserted\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_FANS) {
+        printf(&quot;[FANS] Fan fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_OTHER) {
+        printf(&quot;[OTHER] Other fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_UNKNOWN) {
+        printf(&quot;[UNKNOWN] Unknown fault\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_BUSY) {
+        printf(&quot;[BUSY] Device is busy\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_OFF) {
+        printf(&quot;[OFF] Device is off\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_OV) {
+        printf(&quot;[VOUT_OV] Output overvoltage fault\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_OC) {
+        printf(&quot;[IOUT_OC] Output overcurrent fault\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VIN_UV) {
+        printf(&quot;[VIN_UV] Input undervoltage fault\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_TEMPERATURE) {
+        printf(&quot;[TEMPERATURE] Temperature fault/warning\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_CML) {
+        printf(&quot;[CML] Communication/Memory/Logic fault\n&quot;);
+    }
+}
+
+// 检查设备健康状态
+bool PMBus_CheckHealth(uint8_t device_addr) {
+    uint16_t status;
+
+    if (!PMBus_ReadStatusWord(device_addr, &amp;status)) {
+        printf(&quot;Error: Failed to read status\n&quot;);
+        return false;
+    }
+
+    PMBus_PrintStatus(status);
+
+    // 检查关键故障
+    uint16_t critical_faults = PMBUS_STATUS_VOUT_OV | 
+                               PMBUS_STATUS_IOUT_OC |
+                               PMBUS_STATUS_VIN_UV |
+                               PMBUS_STATUS_TEMPERATURE;
+
+    if (status &amp; critical_faults) {
+        printf(&quot;\nCRITICAL: Device has critical faults!\n&quot;);
+        return false;
+    }
+
+    if (status == 0x0000) {
+        printf(&quot;\nDevice is healthy\n&quot;);
+        return true;
+    }
+
+    printf(&quot;\nDevice has warnings but is operational\n&quot;);
+    return true;
+}
+</code></pre>
+<p><strong>STATUS_VOUT命令（0x7A）</strong>：</p>
+<pre><code>功能：读取输出电压详细状态
+
+数据格式：1字节
+
+位定义：
+┌───────────────────────────────────────────┐
+│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0           │
+├───┼───┼───┼───┼───┼───┼───┼─────────────┤
+│OV │OV │UV │UV │MAX│   │   │VOUT跟踪错误 │
+│故障│警告│警告│故障│   │   │             │
+└───┴───┴───┴───┴───┴───┴───┴─────────────┘
+
+位说明：
+Bit 7：过压故障（VOUT &gt; OV_FAULT_LIMIT）
+Bit 6：过压警告（VOUT &gt; OV_WARN_LIMIT）
+Bit 5：欠压警告（VOUT &lt; UV_WARN_LIMIT）
+Bit 4：欠压故障（VOUT &lt; UV_FAULT_LIMIT）
+Bit 3：VOUT达到最大值
+Bit 2-1：保留
+Bit 0：VOUT跟踪错误
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// STATUS_VOUT位定义
+#define PMBUS_STATUS_VOUT_OV_FAULT  (1 &lt;&lt; 7)
+#define PMBUS_STATUS_VOUT_OV_WARN   (1 &lt;&lt; 6)
+#define PMBUS_STATUS_VOUT_UV_WARN   (1 &lt;&lt; 5)
+#define PMBUS_STATUS_VOUT_UV_FAULT  (1 &lt;&lt; 4)
+#define PMBUS_STATUS_VOUT_MAX       (1 &lt;&lt; 3)
+#define PMBUS_STATUS_VOUT_TRACKING  (1 &lt;&lt; 0)
+
+// 读取输出电压状态
+bool PMBus_ReadVoutStatus(uint8_t device_addr, uint8_t *status) {
+    return PMBus_ReadByte(device_addr, PMBUS_CMD_STATUS_VOUT, status);
+}
+
+// 解析输出电压状态
+void PMBus_PrintVoutStatus(uint8_t status) {
+    printf(&quot;\n=== VOUT Status (0x%02X) ===\n&quot;, status);
+
+    if (status == 0x00) {
+        printf(&quot;Output voltage is normal\n&quot;);
+        return;
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_OV_FAULT) {
+        printf(&quot;[FAULT] Output overvoltage\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_OV_WARN) {
+        printf(&quot;[WARNING] Output voltage high\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_UV_WARN) {
+        printf(&quot;[WARNING] Output voltage low\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_UV_FAULT) {
+        printf(&quot;[FAULT] Output undervoltage\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_MAX) {
+        printf(&quot;[INFO] Output at maximum\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_VOUT_TRACKING) {
+        printf(&quot;[ERROR] Voltage tracking error\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>STATUS_IOUT命令（0x7B）</strong>：</p>
+<pre><code>功能：读取输出电流详细状态
+
+数据格式：1字节
+
+位定义：
+┌───────────────────────────────────────────┐
+│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0           │
+├───┼───┼───┼───┼───┼───┼───┼─────────────┤
+│OC │OC │OC │UC │UC │   │POUT│POUT        │
+│故障│LV │警告│故障│警告│   │OV  │OP       │
+└───┴───┴───┴───┴───┴───┴───┴─────────────┘
+
+位说明：
+Bit 7：过流故障
+Bit 6：低压过流故障
+Bit 5：过流警告
+Bit 4：欠流故障
+Bit 3：欠流警告
+Bit 2：保留
+Bit 1：输出功率过载
+Bit 0：输出功率限制运行
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// STATUS_IOUT位定义
+#define PMBUS_STATUS_IOUT_OC_FAULT    (1 &lt;&lt; 7)
+#define PMBUS_STATUS_IOUT_OC_LV_FAULT (1 &lt;&lt; 6)
+#define PMBUS_STATUS_IOUT_OC_WARN     (1 &lt;&lt; 5)
+#define PMBUS_STATUS_IOUT_UC_FAULT    (1 &lt;&lt; 4)
+#define PMBUS_STATUS_IOUT_UC_WARN     (1 &lt;&lt; 3)
+#define PMBUS_STATUS_POUT_OP_FAULT    (1 &lt;&lt; 1)
+#define PMBUS_STATUS_POUT_OP_WARN     (1 &lt;&lt; 0)
+
+// 读取输出电流状态
+bool PMBus_ReadIoutStatus(uint8_t device_addr, uint8_t *status) {
+    return PMBus_ReadByte(device_addr, PMBUS_CMD_STATUS_IOUT, status);
+}
+
+// 解析输出电流状态
+void PMBus_PrintIoutStatus(uint8_t status) {
+    printf(&quot;\n=== IOUT Status (0x%02X) ===\n&quot;, status);
+
+    if (status == 0x00) {
+        printf(&quot;Output current is normal\n&quot;);
+        return;
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_OC_FAULT) {
+        printf(&quot;[FAULT] Output overcurrent\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_OC_LV_FAULT) {
+        printf(&quot;[FAULT] Output overcurrent at low voltage\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_OC_WARN) {
+        printf(&quot;[WARNING] Output current high\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_UC_FAULT) {
+        printf(&quot;[FAULT] Output undercurrent\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_IOUT_UC_WARN) {
+        printf(&quot;[WARNING] Output current low\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_POUT_OP_FAULT) {
+        printf(&quot;[FAULT] Output power overload\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_POUT_OP_WARN) {
+        printf(&quot;[WARNING] Output power limit\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>STATUS_TEMPERATURE命令（0x7D）</strong>：</p>
+<pre><code>功能：读取温度详细状态
+
+数据格式：1字节
+
+位定义：
+┌───────────────────────────────────────────┐
+│ 7 │ 6 │ 5 │ 4 │ 3 │ 2 │ 1 │ 0           │
+├───┼───┼───┼───┼───┼───┼───┼─────────────┤
+│OT │OT │UT │UT │   │   │   │             │
+│故障│警告│警告│故障│   │   │             │
+└───┴───┴───┴───┴───┴───┴───┴─────────────┘
+
+位说明：
+Bit 7：过温故障
+Bit 6：过温警告
+Bit 5：欠温警告
+Bit 4：欠温故障
+Bit 3-0：保留
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// STATUS_TEMPERATURE位定义
+#define PMBUS_STATUS_OT_FAULT  (1 &lt;&lt; 7)
+#define PMBUS_STATUS_OT_WARN   (1 &lt;&lt; 6)
+#define PMBUS_STATUS_UT_WARN   (1 &lt;&lt; 5)
+#define PMBUS_STATUS_UT_FAULT  (1 &lt;&lt; 4)
+
+// 读取温度状态
+bool PMBus_ReadTemperatureStatus(uint8_t device_addr, uint8_t *status) {
+    return PMBus_ReadByte(device_addr, PMBUS_CMD_STATUS_TEMPERATURE, status);
+}
+
+// 解析温度状态
+void PMBus_PrintTemperatureStatus(uint8_t status) {
+    printf(&quot;\n=== Temperature Status (0x%02X) ===\n&quot;, status);
+
+    if (status == 0x00) {
+        printf(&quot;Temperature is normal\n&quot;);
+        return;
+    }
+
+    if (status &amp; PMBUS_STATUS_OT_FAULT) {
+        printf(&quot;[FAULT] Over temperature\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_OT_WARN) {
+        printf(&quot;[WARNING] Temperature high\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_UT_WARN) {
+        printf(&quot;[WARNING] Temperature low\n&quot;);
+    }
+
+    if (status &amp; PMBUS_STATUS_UT_FAULT) {
+        printf(&quot;[FAULT] Under temperature\n&quot;);
+    }
+}
+
+// 综合状态检查
+void PMBus_ComprehensiveStatusCheck(uint8_t device_addr) {
+    uint16_t status_word;
+    uint8_t status_vout, status_iout, status_temp;
+
+    printf(&quot;\n========== Comprehensive Status Check ==========\n&quot;);
+
+    // 读取STATUS_WORD
+    if (PMBus_ReadStatusWord(device_addr, &amp;status_word)) {
+        PMBus_PrintStatus(status_word);
+
+        // 根据STATUS_WORD读取详细状态
+        if (status_word &amp; PMBUS_STATUS_VOUT) {
+            if (PMBus_ReadVoutStatus(device_addr, &amp;status_vout)) {
+                PMBus_PrintVoutStatus(status_vout);
+            }
+        }
+
+        if (status_word &amp; PMBUS_STATUS_IOUT) {
+            if (PMBus_ReadIoutStatus(device_addr, &amp;status_iout)) {
+                PMBus_PrintIoutStatus(status_iout);
+            }
+        }
+
+        if (status_word &amp; PMBUS_STATUS_TEMPERATURE) {
+            if (PMBus_ReadTemperatureStatus(device_addr, &amp;status_temp)) {
+                PMBus_PrintTemperatureStatus(status_temp);
+            }
+        }
+    }
+
+    printf(&quot;\n===============================================\n&quot;);
+}
+</code></pre>
+<h3 id="_11">故障限制配置命令</h3>
+<p><strong>VOUT_OV_FAULT_LIMIT命令（0x40）</strong>：</p>
+<pre><code>功能：设置输出过压故障限制
+
+数据格式：2字节（Linear16或Direct格式）
+
+作用：
+- 当VOUT &gt; OV_FAULT_LIMIT时触发故障
+- 通常设置为标称电压的110%-120%
+- 触发后根据VOUT_OV_FAULT_RESPONSE执行动作
+
+示例：
+3.3V输出：OV_FAULT_LIMIT = 3.6V (109%)
+5V输出：OV_FAULT_LIMIT = 5.5V (110%)
+12V输出：OV_FAULT_LIMIT = 13.2V (110%)
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 配置过压保护
+bool PMBus_ConfigureOVP(uint8_t device_addr, 
+                        float nominal_voltage,
+                        float ov_percent) {
+    Linear16_Context_t context;
+    float ov_limit;
+    uint16_t ov_value;
+
+    // 初始化上下文
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 计算过压限制
+    ov_limit = nominal_voltage * (1.0 + ov_percent / 100.0);
+
+    printf(&quot;Configuring OVP:\n&quot;);
+    printf(&quot;  Nominal: %.2fV\n&quot;, nominal_voltage);
+    printf(&quot;  OV Limit: %.2fV (+%.1f%%)\n&quot;, ov_limit, ov_percent);
+
+    // 转换并写入
+    ov_value = Float_To_Linear16(ov_limit, &amp;context);
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_OV_FAULT_LIMIT, ov_value)) {
+        return false;
+    }
+
+    return true;
+}
+
+// 配置欠压保护
+bool PMBus_ConfigureUVP(uint8_t device_addr,
+                        float nominal_voltage,
+                        float uv_percent) {
+    Linear16_Context_t context;
+    float uv_limit;
+    uint16_t uv_value;
+
+    if (!PMBus_InitLinear16Context(device_addr, &amp;context)) {
+        return false;
+    }
+
+    // 计算欠压限制
+    uv_limit = nominal_voltage * (1.0 - uv_percent / 100.0);
+
+    printf(&quot;Configuring UVP:\n&quot;);
+    printf(&quot;  Nominal: %.2fV\n&quot;, nominal_voltage);
+    printf(&quot;  UV Limit: %.2fV (-%.1f%%)\n&quot;, uv_limit, uv_percent);
+
+    uv_value = Float_To_Linear16(uv_limit, &amp;context);
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_VOUT_UV_FAULT_LIMIT, uv_value)) {
+        return false;
+    }
+
+    return true;
+}
+</code></pre>
+<p><strong>IOUT_OC_FAULT_LIMIT命令（0x46）</strong>：</p>
+<pre><code>功能：设置输出过流故障限制
+
+数据格式：2字节（Linear11格式）
+
+作用：
+- 当IOUT &gt; OC_FAULT_LIMIT时触发故障
+- 通常设置为额定电流的120%-150%
+- 保护电源和负载
+
+示例：
+10A输出：OC_FAULT_LIMIT = 12A (120%)
+20A输出：OC_FAULT_LIMIT = 25A (125%)
+</code></pre>
+<p><strong>实现代码</strong>：</p>
+<pre><code class="language-c">// 配置过流保护
+bool PMBus_ConfigureOCP(uint8_t device_addr,
+                        float rated_current,
+                        float oc_percent) {
+    float oc_limit;
+    uint16_t oc_value;
+
+    // 计算过流限制
+    oc_limit = rated_current * (1.0 + oc_percent / 100.0);
+
+    printf(&quot;Configuring OCP:\n&quot;);
+    printf(&quot;  Rated: %.2fA\n&quot;, rated_current);
+    printf(&quot;  OC Limit: %.2fA (+%.1f%%)\n&quot;, oc_limit, oc_percent);
+
+    // 转换为Linear11格式
+    oc_value = Float_To_Linear11(oc_limit);
+
+    if (!PMBus_WriteWord(device_addr, PMBUS_CMD_IOUT_OC_FAULT_LIMIT, oc_value)) {
+        return false;
+    }
+
+    return true;
+}
+
+// 配置完整的保护参数
+bool PMBus_ConfigureProtection(uint8_t device_addr,
+                                float nominal_voltage,
+                                float rated_current) {
+    printf(&quot;\n=== Configuring Protection Parameters ===\n&quot;);
+
+    // 配置过压保护（+10%）
+    if (!PMBus_ConfigureOVP(device_addr, nominal_voltage, 10.0)) {
+        printf(&quot;Error: Failed to configure OVP\n&quot;);
+        return false;
+    }
+
+    // 配置欠压保护（-10%）
+    if (!PMBus_ConfigureUVP(device_addr, nominal_voltage, 10.0)) {
+        printf(&quot;Error: Failed to configure UVP\n&quot;);
+        return false;
+    }
+
+    // 配置过流保护（+20%）
+    if (!PMBus_ConfigureOCP(device_addr, rated_current, 20.0)) {
+        printf(&quot;Error: Failed to configure OCP\n&quot;);
+        return false;
+    }
+
+    printf(&quot;\nProtection configured successfully\n&quot;);
+
+    return true;
+}
+</code></pre>
+<h2 id="pmbus_9">PMBus主机实现</h2>
+<h3 id="_12">硬件接口设计</h3>
+<p><strong>PMBus主机硬件连接</strong>：</p>
+<pre><code>微控制器（STM32/ESP32）
+ │
+ ├─ I2C/SMBus接口
+ │   │
+ │   ├─ SCL ──┬── 4.7kΩ上拉 ── VDD (3.3V)
+ │   │        │
+ │   │        ├── PMBus设备1 (SCL)
+ │   │        ├── PMBus设备2 (SCL)
+ │   │        └── PMBus设备3 (SCL)
+ │   │
+ │   └─ SDA ──┬── 4.7kΩ上拉 ── VDD (3.3V)
+ │            │
+ │            ├── PMBus设备1 (SDA)
+ │            ├── PMBus设备2 (SDA)
+ │            └── PMBus设备3 (SDA)
+ │
+ ├─ SMBALERT# ─┬── 10kΩ上拉 ── VDD
+ │             │
+ │             ├── PMBus设备1 (ALERT#)
+ │             ├── PMBus设备2 (ALERT#)
+ │             └── PMBus设备3 (ALERT#)
+ │
+ └─ CONTROL引脚
+     ├── GPIO1 ── PMBus设备1 (CTRL)
+     ├── GPIO2 ── PMBus设备2 (CTRL)
+     └── GPIO3 ── PMBus设备3 (CTRL)
+
+硬件设计要点：
+1. 上拉电阻：4.7kΩ适合100kHz，根据总线电容调整
+2. SMBALERT#：开漏输出，需要上拉电阻
+3. 电平转换：如果MCU是3.3V，PMBus设备是5V，需要电平转换器
+4. ESD保护：建议在SCL/SDA线上增加ESD保护
+5. PCB布线：SCL/SDA走线尽量短，避免长距离走线
+</code></pre>
+<h3 id="_13">软件架构设计</h3>
+<p><strong>PMBus驱动层次结构</strong>：</p>
+<pre><code class="language-c">// PMBus软件架构
+
+┌─────────────────────────────────────┐
+│      应用层（Application）           │
+│  - 电源管理策略                      │
+│  - 用户接口                          │
+│  - 数据记录                          │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│      PMBus API层                     │
+│  - PMBus_Init()                     │
+│  - PMBus_SetVoltage()               │
+│  - PMBus_ReadTelemetry()            │
+│  - PMBus_ConfigureProtection()      │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│      PMBus命令层                     │
+│  - 命令编码/解码                     │
+│  - 数据格式转换                      │
+│  - 错误处理                          │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│      SMBus传输层                     │
+│  - Read/Write Byte/Word             │
+│  - Block Read/Write                 │
+│  - PEC计算和验证                     │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│      I2C HAL层                       │
+│  - I2C_Start/Stop                   │
+│  - I2C_WriteByte/ReadByte           │
+│  - 超时处理                          │
+└─────────────────────────────────────┘
+              ↓
+┌─────────────────────────────────────┐
+│      硬件层（Hardware）              │
+│  - I2C外设寄存器                     │
+│  - GPIO控制                          │
+│  - 中断处理                          │
+└─────────────────────────────────────┘
+</code></pre>
+<h3 id="pmbus_10">PMBus驱动实现</h3>
+<p><strong>PMBus设备对象</strong>：</p>
+<pre><code class="language-c">// PMBus设备配置
+typedef struct {
+    uint8_t address;              // 设备I2C地址
+    char name[32];                // 设备名称
+    uint8_t num_pages;            // 页面数量
+    bool supports_pec;            // 是否支持PEC
+    Linear16_Context_t linear16;  // Linear16上下文
+    DirectFormat_Context_t direct; // Direct格式上下文
+} PMBus_Device_t;
+
+// PMBus设备句柄
+typedef struct {
+    PMBus_Device_t device;        // 设备配置
+    I2C_HandleTypeDef *hi2c;      // I2C句柄
+    bool initialized;             // 初始化标志
+    uint32_t error_count;         // 错误计数
+    uint32_t transaction_count;   // 事务计数
+} PMBus_Handle_t;
+
+// PMBus管理器（管理多个设备）
+typedef struct {
+    PMBus_Handle_t devices[PMBUS_MAX_DEVICES];
+    uint8_t device_count;
+    I2C_HandleTypeDef *hi2c;
+} PMBus_Manager_t;
+
+// 全局PMBus管理器
+static PMBus_Manager_t g_pmbus_manager = {0};
+</code></pre>
+<p><strong>初始化函数</strong>：</p>
+<pre><code class="language-c">// 初始化PMBus管理器
+bool PMBus_ManagerInit(I2C_HandleTypeDef *hi2c) {
+    g_pmbus_manager.hi2c = hi2c;
+    g_pmbus_manager.device_count = 0;
+
+    printf(&quot;PMBus Manager initialized\n&quot;);
+
+    return true;
+}
+
+// 添加PMBus设备
+PMBus_Handle_t* PMBus_AddDevice(uint8_t address, const char *name) {
+    if (g_pmbus_manager.device_count &gt;= PMBUS_MAX_DEVICES) {
+        printf(&quot;Error: Maximum devices reached\n&quot;);
+        return NULL;
+    }
+
+    PMBus_Handle_t *handle = &amp;g_pmbus_manager.devices[g_pmbus_manager.device_count];
+
+    // 配置设备
+    handle-&gt;device.address = address;
+    strncpy(handle-&gt;device.name, name, sizeof(handle-&gt;device.name) - 1);
+    handle-&gt;hi2c = g_pmbus_manager.hi2c;
+    handle-&gt;initialized = false;
+    handle-&gt;error_count = 0;
+    handle-&gt;transaction_count = 0;
+
+    g_pmbus_manager.device_count++;
+
+    printf(&quot;Added PMBus device: %s (0x%02X)\n&quot;, name, address);
+
+    return handle;
+}
+
+// 初始化PMBus设备
+bool PMBus_DeviceInit(PMBus_Handle_t *handle) {
+    uint8_t pmbus_revision;
+    uint8_t capability;
+
+    printf(&quot;\nInitializing PMBus device: %s\n&quot;, handle-&gt;device.name);
+
+    // 读取PMBus版本
+    if (PMBus_ReadByte(handle-&gt;device.address, 
+                       PMBUS_CMD_PMBUS_REVISION, 
+                       &amp;pmbus_revision)) {
+        printf(&quot;  PMBus Revision: %d.%d\n&quot;, 
+               (pmbus_revision &gt;&gt; 4) &amp; 0x0F,
+               pmbus_revision &amp; 0x0F);
+    }
+
+    // 读取设备能力
+    if (PMBus_ReadByte(handle-&gt;device.address,
+                       PMBUS_CMD_CAPABILITY,
+                       &amp;capability)) {
+        printf(&quot;  Capability: 0x%02X\n&quot;, capability);
+        handle-&gt;device.supports_pec = (capability &amp; 0x80) != 0;
+        handle-&gt;device.num_pages = (capability &amp; 0x1F);
+
+        printf(&quot;    PEC Support: %s\n&quot;, 
+               handle-&gt;device.supports_pec ? &quot;Yes&quot; : &quot;No&quot;);
+        printf(&quot;    Pages: %d\n&quot;, handle-&gt;device.num_pages);
+    }
+
+    // 初始化Linear16上下文
+    if (!PMBus_InitLinear16Context(handle-&gt;device.address, 
+                                    &amp;handle-&gt;device.linear16)) {
+        printf(&quot;  Warning: Failed to init Linear16 context\n&quot;);
+    }
+
+    // 读取设备信息
+    uint8_t mfr_id[16];
+    uint8_t mfr_model[16];
+    uint8_t mfr_serial[16];
+    uint8_t count;
+
+    if (PMBus_BlockRead(handle-&gt;device.address, PMBUS_CMD_MFR_ID, 
+                        mfr_id, &amp;count)) {
+        mfr_id[count] = '\0';
+        printf(&quot;  Manufacturer: %s\n&quot;, mfr_id);
+    }
+
+    if (PMBus_BlockRead(handle-&gt;device.address, PMBUS_CMD_MFR_MODEL,
+                        mfr_model, &amp;count)) {
+        mfr_model[count] = '\0';
+        printf(&quot;  Model: %s\n&quot;, mfr_model);
+    }
+
+    if (PMBus_BlockRead(handle-&gt;device.address, PMBUS_CMD_MFR_SERIAL,
+                        mfr_serial, &amp;count)) {
+        mfr_serial[count] = '\0';
+        printf(&quot;  Serial: %s\n&quot;, mfr_serial);
+    }
+
+    handle-&gt;initialized = true;
+
+    printf(&quot;Device initialized successfully\n&quot;);
+
+    return true;
+}
+
+// 扫描PMBus总线
+void PMBus_ScanBus(void) {
+    printf(&quot;\n=== Scanning PMBus Bus ===\n&quot;);
+
+    for (uint8_t addr = 0x08; addr &lt;= 0x77; addr++) {
+        // 尝试Quick Command
+        if (PMBus_QuickCommand(addr, false)) {
+            printf(&quot;Found device at address 0x%02X\n&quot;, addr);
+
+            // 尝试读取设备信息
+            uint8_t mfr_id[16];
+            uint8_t count;
+            if (PMBus_BlockRead(addr, PMBUS_CMD_MFR_ID, mfr_id, &amp;count)) {
+                mfr_id[count] = '\0';
+                printf(&quot;  Manufacturer: %s\n&quot;, mfr_id);
+            }
+        }
+    }
+
+    printf(&quot;=== Scan Complete ===\n&quot;);
+}
+</code></pre>
+<h3 id="_14">高级功能实现</h3>
+<p><strong>电源排序控制</strong>：</p>
+<pre><code class="language-c">// 电源排序配置
+typedef struct {
+    PMBus_Handle_t *handle;
+    uint16_t delay_ms;        // 延时（毫秒）
+    float target_voltage;     // 目标电压
+} PowerSequence_Step_t;
+
+// 电源排序
+bool PMBus_PowerSequence(PowerSequence_Step_t *sequence, uint8_t num_steps) {
+    printf(&quot;\n=== Starting Power Sequence ===\n&quot;);
+
+    for (uint8_t i = 0; i &lt; num_steps; i++) {
+        PowerSequence_Step_t *step = &amp;sequence[i];
+
+        printf(&quot;\nStep %d: %s\n&quot;, i + 1, step-&gt;handle-&gt;device.name);
+        printf(&quot;  Target: %.2fV\n&quot;, step-&gt;target_voltage);
+        printf(&quot;  Delay: %dms\n&quot;, step-&gt;delay_ms);
+
+        // 设置电压
+        if (!PMBus_SetVoltage(step-&gt;handle-&gt;device.address, 
+                              step-&gt;target_voltage)) {
+            printf(&quot;  Error: Failed to set voltage\n&quot;);
+            return false;
+        }
+
+        // 开启电源
+        if (!PMBus_PowerOn(step-&gt;handle-&gt;device.address)) {
+            printf(&quot;  Error: Failed to power on\n&quot;);
+            return false;
+        }
+
+        // 等待稳定
+        HAL_Delay(step-&gt;delay_ms);
+
+        // 验证输出
+        float actual_voltage;
+        if (PMBus_ReadVoltage(step-&gt;handle-&gt;device.address, &amp;actual_voltage)) {
+            printf(&quot;  Actual: %.3fV\n&quot;, actual_voltage);
+
+            // 检查电压是否在范围内
+            float error = fabs(actual_voltage - step-&gt;target_voltage);
+            if (error &gt; step-&gt;target_voltage * 0.05) {  // 5%容差
+                printf(&quot;  Warning: Voltage out of range\n&quot;);
+            }
+        }
+
+        printf(&quot;  Step %d complete\n&quot;, i + 1);
+    }
+
+    printf(&quot;\n=== Power Sequence Complete ===\n&quot;);
+
+    return true;
+}
+
+// 使用示例
+void PowerSequence_Example(void) {
+    // 定义电源排序
+    PowerSequence_Step_t sequence[] = {
+        {&amp;psu_handle, 100, 12.0},    // 步骤1：12V电源，延时100ms
+        {&amp;vrm1_handle, 50, 3.3},     // 步骤2：3.3V VRM，延时50ms
+        {&amp;vrm2_handle, 50, 1.8},     // 步骤3：1.8V VRM，延时50ms
+        {&amp;vrm3_handle, 50, 1.2},     // 步骤4：1.2V VRM，延时50ms
+    };
+
+    PMBus_PowerSequence(sequence, sizeof(sequence) / sizeof(sequence[0]));
+}
+</code></pre>
+<p><strong>动态电压调节（DVS）</strong>：</p>
+<pre><code class="language-c">// DVS配置
+typedef struct {
+    float voltage_min;        // 最小电压
+    float voltage_max;        // 最大电压
+    float voltage_step;       // 电压步进
+    uint16_t transition_rate; // 转换速率（mV/μs）
+} DVS_Config_t;
+
+// 配置DVS
+bool PMBus_ConfigureDVS(PMBus_Handle_t *handle, DVS_Config_t *config) {
+    Linear16_Context_t *ctx = &amp;handle-&gt;device.linear16;
+    uint16_t vout_min, vout_max, transition_rate;
+
+    printf(&quot;\nConfiguring DVS for %s:\n&quot;, handle-&gt;device.name);
+    printf(&quot;  Range: %.3fV - %.3fV\n&quot;, config-&gt;voltage_min, config-&gt;voltage_max);
+    printf(&quot;  Step: %.3fV\n&quot;, config-&gt;voltage_step);
+    printf(&quot;  Rate: %d mV/μs\n&quot;, config-&gt;transition_rate);
+
+    // 设置电压范围
+    vout_min = Float_To_Linear16(config-&gt;voltage_min, ctx);
+    vout_max = Float_To_Linear16(config-&gt;voltage_max, ctx);
+
+    PMBus_WriteWord(handle-&gt;device.address, PMBUS_CMD_VOUT_MARGIN_LOW, vout_min);
+    PMBus_WriteWord(handle-&gt;device.address, PMBUS_CMD_VOUT_MAX, vout_max);
+
+    // 设置转换速率
+    transition_rate = Float_To_Linear11(config-&gt;transition_rate / 1000.0);
+    PMBus_WriteWord(handle-&gt;device.address, 
+                    PMBUS_CMD_VOUT_TRANSITION_RATE, 
+                    transition_rate);
+
+    return true;
+}
+
+// 执行DVS
+bool PMBus_PerformDVS(PMBus_Handle_t *handle, float target_voltage) {
+    float current_voltage;
+
+    // 读取当前电压
+    if (!PMBus_ReadVoltage(handle-&gt;device.address, &amp;current_voltage)) {
+        return false;
+    }
+
+    printf(&quot;DVS: %.3fV → %.3fV\n&quot;, current_voltage, target_voltage);
+
+    // 设置目标电压
+    if (!PMBus_SetVoltage(handle-&gt;device.address, target_voltage)) {
+        return false;
+    }
+
+    // 等待转换完成
+    uint32_t start_time = HAL_GetTick();
+    uint32_t timeout = 1000;  // 1秒超时
+
+    while (HAL_GetTick() - start_time &lt; timeout) {
+        float voltage;
+        if (PMBus_ReadVoltage(handle-&gt;device.address, &amp;voltage)) {
+            float error = fabs(voltage - target_voltage);
+            if (error &lt; 0.01) {  // 10mV容差
+                printf(&quot;DVS complete: %.3fV (%.1fms)\n&quot;, 
+                       voltage, (float)(HAL_GetTick() - start_time));
+                return true;
+            }
+        }
+        HAL_Delay(10);
+    }
+
+    printf(&quot;DVS timeout\n&quot;);
+    return false;
+}
+
+// DVS性能测试
+void PMBus_DVS_PerformanceTest(PMBus_Handle_t *handle) {
+    float voltages[] = {1.0, 1.2, 1.0, 0.8, 1.2, 1.0};
+    uint32_t total_time = 0;
+
+    printf(&quot;\n=== DVS Performance Test ===\n&quot;);
+
+    for (int i = 0; i &lt; sizeof(voltages) / sizeof(voltages[0]); i++) {
+        uint32_t start = HAL_GetTick();
+
+        if (PMBus_PerformDVS(handle, voltages[i])) {
+            uint32_t elapsed = HAL_GetTick() - start;
+            total_time += elapsed;
+            printf(&quot;Step %d: %.1fms\n&quot;, i + 1, (float)elapsed);
+        }
+
+        HAL_Delay(100);
+    }
+
+    printf(&quot;\nTotal time: %.1fms\n&quot;, (float)total_time);
+    printf(&quot;Average: %.1fms\n&quot;, (float)total_time / (sizeof(voltages) / sizeof(voltages[0])));
+}
+</code></pre>
+<p><strong>故障记录和分析</strong>：</p>
+<pre><code class="language-c">// 故障记录
+typedef struct {
+    uint32_t timestamp;       // 时间戳
+    uint16_t status_word;     // 状态字
+    uint8_t status_vout;      // 输出电压状态
+    uint8_t status_iout;      // 输出电流状态
+    uint8_t status_temp;      // 温度状态
+    float vout;               // 输出电压
+    float iout;               // 输出电流
+    float temperature;        // 温度
+} PMBus_FaultRecord_t;
+
+// 故障日志
+#define FAULT_LOG_SIZE 100
+static PMBus_FaultRecord_t g_fault_log[FAULT_LOG_SIZE];
+static uint16_t g_fault_log_index = 0;
+
+// 记录故障
+void PMBus_RecordFault(PMBus_Handle_t *handle) {
+    PMBus_FaultRecord_t *record = &amp;g_fault_log[g_fault_log_index];
+
+    // 记录时间戳
+    record-&gt;timestamp = HAL_GetTick();
+
+    // 读取状态
+    PMBus_ReadStatusWord(handle-&gt;device.address, &amp;record-&gt;status_word);
+    PMBus_ReadVoutStatus(handle-&gt;device.address, &amp;record-&gt;status_vout);
+    PMBus_ReadIoutStatus(handle-&gt;device.address, &amp;record-&gt;status_iout);
+    PMBus_ReadTemperatureStatus(handle-&gt;device.address, &amp;record-&gt;status_temp);
+
+    // 读取遥测数据
+    PMBus_ReadVoltage(handle-&gt;device.address, &amp;record-&gt;vout);
+    PMBus_ReadCurrent(handle-&gt;device.address, &amp;record-&gt;iout);
+    PMBus_ReadTemperature(handle-&gt;device.address, 1, &amp;record-&gt;temperature);
+
+    // 更新索引
+    g_fault_log_index = (g_fault_log_index + 1) % FAULT_LOG_SIZE;
+
+    printf(&quot;Fault recorded at %lu ms\n&quot;, record-&gt;timestamp);
+}
+
+// 打印故障日志
+void PMBus_PrintFaultLog(void) {
+    printf(&quot;\n=== Fault Log ===\n&quot;);
+    printf(&quot;Total records: %d\n\n&quot;, 
+           g_fault_log_index &lt; FAULT_LOG_SIZE ? g_fault_log_index : FAULT_LOG_SIZE);
+
+    for (uint16_t i = 0; i &lt; FAULT_LOG_SIZE; i++) {
+        PMBus_FaultRecord_t *record = &amp;g_fault_log[i];
+
+        if (record-&gt;timestamp == 0) continue;
+
+        printf(&quot;Record %d (Time: %lu ms):\n&quot;, i, record-&gt;timestamp);
+        printf(&quot;  STATUS_WORD: 0x%04X\n&quot;, record-&gt;status_word);
+        printf(&quot;  VOUT: %.3fV (Status: 0x%02X)\n&quot;, 
+               record-&gt;vout, record-&gt;status_vout);
+        printf(&quot;  IOUT: %.3fA (Status: 0x%02X)\n&quot;,
+               record-&gt;iout, record-&gt;status_iout);
+        printf(&quot;  TEMP: %.1f°C (Status: 0x%02X)\n&quot;,
+               record-&gt;temperature, record-&gt;status_temp);
+        printf(&quot;\n&quot;);
+    }
+}
+
+// 故障分析
+void PMBus_AnalyzeFaults(void) {
+    uint32_t ovp_count = 0;
+    uint32_t uvp_count = 0;
+    uint32_t ocp_count = 0;
+    uint32_t otp_count = 0;
+
+    printf(&quot;\n=== Fault Analysis ===\n&quot;);
+
+    for (uint16_t i = 0; i &lt; FAULT_LOG_SIZE; i++) {
+        PMBus_FaultRecord_t *record = &amp;g_fault_log[i];
+
+        if (record-&gt;timestamp == 0) continue;
+
+        if (record-&gt;status_vout &amp; PMBUS_STATUS_VOUT_OV_FAULT) ovp_count++;
+        if (record-&gt;status_vout &amp; PMBUS_STATUS_VOUT_UV_FAULT) uvp_count++;
+        if (record-&gt;status_iout &amp; PMBUS_STATUS_IOUT_OC_FAULT) ocp_count++;
+        if (record-&gt;status_temp &amp; PMBUS_STATUS_OT_FAULT) otp_count++;
+    }
+
+    printf(&quot;Overvoltage faults: %lu\n&quot;, ovp_count);
+    printf(&quot;Undervoltage faults: %lu\n&quot;, uvp_count);
+    printf(&quot;Overcurrent faults: %lu\n&quot;, ocp_count);
+    printf(&quot;Overtemperature faults: %lu\n&quot;, otp_count);
+
+    // 计算故障率
+    uint32_t total_records = g_fault_log_index &lt; FAULT_LOG_SIZE ? 
+                             g_fault_log_index : FAULT_LOG_SIZE;
+    if (total_records &gt; 0) {
+        printf(&quot;\nFault rates:\n&quot;);
+        printf(&quot;  OVP: %.2f%%\n&quot;, (float)ovp_count / total_records * 100);
+        printf(&quot;  UVP: %.2f%%\n&quot;, (float)uvp_count / total_records * 100);
+        printf(&quot;  OCP: %.2f%%\n&quot;, (float)ocp_count / total_records * 100);
+        printf(&quot;  OTP: %.2f%%\n&quot;, (float)otp_count / total_records * 100);
+    }
+}
+</code></pre>
+<h2 id="_15">实战项目：服务器电源管理系统</h2>
+<h3 id="_16">项目需求</h3>
+<p><strong>系统规格</strong>：</p>
+<pre><code>硬件配置：
+- 主控：STM32F407微控制器
+- 电源：2个冗余PSU（PMBus接口）
+- VRM：3个电压调节器（CPU、内存、外设）
+- 传感器：温度、风扇转速
+- 接口：UART调试、以太网管理
+
+功能需求：
+1. 电源监控：
+   - 实时监控所有电源的电压、电流、功率
+   - 温度监控和过温保护
+   - 效率计算和优化
+
+2. 电源控制：
+   - 电源排序控制
+   - 动态电压调节（DVS）
+   - 冗余切换
+
+3. 故障管理：
+   - 故障检测和记录
+   - 自动恢复
+   - 告警通知
+
+4. 远程管理：
+   - UART命令行接口
+   - 以太网管理接口
+   - 日志上传
+
+性能指标：
+- 遥测采样率：10Hz
+- 故障响应时间：&lt;100ms
+- DVS转换时间：&lt;10ms
+- 系统可用性：&gt;99.9%
+</code></pre>
+<h3 id="_17">系统架构设计</h3>
+<p><strong>软件架构</strong>：</p>
+<pre><code class="language-c">// 系统架构
+
+┌─────────────────────────────────────────────┐
+│           应用层（Application）              │
+│  ┌─────────────┐  ┌─────────────┐          │
+│  │ 电源管理策略 │  │ 用户接口    │          │
+│  └─────────────┘  └─────────────┘          │
+└─────────────────────────────────────────────┘
+              ↓              ↓
+┌─────────────────────────────────────────────┐
+│           服务层（Services）                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │遥测服务  │ │故障管理  │ │日志服务  │   │
+│  └──────────┘ └──────────┘ └──────────┘   │
+└─────────────────────────────────────────────┘
+              ↓              ↓
+┌─────────────────────────────────────────────┐
+│           驱动层（Drivers）                  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │PMBus驱动 │ │UART驱动  │ │以太网驱动│   │
+│  └──────────┘ └──────────┘ └──────────┘   │
+└─────────────────────────────────────────────┘
+              ↓              ↓
+┌─────────────────────────────────────────────┐
+│           HAL层（Hardware Abstraction）      │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐   │
+│  │I2C HAL   │ │UART HAL  │ │ETH HAL   │   │
+│  └──────────┘ └──────────┘ └──────────┘   │
+└─────────────────────────────────────────────┘
+</code></pre>
+<h3 id="_18">核心代码实现</h3>
+<p><strong>系统初始化</strong>：</p>
+<pre><code class="language-c">// 系统配置
+typedef struct {
+    PMBus_Handle_t psu1;          // PSU #1
+    PMBus_Handle_t psu2;          // PSU #2
+    PMBus_Handle_t vrm_cpu;       // CPU VRM
+    PMBus_Handle_t vrm_mem;       // 内存VRM
+    PMBus_Handle_t vrm_peri;      // 外设VRM
+
+    bool psu1_active;             // PSU1活动状态
+    bool psu2_active;             // PSU2活动状态
+    bool redundancy_enabled;      // 冗余使能
+
+    uint32_t telemetry_interval;  // 遥测间隔（ms）
+    uint32_t fault_check_interval; // 故障检查间隔（ms）
+} PowerSystem_Config_t;
+
+// 全局系统配置
+static PowerSystem_Config_t g_power_system;
+
+// 系统初始化
+bool PowerSystem_Init(void) {
+    printf(&quot;\n========================================\n&quot;);
+    printf(&quot;  Server Power Management System\n&quot;);
+    printf(&quot;========================================\n\n&quot;);
+
+    // 初始化PMBus管理器
+    if (!PMBus_ManagerInit(&amp;hi2c1)) {
+        printf(&quot;Error: Failed to initialize PMBus manager\n&quot;);
+        return false;
+    }
+
+    // 添加PSU设备
+    printf(&quot;Initializing PSU devices...\n&quot;);
+    PMBus_Handle_t *psu1 = PMBus_AddDevice(0x58, &quot;PSU #1&quot;);
+    PMBus_Handle_t *psu2 = PMBus_AddDevice(0x59, &quot;PSU #2&quot;);
+
+    if (psu1) {
+        PMBus_DeviceInit(psu1);
+        g_power_system.psu1 = *psu1;
+        g_power_system.psu1_active = true;
+    }
+
+    if (psu2) {
+        PMBus_DeviceInit(psu2);
+        g_power_system.psu2 = *psu2;
+        g_power_system.psu2_active = true;
+    }
+
+    // 添加VRM设备
+    printf(&quot;\nInitializing VRM devices...\n&quot;);
+    PMBus_Handle_t *vrm_cpu = PMBus_AddDevice(0x60, &quot;CPU VRM&quot;);
+    PMBus_Handle_t *vrm_mem = PMBus_AddDevice(0x61, &quot;Memory VRM&quot;);
+    PMBus_Handle_t *vrm_peri = PMBus_AddDevice(0x62, &quot;Peripheral VRM&quot;);
+
+    if (vrm_cpu) {
+        PMBus_DeviceInit(vrm_cpu);
+        g_power_system.vrm_cpu = *vrm_cpu;
+    }
+
+    if (vrm_mem) {
+        PMBus_DeviceInit(vrm_mem);
+        g_power_system.vrm_mem = *vrm_mem;
+    }
+
+    if (vrm_peri) {
+        PMBus_DeviceInit(vrm_peri);
+        g_power_system.vrm_peri = *vrm_peri;
+    }
+
+    // 配置系统参数
+    g_power_system.redundancy_enabled = true;
+    g_power_system.telemetry_interval = 100;  // 100ms
+    g_power_system.fault_check_interval = 50; // 50ms
+
+    printf(&quot;\nSystem initialized successfully\n&quot;);
+    printf(&quot;Redundancy: %s\n&quot;, 
+           g_power_system.redundancy_enabled ? &quot;Enabled&quot; : &quot;Disabled&quot;);
+
+    return true;
+}
+
+// 配置电源保护参数
+bool PowerSystem_ConfigureProtection(void) {
+    printf(&quot;\nConfiguring protection parameters...\n&quot;);
+
+    // 配置PSU保护
+    PMBus_ConfigureProtection(g_power_system.psu1.device.address, 12.0, 50.0);
+    PMBus_ConfigureProtection(g_power_system.psu2.device.address, 12.0, 50.0);
+
+    // 配置VRM保护
+    PMBus_ConfigureProtection(g_power_system.vrm_cpu.device.address, 1.0, 10.0);
+    PMBus_ConfigureProtection(g_power_system.vrm_mem.device.address, 1.35, 5.0);
+    PMBus_ConfigureProtection(g_power_system.vrm_peri.device.address, 3.3, 5.0);
+
+    printf(&quot;Protection configured\n&quot;);
+
+    return true;
+}
+
+// 电源上电序列
+bool PowerSystem_PowerOn(void) {
+    printf(&quot;\n=== Power-On Sequence ===\n&quot;);
+
+    // 定义上电序列
+    PowerSequence_Step_t sequence[] = {
+        {&amp;g_power_system.psu1, 200, 12.0},      // PSU1: 12V
+        {&amp;g_power_system.vrm_peri, 100, 3.3},   // 外设: 3.3V
+        {&amp;g_power_system.vrm_mem, 100, 1.35},   // 内存: 1.35V
+        {&amp;g_power_system.vrm_cpu, 100, 1.0},    // CPU: 1.0V
+    };
+
+    // 执行上电序列
+    if (!PMBus_PowerSequence(sequence, 
+                             sizeof(sequence) / sizeof(sequence[0]))) {
+        printf(&quot;Error: Power-on sequence failed\n&quot;);
+        return false;
+    }
+
+    printf(&quot;\nSystem powered on successfully\n&quot;);
+
+    return true;
+}
+
+// 电源下电序列
+bool PowerSystem_PowerOff(void) {
+    printf(&quot;\n=== Power-Off Sequence ===\n&quot;);
+
+    // 反向关闭电源
+    printf(&quot;Shutting down CPU VRM...\n&quot;);
+    PMBus_PowerOff(g_power_system.vrm_cpu.device.address);
+    HAL_Delay(100);
+
+    printf(&quot;Shutting down Memory VRM...\n&quot;);
+    PMBus_PowerOff(g_power_system.vrm_mem.device.address);
+    HAL_Delay(100);
+
+    printf(&quot;Shutting down Peripheral VRM...\n&quot;);
+    PMBus_PowerOff(g_power_system.vrm_peri.device.address);
+    HAL_Delay(100);
+
+    printf(&quot;Shutting down PSU...\n&quot;);
+    PMBus_PowerOff(g_power_system.psu1.device.address);
+    HAL_Delay(200);
+
+    printf(&quot;\nSystem powered off\n&quot;);
+
+    return true;
+}
+</code></pre>
+<p><strong>遥测服务</strong>：</p>
+<pre><code class="language-c">// 遥测数据
+typedef struct {
+    float voltage;
+    float current;
+    float power;
+    float temperature;
+    float efficiency;
+} Telemetry_Data_t;
+
+// 系统遥测
+typedef struct {
+    Telemetry_Data_t psu1;
+    Telemetry_Data_t psu2;
+    Telemetry_Data_t vrm_cpu;
+    Telemetry_Data_t vrm_mem;
+    Telemetry_Data_t vrm_peri;
+    uint32_t timestamp;
+} System_Telemetry_t;
+
+// 读取设备遥测
+bool PowerSystem_ReadDeviceTelemetry(PMBus_Handle_t *handle, 
+                                     Telemetry_Data_t *data) {
+    // 读取电压
+    if (!PMBus_ReadVoltage(handle-&gt;device.address, &amp;data-&gt;voltage)) {
+        return false;
+    }
+
+    // 读取电流
+    if (!PMBus_ReadCurrent(handle-&gt;device.address, &amp;data-&gt;current)) {
+        return false;
+    }
+
+    // 读取功率
+    if (!PMBus_ReadPower(handle-&gt;device.address, &amp;data-&gt;power)) {
+        // 如果设备不支持直接读取功率，则计算
+        data-&gt;power = data-&gt;voltage * data-&gt;current;
+    }
+
+    // 读取温度
+    if (!PMBus_ReadTemperature(handle-&gt;device.address, 1, &amp;data-&gt;temperature)) {
+        data-&gt;temperature = 0.0;
+    }
+
+    // 计算效率（仅对PSU）
+    data-&gt;efficiency = 0.0;
+
+    return true;
+}
+
+// 读取系统遥测
+bool PowerSystem_ReadTelemetry(System_Telemetry_t *telemetry) {
+    telemetry-&gt;timestamp = HAL_GetTick();
+
+    // 读取PSU遥测
+    if (!PowerSystem_ReadDeviceTelemetry(&amp;g_power_system.psu1, 
+                                         &amp;telemetry-&gt;psu1)) {
+        return false;
+    }
+
+    if (g_power_system.psu2_active) {
+        PowerSystem_ReadDeviceTelemetry(&amp;g_power_system.psu2, 
+                                        &amp;telemetry-&gt;psu2);
+    }
+
+    // 读取VRM遥测
+    PowerSystem_ReadDeviceTelemetry(&amp;g_power_system.vrm_cpu, 
+                                    &amp;telemetry-&gt;vrm_cpu);
+    PowerSystem_ReadDeviceTelemetry(&amp;g_power_system.vrm_mem,
+                                    &amp;telemetry-&gt;vrm_mem);
+    PowerSystem_ReadDeviceTelemetry(&amp;g_power_system.vrm_peri,
+                                    &amp;telemetry-&gt;vrm_peri);
+
+    return true;
+}
+
+// 打印遥测数据
+void PowerSystem_PrintTelemetry(System_Telemetry_t *telemetry) {
+    printf(&quot;\n========== System Telemetry ==========\n&quot;);
+    printf(&quot;Time: %lu ms\n\n&quot;, telemetry-&gt;timestamp);
+
+    printf(&quot;PSU #1:\n&quot;);
+    printf(&quot;  Voltage: %.2fV\n&quot;, telemetry-&gt;psu1.voltage);
+    printf(&quot;  Current: %.2fA\n&quot;, telemetry-&gt;psu1.current);
+    printf(&quot;  Power: %.2fW\n&quot;, telemetry-&gt;psu1.power);
+    printf(&quot;  Temperature: %.1f°C\n&quot;, telemetry-&gt;psu1.temperature);
+
+    if (g_power_system.psu2_active) {
+        printf(&quot;\nPSU #2:\n&quot;);
+        printf(&quot;  Voltage: %.2fV\n&quot;, telemetry-&gt;psu2.voltage);
+        printf(&quot;  Current: %.2fA\n&quot;, telemetry-&gt;psu2.current);
+        printf(&quot;  Power: %.2fW\n&quot;, telemetry-&gt;psu2.power);
+        printf(&quot;  Temperature: %.1f°C\n&quot;, telemetry-&gt;psu2.temperature);
+    }
+
+    printf(&quot;\nCPU VRM:\n&quot;);
+    printf(&quot;  Voltage: %.3fV\n&quot;, telemetry-&gt;vrm_cpu.voltage);
+    printf(&quot;  Current: %.2fA\n&quot;, telemetry-&gt;vrm_cpu.current);
+    printf(&quot;  Power: %.2fW\n&quot;, telemetry-&gt;vrm_cpu.power);
+    printf(&quot;  Temperature: %.1f°C\n&quot;, telemetry-&gt;vrm_cpu.temperature);
+
+    printf(&quot;\nMemory VRM:\n&quot;);
+    printf(&quot;  Voltage: %.3fV\n&quot;, telemetry-&gt;vrm_mem.voltage);
+    printf(&quot;  Current: %.2fA\n&quot;, telemetry-&gt;vrm_mem.current);
+    printf(&quot;  Power: %.2fW\n&quot;, telemetry-&gt;vrm_mem.power);
+    printf(&quot;  Temperature: %.1f°C\n&quot;, telemetry-&gt;vrm_mem.temperature);
+
+    printf(&quot;\nPeripheral VRM:\n&quot;);
+    printf(&quot;  Voltage: %.3fV\n&quot;, telemetry-&gt;vrm_peri.voltage);
+    printf(&quot;  Current: %.2fA\n&quot;, telemetry-&gt;vrm_peri.current);
+    printf(&quot;  Power: %.2fW\n&quot;, telemetry-&gt;vrm_peri.power);
+    printf(&quot;  Temperature: %.1f°C\n&quot;, telemetry-&gt;vrm_peri.temperature);
+
+    // 计算总功率
+    float total_power = telemetry-&gt;vrm_cpu.power + 
+                        telemetry-&gt;vrm_mem.power +
+                        telemetry-&gt;vrm_peri.power;
+
+    printf(&quot;\nTotal System Power: %.2fW\n&quot;, total_power);
+
+    printf(&quot;======================================\n&quot;);
+}
+
+// 遥测任务
+void PowerSystem_TelemetryTask(void) {
+    static uint32_t last_update = 0;
+    System_Telemetry_t telemetry;
+
+    if (HAL_GetTick() - last_update &gt;= g_power_system.telemetry_interval) {
+        if (PowerSystem_ReadTelemetry(&amp;telemetry)) {
+            PowerSystem_PrintTelemetry(&amp;telemetry);
+
+            // 可以在这里添加数据记录、上传等功能
+        }
+
+        last_update = HAL_GetTick();
+    }
+}
+</code></pre>
+<p><strong>故障管理服务</strong>：</p>
+<pre><code class="language-c">// 故障类型
+typedef enum {
+    FAULT_NONE = 0,
+    FAULT_OVP,          // 过压
+    FAULT_UVP,          // 欠压
+    FAULT_OCP,          // 过流
+    FAULT_OTP,          // 过温
+    FAULT_COMM,         // 通信故障
+    FAULT_PSU_FAIL,     // PSU故障
+} Fault_Type_t;
+
+// 故障事件
+typedef struct {
+    Fault_Type_t type;
+    PMBus_Handle_t *device;
+    uint32_t timestamp;
+    uint16_t status_word;
+    bool resolved;
+} Fault_Event_t;
+
+// 故障队列
+#define FAULT_QUEUE_SIZE 50
+static Fault_Event_t g_fault_queue[FAULT_QUEUE_SIZE];
+static uint16_t g_fault_queue_head = 0;
+static uint16_t g_fault_queue_tail = 0;
+
+// 添加故障事件
+void PowerSystem_AddFaultEvent(Fault_Type_t type, PMBus_Handle_t *device) {
+    Fault_Event_t *event = &amp;g_fault_queue[g_fault_queue_tail];
+
+    event-&gt;type = type;
+    event-&gt;device = device;
+    event-&gt;timestamp = HAL_GetTick();
+    PMBus_ReadStatusWord(device-&gt;device.address, &amp;event-&gt;status_word);
+    event-&gt;resolved = false;
+
+    g_fault_queue_tail = (g_fault_queue_tail + 1) % FAULT_QUEUE_SIZE;
+
+    // 记录故障
+    PMBus_RecordFault(device);
+
+    printf(&quot;\n!!! FAULT DETECTED !!!\n&quot;);
+    printf(&quot;Device: %s\n&quot;, device-&gt;device.name);
+    printf(&quot;Type: %d\n&quot;, type);
+    printf(&quot;Time: %lu ms\n&quot;, event-&gt;timestamp);
+    printf(&quot;Status: 0x%04X\n&quot;, event-&gt;status_word);
+}
+
+// 检查设备故障
+bool PowerSystem_CheckDeviceFaults(PMBus_Handle_t *handle) {
+    uint16_t status_word;
+    uint8_t status_vout, status_iout, status_temp;
+    bool fault_detected = false;
+
+    // 读取状态字
+    if (!PMBus_ReadStatusWord(handle-&gt;device.address, &amp;status_word)) {
+        PowerSystem_AddFaultEvent(FAULT_COMM, handle);
+        return true;
+    }
+
+    // 检查各类故障
+    if (status_word &amp; PMBUS_STATUS_VOUT) {
+        PMBus_ReadVoutStatus(handle-&gt;device.address, &amp;status_vout);
+
+        if (status_vout &amp; PMBUS_STATUS_VOUT_OV_FAULT) {
+            PowerSystem_AddFaultEvent(FAULT_OVP, handle);
+            fault_detected = true;
+        }
+
+        if (status_vout &amp; PMBUS_STATUS_VOUT_UV_FAULT) {
+            PowerSystem_AddFaultEvent(FAULT_UVP, handle);
+            fault_detected = true;
+        }
+    }
+
+    if (status_word &amp; PMBUS_STATUS_IOUT) {
+        PMBus_ReadIoutStatus(handle-&gt;device.address, &amp;status_iout);
+
+        if (status_iout &amp; PMBUS_STATUS_IOUT_OC_FAULT) {
+            PowerSystem_AddFaultEvent(FAULT_OCP, handle);
+            fault_detected = true;
+        }
+    }
+
+    if (status_word &amp; PMBUS_STATUS_TEMPERATURE) {
+        PMBus_ReadTemperatureStatus(handle-&gt;device.address, &amp;status_temp);
+
+        if (status_temp &amp; PMBUS_STATUS_OT_FAULT) {
+            PowerSystem_AddFaultEvent(FAULT_OTP, handle);
+            fault_detected = true;
+        }
+    }
+
+    return fault_detected;
+}
+
+// 故障检查任务
+void PowerSystem_FaultCheckTask(void) {
+    static uint32_t last_check = 0;
+
+    if (HAL_GetTick() - last_check &gt;= g_power_system.fault_check_interval) {
+        // 检查所有设备
+        PowerSystem_CheckDeviceFaults(&amp;g_power_system.psu1);
+
+        if (g_power_system.psu2_active) {
+            PowerSystem_CheckDeviceFaults(&amp;g_power_system.psu2);
+        }
+
+        PowerSystem_CheckDeviceFaults(&amp;g_power_system.vrm_cpu);
+        PowerSystem_CheckDeviceFaults(&amp;g_power_system.vrm_mem);
+        PowerSystem_CheckDeviceFaults(&amp;g_power_system.vrm_peri);
+
+        last_check = HAL_GetTick();
+    }
+}
+
+// 故障恢复
+bool PowerSystem_RecoverFromFault(Fault_Event_t *event) {
+    printf(&quot;\nAttempting fault recovery...\n&quot;);
+    printf(&quot;Device: %s\n&quot;, event-&gt;device-&gt;device.name);
+    printf(&quot;Fault type: %d\n&quot;, event-&gt;type);
+
+    // 清除故障
+    PMBus_ClearFaults(event-&gt;device-&gt;device.address);
+    HAL_Delay(100);
+
+    // 检查是否恢复
+    uint16_t status_word;
+    if (PMBus_ReadStatusWord(event-&gt;device-&gt;device.address, &amp;status_word)) {
+        if (status_word == 0x0000) {
+            printf(&quot;Fault cleared successfully\n&quot;);
+            event-&gt;resolved = true;
+            return true;
+        }
+    }
+
+    printf(&quot;Fault recovery failed\n&quot;);
+    return false;
+}
+</code></pre>
+<p><strong>冗余管理</strong>：</p>
+<pre><code class="language-c">// PSU冗余切换
+bool PowerSystem_SwitchPSU(void) {
+    printf(&quot;\n=== PSU Redundancy Switch ===\n&quot;);
+
+    if (!g_power_system.redundancy_enabled) {
+        printf(&quot;Redundancy not enabled\n&quot;);
+        return false;
+    }
+
+    // 检查PSU1状态
+    uint16_t psu1_status;
+    bool psu1_ok = PMBus_ReadStatusWord(g_power_system.psu1.device.address, 
+                                        &amp;psu1_status);
+    psu1_ok = psu1_ok &amp;&amp; (psu1_status == 0x0000);
+
+    // 检查PSU2状态
+    uint16_t psu2_status;
+    bool psu2_ok = PMBus_ReadStatusWord(g_power_system.psu2.device.address,
+                                        &amp;psu2_status);
+    psu2_ok = psu2_ok &amp;&amp; (psu2_status == 0x0000);
+
+    printf(&quot;PSU1 Status: %s (0x%04X)\n&quot;, psu1_ok ? &quot;OK&quot; : &quot;FAULT&quot;, psu1_status);
+    printf(&quot;PSU2 Status: %s (0x%04X)\n&quot;, psu2_ok ? &quot;OK&quot; : &quot;FAULT&quot;, psu2_status);
+
+    // 如果PSU1故障，切换到PSU2
+    if (!psu1_ok &amp;&amp; psu2_ok) {
+        printf(&quot;Switching to PSU2...\n&quot;);
+        g_power_system.psu1_active = false;
+        g_power_system.psu2_active = true;
+
+        // 关闭PSU1
+        PMBus_PowerOff(g_power_system.psu1.device.address);
+
+        // 确保PSU2开启
+        PMBus_PowerOn(g_power_system.psu2.device.address);
+
+        printf(&quot;Switched to PSU2\n&quot;);
+        return true;
+    }
+
+    // 如果PSU2故障，切换到PSU1
+    if (!psu2_ok &amp;&amp; psu1_ok) {
+        printf(&quot;Switching to PSU1...\n&quot;);
+        g_power_system.psu1_active = true;
+        g_power_system.psu2_active = false;
+
+        // 关闭PSU2
+        PMBus_PowerOff(g_power_system.psu2.device.address);
+
+        // 确保PSU1开启
+        PMBus_PowerOn(g_power_system.psu1.device.address);
+
+        printf(&quot;Switched to PSU1\n&quot;);
+        return true;
+    }
+
+    // 如果两个都故障
+    if (!psu1_ok &amp;&amp; !psu2_ok) {
+        printf(&quot;CRITICAL: Both PSUs failed!\n&quot;);
+        return false;
+    }
+
+    printf(&quot;No switch needed, both PSUs OK\n&quot;);
+    return true;
+}
+</code></pre>
+<h3 id="_19">主循环实现</h3>
+<p><strong>系统主循环</strong>：</p>
+<pre><code class="language-c">// 主循环
+void PowerSystem_MainLoop(void) {
+    printf(&quot;\n=== Starting Power System Main Loop ===\n&quot;);
+
+    while (1) {
+        // 遥测任务
+        PowerSystem_TelemetryTask();
+
+        // 故障检查任务
+        PowerSystem_FaultCheckTask();
+
+        // 处理故障队列
+        if (g_fault_queue_head != g_fault_queue_tail) {
+            Fault_Event_t *event = &amp;g_fault_queue[g_fault_queue_head];
+
+            if (!event-&gt;resolved) {
+                PowerSystem_RecoverFromFault(event);
+            }
+
+            g_fault_queue_head = (g_fault_queue_head + 1) % FAULT_QUEUE_SIZE;
+        }
+
+        // 冗余检查
+        if (g_power_system.redundancy_enabled) {
+            static uint32_t last_redundancy_check = 0;
+            if (HAL_GetTick() - last_redundancy_check &gt;= 5000) {  // 5秒
+                PowerSystem_SwitchPSU();
+                last_redundancy_check = HAL_GetTick();
+            }
+        }
+
+        // 让出CPU
+        HAL_Delay(10);
+    }
+}
+
+// 主函数
+int main(void) {
+    // 硬件初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_GPIO_Init();
+    MX_I2C1_Init();
+    MX_USART1_UART_Init();
+
+    // 系统初始化
+    if (!PowerSystem_Init()) {
+        printf(&quot;System initialization failed!\n&quot;);
+        while (1);
+    }
+
+    // 配置保护参数
+    PowerSystem_ConfigureProtection();
+
+    // 上电
+    if (!PowerSystem_PowerOn()) {
+        printf(&quot;Power-on failed!\n&quot;);
+        while (1);
+    }
+
+    // 进入主循环
+    PowerSystem_MainLoop();
+
+    return 0;
+}
+</code></pre>
+<h2 id="_20">调试与故障排除</h2>
+<h3 id="_21">常见问题</h3>
+<p><strong>1. 通信失败</strong>：</p>
+<pre><code>问题现象：
+- 无法读取设备
+- 读取数据全为0xFF
+- 超时错误
+
+可能原因：
+1. 硬件连接问题
+   - SCL/SDA线路断开
+   - 上拉电阻缺失或值不对
+   - 电源未连接
+
+2. 地址错误
+   - 设备地址配置错误
+   - 地址冲突
+
+3. 时序问题
+   - I2C时钟频率过高
+   - 时序不符合SMBus规范
+
+4. 电平不匹配
+   - 3.3V和5V混用
+   - 需要电平转换
+
+排查步骤：
+1. 用示波器检查SCL/SDA波形
+2. 验证上拉电阻值
+3. 检查设备地址
+4. 降低I2C时钟频率
+5. 检查电源和地线
+</code></pre>
+<p><strong>调试代码</strong>：</p>
+<pre><code class="language-c">// I2C总线诊断
+void PMBus_DiagnoseBus(void) {
+    printf(&quot;\n=== PMBus Bus Diagnostics ===\n&quot;);
+
+    // 检查I2C外设状态
+    printf(&quot;I2C Status: 0x%08lX\n&quot;, hi2c1.Instance-&gt;SR1);
+    printf(&quot;I2C Error: 0x%08lX\n&quot;, hi2c1.ErrorCode);
+
+    // 检查GPIO状态
+    GPIO_PinState scl_state = HAL_GPIO_ReadPin(I2C1_SCL_GPIO_Port, I2C1_SCL_Pin);
+    GPIO_PinState sda_state = HAL_GPIO_ReadPin(I2C1_SDA_GPIO_Port, I2C1_SDA_Pin);
+
+    printf(&quot;SCL State: %s\n&quot;, scl_state ? &quot;HIGH&quot; : &quot;LOW&quot;);
+    printf(&quot;SDA State: %s\n&quot;, sda_state ? &quot;HIGH&quot; : &quot;LOW&quot;);
+
+    // 如果SCL或SDA被拉低，可能是总线挂死
+    if (!scl_state || !sda_state) {
+        printf(&quot;WARNING: Bus may be stuck!\n&quot;);
+        printf(&quot;Attempting bus recovery...\n&quot;);
+
+        // 尝试恢复总线
+        PMBus_BusRecovery();
+    }
+
+    // 扫描总线
+    printf(&quot;\nScanning bus...\n&quot;);
+    PMBus_ScanBus();
+}
+
+// 总线恢复
+void PMBus_BusRecovery(void) {
+    printf(&quot;Performing bus recovery...\n&quot;);
+
+    // 方法1：发送STOP条件
+    hi2c1.Instance-&gt;CR1 |= I2C_CR1_STOP;
+    HAL_Delay(10);
+
+    // 方法2：时钟脉冲恢复
+    // 将SCL配置为GPIO输出
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = I2C1_SCL_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_OD;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(I2C1_SCL_GPIO_Port, &amp;GPIO_InitStruct);
+
+    // 发送9个时钟脉冲
+    for (int i = 0; i &lt; 9; i++) {
+        HAL_GPIO_WritePin(I2C1_SCL_GPIO_Port, I2C1_SCL_Pin, GPIO_PIN_RESET);
+        HAL_Delay(1);
+        HAL_GPIO_WritePin(I2C1_SCL_GPIO_Port, I2C1_SCL_Pin, GPIO_PIN_SET);
+        HAL_Delay(1);
+    }
+
+    // 恢复I2C功能
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;
+    GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
+    HAL_GPIO_Init(I2C1_SCL_GPIO_Port, &amp;GPIO_InitStruct);
+
+    // 重新初始化I2C
+    HAL_I2C_DeInit(&amp;hi2c1);
+    HAL_Delay(10);
+    HAL_I2C_Init(&amp;hi2c1);
+
+    printf(&quot;Bus recovery complete\n&quot;);
+}
+</code></pre>
+<p><strong>2. 数据格式错误</strong>：</p>
+<pre><code>问题现象：
+- 读取的电压/电流值异常
+- 数值跳变
+- 负数出现在不应该的地方
+
+可能原因：
+1. 数据格式理解错误
+   - Linear11/Linear16/Direct格式混淆
+   - 指数计算错误
+   - 字节序错误
+
+2. VOUT_MODE未正确读取
+   - Linear16需要先读取VOUT_MODE
+   - 指数值错误
+
+3. 系数配置错误
+   - Direct格式系数不正确
+
+排查步骤：
+1. 打印原始数据（十六进制）
+2. 验证VOUT_MODE值
+3. 手动计算验证
+4. 参考设备数据手册
+</code></pre>
+<p><strong>调试代码</strong>：</p>
+<pre><code class="language-c">// 数据格式调试
+void PMBus_DebugDataFormat(uint8_t device_addr) {
+    uint8_t vout_mode;
+    uint16_t vout_raw;
+    float vout_float;
+
+    printf(&quot;\n=== Data Format Debug ===\n&quot;);
+
+    // 读取VOUT_MODE
+    if (PMBus_ReadByte(device_addr, PMBUS_CMD_VOUT_MODE, &amp;vout_mode)) {
+        printf(&quot;VOUT_MODE: 0x%02X\n&quot;, vout_mode);
+        printf(&quot;  Mode: %d\n&quot;, (vout_mode &gt;&gt; 5) &amp; 0x07);
+        printf(&quot;  Exponent: %d\n&quot;, (int8_t)(vout_mode &amp; 0x1F));
+    }
+
+    // 读取VOUT原始数据
+    if (PMBus_ReadWord(device_addr, PMBUS_CMD_READ_VOUT, &amp;vout_raw)) {
+        printf(&quot;\nREAD_VOUT: 0x%04X\n&quot;, vout_raw);
+        printf(&quot;  Binary: &quot;);
+        for (int i = 15; i &gt;= 0; i--) {
+            printf(&quot;%d&quot;, (vout_raw &gt;&gt; i) &amp; 1);
+            if (i == 11) printf(&quot; &quot;);  // 分隔指数和尾数
+        }
+        printf(&quot;\n&quot;);
+
+        // 解析Linear16
+        Linear16_Context_t context;
+        if (PMBus_InitLinear16Context(device_addr, &amp;context)) {
+            vout_float = Linear16_To_Float(vout_raw, &amp;context);
+            printf(&quot;  Decoded (Linear16): %.4fV\n&quot;, vout_float);
+
+            // 手动计算验证
+            int16_t mantissa = (int16_t)vout_raw;
+            int8_t exponent = context.exponent;
+            float manual_calc = (float)mantissa;
+            if (exponent &gt;= 0) {
+                manual_calc *= (1 &lt;&lt; exponent);
+            } else {
+                manual_calc /= (1 &lt;&lt; (-exponent));
+            }
+            printf(&quot;  Manual calculation: %.4fV\n&quot;, manual_calc);
+            printf(&quot;  Mantissa: %d, Exponent: %d\n&quot;, mantissa, exponent);
+        }
+    }
+
+    // 读取电流（Linear11格式）
+    uint16_t iout_raw;
+    if (PMBus_ReadWord(device_addr, PMBUS_CMD_READ_IOUT, &amp;iout_raw)) {
+        printf(&quot;\nREAD_IOUT: 0x%04X\n&quot;, iout_raw);
+
+        // 解析Linear11
+        Linear11_t linear;
+        linear.raw = iout_raw;
+        printf(&quot;  Mantissa: %d (0x%03X)\n&quot;, 
+               linear.fields.mantissa, linear.fields.mantissa &amp; 0x7FF);
+        printf(&quot;  Exponent: %d (0x%02X)\n&quot;,
+               linear.fields.exponent, linear.fields.exponent &amp; 0x1F);
+
+        float iout_float = Linear11_To_Float(iout_raw);
+        printf(&quot;  Decoded: %.4fA\n&quot;, iout_float);
+    }
+}
+</code></pre>
+<p><strong>3. PEC校验失败</strong>：</p>
+<pre><code>问题现象：
+- PEC错误频繁
+- 通信不稳定
+
+可能原因：
+1. 噪声干扰
+   - PCB布线不当
+   - 电源噪声
+   - EMI干扰
+
+2. 时序问题
+   - 时钟频率过高
+   - 上升/下降时间不符合规范
+
+3. PEC计算错误
+   - 算法实现错误
+   - 包含了不应该包含的字节
+
+排查步骤：
+1. 降低I2C时钟频率
+2. 检查PCB布线
+3. 添加滤波电容
+4. 验证PEC计算算法
+5. 使用示波器检查信号质量
+</code></pre>
+<p><strong>调试代码</strong>：</p>
+<pre><code class="language-c">// PEC调试
+void PMBus_DebugPEC(uint8_t device_addr) {
+    uint8_t cmd = PMBUS_CMD_READ_VOUT;
+    uint16_t data;
+
+    printf(&quot;\n=== PEC Debug ===\n&quot;);
+
+    // 手动执行带PEC的读取
+    uint8_t pec_data[4];
+    uint8_t received_pec;
+    uint8_t calculated_pec;
+
+    // 构建PEC计算数据
+    pec_data[0] = (device_addr &lt;&lt; 1) | 0;  // 写地址
+    pec_data[1] = cmd;                      // 命令
+    pec_data[2] = (device_addr &lt;&lt; 1) | 1;  // 读地址
+
+    printf(&quot;PEC calculation data:\n&quot;);
+    printf(&quot;  Write Address: 0x%02X\n&quot;, pec_data[0]);
+    printf(&quot;  Command: 0x%02X\n&quot;, pec_data[1]);
+    printf(&quot;  Read Address: 0x%02X\n&quot;, pec_data[2]);
+
+    // 执行读取
+    if (PMBus_ReadWord(device_addr, cmd, &amp;data)) {
+        pec_data[3] = data &amp; 0xFF;  // 数据低字节
+
+        printf(&quot;  Data Low: 0x%02X\n&quot;, pec_data[3]);
+
+        // 计算PEC
+        calculated_pec = SMBus_CalculatePEC(pec_data, 4);
+        printf(&quot;\nCalculated PEC: 0x%02X\n&quot;, calculated_pec);
+
+        // 读取实际PEC（需要修改读取函数返回PEC）
+        // received_pec = ...
+        // printf(&quot;Received PEC: 0x%02X\n&quot;, received_pec);
+
+        // 逐步计算PEC
+        printf(&quot;\nStep-by-step PEC calculation:\n&quot;);
+        uint8_t crc = 0x00;
+        for (int i = 0; i &lt; 4; i++) {
+            printf(&quot;  Step %d: CRC=0x%02X, Data=0x%02X&quot;, 
+                   i, crc, pec_data[i]);
+            crc = SMBus_UpdatePEC(crc, pec_data[i]);
+            printf(&quot; → CRC=0x%02X\n&quot;, crc);
+        }
+    }
+}
+</code></pre>
+<h3 id="_22">性能优化</h3>
+<p><strong>1. 批量读取优化</strong>：</p>
+<pre><code class="language-c">// 批量读取遥测数据
+typedef struct {
+    uint8_t cmd;
+    uint16_t *data;
+} BatchRead_Item_t;
+
+bool PMBus_BatchRead(uint8_t device_addr, 
+                     BatchRead_Item_t *items, 
+                     uint8_t count) {
+    for (uint8_t i = 0; i &lt; count; i++) {
+        if (!PMBus_ReadWord(device_addr, items[i].cmd, items[i].data)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// 使用示例
+void PMBus_FastTelemetry(uint8_t device_addr) {
+    uint16_t vout_raw, iout_raw, pout_raw, temp_raw;
+
+    BatchRead_Item_t items[] = {
+        {PMBUS_CMD_READ_VOUT, &amp;vout_raw},
+        {PMBUS_CMD_READ_IOUT, &amp;iout_raw},
+        {PMBUS_CMD_READ_POUT, &amp;pout_raw},
+        {PMBUS_CMD_READ_TEMPERATURE_1, &amp;temp_raw},
+    };
+
+    uint32_t start = HAL_GetTick();
+
+    if (PMBus_BatchRead(device_addr, items, 4)) {
+        uint32_t elapsed = HAL_GetTick() - start;
+        printf(&quot;Batch read completed in %lu ms\n&quot;, elapsed);
+
+        // 解码数据
+        // ...
+    }
+}
+</code></pre>
+<p><strong>2. 缓存优化</strong>：</p>
+<pre><code class="language-c">// 遥测数据缓存
+typedef struct {
+    float voltage;
+    float current;
+    float power;
+    float temperature;
+    uint32_t timestamp;
+    bool valid;
+} TelemetryCache_t;
+
+static TelemetryCache_t g_telemetry_cache[PMBUS_MAX_DEVICES];
+
+// 带缓存的读取
+bool PMBus_ReadVoltage_Cached(uint8_t device_addr, 
+                               float *voltage,
+                               uint32_t max_age_ms) {
+    uint8_t device_index = device_addr - 0x58;  // 假设地址从0x58开始
+
+    if (device_index &gt;= PMBUS_MAX_DEVICES) {
+        return false;
+    }
+
+    TelemetryCache_t *cache = &amp;g_telemetry_cache[device_index];
+
+    // 检查缓存是否有效
+    if (cache-&gt;valid &amp;&amp; 
+        (HAL_GetTick() - cache-&gt;timestamp) &lt; max_age_ms) {
+        *voltage = cache-&gt;voltage;
+        return true;
+    }
+
+    // 缓存过期，重新读取
+    if (PMBus_ReadVoltage(device_addr, voltage)) {
+        cache-&gt;voltage = *voltage;
+        cache-&gt;timestamp = HAL_GetTick();
+        cache-&gt;valid = true;
+        return true;
+    }
+
+    return false;
+}
+</code></pre>
+<h2 id="_23">最佳实践</h2>
+<h3 id="_24">设计建议</h3>
+<p><strong>1. 硬件设计</strong>：</p>
+<pre><code>上拉电阻选择：
+- 100kHz：4.7kΩ
+- 400kHz：2.2kΩ
+- 考虑总线电容
+
+PCB布线：
+- SCL/SDA走线尽量短（&lt;30cm）
+- 避免平行长距离走线
+- 远离高频信号
+- 添加地平面
+
+ESD保护：
+- 在SCL/SDA线上添加TVS二极管
+- 靠近连接器放置
+
+电源设计：
+- 为PMBus设备提供干净的电源
+- 添加去耦电容
+- 考虑隔离
+
+连接器：
+- 使用带锁扣的连接器
+- 考虑热插拔需求
+- 预留测试点
+</code></pre>
+<p><strong>2. 软件设计</strong>：</p>
+<pre><code class="language-c">// 错误处理
+#define PMBUS_MAX_RETRIES 3
+
+bool PMBus_ReadWord_Robust(uint8_t device_addr, 
+                            uint8_t cmd,
+                            uint16_t *data) {
+    for (uint8_t retry = 0; retry &lt; PMBUS_MAX_RETRIES; retry++) {
+        if (PMBus_ReadWord(device_addr, cmd, data)) {
+            return true;
+        }
+
+        // 重试前延时
+        HAL_Delay(10);
+
+        // 如果是最后一次重试，尝试恢复总线
+        if (retry == PMBUS_MAX_RETRIES - 1) {
+            PMBus_BusRecovery();
+        }
+    }
+
+    return false;
+}
+
+// 超时保护
+bool PMBus_ReadWord_WithTimeout(uint8_t device_addr,
+                                 uint8_t cmd,
+                                 uint16_t *data,
+                                 uint32_t timeout_ms) {
+    uint32_t start = HAL_GetTick();
+
+    while (HAL_GetTick() - start &lt; timeout_ms) {
+        if (PMBus_ReadWord(device_addr, cmd, data)) {
+            return true;
+        }
+
+        HAL_Delay(1);
+    }
+
+    return false;
+}
+
+// 参数验证
+bool PMBus_SetVoltage_Safe(uint8_t device_addr, float voltage) {
+    // 读取电压范围
+    float vout_max;
+    if (!PMBus_GetVoltageMax(device_addr, &amp;vout_max)) {
+        return false;
+    }
+
+    // 验证范围
+    if (voltage &lt; 0.0 || voltage &gt; vout_max) {
+        printf(&quot;Error: Voltage %.2fV out of range (0 - %.2fV)\n&quot;,
+               voltage, vout_max);
+        return false;
+    }
+
+    // 设置电压
+    return PMBus_SetVoltage(device_addr, voltage);
+}
+</code></pre>
+<p><strong>3. 测试策略</strong>：</p>
+<pre><code>单元测试：
+- 数据格式转换函数
+- PEC计算函数
+- 命令编解码函数
+
+集成测试：
+- 设备初始化流程
+- 遥测读取功能
+- 故障检测和恢复
+
+系统测试：
+- 电源排序
+- 冗余切换
+- 长时间稳定性测试
+
+压力测试：
+- 高频率遥测读取
+- 故障注入测试
+- 边界条件测试
+</code></pre>
+<h2 id="_25">总结</h2>
+<h3 id="_26">关键要点</h3>
+<ol>
+<li>
+<p><strong>PMBus协议特点</strong>：
+   - 基于SMBus的数字电源管理协议
+   - 标准化命令集和数据格式
+   - 支持遥测、控制、配置、故障管理
+   - 广泛应用于服务器、通信、工业领域</p>
+</li>
+<li>
+<p><strong>数据格式</strong>：
+   - Linear11：11位尾数+5位指数
+   - Linear16：16位尾数+外部指数
+   - Direct：用户定义系数
+   - 正确理解和转换是关键</p>
+</li>
+<li>
+<p><strong>命令分类</strong>：
+   - 控制命令：OPERATION、ON_OFF_CONFIG
+   - 配置命令：VOUT_COMMAND、限制设置
+   - 遥测命令：READ_VOUT/IOUT/TEMPERATURE
+   - 状态命令：STATUS_WORD及详细状态</p>
+</li>
+<li>
+<p><strong>实现要点</strong>：
+   - 分层架构设计
+   - 错误处理和重试机制
+   - 超时保护
+   - 数据缓存优化</p>
+</li>
+<li>
+<p><strong>应用场景</strong>：
+   - 服务器电源管理
+   - 电源排序控制
+   - 动态电压调节
+   - 冗余和故障管理</p>
+</li>
+</ol>
+<h3 id="_27">学习路径</h3>
+<p><strong>初级阶段</strong>：
+1. 掌握SMBus基础
+2. 理解PMBus数据格式
+3. 实现基本的读写操作
+4. 完成简单的遥测读取</p>
+<p><strong>中级阶段</strong>：
+1. 实现完整的命令集
+2. 开发设备驱动
+3. 实现故障检测
+4. 完成电源控制功能</p>
+<p><strong>高级阶段</strong>：
+1. 实现复杂的电源管理策略
+2. 优化性能和可靠性
+3. 开发完整的管理系统
+4. 处理各种异常情况</p>
+<h3 id="_28">下一步学习</h3>
+<p><strong>相关主题</strong>：
+- <a href="../intermediate/05-smbus-protocol.html">SMBus协议详解</a>
+- <a href="../beginner/03-i2c-hardware.html">I2C硬件接口</a>
+- <a href="../../03-power-management/intermediate/04-switching-power-supply.html">开关电源设计</a></p>
+<p><strong>进阶方向</strong>：
+- AVSBus协议（自适应电压调节）
+- PMBus从机设备开发
+- 电源管理算法优化
+- 故障预测和诊断</p>
+<h2 id="_29">参考资料</h2>
+<ol>
+<li>
+<p><strong>官方规范</strong>：
+   - PMBus Power System Management Protocol Specification (Part I &amp; II)
+   - SMBus Specification Version 3.0
+   - I2C-bus Specification</p>
+</li>
+<li>
+<p><strong>应用笔记</strong>：
+   - Texas Instruments: PMBus Design Guide
+   - Analog Devices: Digital Power Management
+   - Infineon: PMBus Implementation Guide</p>
+</li>
+<li>
+<p><strong>开发工具</strong>：
+   - PMBus命令分析器
+   - 数字电源开发套件
+   - 协议分析仪</p>
+</li>
+<li>
+<p><strong>在线资源</strong>：
+   - PMBus Implementers Forum (pmbus.org)
+   - 厂商技术支持论坛
+   - 开源PMBus驱动代码</p>
+</li>
+<li>
+<p><strong>推荐书籍</strong>：
+   - 《Digital Power Management》
+   - 《Power Supply Design》
+   - 《Embedded Systems Design》</p>
+</li>
+</ol>
+<hr />
+<p><strong>文档版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2024-01-15<br />
+<strong>作者</strong>: 嵌入式知识平台</p>
+<p>如有问题或建议，欢迎反馈！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

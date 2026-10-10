@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>以太网接口硬件设计 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/">06-communication-interface-hardware</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#vs">以太网 vs 其他网络接口</a></li>
+<li><a href="#_4">以太网的优势</a></li>
+</ul>
+</li>
+<li><a href="#_5">以太网硬件架构</a><ul>
+<li><a href="#_6">系统框图</a></li>
+<li><a href="#macphy">MAC和PHY的分工</a></li>
+</ul>
+</li>
+<li><a href="#miirmii">MII和RMII接口</a><ul>
+<li><a href="#miimedia-independent-interface">MII接口（Media Independent Interface）</a></li>
+<li><a href="#rmiireduced-mii">RMII接口（Reduced MII）</a></li>
+<li><a href="#mii-vs-rmii">MII vs RMII对比</a></li>
+</ul>
+</li>
+<li><a href="#phy">PHY芯片选型</a><ul>
+<li><a href="#phy_1">常用PHY芯片</a></li>
+<li><a href="#phy_2">PHY芯片引脚功能</a></li>
+<li><a href="#phy_3">PHY地址配置</a></li>
+</ul>
+</li>
+<li><a href="#_7">网络变压器设计</a><ul>
+<li><a href="#_8">变压器的作用</a></li>
+<li><a href="#_9">变压器类型</a></li>
+<li><a href="#_10">变压器电路设计</a></li>
+<li><a href="#rj45">RJ45接口引脚定义</a></li>
+</ul>
+</li>
+<li><a href="#_11">硬件电路设计</a><ul>
+<li><a href="#_12">基本以太网电路</a></li>
+<li><a href="#_13">电源设计</a></li>
+<li><a href="#_14">时钟设计</a></li>
+</ul>
+</li>
+<li><a href="#pcb">PCB布局设计</a><ul>
+<li><a href="#_15">布局原则</a></li>
+<li><a href="#_16">走线设计</a></li>
+<li><a href="#emc">EMC优化</a></li>
+</ul>
+</li>
+<li><a href="#stm32">STM32以太网配置</a><ul>
+<li><a href="#_17">硬件初始化</a></li>
+<li><a href="#phy_4">PHY芯片初始化</a></li>
+<li><a href="#mac">MAC控制器配置</a></li>
+<li><a href="#_18">数据发送和接收</a></li>
+</ul>
+</li>
+<li><a href="#_19">常见问题与调试</a><ul>
+<li><a href="#1">问题1：无法建立链路</a></li>
+<li><a href="#2">问题2：数据传输错误</a></li>
+<li><a href="#3">问题3：传输速率低</a></li>
+</ul>
+</li>
+<li><a href="#_20">实用技巧</a><ul>
+<li><a href="#1-led">1. LED指示灯配置</a></li>
+<li><a href="#2-wol">2. 网络唤醒（WoL）</a></li>
+<li><a href="#3_1">3. 环回测试</a></li>
+<li><a href="#4">4. 链路状态监控</a></li>
+</ul>
+</li>
+<li><a href="#_21">性能优化</a><ul>
+<li><a href="#_22">提高吞吐量</a></li>
+<li><a href="#_23">降低延迟</a></li>
+</ul>
+</li>
+<li><a href="#_24">总结</a><ul>
+<li><a href="#_25">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_26">实践建议</a><ul>
+<li><a href="#_27">初学者练习</a></li>
+<li><a href="#_28">进阶项目</a></li>
+</ul>
+</li>
+<li><a href="#_29">延伸阅读</a><ul>
+<li><a href="#_30">相关文章</a></li>
+<li><a href="#_31">协议实现</a></li>
+<li><a href="#_32">硬件设计</a></li>
+</ul>
+</li>
+<li><a href="#_33">参考资料</a><ul>
+<li><a href="#_34">数据手册</a></li>
+<li><a href="#_35">技术标准</a></li>
+<li><a href="#_36">在线工具</a></li>
+<li><a href="#_37">开源项目</a></li>
+</ul>
+</li>
+<li><a href="#_38">常见应用场景</a><ul>
+<li><a href="#1_1">1. 工业控制</a></li>
+<li><a href="#2_1">2. 物联网设备</a></li>
+<li><a href="#3_2">3. 嵌入式服务器</a></li>
+<li><a href="#4_1">4. 网络存储</a></li>
+<li><a href="#5">5. 医疗设备</a></li>
+</ul>
+</li>
+<li><a href="#_39">附录</a><ul>
+<li><a href="#a-phy">A. PHY芯片对比表</a></li>
+<li><a href="#b">B. 网络变压器对比表</a></li>
+<li><a href="#c">C. 故障排查检查清单</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">以太网接口硬件设计</h1>
+<h2 id="_2">概述</h2>
+<p>以太网（Ethernet）是目前应用最广泛的局域网技术，由Xerox公司于1970年代开发。以太网以其高速率、标准化、成本低的特点，成为工业控制、物联网、嵌入式系统等领域的首选网络通信方案。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解以太网的工作原理和硬件架构</li>
+<li>掌握PHY芯片的选型和应用</li>
+<li>学会MII/RMII接口的配置</li>
+<li>理解网络变压器的作用和设计</li>
+<li>实现STM32的以太网通信</li>
+<li>掌握以太网接口的EMC设计</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="vs">以太网 vs 其他网络接口</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>以太网</th>
+<th>CAN</th>
+<th>USB</th>
+<th>RS485</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>速度</td>
+<td>10/100/1000 Mbps</td>
+<td>最高1Mbps</td>
+<td>最高480Mbps</td>
+<td>最高10Mbps</td>
+</tr>
+<tr>
+<td>传输距离</td>
+<td>100m（双绞线）</td>
+<td>最远10km</td>
+<td>5m</td>
+<td>1200m</td>
+</tr>
+<tr>
+<td>拓扑结构</td>
+<td>星型</td>
+<td>总线型</td>
+<td>树型</td>
+<td>总线型</td>
+</tr>
+<tr>
+<td>协议栈</td>
+<td>TCP/IP</td>
+<td>CAN协议</td>
+<td>USB协议</td>
+<td>Modbus等</td>
+</tr>
+<tr>
+<td>应用领域</td>
+<td>网络通信</td>
+<td>汽车、工业</td>
+<td>外设连接</td>
+<td>工业控制</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>中等</td>
+<td>低</td>
+<td>低</td>
+<td>低</td>
+</tr>
+<tr>
+<td>复杂度</td>
+<td>高</td>
+<td>中</td>
+<td>高</td>
+<td>低</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_4">以太网的优势</h3>
+<p><strong>高速率</strong>：
+- 10BASE-T：10 Mbps
+- 100BASE-TX：100 Mbps（Fast Ethernet）
+- 1000BASE-T：1000 Mbps（Gigabit Ethernet）</p>
+<p><strong>标准化</strong>：
+- IEEE 802.3标准
+- 全球统一规范
+- 互操作性好</p>
+<p><strong>灵活性</strong>：
+- 支持TCP/IP协议栈
+- 可接入互联网
+- 支持多种应用协议</p>
+<p><strong>成本低</strong>：
+- 芯片成本低
+- 使用标准网线
+- 易于维护</p>
+<h2 id="_5">以太网硬件架构</h2>
+<h3 id="_6">系统框图</h3>
+<p><strong>完整的以太网系统</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────────┐
+│                   嵌入式系统                          │
+│                                                      │
+│  ┌──────────┐      ┌──────────┐      ┌──────────┐  │
+│  │   应用   │      │  TCP/IP  │      │   驱动   │  │
+│  │   层     │ ←──→ │  协议栈  │ ←──→ │   层     │  │
+│  └──────────┘      └──────────┘      └──────────┘  │
+│                                           ↕          │
+│  ┌──────────────────────────────────────────────┐  │
+│  │              MCU (STM32)                      │  │
+│  │  ┌────────────────────────────────────────┐  │  │
+│  │  │         以太网MAC控制器                 │  │  │
+│  │  │  (Media Access Control)                │  │  │
+│  │  └────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────┘  │
+│                      ↕ MII/RMII                    │
+└──────────────────────┼────────────────────────────┘
+                       ↓
+┌──────────────────────┼────────────────────────────┐
+│              PHY芯片 (物理层)                       │
+│  ┌────────────────────────────────────────────┐  │
+│  │         以太网PHY收发器                     │  │
+│  │  (Physical Layer Transceiver)             │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────┼────────────────────────────┘
+                       ↓ 差分信号
+┌──────────────────────┼────────────────────────────┐
+│              网络变压器                             │
+│  ┌────────────────────────────────────────────┐  │
+│  │         隔离变压器 (Transformer)            │  │
+│  │  - 电气隔离                                 │  │
+│  │  - 阻抗匹配                                 │  │
+│  │  - 共模抑制                                 │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────┼────────────────────────────┘
+                       ↓
+┌──────────────────────┼────────────────────────────┐
+│              RJ45接口                              │
+│  ┌────────────────────────────────────────────┐  │
+│  │         RJ45连接器                          │  │
+│  │  - 8P8C接口                                 │  │
+│  │  - 集成LED指示灯                            │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────┼────────────────────────────┘
+                       ↓
+                   网络电缆
+</code></pre>
+<h3 id="macphy">MAC和PHY的分工</h3>
+<p><strong>MAC（Media Access Control）</strong>：
+- 数据帧的封装和解封装
+- MAC地址管理
+- 流量控制
+- 冲突检测（半双工模式）
+- 通常集成在MCU内部</p>
+<p><strong>PHY（Physical Layer）</strong>：
+- 物理信号的编码和解码
+- 差分信号的发送和接收
+- 自动协商（速度和双工模式）
+- 链路状态检测
+- 独立芯片</p>
+<h2 id="miirmii">MII和RMII接口</h2>
+<h3 id="miimedia-independent-interface">MII接口（Media Independent Interface）</h3>
+<p><strong>MII信号定义</strong>：</p>
+<pre><code>MCU (MAC)                    PHY芯片
+
+TX_CLK  ←────────────────── 发送时钟（25MHz）
+TXD[3:0] ───────────────→   发送数据（4位）
+TX_EN   ───────────────→    发送使能
+TX_ER   ───────────────→    发送错误（可选）
+
+RX_CLK  ←────────────────── 接收时钟（25MHz）
+RXD[3:0] ←──────────────    接收数据（4位）
+RX_DV   ←──────────────     接收数据有效
+RX_ER   ←──────────────     接收错误（可选）
+
+COL     ←──────────────     冲突检测
+CRS     ←──────────────     载波侦听
+
+MDC     ───────────────→    管理时钟
+MDIO    ←──────────────→    管理数据
+
+总计：16个信号线
+</code></pre>
+<p><strong>MII时序特性</strong>：</p>
+<pre><code>100Mbps模式：
+- TX_CLK/RX_CLK：25MHz
+- 数据宽度：4位
+- 每个时钟周期传输4位
+- 4位 × 25MHz = 100Mbps
+
+10Mbps模式：
+- TX_CLK/RX_CLK：2.5MHz
+- 数据宽度：4位
+- 每个时钟周期传输4位
+- 4位 × 2.5MHz = 10Mbps
+</code></pre>
+<h3 id="rmiireduced-mii">RMII接口（Reduced MII）</h3>
+<p><strong>RMII信号定义</strong>：</p>
+<pre><code>MCU (MAC)                    PHY芯片
+
+REF_CLK ←────────────────── 参考时钟（50MHz）
+TXD[1:0] ───────────────→   发送数据（2位）
+TX_EN   ───────────────→    发送使能
+
+RXD[1:0] ←──────────────    接收数据（2位）
+CRS_DV  ←──────────────     载波侦听/数据有效
+
+MDC     ───────────────→    管理时钟
+MDIO    ←──────────────→    管理数据
+
+总计：7个信号线
+</code></pre>
+<p><strong>RMII时序特性</strong>：</p>
+<pre><code>100Mbps模式：
+- REF_CLK：50MHz
+- 数据宽度：2位
+- 每个时钟周期传输2位
+- 2位 × 50MHz = 100Mbps
+
+10Mbps模式：
+- REF_CLK：50MHz
+- 数据宽度：2位
+- 每10个时钟周期传输2位
+- 2位 × 5MHz = 10Mbps
+</code></pre>
+<h3 id="mii-vs-rmii">MII vs RMII对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>MII</th>
+<th>RMII</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>信号线数量</td>
+<td>16根</td>
+<td>7根</td>
+</tr>
+<tr>
+<td>时钟频率</td>
+<td>25MHz/2.5MHz</td>
+<td>50MHz</td>
+</tr>
+<tr>
+<td>数据宽度</td>
+<td>4位</td>
+<td>2位</td>
+</tr>
+<tr>
+<td>PCB布线</td>
+<td>复杂</td>
+<td>简单</td>
+</tr>
+<tr>
+<td>功耗</td>
+<td>较高</td>
+<td>较低</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>较高</td>
+<td>较低</td>
+</tr>
+<tr>
+<td>应用</td>
+<td>高性能系统</td>
+<td>嵌入式系统</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推荐选择</strong>：
+- 嵌入式系统：优先选择RMII
+- 高性能系统：可选择MII
+- 成本敏感：选择RMII</p>
+<h2 id="phy">PHY芯片选型</h2>
+<h3 id="phy_1">常用PHY芯片</h3>
+<p><strong>1. LAN8720A（最常用）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接口</td>
+<td>RMII</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>10/100 Mbps</td>
+</tr>
+<tr>
+<td>工作电压</td>
+<td>3.3V</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>QFN-24</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>成本低，应用广泛</td>
+</tr>
+<tr>
+<td>厂商</td>
+<td>Microchip</td>
+</tr>
+</tbody>
+</table>
+<p><strong>2. DP83848（TI）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接口</td>
+<td>MII/RMII</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>10/100 Mbps</td>
+</tr>
+<tr>
+<td>工作电压</td>
+<td>3.3V</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>LQFP-48</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>工业级，可靠性高</td>
+</tr>
+<tr>
+<td>厂商</td>
+<td>Texas Instruments</td>
+</tr>
+</tbody>
+</table>
+<p><strong>3. RTL8201F（Realtek）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接口</td>
+<td>MII/RMII</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>10/100 Mbps</td>
+</tr>
+<tr>
+<td>工作电压</td>
+<td>3.3V</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>QFN-32</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>集成LED驱动</td>
+</tr>
+<tr>
+<td>厂商</td>
+<td>Realtek</td>
+</tr>
+</tbody>
+</table>
+<p><strong>4. KSZ8081（Microchip）</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>接口</td>
+<td>MII/RMII</td>
+</tr>
+<tr>
+<td>速度</td>
+<td>10/100 Mbps</td>
+</tr>
+<tr>
+<td>工作电压</td>
+<td>3.3V/2.5V</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>QFN-24</td>
+</tr>
+<tr>
+<td>特点</td>
+<td>低功耗，支持HP Auto-MDIX</td>
+</tr>
+<tr>
+<td>厂商</td>
+<td>Microchip</td>
+</tr>
+</tbody>
+</table>
+<h3 id="phy_2">PHY芯片引脚功能</h3>
+<p><strong>LAN8720A引脚图（RMII模式）</strong>：</p>
+<pre><code>        LAN8720A (QFN-24)
+     ┌──────────────────┐
+VDD  ┤1              24├ VDDCR
+TXD0 ┤2              23├ LED2/nINTSEL
+TXD1 ┤3              22├ LED1/REGOFF
+TX_EN┤4              21├ XTAL2
+RXD0 ┤5              20├ XTAL1
+RXD1 ┤6              19├ MDC
+CRS_DV┤7             18├ MDIO
+REF_CLK┤8            17├ nINT/REFCLKO
+     │                 │
+GND  ┤9              16├ nRST
+     └──────────────────┘
+
+关键引脚：
+- VDD: 3.3V电源
+- VDDCR: 内部1.2V稳压器输出
+- TXD[1:0]: 发送数据
+- RXD[1:0]: 接收数据
+- REF_CLK: 50MHz参考时钟
+- MDC/MDIO: 管理接口
+- nRST: 复位（低电平有效）
+</code></pre>
+<h3 id="phy_3">PHY地址配置</h3>
+<p><strong>MDIO地址设置</strong>：</p>
+<pre><code>PHY地址通过硬件引脚配置：
+
+LAN8720A地址配置：
+- 地址0：RXD0=0, RXD1=0
+- 地址1：RXD0=1, RXD1=0
+- 地址2：RXD0=0, RXD1=1
+- 地址3：RXD0=1, RXD1=1
+
+配置方法：
+在nRST释放时，RXD0和RXD1的电平
+决定PHY地址
+
+示例（地址1）：
+RXD0 ──┬── 10kΩ ── VDD
+       │
+RXD1 ──┴── 10kΩ ── GND
+</code></pre>
+<h2 id="_7">网络变压器设计</h2>
+<h3 id="_8">变压器的作用</h3>
+<p><strong>为什么需要网络变压器</strong>：</p>
+<pre><code>1. 电气隔离：
+   - 隔离PHY和网线
+   - 保护设备免受浪涌冲击
+   - 防止地环路
+
+2. 阻抗匹配：
+   - PHY侧：50Ω
+   - 网线侧：100Ω
+   - 变压器实现阻抗转换
+
+3. 共模抑制：
+   - 抑制共模干扰
+   - 改善EMC性能
+   - 提高信号质量
+
+4. 直流隔离：
+   - 隔离直流分量
+   - 只传输交流信号
+</code></pre>
+<h3 id="_9">变压器类型</h3>
+<p><strong>1. 分立变压器</strong>：</p>
+<pre><code>PHY芯片 ──→ 变压器 ──→ RJ45接口
+
+优点：
+- 灵活性高
+- 可选择不同规格
+- 易于更换
+
+缺点：
+- 占用空间大
+- 需要额外的中心抽头电容
+- 布线复杂
+</code></pre>
+<p><strong>2. 集成变压器（带RJ45）</strong>：</p>
+<pre><code>PHY芯片 ──→ 集成模块（变压器+RJ45）
+
+优点：
+- 节省空间
+- 简化设计
+- 减少布线
+- 集成LED指示灯
+
+缺点：
+- 成本稍高
+- 灵活性较低
+
+推荐型号：
+- HanRun HR911105A
+- Pulse J0011D21BNL
+- Wurth 7499111121
+</code></pre>
+<h3 id="_10">变压器电路设计</h3>
+<p><strong>标准变压器连接</strong>：</p>
+<pre><code>PHY (LAN8720A)              变压器              RJ45
+
+TXP ──┬─── 49.9Ω ───┬──→ ┌───┐ ──→ TD+ ──→ Pin 1
+      │             │     │   │
+      └─ 0.1μF ─┬─ GND    │ T │
+                │         │ X │
+TXN ──┬─── 49.9Ω ───┴──→ └───┘ ──→ TD- ──→ Pin 2
+      │
+      └─ 0.1μF ─── GND
+
+RXP ←─┬─── 49.9Ω ───┬──← ┌───┐ ←── RD+ ←── Pin 3
+      │             │     │   │
+      └─ 0.1μF ─┬─ GND    │ R │
+                │         │ X │
+RXN ←─┬─── 49.9Ω ───┴──← └───┘ ←── RD- ←── Pin 6
+      │
+      └─ 0.1μF ─── GND
+
+中心抽头电容：
+- 发送侧：0.1μF × 2
+- 接收侧：0.1μF × 2
+- 作用：提供直流偏置路径
+
+终端电阻：
+- 49.9Ω × 4
+- 作用：阻抗匹配
+</code></pre>
+<h3 id="rj45">RJ45接口引脚定义</h3>
+<p><strong>8P8C标准接口</strong>：</p>
+<pre><code>RJ45接口（正面视图）
+┌─────────────┐
+│ 8 7 6 5 4 3 2 1 │
+└─────────────┘
+
+引脚定义（100BASE-TX）：
+Pin 1: TD+  (发送正)
+Pin 2: TD-  (发送负)
+Pin 3: RD+  (接收正)
+Pin 4: NC   (未使用)
+Pin 5: NC   (未使用)
+Pin 6: RD-  (接收负)
+Pin 7: NC   (未使用)
+Pin 8: NC   (未使用)
+
+注意：
+- 只使用4根线（1,2,3,6）
+- 其他引脚在1000BASE-T中使用
+</code></pre>
+<h2 id="_11">硬件电路设计</h2>
+<h3 id="_12">基本以太网电路</h3>
+<p><strong>STM32 + LAN8720A完整电路</strong>：</p>
+<pre><code>STM32F407                    LAN8720A              变压器+RJ45
+
+PA1  (REF_CLK) ←──────────── REF_CLK              
+PA2  (MDIO)    ←──────────→  MDIO                 
+PC1  (MDC)     ───────────→  MDC                  
+
+PG11 (TX_EN)   ───────────→  TX_EN                
+PG13 (TXD0)    ───────────→  TXD0 ──┬─ 49.9Ω ─→ TD+
+PG14 (TXD1)    ───────────→  TXD1 ──┴─ 49.9Ω ─→ TD-
+
+PC4  (RXD0)    ←──────────── RXD0 ←─┬─ 49.9Ω ←─ RD+
+PC5  (RXD1)    ←──────────── RXD1 ←─┴─ 49.9Ω ←─ RD-
+PA7  (CRS_DV)  ←──────────── CRS_DV               
+
+PG8  (nRST)    ───────────→  nRST                 
+                             │                     
+3.3V ─┬─ 0.1μF ─┬─ VDD ─────┤                     
+      └─ 10μF ──┘            │                     
+                             │                     
+GND ──────────────── GND ────┤                     
+                             │                     
+                          VDDCR ─┬─ 10μF ─┬─ GND  
+                                 └─ 0.1μF ┘        
+
+25MHz晶振：                                        
+XTAL1 ──┬─── 晶振 ───┬─── XTAL2                   
+        │            │                             
+        ├─ 22pF ─┬─ GND                            
+        │        │                                 
+        └────────┴─ 22pF ─── GND                   
+</code></pre>
+<h3 id="_13">电源设计</h3>
+<p><strong>1. 3.3V主电源</strong>：</p>
+<pre><code>5V ──┬─── LDO ───┬─── 3.3V ──→ PHY VDD
+     │  (AMS1117) │
+     │            ├─── 10μF ──┬─ GND
+     │            │           │
+     │            └─── 0.1μF ─┘
+    GND
+
+要求：
+- 输出电流：≥200mA
+- 纹波：&lt;50mV
+- 去耦电容：10μF + 0.1μF
+</code></pre>
+<p><strong>2. 内部稳压器</strong>：</p>
+<pre><code>LAN8720A内部1.2V稳压器：
+
+VDDCR ──┬─── 10μF ──┬─── GND
+        │           │
+        └─── 0.1μF ─┘
+
+注意：
+- VDDCR输出1.2V
+- 必须外接去耦电容
+- 10μF钽电容或陶瓷电容
+- 0.1μF高频去耦
+</code></pre>
+<h3 id="_14">时钟设计</h3>
+<p><strong>1. 外部晶振（可选）</strong>：</p>
+<pre><code>25MHz晶振电路：
+
+XTAL1 ──┬─── 晶振 ───┬─── XTAL2
+        │   (25MHz)  │
+        │            │
+        ├─ 22pF ─┬─ GND
+        │        │
+        └────────┴─ 22pF ─── GND
+
+要求：
+- 频率：25MHz ± 50ppm
+- 负载电容：18-22pF
+- ESR：&lt;100Ω
+</code></pre>
+<p><strong>2. 外部时钟输入（推荐）</strong>：</p>
+<pre><code>50MHz时钟源 ──→ REF_CLK (LAN8720A)
+                    │
+                    └──→ REF_CLK (STM32)
+
+优点：
+- 节省成本
+- 减少元件
+- 提高可靠性
+
+时钟源：
+- 有源晶振
+- 时钟发生器
+- MCU输出时钟
+</code></pre>
+<h2 id="pcb">PCB布局设计</h2>
+<h3 id="_15">布局原则</h3>
+<p><strong>1. 整体布局</strong>：</p>
+<pre><code>推荐布局顺序：
+1. RJ45接口放置在板边
+2. 网络变压器紧邻RJ45
+3. PHY芯片靠近变压器
+4. MCU尽量靠近PHY
+
+布局示意：
+┌─────────────────────────┐
+│                         │
+│  [RJ45+变压器]          │ ← 板边
+│       ↓                 │
+│  [PHY芯片]              │ ← 距离&lt;5cm
+│       ↓                 │
+│  [MCU]                  │ ← 尽量靠近
+│                         │
+└─────────────────────────┘
+</code></pre>
+<p><strong>2. 差分对布局</strong>：</p>
+<pre><code>差分对走线要求：
+- 保持平行
+- 等长等宽
+- 避免分叉
+- 避免过孔
+
+正确示例：
+TD+ ═══════════════════
+TD- ═══════════════════
+
+错误示例：
+TD+ ═══╗     ╔═════════
+       ╚═════╝
+TD- ═══════════════════
+</code></pre>
+<h3 id="_16">走线设计</h3>
+<p><strong>1. 差分对走线</strong>：</p>
+<pre><code>走线参数（4层板）：
+- 线宽：8mil（0.2mm）
+- 间距：8mil（0.2mm）
+- 差分阻抗：100Ω ± 10%
+- 长度差：&lt; 5mm
+
+走线技巧：
+1. 使用差分对走线工具
+2. 保持等长
+3. 避免直角转弯（使用45°或圆弧）
+4. 避免跨越分割
+</code></pre>
+<p><strong>2. 时钟走线</strong>：</p>
+<pre><code>REF_CLK走线要求：
+- 尽量短
+- 远离干扰源
+- 包地处理
+- 阻抗控制50Ω
+
+走线示意：
+PHY ═══ REF_CLK ═══ MCU
+        ↓
+       GND (包地)
+</code></pre>
+<p><strong>3. 地平面处理</strong>：</p>
+<pre><code>地平面要求：
+- 差分对下方保持完整地平面
+- 不要分割地平面
+- 多层板各层地平面互连
+
+地平面示意：
+┌─────────────────────┐
+│  Top: 差分对         │
+├─────────────────────┤
+│  GND: 完整地平面     │ ← 参考平面
+├─────────────────────┤
+│  Power: 电源层       │
+├─────────────────────┤
+│  Bottom: 信号层      │
+└─────────────────────┘
+</code></pre>
+<h3 id="emc">EMC优化</h3>
+<p><strong>1. 共模扼流圈</strong>：</p>
+<pre><code>添加共模扼流圈（CMC）：
+
+PHY ─── TD+ ───┬─ CMC ─┬─── 变压器
+               │       │
+PHY ─── TD- ───┴───────┴─── 变压器
+
+作用：
+- 抑制共模干扰
+- 改善EMC性能
+- 不影响差分信号
+
+推荐型号：
+- Murata DLW5BSN900SQ2L
+- TDK ACM2012-900-2P
+</code></pre>
+<p><strong>2. ESD保护</strong>：</p>
+<pre><code>ESD保护电路：
+
+RJ45 ──┬─── TVS ───┬─── 变压器
+       │           │
+      GND         GND
+
+推荐器件：
+- PESD5V0S4UF（4通道）
+- TPD4E05U06（4通道）
+- 钳位电压：&lt;6V
+- 电容：&lt;5pF
+</code></pre>
+<p><strong>3. 屏蔽设计</strong>：</p>
+<pre><code>屏蔽措施：
+1. 使用带屏蔽的RJ45接口
+2. 屏蔽层连接到GND
+3. 在接口周围铺地
+4. 使用屏蔽网线
+
+屏蔽接口示意：
+┌─────────────┐
+│  RJ45接口   │
+│  ┌───────┐  │
+│  │ 屏蔽层 │  │ ← 连接到GND
+│  └───────┘  │
+└─────────────┘
+</code></pre>
+<h2 id="stm32">STM32以太网配置</h2>
+<h3 id="_17">硬件初始化</h3>
+<p><strong>GPIO和以太网外设配置</strong>：</p>
+<pre><code class="language-c">// 1. 使能时钟
+RCC-&gt;AHB1ENR |= RCC_AHB1ENR_ETHMACEN |      // 以太网MAC
+                RCC_AHB1ENR_ETHMACTXEN |    // 以太网MAC TX
+                RCC_AHB1ENR_ETHMACRXEN;     // 以太网MAC RX
+
+RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN |       // GPIOA
+                RCC_AHB1ENR_GPIOCEN |       // GPIOC
+                RCC_AHB1ENR_GPIOGEN;        // GPIOG
+
+// 2. 配置GPIO（RMII模式）
+// PA1 (REF_CLK) - 复用功能
+GPIOA-&gt;MODER &amp;= ~(3 &lt;&lt; 2);
+GPIOA-&gt;MODER |= (2 &lt;&lt; 2);
+GPIOA-&gt;AFR[0] |= (11 &lt;&lt; 4);  // AF11
+
+// PA2 (MDIO) - 复用功能
+GPIOA-&gt;MODER &amp;= ~(3 &lt;&lt; 4);
+GPIOA-&gt;MODER |= (2 &lt;&lt; 4);
+GPIOA-&gt;AFR[0] |= (11 &lt;&lt; 8);  // AF11
+
+// PA7 (CRS_DV) - 复用功能
+GPIOA-&gt;MODER &amp;= ~(3 &lt;&lt; 14);
+GPIOA-&gt;MODER |= (2 &lt;&lt; 14);
+GPIOA-&gt;AFR[0] |= (11 &lt;&lt; 28);  // AF11
+
+// PC1 (MDC) - 复用功能
+GPIOC-&gt;MODER &amp;= ~(3 &lt;&lt; 2);
+GPIOC-&gt;MODER |= (2 &lt;&lt; 2);
+GPIOC-&gt;AFR[0] |= (11 &lt;&lt; 4);  // AF11
+
+// PC4 (RXD0) - 复用功能
+GPIOC-&gt;MODER &amp;= ~(3 &lt;&lt; 8);
+GPIOC-&gt;MODER |= (2 &lt;&lt; 8);
+GPIOC-&gt;AFR[0] |= (11 &lt;&lt; 16);  // AF11
+
+// PC5 (RXD1) - 复用功能
+GPIOC-&gt;MODER &amp;= ~(3 &lt;&lt; 10);
+GPIOC-&gt;MODER |= (2 &lt;&lt; 10);
+GPIOC-&gt;AFR[0] |= (11 &lt;&lt; 20);  // AF11
+
+// PG11 (TX_EN) - 复用功能
+GPIOG-&gt;MODER &amp;= ~(3 &lt;&lt; 22);
+GPIOG-&gt;MODER |= (2 &lt;&lt; 22);
+GPIOG-&gt;AFR[1] |= (11 &lt;&lt; 12);  // AF11
+
+// PG13 (TXD0) - 复用功能
+GPIOG-&gt;MODER &amp;= ~(3 &lt;&lt; 26);
+GPIOG-&gt;MODER |= (2 &lt;&lt; 26);
+GPIOG-&gt;AFR[1] |= (11 &lt;&lt; 20);  // AF11
+
+// PG14 (TXD1) - 复用功能
+GPIOG-&gt;MODER &amp;= ~(3 &lt;&lt; 28);
+GPIOG-&gt;MODER |= (2 &lt;&lt; 28);
+GPIOG-&gt;AFR[1] |= (11 &lt;&lt; 24);  // AF11
+
+// 3. 配置GPIO速度（高速）
+GPIOA-&gt;OSPEEDR |= (3 &lt;&lt; 2) | (3 &lt;&lt; 4) | (3 &lt;&lt; 14);
+GPIOC-&gt;OSPEEDR |= (3 &lt;&lt; 2) | (3 &lt;&lt; 8) | (3 &lt;&lt; 10);
+GPIOG-&gt;OSPEEDR |= (3 &lt;&lt; 22) | (3 &lt;&lt; 26) | (3 &lt;&lt; 28);
+</code></pre>
+<h3 id="phy_4">PHY芯片初始化</h3>
+<pre><code class="language-c">// PHY寄存器地址
+#define PHY_BCR         0x00  // 基本控制寄存器
+#define PHY_BSR         0x01  // 基本状态寄存器
+#define PHY_ID1         0x02  // PHY标识符1
+#define PHY_ID2         0x03  // PHY标识符2
+#define PHY_ANAR        0x04  // 自动协商通告寄存器
+#define PHY_ANLPAR      0x05  // 自动协商链路伙伴能力寄存器
+
+// PHY地址（根据硬件配置）
+#define PHY_ADDRESS     0x01
+
+// 读取PHY寄存器
+uint16_t ETH_ReadPHYRegister(uint8_t reg) {
+    uint32_t timeout = 0;
+
+    // 等待MDIO空闲
+    while (ETH-&gt;MACMIIAR &amp; ETH_MACMIIAR_MB) {
+        if (++timeout &gt; 1000) return 0xFFFF;
+    }
+
+    // 配置MDIO读操作
+    ETH-&gt;MACMIIAR = (PHY_ADDRESS &lt;&lt; 11) |  // PHY地址
+                    (reg &lt;&lt; 6) |            // 寄存器地址
+                    ETH_MACMIIAR_CR_Div42 | // 时钟分频
+                    ETH_MACMIIAR_MB;        // 开始操作
+
+    // 等待操作完成
+    timeout = 0;
+    while (ETH-&gt;MACMIIAR &amp; ETH_MACMIIAR_MB) {
+        if (++timeout &gt; 1000) return 0xFFFF;
+    }
+
+    // 返回读取的数据
+    return (uint16_t)(ETH-&gt;MACMIIDR);
+}
+
+// 写入PHY寄存器
+bool ETH_WritePHYRegister(uint8_t reg, uint16_t value) {
+    uint32_t timeout = 0;
+
+    // 等待MDIO空闲
+    while (ETH-&gt;MACMIIAR &amp; ETH_MACMIIAR_MB) {
+        if (++timeout &gt; 1000) return false;
+    }
+
+    // 写入数据
+    ETH-&gt;MACMIIDR = value;
+
+    // 配置MDIO写操作
+    ETH-&gt;MACMIIAR = (PHY_ADDRESS &lt;&lt; 11) |  // PHY地址
+                    (reg &lt;&lt; 6) |            // 寄存器地址
+                    ETH_MACMIIAR_MW |       // 写操作
+                    ETH_MACMIIAR_CR_Div42 | // 时钟分频
+                    ETH_MACMIIAR_MB;        // 开始操作
+
+    // 等待操作完成
+    timeout = 0;
+    while (ETH-&gt;MACMIIAR &amp; ETH_MACMIIAR_MB) {
+        if (++timeout &gt; 1000) return false;
+    }
+
+    return true;
+}
+
+// PHY初始化
+bool ETH_PHY_Init(void) {
+    uint16_t reg_value;
+    uint32_t timeout = 0;
+
+    // 1. 读取PHY ID
+    uint16_t id1 = ETH_ReadPHYRegister(PHY_ID1);
+    uint16_t id2 = ETH_ReadPHYRegister(PHY_ID2);
+    printf(&quot;PHY ID: 0x%04X%04X\n&quot;, id1, id2);
+
+    // 2. 软复位PHY
+    ETH_WritePHYRegister(PHY_BCR, 0x8000);
+
+    // 等待复位完成
+    do {
+        reg_value = ETH_ReadPHYRegister(PHY_BCR);
+        if (++timeout &gt; 1000) return false;
+    } while (reg_value &amp; 0x8000);
+
+    // 3. 配置自动协商
+    ETH_WritePHYRegister(PHY_ANAR, 0x01E1);  // 10/100Mbps, 全/半双工
+
+    // 4. 启动自动协商
+    ETH_WritePHYRegister(PHY_BCR, 0x1200);  // 使能自动协商
+
+    // 5. 等待链路建立
+    timeout = 0;
+    do {
+        reg_value = ETH_ReadPHYRegister(PHY_BSR);
+        HAL_Delay(10);
+        if (++timeout &gt; 500) {
+            printf(&quot;Link timeout\n&quot;);
+            return false;
+        }
+    } while (!(reg_value &amp; 0x0004));  // 等待链路状态位
+
+    printf(&quot;Link established\n&quot;);
+    return true;
+}
+</code></pre>
+<h3 id="mac">MAC控制器配置</h3>
+<pre><code class="language-c">// MAC初始化
+void ETH_MAC_Init(void) {
+    // 1. 软复位MAC
+    ETH-&gt;DMABMR |= ETH_DMABMR_SR;
+    while (ETH-&gt;DMABMR &amp; ETH_DMABMR_SR);
+
+    // 2. 配置MAC
+    ETH-&gt;MACCR = ETH_MACCR_FES |      // 快速以太网（100Mbps）
+                 ETH_MACCR_DM |       // 全双工模式
+                 ETH_MACCR_IPCO |     // IPv4校验和卸载
+                 ETH_MACCR_RD |       // 禁用重试
+                 ETH_MACCR_APCS;      // 自动去除CRC
+
+    // 3. 配置MAC帧过滤
+    ETH-&gt;MACFFR = ETH_MACFFR_RA;      // 接收所有帧（混杂模式）
+
+    // 4. 配置MAC地址
+    ETH-&gt;MACA0HR = (MAC_ADDR[5] &lt;&lt; 8) | MAC_ADDR[4];
+    ETH-&gt;MACA0LR = (MAC_ADDR[3] &lt;&lt; 24) | (MAC_ADDR[2] &lt;&lt; 16) |
+                   (MAC_ADDR[1] &lt;&lt; 8) | MAC_ADDR[0];
+
+    // 5. 配置DMA
+    ETH-&gt;DMAOMR = ETH_DMAOMR_RSF |    // 接收存储转发
+                  ETH_DMAOMR_TSF |    // 发送存储转发
+                  ETH_DMAOMR_OSF;     // 操作第二帧
+
+    // 6. 配置DMA总线模式
+    ETH-&gt;DMABMR = ETH_DMABMR_AAB |    // 地址对齐突发
+                  ETH_DMABMR_FB |     // 固定突发
+                  ETH_DMABMR_RDP_32Beat | // RX DMA突发长度
+                  ETH_DMABMR_PBL_32Beat | // 可编程突发长度
+                  ETH_DMABMR_USP;     // 使用独立PBL
+
+    // 7. 使能MAC和DMA
+    ETH-&gt;MACCR |= ETH_MACCR_TE | ETH_MACCR_RE;  // 使能发送和接收
+    ETH-&gt;DMAOMR |= ETH_DMAOMR_ST | ETH_DMAOMR_SR; // 启动DMA
+}
+</code></pre>
+<h3 id="_18">数据发送和接收</h3>
+<pre><code class="language-c">// 以太网描述符结构
+typedef struct {
+    uint32_t Status;
+    uint32_t ControlBufferSize;
+    uint32_t Buffer1Addr;
+    uint32_t Buffer2NextDescAddr;
+} ETH_DMADescTypeDef;
+
+// 发送和接收缓冲区
+#define ETH_RXBUFNB        4
+#define ETH_TXBUFNB        2
+#define ETH_RX_BUF_SIZE    1524
+#define ETH_TX_BUF_SIZE    1524
+
+__attribute__((aligned(4))) ETH_DMADescTypeDef DMARxDscrTab[ETH_RXBUFNB];
+__attribute__((aligned(4))) ETH_DMADescTypeDef DMATxDscrTab[ETH_TXBUFNB];
+__attribute__((aligned(4))) uint8_t Rx_Buff[ETH_RXBUFNB][ETH_RX_BUF_SIZE];
+__attribute__((aligned(4))) uint8_t Tx_Buff[ETH_TXBUFNB][ETH_TX_BUF_SIZE];
+
+// 初始化DMA描述符
+void ETH_DMATxDescListInit(void) {
+    for (int i = 0; i &lt; ETH_TXBUFNB; i++) {
+        DMATxDscrTab[i].Status = ETH_DMATXDESC_TCH;
+        DMATxDscrTab[i].Buffer1Addr = (uint32_t)(&amp;Tx_Buff[i][0]);
+
+        if (i &lt; (ETH_TXBUFNB - 1)) {
+            DMATxDscrTab[i].Buffer2NextDescAddr = (uint32_t)(&amp;DMATxDscrTab[i + 1]);
+        } else {
+            DMATxDscrTab[i].Buffer2NextDescAddr = (uint32_t)(&amp;DMATxDscrTab[0]);
+        }
+    }
+
+    // 设置发送描述符地址
+    ETH-&gt;DMATDLAR = (uint32_t)DMATxDscrTab;
+}
+
+void ETH_DMARxDescListInit(void) {
+    for (int i = 0; i &lt; ETH_RXBUFNB; i++) {
+        DMARxDscrTab[i].Status = ETH_DMARXDESC_OWN;
+        DMARxDscrTab[i].ControlBufferSize = ETH_DMARXDESC_RCH | ETH_RX_BUF_SIZE;
+        DMARxDscrTab[i].Buffer1Addr = (uint32_t)(&amp;Rx_Buff[i][0]);
+
+        if (i &lt; (ETH_RXBUFNB - 1)) {
+            DMARxDscrTab[i].Buffer2NextDescAddr = (uint32_t)(&amp;DMARxDscrTab[i + 1]);
+        } else {
+            DMARxDscrTab[i].Buffer2NextDescAddr = (uint32_t)(&amp;DMARxDscrTab[0]);
+        }
+    }
+
+    // 设置接收描述符地址
+    ETH-&gt;DMARDLAR = (uint32_t)DMARxDscrTab;
+}
+
+// 发送数据帧
+bool ETH_TransmitFrame(uint8_t *data, uint16_t len) {
+    static uint32_t tx_index = 0;
+
+    // 检查描述符是否可用
+    if (DMATxDscrTab[tx_index].Status &amp; ETH_DMATXDESC_OWN) {
+        return false;  // 描述符忙
+    }
+
+    // 复制数据到发送缓冲区
+    memcpy((uint8_t *)DMATxDscrTab[tx_index].Buffer1Addr, data, len);
+
+    // 配置描述符
+    DMATxDscrTab[tx_index].ControlBufferSize = len &amp; ETH_DMATXDESC_TBS1;
+    DMATxDscrTab[tx_index].Status = ETH_DMATXDESC_OWN |
+                                     ETH_DMATXDESC_FS |
+                                     ETH_DMATXDESC_LS |
+                                     ETH_DMATXDESC_IC;
+
+    // 启动发送
+    if (ETH-&gt;DMASR &amp; ETH_DMASR_TBUS) {
+        ETH-&gt;DMASR = ETH_DMASR_TBUS;
+        ETH-&gt;DMATPDR = 0;
+    }
+
+    // 更新索引
+    tx_index = (tx_index + 1) % ETH_TXBUFNB;
+
+    return true;
+}
+
+// 接收数据帧
+uint16_t ETH_ReceiveFrame(uint8_t *buffer, uint16_t max_len) {
+    static uint32_t rx_index = 0;
+    uint16_t len = 0;
+
+    // 检查是否有数据
+    if (DMARxDscrTab[rx_index].Status &amp; ETH_DMARXDESC_OWN) {
+        return 0;  // 无数据
+    }
+
+    // 检查帧状态
+    if ((DMARxDscrTab[rx_index].Status &amp; ETH_DMARXDESC_ES) == 0 &amp;&amp;
+        (DMARxDscrTab[rx_index].Status &amp; ETH_DMARXDESC_LS) &amp;&amp;
+        (DMARxDscrTab[rx_index].Status &amp; ETH_DMARXDESC_FS)) {
+
+        // 获取帧长度
+        len = ((DMARxDscrTab[rx_index].Status &amp; ETH_DMARXDESC_FL) &gt;&gt; 16) - 4;
+
+        // 复制数据
+        if (len &lt;= max_len) {
+            memcpy(buffer, (uint8_t *)DMARxDscrTab[rx_index].Buffer1Addr, len);
+        } else {
+            len = 0;  // 缓冲区太小
+        }
+    }
+
+    // 释放描述符
+    DMARxDscrTab[rx_index].Status = ETH_DMARXDESC_OWN;
+
+    // 恢复接收
+    if (ETH-&gt;DMASR &amp; ETH_DMASR_RBUS) {
+        ETH-&gt;DMASR = ETH_DMASR_RBUS;
+        ETH-&gt;DMARPDR = 0;
+    }
+
+    // 更新索引
+    rx_index = (rx_index + 1) % ETH_RXBUFNB;
+
+    return len;
+}
+</code></pre>
+<h2 id="_19">常见问题与调试</h2>
+<h3 id="1">问题1：无法建立链路</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>硬件连接问题</strong>
+   - 检查：网线是否正常
+   - 检查：RJ45接口是否接触良好
+   - 解决：更换网线，检查接口</p>
+</li>
+<li>
+<p><strong>PHY配置问题</strong>
+   - 检查：PHY地址是否正确
+   - 检查：时钟是否正常
+   - 解决：确认PHY地址配置，检查时钟信号</p>
+</li>
+<li>
+<p><strong>变压器问题</strong>
+   - 检查：变压器是否损坏
+   - 检查：终端电阻是否正确
+   - 解决：更换变压器，检查电阻值</p>
+</li>
+</ol>
+<p><strong>调试步骤</strong>：</p>
+<pre><code class="language-c">// 检查PHY状态
+void Debug_CheckPHYStatus(void) {
+    uint16_t bsr = ETH_ReadPHYRegister(PHY_BSR);
+
+    printf(&quot;=== PHY状态 ===\n&quot;);
+
+    if (bsr &amp; 0x0004) {
+        printf(&quot;链路状态: 已连接\n&quot;);
+    } else {
+        printf(&quot;链路状态: 未连接\n&quot;);
+    }
+
+    if (bsr &amp; 0x0020) {
+        printf(&quot;自动协商: 完成\n&quot;);
+    } else {
+        printf(&quot;自动协商: 进行中\n&quot;);
+    }
+
+    if (bsr &amp; 0x0001) {
+        printf(&quot;扩展能力: 支持\n&quot;);
+    }
+
+    // 读取链路伙伴能力
+    uint16_t anlpar = ETH_ReadPHYRegister(PHY_ANLPAR);
+    printf(&quot;链路伙伴能力: 0x%04X\n&quot;, anlpar);
+
+    if (anlpar &amp; 0x0100) {
+        printf(&quot;  - 100BASE-TX 全双工\n&quot;);
+    }
+    if (anlpar &amp; 0x0080) {
+        printf(&quot;  - 100BASE-TX 半双工\n&quot;);
+    }
+    if (anlpar &amp; 0x0040) {
+        printf(&quot;  - 10BASE-T 全双工\n&quot;);
+    }
+    if (anlpar &amp; 0x0020) {
+        printf(&quot;  - 10BASE-T 半双工\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="2">问题2：数据传输错误</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>信号完整性问题</strong>
+   - 检查：差分阻抗是否为100Ω
+   - 检查：走线是否等长
+   - 解决：优化PCB布线</p>
+</li>
+<li>
+<p><strong>EMI干扰</strong>
+   - 检查：是否有干扰源
+   - 检查：地平面是否完整
+   - 解决：添加共模扼流圈，改善屏蔽</p>
+</li>
+<li>
+<p><strong>MAC配置问题</strong>
+   - 检查：MAC地址是否正确
+   - 检查：DMA配置是否正确
+   - 解决：检查配置参数</p>
+</li>
+</ol>
+<p><strong>错误统计</strong>：</p>
+<pre><code class="language-c">// 以太网错误计数器
+typedef struct {
+    uint32_t tx_errors;
+    uint32_t rx_errors;
+    uint32_t crc_errors;
+    uint32_t collision_errors;
+} ETH_ErrorCounter_t;
+
+ETH_ErrorCounter_t eth_errors = {0};
+
+// 错误监控
+void ETH_MonitorErrors(void) {
+    uint32_t dmasr = ETH-&gt;DMASR;
+
+    // 检查发送错误
+    if (dmasr &amp; ETH_DMASR_TPS) {
+        eth_errors.tx_errors++;
+        printf(&quot;发送错误计数: %lu\n&quot;, eth_errors.tx_errors);
+    }
+
+    // 检查接收错误
+    if (dmasr &amp; ETH_DMASR_RPS) {
+        eth_errors.rx_errors++;
+        printf(&quot;接收错误计数: %lu\n&quot;, eth_errors.rx_errors);
+    }
+
+    // 清除错误标志
+    ETH-&gt;DMASR = dmasr;
+}
+</code></pre>
+<h3 id="3">问题3：传输速率低</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>
+<p><strong>协商速度低</strong>
+   - 检查：协商结果是10Mbps还是100Mbps
+   - 解决：强制100Mbps模式</p>
+</li>
+<li>
+<p><strong>DMA配置不当</strong>
+   - 检查：DMA突发长度
+   - 检查：缓冲区大小
+   - 解决：优化DMA配置</p>
+</li>
+<li>
+<p><strong>CPU处理延迟</strong>
+   - 检查：中断处理时间
+   - 解决：使用DMA，优化中断处理</p>
+</li>
+</ol>
+<p><strong>性能优化</strong>：</p>
+<pre><code class="language-c">// 强制100Mbps全双工
+void ETH_Force100MFullDuplex(void) {
+    // 禁用自动协商，强制100Mbps全双工
+    ETH_WritePHYRegister(PHY_BCR, 0x2100);
+
+    // 配置MAC为100Mbps全双工
+    ETH-&gt;MACCR |= ETH_MACCR_FES | ETH_MACCR_DM;
+
+    printf(&quot;强制100Mbps全双工模式\n&quot;);
+}
+
+// 优化DMA配置
+void ETH_OptimizeDMA(void) {
+    // 增大DMA突发长度
+    ETH-&gt;DMABMR &amp;= ~ETH_DMABMR_PBL;
+    ETH-&gt;DMABMR |= ETH_DMABMR_PBL_32Beat;
+
+    // 使能存储转发模式
+    ETH-&gt;DMAOMR |= ETH_DMAOMR_RSF | ETH_DMAOMR_TSF;
+
+    printf(&quot;DMA配置已优化\n&quot;);
+}
+</code></pre>
+<h2 id="_20">实用技巧</h2>
+<h3 id="1-led">1. LED指示灯配置</h3>
+<pre><code class="language-c">// 配置PHY LED指示灯
+void ETH_ConfigureLED(void) {
+    // LAN8720A LED配置
+    // LED1: 链路状态/活动
+    // LED2: 速度指示
+
+    // 读取特殊模式寄存器
+    uint16_t reg = ETH_ReadPHYRegister(0x1F);
+
+    // 配置LED模式
+    reg &amp;= ~0x00F0;  // 清除LED配置位
+    reg |= 0x0010;   // LED1: 链路/活动, LED2: 速度
+
+    ETH_WritePHYRegister(0x1F, reg);
+
+    printf(&quot;LED配置完成\n&quot;);
+}
+</code></pre>
+<h3 id="2-wol">2. 网络唤醒（WoL）</h3>
+<pre><code class="language-c">// 配置网络唤醒
+void ETH_ConfigureWakeOnLAN(void) {
+    // 使能魔术包检测
+    ETH-&gt;MACPMTCSR |= ETH_MACPMTCSR_MPE;
+
+    // 使能PMT中断
+    ETH-&gt;MACIMR &amp;= ~ETH_MACIMR_PMTIM;
+
+    printf(&quot;网络唤醒已使能\n&quot;);
+}
+
+// 进入低功耗模式
+void ETH_EnterLowPower(void) {
+    // 配置PHY进入低功耗模式
+    uint16_t bcr = ETH_ReadPHYRegister(PHY_BCR);
+    bcr |= 0x0800;  // 使能低功耗模式
+    ETH_WritePHYRegister(PHY_BCR, bcr);
+
+    // 配置MAC进入低功耗模式
+    ETH-&gt;MACPMTCSR |= ETH_MACPMTCSR_PD;
+
+    printf(&quot;进入低功耗模式\n&quot;);
+}
+</code></pre>
+<h3 id="3_1">3. 环回测试</h3>
+<pre><code class="language-c">// PHY环回测试
+void ETH_LoopbackTest(void) {
+    printf(&quot;开始环回测试...\n&quot;);
+
+    // 使能PHY内部环回
+    uint16_t bcr = ETH_ReadPHYRegister(PHY_BCR);
+    bcr |= 0x4000;  // 使能环回
+    ETH_WritePHYRegister(PHY_BCR, bcr);
+
+    // 准备测试数据
+    uint8_t tx_data[64];
+    uint8_t rx_data[64];
+
+    for (int i = 0; i &lt; 64; i++) {
+        tx_data[i] = i;
+    }
+
+    // 发送数据
+    ETH_TransmitFrame(tx_data, 64);
+    HAL_Delay(10);
+
+    // 接收数据
+    uint16_t len = ETH_ReceiveFrame(rx_data, 64);
+
+    // 验证数据
+    bool pass = true;
+    if (len == 64) {
+        for (int i = 0; i &lt; 64; i++) {
+            if (tx_data[i] != rx_data[i]) {
+                pass = false;
+                break;
+            }
+        }
+    } else {
+        pass = false;
+    }
+
+    // 禁用环回
+    bcr &amp;= ~0x4000;
+    ETH_WritePHYRegister(PHY_BCR, bcr);
+
+    if (pass) {
+        printf(&quot;环回测试通过\n&quot;);
+    } else {
+        printf(&quot;环回测试失败\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="4">4. 链路状态监控</h3>
+<pre><code class="language-c">// 链路状态监控
+void ETH_MonitorLinkStatus(void) {
+    static bool last_link_state = false;
+    bool current_link_state;
+
+    // 读取链路状态
+    uint16_t bsr = ETH_ReadPHYRegister(PHY_BSR);
+    current_link_state = (bsr &amp; 0x0004) != 0;
+
+    // 检测链路变化
+    if (current_link_state != last_link_state) {
+        if (current_link_state) {
+            printf(&quot;链路已连接\n&quot;);
+
+            // 读取协商结果
+            uint16_t anlpar = ETH_ReadPHYRegister(PHY_ANLPAR);
+
+            if (anlpar &amp; 0x0100) {
+                printf(&quot;速度: 100Mbps 全双工\n&quot;);
+            } else if (anlpar &amp; 0x0080) {
+                printf(&quot;速度: 100Mbps 半双工\n&quot;);
+            } else if (anlpar &amp; 0x0040) {
+                printf(&quot;速度: 10Mbps 全双工\n&quot;);
+            } else if (anlpar &amp; 0x0020) {
+                printf(&quot;速度: 10Mbps 半双工\n&quot;);
+            }
+        } else {
+            printf(&quot;链路已断开\n&quot;);
+        }
+
+        last_link_state = current_link_state;
+    }
+}
+</code></pre>
+<h2 id="_21">性能优化</h2>
+<h3 id="_22">提高吞吐量</h3>
+<p><strong>1. 使用零拷贝技术</strong>：</p>
+<pre><code class="language-c">// 零拷贝发送（直接使用DMA缓冲区）
+bool ETH_TransmitZeroCopy(uint8_t **buffer, uint16_t len) {
+    static uint32_t tx_index = 0;
+
+    // 检查描述符是否可用
+    if (DMATxDscrTab[tx_index].Status &amp; ETH_DMATXDESC_OWN) {
+        return false;
+    }
+
+    // 返回缓冲区指针
+    *buffer = (uint8_t *)DMATxDscrTab[tx_index].Buffer1Addr;
+
+    // 配置描述符
+    DMATxDscrTab[tx_index].ControlBufferSize = len &amp; ETH_DMATXDESC_TBS1;
+    DMATxDscrTab[tx_index].Status = ETH_DMATXDESC_OWN |
+                                     ETH_DMATXDESC_FS |
+                                     ETH_DMATXDESC_LS |
+                                     ETH_DMATXDESC_IC;
+
+    // 启动发送
+    if (ETH-&gt;DMASR &amp; ETH_DMASR_TBUS) {
+        ETH-&gt;DMASR = ETH_DMASR_TBUS;
+        ETH-&gt;DMATPDR = 0;
+    }
+
+    // 更新索引
+    tx_index = (tx_index + 1) % ETH_TXBUFNB;
+
+    return true;
+}
+</code></pre>
+<p><strong>2. 增大缓冲区</strong>：</p>
+<pre><code class="language-c">// 增大接收缓冲区数量
+#define ETH_RXBUFNB        8  // 从4增加到8
+#define ETH_TXBUFNB        4  // 从2增加到4
+
+// 增大缓冲区大小
+#define ETH_RX_BUF_SIZE    2048  // 从1524增加到2048
+#define ETH_TX_BUF_SIZE    2048
+</code></pre>
+<h3 id="_23">降低延迟</h3>
+<p><strong>1. 使用中断模式</strong>：</p>
+<pre><code class="language-c">// 使能以太网中断
+void ETH_EnableInterrupt(void) {
+    // 使能接收中断
+    ETH-&gt;DMAIER |= ETH_DMAIER_NISE | ETH_DMAIER_RIE;
+
+    // 配置NVIC
+    NVIC_EnableIRQ(ETH_IRQn);
+    NVIC_SetPriority(ETH_IRQn, 0);  // 最高优先级
+}
+
+// 中断处理函数
+void ETH_IRQHandler(void) {
+    uint32_t dmasr = ETH-&gt;DMASR;
+
+    // 接收中断
+    if (dmasr &amp; ETH_DMASR_RS) {
+        // 立即处理接收数据
+        ETH_ProcessReceivedData();
+
+        // 清除中断标志
+        ETH-&gt;DMASR = ETH_DMASR_RS | ETH_DMASR_NIS;
+    }
+}
+</code></pre>
+<p><strong>2. 优化协议栈</strong>：</p>
+<pre><code class="language-c">// 使用轻量级TCP/IP协议栈（如lwIP）
+// 配置lwIP选项以降低延迟
+
+#define LWIP_NETIF_TX_SINGLE_PBUF  1  // 单个pbuf发送
+#define TCP_SND_QUEUELEN           8  // 发送队列长度
+#define MEMP_NUM_TCP_SEG           16 // TCP段数量
+#define PBUF_POOL_SIZE             16 // pbuf池大小
+</code></pre>
+<h2 id="_24">总结</h2>
+<p>通过本文学习，你已经掌握了：</p>
+<ul>
+<li>✅ <strong>以太网基础</strong>：MAC/PHY架构、MII/RMII接口、信号定义</li>
+<li>✅ <strong>PHY芯片</strong>：选型方法、引脚功能、地址配置</li>
+<li>✅ <strong>变压器设计</strong>：作用原理、类型选择、电路连接</li>
+<li>✅ <strong>硬件设计</strong>：电源设计、时钟设计、PCB布局</li>
+<li>✅ <strong>STM32配置</strong>：GPIO配置、PHY初始化、MAC配置</li>
+<li>✅ <strong>数据传输</strong>：DMA描述符、发送接收、错误处理</li>
+<li>✅ <strong>故障排除</strong>：常见问题诊断和解决方法</li>
+</ul>
+<h3 id="_25">关键要点</h3>
+<ol>
+<li>
+<p><strong>硬件架构</strong>：
+   - MAC负责数据链路层
+   - PHY负责物理层
+   - 变压器提供隔离和阻抗匹配</p>
+</li>
+<li>
+<p><strong>接口选择</strong>：
+   - 嵌入式系统优先选择RMII
+   - RMII只需7根信号线
+   - 50MHz参考时钟</p>
+</li>
+<li>
+<p><strong>变压器设计</strong>：
+   - 必须使用网络变压器
+   - 提供电气隔离
+   - 实现阻抗匹配</p>
+</li>
+<li>
+<p><strong>PCB设计</strong>：
+   - 差分对等长等宽
+   - 完整的地平面
+   - 良好的EMC措施</p>
+</li>
+</ol>
+<h2 id="_26">实践建议</h2>
+<h3 id="_27">初学者练习</h3>
+<ol>
+<li>
+<p><strong>基础通信</strong>：
+   - 搭建STM32以太网节点
+   - 实现简单的数据收发
+   - 测试链路状态</p>
+</li>
+<li>
+<p><strong>PHY配置</strong>：
+   - 读写PHY寄存器
+   - 配置自动协商
+   - 监控链路状态</p>
+</li>
+<li>
+<p><strong>性能测试</strong>：
+   - 测试传输速率
+   - 测试延迟
+   - 优化配置</p>
+</li>
+</ol>
+<h3 id="_28">进阶项目</h3>
+<ol>
+<li>
+<p><strong>TCP/IP协议栈</strong>：
+   - 移植lwIP协议栈
+   - 实现HTTP服务器
+   - 实现MQTT客户端</p>
+</li>
+<li>
+<p><strong>工业以太网</strong>：
+   - 实现Modbus TCP
+   - 实现EtherCAT从站
+   - 实现PROFINET设备</p>
+</li>
+<li>
+<p><strong>网络应用</strong>：
+   - 实现网络摄像头
+   - 实现数据采集器
+   - 实现远程控制</p>
+</li>
+</ol>
+<h2 id="_29">延伸阅读</h2>
+<h3 id="_30">相关文章</h3>
+<ul>
+<li><a href="01-can-bus-hardware.html">CAN总线硬件设计</a> - 学习工业总线通信</li>
+<li><a href="02-usb-hardware.html">USB硬件接口设计</a> - 学习高速接口设计</li>
+<li><a href="../beginner/02-spi-hardware.html">SPI硬件接口与应用</a> - 学习同步通信</li>
+</ul>
+<h3 id="_31">协议实现</h3>
+<ul>
+<li>lwIP协议栈移植</li>
+<li>Modbus TCP实现</li>
+</ul>
+<h3 id="_32">硬件设计</h3>
+<ul>
+<li><a href="../../02-hardware-design-fundamentals/intermediate/01-signal-integrity.html">信号完整性分析</a></li>
+<li><a href="../../02-hardware-design-fundamentals/intermediate/02-emc-design.html">EMC设计实战</a></li>
+<li><a href="../../02-hardware-design-fundamentals/intermediate/03-high-speed-pcb.html">高速PCB设计要点</a></li>
+</ul>
+<h2 id="_33">参考资料</h2>
+<h3 id="_34">数据手册</h3>
+<ol>
+<li><a href="https://www.microchip.com/wwwproducts/en/LAN8720A">LAN8720A Datasheet</a> - Microchip PHY芯片</li>
+<li><a href="https://www.ti.com/product/DP83848">DP83848 Datasheet</a> - TI PHY芯片</li>
+<li><a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4 Reference Manual</a> - 以太网章节</li>
+</ol>
+<h3 id="_35">技术标准</h3>
+<ol>
+<li><strong>IEEE 802.3</strong>：以太网标准</li>
+<li><strong>IEEE 802.3u</strong>：Fast Ethernet（100BASE-TX）</li>
+<li><strong>IEEE 802.3ab</strong>：Gigabit Ethernet（1000BASE-T）</li>
+</ol>
+<h3 id="_36">在线工具</h3>
+<ol>
+<li><a href="https://www.wireshark.org/">Ethernet Frame Calculator</a> - 以太网帧分析</li>
+<li><a href="https://www.eeweb.com/tools/microstrip-impedance/">PCB Impedance Calculator</a> - 阻抗计算器</li>
+<li><a href="https://www.flukenetworks.com/">Network Cable Tester</a> - 网线测试工具</li>
+</ol>
+<h3 id="_37">开源项目</h3>
+<ol>
+<li><a href="https://savannah.nongnu.org/projects/lwip/">lwIP</a> - 轻量级TCP/IP协议栈</li>
+<li><a href="https://github.com/adamdunkels/uip">uIP</a> - 微型TCP/IP协议栈</li>
+<li><a href="https://www.freertos.org/FreeRTOS-Plus/FreeRTOS_Plus_TCP/">FreeRTOS+TCP</a> - FreeRTOS TCP/IP栈</li>
+</ol>
+<h2 id="_38">常见应用场景</h2>
+<h3 id="1_1">1. 工业控制</h3>
+<p><strong>应用</strong>：
+- PLC通信
+- 工业网关
+- 数据采集</p>
+<p><strong>配置</strong>：100BASE-TX，Modbus TCP</p>
+<h3 id="2_1">2. 物联网设备</h3>
+<p><strong>应用</strong>：
+- 智能家居
+- 环境监测
+- 远程控制</p>
+<p><strong>配置</strong>：10/100BASE-TX，MQTT</p>
+<h3 id="3_2">3. 嵌入式服务器</h3>
+<p><strong>应用</strong>：
+- Web服务器
+- 文件服务器
+- 视频流服务器</p>
+<p><strong>配置</strong>：100BASE-TX，HTTP/FTP</p>
+<h3 id="4_1">4. 网络存储</h3>
+<p><strong>应用</strong>：
+- NAS设备
+- 网络硬盘
+- 数据备份</p>
+<p><strong>配置</strong>：1000BASE-T，NFS/SMB</p>
+<h3 id="5">5. 医疗设备</h3>
+<p><strong>应用</strong>：
+- 医疗监护
+- 设备互联
+- 数据传输</p>
+<p><strong>配置</strong>：100BASE-TX，HL7协议</p>
+<h2 id="_39">附录</h2>
+<h3 id="a-phy">A. PHY芯片对比表</h3>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>厂商</th>
+<th>接口</th>
+<th>速度</th>
+<th>封装</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LAN8720A</td>
+<td>Microchip</td>
+<td>RMII</td>
+<td>10/100</td>
+<td>QFN-24</td>
+<td>成本低</td>
+</tr>
+<tr>
+<td>DP83848</td>
+<td>TI</td>
+<td>MII/RMII</td>
+<td>10/100</td>
+<td>LQFP-48</td>
+<td>工业级</td>
+</tr>
+<tr>
+<td>RTL8201F</td>
+<td>Realtek</td>
+<td>MII/RMII</td>
+<td>10/100</td>
+<td>QFN-32</td>
+<td>集成LED</td>
+</tr>
+<tr>
+<td>KSZ8081</td>
+<td>Microchip</td>
+<td>MII/RMII</td>
+<td>10/100</td>
+<td>QFN-24</td>
+<td>低功耗</td>
+</tr>
+<tr>
+<td>LAN8742A</td>
+<td>Microchip</td>
+<td>RMII</td>
+<td>10/100</td>
+<td>QFN-24</td>
+<td>改进版</td>
+</tr>
+</tbody>
+</table>
+<h3 id="b">B. 网络变压器对比表</h3>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>类型</th>
+<th>隔离电压</th>
+<th>插入损耗</th>
+<th>应用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HR911105A</td>
+<td>集成RJ45</td>
+<td>1500V</td>
+<td>&lt;1dB</td>
+<td>通用</td>
+</tr>
+<tr>
+<td>J0011D21BNL</td>
+<td>集成RJ45</td>
+<td>1500V</td>
+<td>&lt;1dB</td>
+<td>工业</td>
+</tr>
+<tr>
+<td>7499111121</td>
+<td>集成RJ45</td>
+<td>1500V</td>
+<td>&lt;1dB</td>
+<td>汽车</td>
+</tr>
+<tr>
+<td>H1102NL</td>
+<td>分立变压器</td>
+<td>1500V</td>
+<td>&lt;0.8dB</td>
+<td>高性能</td>
+</tr>
+</tbody>
+</table>
+<h3 id="c">C. 故障排查检查清单</h3>
+<p><strong>硬件检查</strong>：
+- [ ] 网线连接正常
+- [ ] RJ45接口无损坏
+- [ ] 变压器安装正确
+- [ ] 终端电阻值正确（49.9Ω）
+- [ ] 电源电压正常（3.3V）
+- [ ] 时钟信号正常（50MHz）</p>
+<p><strong>软件检查</strong>：
+- [ ] PHY地址配置正确
+- [ ] GPIO复用功能配置正确
+- [ ] MAC地址配置正确
+- [ ] DMA描述符初始化正确
+- [ ] 中断使能
+- [ ] 协议栈配置正确</p>
+<p><strong>测试方法</strong>：
+- [ ] PHY ID读取正常
+- [ ] 链路状态正常
+- [ ] 环回测试通过
+- [ ] 数据收发正常
+- [ ] 性能测试达标</p>
+<hr />
+<p><strong>反馈与支持</strong>：
+- 如果你在学习过程中遇到问题，欢迎在评论区留言
+- 分享你的项目经验，与其他学习者交流
+- 发现文档错误？请提交Issue帮助我们改进</p>
+<p><strong>版权声明</strong>：本文采用 CC BY-SA 4.0 协议，欢迎分享和改编，但请注明出处。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

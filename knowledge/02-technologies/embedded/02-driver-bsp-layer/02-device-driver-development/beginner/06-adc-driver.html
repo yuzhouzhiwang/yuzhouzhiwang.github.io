@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>ADC驱动开发：模拟信号采集 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/">02-device-driver-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#adc_1">ADC的工作原理</a></li>
+<li><a href="#stm32-adc">STM32 ADC特性</a></li>
+<li><a href="#adc_2">ADC采样模式</a></li>
+<li><a href="#adc_3">ADC关键参数</a></li>
+<li><a href="#adc_4">ADC寄存器概览</a></li>
+</ul>
+</li>
+<li><a href="#_3">环境准备</a><ul>
+<li><a href="#_4">硬件要求</a></li>
+<li><a href="#_5">软件要求</a></li>
+<li><a href="#_6">硬件连接</a></li>
+</ul>
+</li>
+<li><a href="#_7">核心内容</a><ul>
+<li><a href="#1adcgpio">步骤1：ADC时钟和GPIO配置</a></li>
+<li><a href="#2adc">步骤2：ADC基本配置</a></li>
+<li><a href="#3">步骤3：单次转换模式</a></li>
+<li><a href="#4">步骤4：连续转换模式</a></li>
+<li><a href="#5">步骤5：多通道扫描模式</a></li>
+<li><a href="#6dma">步骤6：DMA传输配置</a></li>
+</ul>
+</li>
+<li><a href="#_8">实践示例</a><ul>
+<li><a href="#1">示例1：电位器电压测量</a></li>
+<li><a href="#2">示例2：温度传感器读取</a></li>
+<li><a href="#3_1">示例3：多通道数据采集</a></li>
+<li><a href="#4adc">示例4：ADC数据滤波</a></li>
+</ul>
+</li>
+<li><a href="#_9">深入理解</a><ul>
+<li><a href="#adc_5">ADC校准</a></li>
+<li><a href="#adc_6">ADC精度优化</a></li>
+<li><a href="#adc_7">定时器触发ADC</a></li>
+<li><a href="#adc_8">ADC模拟看门狗</a></li>
+</ul>
+</li>
+<li><a href="#_10">常见问题</a><ul>
+<li><a href="#q1-adc">Q1: ADC读取值不稳定，跳动很大？</a></li>
+<li><a href="#q2-adc">Q2: ADC转换速度太慢？</a></li>
+<li><a href="#q3">Q3: 多通道采集时数据混乱？</a></li>
+<li><a href="#q4-adc">Q4: ADC测量值与实际电压不符？</a></li>
+<li><a href="#q5-dma">Q5: DMA传输的数据不更新？</a></li>
+</ul>
+</li>
+<li><a href="#_11">总结</a></li>
+<li><a href="#_12">延伸阅读</a></li>
+<li><a href="#_13">参考资料</a></li>
+<li><a href="#_14">练习题</a><ul>
+<li><a href="#_15">基础练习</a></li>
+<li><a href="#_16">进阶练习</a></li>
+<li><a href="#_17">综合练习</a></li>
+<li><a href="#_18">思考题</a></li>
+</ul>
+</li>
+<li><a href="#_19">实验任务</a><ul>
+<li><a href="#1_1">任务1：电压表（必做）</a></li>
+<li><a href="#2_1">任务2：温度监测（必做）</a></li>
+<li><a href="#3_2">任务3：多通道数据采集（选做）</a></li>
+<li><a href="#4_1">任务4：信号采集系统（选做）</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="adc">ADC驱动开发：模拟信号采集</h1>
+<h2 id="_1">概述</h2>
+<p>ADC（Analog-to-Digital Converter，模数转换器）是嵌入式系统中连接模拟世界和数字世界的桥梁。通过ADC，微控制器可以采集温度、电压、电流、光照等模拟信号，并将其转换为数字值进行处理。掌握ADC驱动开发是实现传感器数据采集和信号处理的基础。</p>
+<p>本教程将通过实战项目，带你深入理解ADC的工作原理和驱动开发方法，包括单通道采集、多通道扫描、DMA传输和数据处理等核心技术。</p>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解ADC的工作原理和关键参数</li>
+<li>掌握ADC的配置方法和采样模式</li>
+<li>实现单通道和多通道ADC采集</li>
+<li>使用DMA实现高效的数据传输</li>
+<li>进行ADC数据的校准和滤波处理</li>
+<li>设计可靠的ADC驱动程序</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="adc_1">ADC的工作原理</h3>
+<p>ADC将连续的模拟信号转换为离散的数字信号，这个过程包括采样、量化和编码三个步骤。</p>
+<p><strong>ADC转换过程</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[模拟信号] --&gt; B[采样保持]
+    B --&gt; C[量化]
+    C --&gt; D[编码]
+    D --&gt; E[数字输出]
+</code></pre>
+<ol>
+<li>
+<p><strong>采样（Sampling）</strong>：
+   - 在特定时刻对模拟信号进行采样
+   - 采样频率决定了能够捕获的信号频率范围
+   - 根据奈奎斯特定理，采样频率应至少是信号最高频率的2倍</p>
+</li>
+<li>
+<p><strong>量化（Quantization）</strong>：
+   - 将采样值映射到最接近的离散电平
+   - 量化精度由ADC位数决定（8位、10位、12位等）
+   - 量化误差是ADC固有误差</p>
+</li>
+<li>
+<p><strong>编码（Encoding）</strong>：
+   - 将量化后的值转换为二进制数字
+   - 输出到数据寄存器供CPU读取</p>
+</li>
+</ol>
+<p><strong>ADC分辨率与精度</strong>：</p>
+<pre><code>12位ADC：
+- 分辨率：2^12 = 4096个离散值
+- 参考电压3.3V时，最小分辨电压：3.3V / 4096 ≈ 0.8mV
+- 输入电压1.65V时，数字输出：1.65 / 3.3 × 4096 = 2048
+
+10位ADC：
+- 分辨率：2^10 = 1024个离散值
+- 参考电压3.3V时，最小分辨电压：3.3V / 1024 ≈ 3.2mV
+</code></pre>
+<h3 id="stm32-adc">STM32 ADC特性</h3>
+<p>STM32F4系列的ADC具有以下特性：</p>
+<p><strong>硬件特性</strong>：
+- 12位逐次逼近型ADC
+- 转换速度：最高2.4 MSPS（每秒百万次采样）
+- 多达3个ADC控制器（ADC1、ADC2、ADC3）
+- 每个ADC最多19个通道（16个外部通道 + 3个内部通道）
+- 支持单次、连续、扫描和间断模式
+- 支持DMA传输
+- 可编程采样时间
+- 模拟看门狗功能</p>
+<p><strong>ADC通道映射</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>通道</th>
+<th>ADC1</th>
+<th>ADC2</th>
+<th>ADC3</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CH0</td>
+<td>PA0</td>
+<td>PA0</td>
+<td>PA0</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH1</td>
+<td>PA1</td>
+<td>PA1</td>
+<td>PA1</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH2</td>
+<td>PA2</td>
+<td>PA2</td>
+<td>PA2</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH3</td>
+<td>PA3</td>
+<td>PA3</td>
+<td>PA3</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH4</td>
+<td>PA4</td>
+<td>PA4</td>
+<td>PF6</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH5</td>
+<td>PA5</td>
+<td>PA5</td>
+<td>PF7</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH6</td>
+<td>PA6</td>
+<td>PA6</td>
+<td>PF8</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH7</td>
+<td>PA7</td>
+<td>PA7</td>
+<td>PF9</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH8</td>
+<td>PB0</td>
+<td>PB0</td>
+<td>PF10</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH9</td>
+<td>PB1</td>
+<td>PB1</td>
+<td>PF3</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH10</td>
+<td>PC0</td>
+<td>PC0</td>
+<td>PC0</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH11</td>
+<td>PC1</td>
+<td>PC1</td>
+<td>PC1</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH12</td>
+<td>PC2</td>
+<td>PC2</td>
+<td>PC2</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH13</td>
+<td>PC3</td>
+<td>PC3</td>
+<td>PC3</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH14</td>
+<td>PC4</td>
+<td>PC4</td>
+<td>PF4</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH15</td>
+<td>PC5</td>
+<td>PC5</td>
+<td>PF5</td>
+<td>外部通道</td>
+</tr>
+<tr>
+<td>CH16</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>温度传感器</td>
+</tr>
+<tr>
+<td>CH17</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>VREFINT</td>
+</tr>
+<tr>
+<td>CH18</td>
+<td>-</td>
+<td>-</td>
+<td>-</td>
+<td>VBAT</td>
+</tr>
+</tbody>
+</table>
+<p><strong>内部通道说明</strong>：
+- <strong>CH16（温度传感器）</strong>：测量芯片内部温度
+- <strong>CH17（VREFINT）</strong>：内部参考电压（约1.2V）
+- <strong>CH18（VBAT）</strong>：电池电压监测</p>
+<h3 id="adc_2">ADC采样模式</h3>
+<p>STM32 ADC支持多种采样模式：</p>
+<p><strong>1. 单次转换模式（Single Conversion）</strong>
+- 触发一次转换后停止
+- 适合偶尔采样的场景
+- 功耗最低</p>
+<p><strong>2. 连续转换模式（Continuous Conversion）</strong>
+- 转换完成后自动开始下一次转换
+- 适合持续监测的场景
+- 可配合DMA使用</p>
+<p><strong>3. 扫描模式（Scan Mode）</strong>
+- 自动转换多个通道
+- 转换结果存储在数据寄存器中
+- 通常配合DMA使用</p>
+<p><strong>4. 间断模式（Discontinuous Mode）</strong>
+- 将通道序列分组转换
+- 每次触发转换一组通道
+- 适合分时采样</p>
+<h3 id="adc_3">ADC关键参数</h3>
+<p><strong>1. 采样时间（Sampling Time）</strong></p>
+<p>采样时间决定了ADC采样保持电路充电的时间，影响转换精度和速度。</p>
+<pre><code>总转换时间 = 采样时间 + 12.5个ADC时钟周期
+
+例如：
+ADC时钟 = 21MHz
+采样时间 = 3个周期
+总转换时间 = (3 + 12.5) / 21MHz ≈ 0.74μs
+转换速率 = 1 / 0.74μs ≈ 1.35 MSPS
+</code></pre>
+<p><strong>采样时间选择原则</strong>：
+- 源阻抗越大，需要越长的采样时间
+- 精度要求越高，需要越长的采样时间
+- 速度要求越高，可以选择较短的采样时间</p>
+<p><strong>2. ADC时钟频率</strong></p>
+<p>ADC时钟由APB2时钟分频得到：</p>
+<pre><code>ADC时钟 = APB2时钟 / 分频系数
+分频系数：2、4、6、8
+
+例如：APB2 = 84MHz
+分频系数 = 4
+ADC时钟 = 84MHz / 4 = 21MHz（推荐）
+</code></pre>
+<p><strong>注意</strong>：ADC时钟不应超过36MHz（STM32F4）</p>
+<p><strong>3. 参考电压</strong></p>
+<p>ADC的参考电压决定了测量范围：</p>
+<ul>
+<li><strong>VREF+</strong>：正参考电压（通常连接到VDDA）</li>
+<li><strong>VREF-</strong>：负参考电压（通常连接到VSSA/GND）</li>
+<li><strong>测量范围</strong>：VREF- 到 VREF+</li>
+</ul>
+<p><strong>数字输出计算</strong>：</p>
+<pre><code>数字输出 = (输入电压 / VREF+) × (2^分辨率 - 1)
+
+例如：12位ADC，VREF+ = 3.3V
+输入电压 = 1.65V
+数字输出 = (1.65 / 3.3) × 4095 = 2047.5 ≈ 2048
+
+反向计算：
+输入电压 = (数字输出 / 4095) × 3.3V
+</code></pre>
+<h3 id="adc_4">ADC寄存器概览</h3>
+<p>STM32 ADC的主要寄存器：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>全称</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SR</td>
+<td>Status Register</td>
+<td>状态寄存器</td>
+</tr>
+<tr>
+<td>CR1</td>
+<td>Control Register 1</td>
+<td>控制寄存器1：分辨率、扫描模式</td>
+</tr>
+<tr>
+<td>CR2</td>
+<td>Control Register 2</td>
+<td>控制寄存器2：使能、触发、连续模式</td>
+</tr>
+<tr>
+<td>SMPR1/2</td>
+<td>Sample Time Register</td>
+<td>采样时间配置</td>
+</tr>
+<tr>
+<td>SQR1/2/3</td>
+<td>Regular Sequence Register</td>
+<td>规则通道序列配置</td>
+</tr>
+<tr>
+<td>DR</td>
+<td>Data Register</td>
+<td>数据寄存器</td>
+</tr>
+<tr>
+<td>CCR</td>
+<td>Common Control Register</td>
+<td>公共控制寄存器：时钟、模式</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_3">环境准备</h2>
+<h3 id="_4">硬件要求</h3>
+<ul>
+<li>STM32F4系列开发板（如STM32F407VET6）</li>
+<li>可调电位器（10kΩ）</li>
+<li>温度传感器（如LM35、DS18B20）</li>
+<li>光敏电阻或光敏二极管</li>
+<li>面包板和杜邦线</li>
+<li>万用表（用于测量电压）</li>
+</ul>
+<h3 id="_5">软件要求</h3>
+<ul>
+<li>Keil MDK 5.x 或 STM32CubeIDE</li>
+<li>STM32F4 HAL库或标准外设库</li>
+<li>串口调试工具（用于输出ADC值）</li>
+</ul>
+<h3 id="_6">硬件连接</h3>
+<pre><code>STM32F407VET6 ADC连接：
+
+单通道采集（电位器）：
+- 电位器一端 -&gt; 3.3V
+- 电位器另一端 -&gt; GND
+- 电位器中间 -&gt; PA0（ADC1_IN0）
+
+多通道采集：
+- PA0（ADC1_IN0） -&gt; 电位器
+- PA1（ADC1_IN1） -&gt; 光敏电阻分压
+- PA2（ADC1_IN2） -&gt; 温度传感器输出
+- PA3（ADC1_IN3） -&gt; 电压检测电路
+
+注意：
+1. 输入电压不能超过VDDA（通常3.3V）
+2. 高阻抗信号源需要加缓冲电路
+3. 模拟地（VSSA）和数字地（VSS）应良好连接
+</code></pre>
+<h2 id="_7">核心内容</h2>
+<h3 id="1adcgpio">步骤1：ADC时钟和GPIO配置</h3>
+<p>首先需要使能ADC时钟和配置GPIO引脚为模拟输入模式。</p>
+<pre><code class="language-c">#include &quot;stm32f4xx.h&quot;
+
+/**
+ * @brief  ADC1时钟和GPIO初始化
+ * @param  无
+ * @retval 无
+ */
+void ADC1_GPIO_Init(void) {
+    // 1. 使能GPIOA和ADC1时钟
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN;   // GPIOA时钟
+    RCC-&gt;APB2ENR |= RCC_APB2ENR_ADC1EN;    // ADC1时钟（在APB2总线上）
+
+    // 2. 配置PA0为模拟输入模式
+    // MODER寄存器：11=模拟模式
+    GPIOA-&gt;MODER |= (0x03 &lt;&lt; (0 * 2));     // PA0模拟模式
+
+    // 3. 模拟输入不需要配置上拉下拉
+    GPIOA-&gt;PUPDR &amp;= ~(0x03 &lt;&lt; (0 * 2));    // 无上拉下拉
+}
+</code></pre>
+<p><strong>代码说明</strong>：</p>
+<ol>
+<li>
+<p><strong>时钟使能</strong>：
+   - ADC1在APB2总线上，需要使能APB2ENR
+   - GPIO也需要使能对应的时钟</p>
+</li>
+<li>
+<p><strong>GPIO配置</strong>：
+   - 模拟输入模式：MODER = 11
+   - 不需要配置输出类型、速度
+   - 不需要上拉下拉电阻</p>
+</li>
+<li>
+<p><strong>多通道配置</strong>：
+   <code>c
+   // 配置PA0-PA3为模拟输入
+   GPIOA-&gt;MODER |= (0x03 &lt;&lt; 0) | (0x03 &lt;&lt; 2) | 
+                   (0x03 &lt;&lt; 4) | (0x03 &lt;&lt; 6);</code></p>
+</li>
+</ol>
+<h3 id="2adc">步骤2：ADC基本配置</h3>
+<p>配置ADC的分辨率、采样时间和转换模式。</p>
+<pre><code class="language-c">/**
+ * @brief  ADC1基本配置
+ * @param  无
+ * @retval 无
+ */
+void ADC1_Config(void) {
+    // 1. 配置ADC公共寄存器
+    // 设置ADC时钟分频：PCLK2 / 4 = 84MHz / 4 = 21MHz
+    ADC-&gt;CCR &amp;= ~ADC_CCR_ADCPRE;
+    ADC-&gt;CCR |= ADC_CCR_ADCPRE_0;  // 分频系数 = 4
+
+    // 2. 禁用ADC（配置前）
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ADON;
+
+    // 3. 配置分辨率：12位
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_RES;     // 00 = 12位分辨率
+
+    // 4. 配置扫描模式：禁用（单通道）
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_SCAN;
+
+    // 5. 配置连续转换模式：禁用（单次转换）
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_CONT;
+
+    // 6. 配置数据对齐：右对齐
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ALIGN;
+
+    // 7. 配置外部触发：软件触发
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_EXTEN;   // 禁用外部触发
+
+    // 8. 配置通道0的采样时间：15个周期
+    // SMPR2寄存器控制通道0-9
+    ADC1-&gt;SMPR2 &amp;= ~ADC_SMPR2_SMP0;
+    ADC1-&gt;SMPR2 |= (0x02 &lt;&lt; 0);    // 010 = 15个周期
+
+    // 9. 配置规则序列：1个转换，通道0
+    ADC1-&gt;SQR1 &amp;= ~ADC_SQR1_L;     // 序列长度 = 1
+    ADC1-&gt;SQR3 &amp;= ~ADC_SQR3_SQ1;
+    ADC1-&gt;SQR3 |= (0 &lt;&lt; 0);        // 第1个转换：通道0
+
+    // 10. 使能ADC
+    ADC1-&gt;CR2 |= ADC_CR2_ADON;
+
+    // 11. 等待ADC稳定（建议延时）
+    for (volatile int i = 0; i &lt; 10000; i++);
+}
+</code></pre>
+<p><strong>采样时间配置表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>配置值</th>
+<th>采样周期</th>
+<th>总转换时间@21MHz</th>
+<th>转换速率</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>000</td>
+<td>3</td>
+<td>0.74μs</td>
+<td>1.35 MSPS</td>
+</tr>
+<tr>
+<td>001</td>
+<td>15</td>
+<td>1.31μs</td>
+<td>0.76 MSPS</td>
+</tr>
+<tr>
+<td>010</td>
+<td>28</td>
+<td>1.93μs</td>
+<td>0.52 MSPS</td>
+</tr>
+<tr>
+<td>011</td>
+<td>56</td>
+<td>3.26μs</td>
+<td>0.31 MSPS</td>
+</tr>
+<tr>
+<td>100</td>
+<td>84</td>
+<td>4.60μs</td>
+<td>0.22 MSPS</td>
+</tr>
+<tr>
+<td>101</td>
+<td>112</td>
+<td>5.93μs</td>
+<td>0.17 MSPS</td>
+</tr>
+<tr>
+<td>110</td>
+<td>144</td>
+<td>7.45μs</td>
+<td>0.13 MSPS</td>
+</tr>
+<tr>
+<td>111</td>
+<td>480</td>
+<td>23.45μs</td>
+<td>0.04 MSPS</td>
+</tr>
+</tbody>
+</table>
+<p><strong>配置要点</strong>：</p>
+<ol>
+<li>
+<p><strong>ADC时钟分频</strong>：
+   - 通过CCR寄存器的ADCPRE位配置
+   - 确保ADC时钟不超过36MHz</p>
+</li>
+<li>
+<p><strong>分辨率选择</strong>：
+   - 12位：最高精度，转换时间最长
+   - 10位：平衡精度和速度
+   - 8位：速度最快，精度较低
+   - 6位：特殊应用</p>
+</li>
+<li>
+<p><strong>数据对齐</strong>：
+   - 右对齐：数据在低位，高位补0
+   - 左对齐：数据在高位，低位补0</p>
+</li>
+</ol>
+<h3 id="3">步骤3：单次转换模式</h3>
+<p>实现最基本的单次ADC转换。</p>
+<pre><code class="language-c">/**
+ * @brief  读取ADC单次转换结果
+ * @param  channel: ADC通道号（0-18）
+ * @retval ADC转换结果（0-4095）
+ */
+uint16_t ADC1_ReadChannel(uint8_t channel) {
+    // 1. 配置要转换的通道
+    ADC1-&gt;SQR3 &amp;= ~ADC_SQR3_SQ1;
+    ADC1-&gt;SQR3 |= (channel &lt;&lt; 0);
+
+    // 2. 启动转换
+    ADC1-&gt;CR2 |= ADC_CR2_SWSTART;
+
+    // 3. 等待转换完成
+    while (!(ADC1-&gt;SR &amp; ADC_SR_EOC));
+
+    // 4. 读取转换结果
+    return ADC1-&gt;DR;
+}
+
+/**
+ * @brief  将ADC值转换为电压（mV）
+ * @param  adc_value: ADC转换结果
+ * @retval 电压值（mV）
+ */
+uint32_t ADC_ToVoltage(uint16_t adc_value) {
+    // VREF+ = 3300mV, 12位ADC
+    return (uint32_t)adc_value * 3300 / 4095;
+}
+
+/**
+ * @brief  读取电压值
+ * @param  channel: ADC通道号
+ * @retval 电压值（mV）
+ */
+uint32_t ADC1_ReadVoltage(uint8_t channel) {
+    uint16_t adc_value = ADC1_ReadChannel(channel);
+    return ADC_ToVoltage(adc_value);
+}
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">int main(void) {
+    uint16_t adc_value;
+    uint32_t voltage;
+
+    // 系统初始化
+    SystemInit();
+    UART1_Init(115200);  // 用于输出结果
+
+    // ADC初始化
+    ADC1_GPIO_Init();
+    ADC1_Config();
+
+    printf(&quot;ADC Single Conversion Test\r\n&quot;);
+
+    while (1) {
+        // 读取通道0
+        adc_value = ADC1_ReadChannel(0);
+        voltage = ADC_ToVoltage(adc_value);
+
+        printf(&quot;ADC Value: %d, Voltage: %d mV\r\n&quot;, 
+               adc_value, voltage);
+
+        // 延时1秒
+        for (volatile int i = 0; i &lt; 2100000; i++);
+    }
+}
+</code></pre>
+<h3 id="4">步骤4：连续转换模式</h3>
+<p>使用连续转换模式可以持续采集数据，无需每次手动启动。</p>
+<pre><code class="language-c">/**
+ * @brief  配置ADC连续转换模式
+ * @param  channel: ADC通道号
+ * @retval 无
+ */
+void ADC1_ContinuousMode_Init(uint8_t channel) {
+    ADC1_GPIO_Init();
+
+    // 基本配置
+    ADC-&gt;CCR |= ADC_CCR_ADCPRE_0;  // 分频系数 = 4
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ADON;
+
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_RES;     // 12位分辨率
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_SCAN;    // 禁用扫描模式
+
+    // 使能连续转换模式
+    ADC1-&gt;CR2 |= ADC_CR2_CONT;     // 连续转换
+
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ALIGN;   // 右对齐
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_EXTEN;   // 软件触发
+
+    // 配置采样时间
+    ADC1-&gt;SMPR2 &amp;= ~(0x07 &lt;&lt; (channel * 3));
+    ADC1-&gt;SMPR2 |= (0x02 &lt;&lt; (channel * 3));  // 15个周期
+
+    // 配置转换序列
+    ADC1-&gt;SQR1 &amp;= ~ADC_SQR1_L;     // 1个转换
+    ADC1-&gt;SQR3 &amp;= ~ADC_SQR3_SQ1;
+    ADC1-&gt;SQR3 |= (channel &lt;&lt; 0);
+
+    // 使能ADC
+    ADC1-&gt;CR2 |= ADC_CR2_ADON;
+    for (volatile int i = 0; i &lt; 10000; i++);
+
+    // 启动第一次转换
+    ADC1-&gt;CR2 |= ADC_CR2_SWSTART;
+}
+
+/**
+ * @brief  读取连续转换结果
+ * @param  无
+ * @retval ADC转换结果
+ */
+uint16_t ADC1_ReadContinuous(void) {
+    // 等待转换完成
+    while (!(ADC1-&gt;SR &amp; ADC_SR_EOC));
+
+    // 读取结果（读取后自动开始下一次转换）
+    return ADC1-&gt;DR;
+}
+</code></pre>
+<p><strong>连续模式优势</strong>：
+- 无需每次手动启动转换
+- 转换间隔最短，采样率最高
+- 适合实时监测应用</p>
+<h3 id="5">步骤5：多通道扫描模式</h3>
+<p>扫描模式可以自动转换多个通道，配合DMA使用效率更高。</p>
+<pre><code class="language-c">#define ADC_CHANNEL_NUM 4
+
+uint16_t adc_values[ADC_CHANNEL_NUM];
+
+/**
+ * @brief  配置ADC多通道扫描模式
+ * @param  无
+ * @retval 无
+ */
+void ADC1_ScanMode_Init(void) {
+    // 1. GPIO初始化（PA0-PA3）
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+    RCC-&gt;APB2ENR |= RCC_APB2ENR_ADC1EN;
+
+    // 配置PA0-PA3为模拟输入
+    GPIOA-&gt;MODER |= (0x03 &lt;&lt; 0) | (0x03 &lt;&lt; 2) | 
+                    (0x03 &lt;&lt; 4) | (0x03 &lt;&lt; 6);
+
+    // 2. ADC配置
+    ADC-&gt;CCR |= ADC_CCR_ADCPRE_0;
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ADON;
+
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_RES;     // 12位
+    ADC1-&gt;CR1 |= ADC_CR1_SCAN;     // 使能扫描模式
+    ADC1-&gt;CR2 |= ADC_CR2_CONT;     // 连续转换
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ALIGN;   // 右对齐
+
+    // 3. 配置采样时间（通道0-3）
+    ADC1-&gt;SMPR2 = (0x02 &lt;&lt; 0) | (0x02 &lt;&lt; 3) | 
+                  (0x02 &lt;&lt; 6) | (0x02 &lt;&lt; 9);
+
+    // 4. 配置转换序列（4个通道）
+    ADC1-&gt;SQR1 &amp;= ~ADC_SQR1_L;
+    ADC1-&gt;SQR1 |= (3 &lt;&lt; 20);       // 序列长度 = 4
+
+    ADC1-&gt;SQR3 = (0 &lt;&lt; 0) |        // SQ1 = CH0
+                 (1 &lt;&lt; 5) |        // SQ2 = CH1
+                 (2 &lt;&lt; 10) |       // SQ3 = CH2
+                 (3 &lt;&lt; 15);        // SQ4 = CH3
+
+    // 5. 使能ADC
+    ADC1-&gt;CR2 |= ADC_CR2_ADON;
+    for (volatile int i = 0; i &lt; 10000; i++);
+}
+
+/**
+ * @brief  读取多通道扫描结果（轮询方式）
+ * @param  values: 存储结果的数组
+ * @param  num: 通道数量
+ * @retval 无
+ */
+void ADC1_ReadScan(uint16_t *values, uint8_t num) {
+    // 启动转换
+    ADC1-&gt;CR2 |= ADC_CR2_SWSTART;
+
+    // 读取每个通道的结果
+    for (uint8_t i = 0; i &lt; num; i++) {
+        // 等待转换完成
+        while (!(ADC1-&gt;SR &amp; ADC_SR_EOC));
+        values[i] = ADC1-&gt;DR;
+    }
+}
+</code></pre>
+<h3 id="6dma">步骤6：DMA传输配置</h3>
+<p>使用DMA可以实现ADC数据的自动传输，完全不占用CPU资源。</p>
+<pre><code class="language-c">/**
+ * @brief  配置DMA2用于ADC1数据传输
+ * @param  buffer: 数据缓冲区
+ * @param  size: 缓冲区大小
+ * @retval 无
+ */
+void ADC1_DMA_Config(uint16_t *buffer, uint16_t size) {
+    // 1. 使能DMA2时钟（ADC1使用DMA2）
+    RCC-&gt;AHB1ENR |= RCC_AHB1ENR_DMA2EN;
+
+    // 2. 配置DMA2 Stream0 Channel0（ADC1）
+    DMA2_Stream0-&gt;CR = 0;  // 先禁用
+    while (DMA2_Stream0-&gt;CR &amp; DMA_SxCR_EN);  // 等待禁用完成
+
+    // 3. 配置DMA参数
+    DMA2_Stream0-&gt;PAR = (uint32_t)&amp;ADC1-&gt;DR;  // 外设地址
+    DMA2_Stream0-&gt;M0AR = (uint32_t)buffer;    // 内存地址
+    DMA2_Stream0-&gt;NDTR = size;                // 数据量
+
+    DMA2_Stream0-&gt;CR = (0 &lt;&lt; 25) |  // Channel 0
+                       (1 &lt;&lt; 16) |  // 优先级：中
+                       (1 &lt;&lt; 13) |  // 内存数据大小：半字（16位）
+                       (1 &lt;&lt; 11) |  // 外设数据大小：半字
+                       (1 &lt;&lt; 10) |  // 内存地址递增
+                       (0 &lt;&lt; 9) |   // 外设地址不递增
+                       (1 &lt;&lt; 8) |   // 循环模式
+                       (0 &lt;&lt; 6);    // 外设到内存
+
+    // 4. 清除DMA标志
+    DMA2-&gt;LIFCR = DMA_LIFCR_CTCIF0 | DMA_LIFCR_CHTIF0 | 
+                  DMA_LIFCR_CTEIF0 | DMA_LIFCR_CDMEIF0 | 
+                  DMA_LIFCR_CFEIF0;
+
+    // 5. 使能DMA
+    DMA2_Stream0-&gt;CR |= DMA_SxCR_EN;
+}
+
+/**
+ * @brief  配置ADC1 + DMA多通道采集
+ * @param  buffer: 数据缓冲区
+ * @param  channels: 通道数量
+ * @retval 无
+ */
+void ADC1_DMA_Init(uint16_t *buffer, uint8_t channels) {
+    // 1. GPIO和ADC基本配置
+    ADC1_ScanMode_Init();
+
+    // 2. 使能DMA模式
+    ADC1-&gt;CR2 |= ADC_CR2_DMA;      // 使能DMA请求
+    ADC1-&gt;CR2 |= ADC_CR2_DDS;      // DMA连续请求
+
+    // 3. 配置DMA
+    ADC1_DMA_Config(buffer, channels);
+
+    // 4. 启动ADC转换
+    ADC1-&gt;CR2 |= ADC_CR2_SWSTART;
+}
+
+/**
+ * @brief  使用示例
+ */
+int main(void) {
+    uint16_t adc_buffer[4];
+
+    SystemInit();
+    UART1_Init(115200);
+
+    // 初始化ADC + DMA
+    ADC1_DMA_Init(adc_buffer, 4);
+
+    printf(&quot;ADC DMA Multi-Channel Test\r\n&quot;);
+
+    while (1) {
+        // DMA自动更新adc_buffer，直接读取即可
+        printf(&quot;CH0: %4d (%4d mV)  &quot;, 
+               adc_buffer[0], ADC_ToVoltage(adc_buffer[0]));
+        printf(&quot;CH1: %4d (%4d mV)  &quot;, 
+               adc_buffer[1], ADC_ToVoltage(adc_buffer[1]));
+        printf(&quot;CH2: %4d (%4d mV)  &quot;, 
+               adc_buffer[2], ADC_ToVoltage(adc_buffer[2]));
+        printf(&quot;CH3: %4d (%4d mV)\r\n&quot;, 
+               adc_buffer[3], ADC_ToVoltage(adc_buffer[3]));
+
+        // 延时
+        for (volatile int i = 0; i &lt; 2100000; i++);
+    }
+}
+</code></pre>
+<p><strong>DMA优势</strong>：
+- 完全不占用CPU资源
+- 数据自动传输到内存
+- 支持循环模式，适合连续采集
+- 可以配合定时器触发实现定时采样</p>
+<h2 id="_8">实践示例</h2>
+<h3 id="1">示例1：电位器电压测量</h3>
+<p>使用ADC测量电位器的电压值，并通过串口输出。</p>
+<pre><code class="language-c">/**
+ * @brief  主函数 - 电位器电压测量
+ */
+int main(void) {
+    uint16_t adc_value;
+    uint32_t voltage;
+    float percentage;
+
+    SystemInit();
+    UART1_Init(115200);
+    ADC1_GPIO_Init();
+    ADC1_Config();
+
+    printf(&quot;\r\n=== Potentiometer Voltage Measurement ===\r\n&quot;);
+    printf(&quot;Turn the potentiometer to see voltage changes\r\n\r\n&quot;);
+
+    while (1) {
+        // 读取ADC值
+        adc_value = ADC1_ReadChannel(0);
+        voltage = ADC_ToVoltage(adc_value);
+        percentage = (float)adc_value / 4095.0f * 100.0f;
+
+        // 输出结果
+        printf(&quot;ADC: %4d  Voltage: %4d mV  Position: %5.1f%%\r\n&quot;, 
+               adc_value, voltage, percentage);
+
+        // 延时500ms
+        for (volatile int i = 0; i &lt; 1050000; i++);
+    }
+}
+</code></pre>
+<p><strong>运行效果</strong>：</p>
+<pre><code>=== Potentiometer Voltage Measurement ===
+Turn the potentiometer to see voltage changes
+
+ADC: 0     Voltage: 0    mV  Position:   0.0%
+ADC: 512   Voltage: 412  mV  Position:  12.5%
+ADC: 2048  Voltage: 1650 mV  Position:  50.0%
+ADC: 4095  Voltage: 3300 mV  Position: 100.0%
+</code></pre>
+<h3 id="2">示例2：温度传感器读取</h3>
+<p>使用ADC读取芯片内部温度传感器。</p>
+<pre><code class="language-c">/**
+ * @brief  读取芯片内部温度
+ * @param  无
+ * @retval 温度值（℃）
+ */
+float ADC_ReadTemperature(void) {
+    uint16_t adc_value;
+    float voltage;
+    float temperature;
+
+    // 使能温度传感器
+    ADC-&gt;CCR |= ADC_CCR_TSVREFE;
+
+    // 读取温度传感器通道（CH16）
+    adc_value = ADC1_ReadChannel(16);
+
+    // 转换为电压（mV）
+    voltage = (float)adc_value * 3300.0f / 4095.0f;
+
+    // 根据数据手册公式计算温度
+    // Temp = (V25 - Vsense) / Avg_Slope + 25
+    // V25 ≈ 760mV, Avg_Slope ≈ 2.5mV/℃
+    temperature = (760.0f - voltage) / 2.5f + 25.0f;
+
+    return temperature;
+}
+
+/**
+ * @brief  主函数 - 温度监测
+ */
+int main(void) {
+    float temperature;
+
+    SystemInit();
+    UART1_Init(115200);
+    ADC1_GPIO_Init();
+    ADC1_Config();
+
+    printf(&quot;\r\n=== Internal Temperature Sensor ===\r\n\r\n&quot;);
+
+    while (1) {
+        temperature = ADC_ReadTemperature();
+        printf(&quot;Temperature: %.1f °C\r\n&quot;, temperature);
+
+        // 延时1秒
+        for (volatile int i = 0; i &lt; 2100000; i++);
+    }
+}
+</code></pre>
+<h3 id="3_1">示例3：多通道数据采集</h3>
+<p>同时采集多个模拟信号，如电压、温度、光照等。</p>
+<pre><code class="language-c">/**
+ * @brief  主函数 - 多通道数据采集
+ */
+int main(void) {
+    uint16_t adc_buffer[4];
+
+    SystemInit();
+    UART1_Init(115200);
+
+    // 初始化ADC + DMA
+    ADC1_DMA_Init(adc_buffer, 4);
+
+    printf(&quot;\r\n=== Multi-Channel Data Acquisition ===\r\n&quot;);
+    printf(&quot;CH0: Potentiometer\r\n&quot;);
+    printf(&quot;CH1: Light Sensor\r\n&quot;);
+    printf(&quot;CH2: Temperature Sensor\r\n&quot;);
+    printf(&quot;CH3: Voltage Monitor\r\n\r\n&quot;);
+
+    while (1) {
+        // 显示表头
+        printf(&quot;┌─────────┬─────────┬─────────┬─────────┐\r\n&quot;);
+        printf(&quot;│   CH0   │   CH1   │   CH2   │   CH3   │\r\n&quot;);
+        printf(&quot;├─────────┼─────────┼─────────┼─────────┤\r\n&quot;);
+
+        // 显示ADC原始值
+        printf(&quot;│  %4d   │  %4d   │  %4d   │  %4d   │\r\n&quot;,
+               adc_buffer[0], adc_buffer[1], 
+               adc_buffer[2], adc_buffer[3]);
+
+        // 显示电压值
+        printf(&quot;│ %4dmV  │ %4dmV  │ %4dmV  │ %4dmV  │\r\n&quot;,
+               ADC_ToVoltage(adc_buffer[0]),
+               ADC_ToVoltage(adc_buffer[1]),
+               ADC_ToVoltage(adc_buffer[2]),
+               ADC_ToVoltage(adc_buffer[3]));
+
+        printf(&quot;└─────────┴─────────┴─────────┴─────────┘\r\n\r\n&quot;);
+
+        // 延时1秒
+        for (volatile int i = 0; i &lt; 2100000; i++);
+    }
+}
+</code></pre>
+<h3 id="4adc">示例4：ADC数据滤波</h3>
+<p>使用滑动平均滤波提高ADC采样精度。</p>
+<pre><code class="language-c">#define FILTER_SIZE 10
+
+/**
+ * @brief  滑动平均滤波
+ * @param  new_value: 新采样值
+ * @retval 滤波后的值
+ */
+uint16_t ADC_MovingAverage(uint16_t new_value) {
+    static uint16_t buffer[FILTER_SIZE] = {0};
+    static uint8_t index = 0;
+    static uint32_t sum = 0;
+
+    // 减去最旧的值
+    sum -= buffer[index];
+
+    // 添加新值
+    buffer[index] = new_value;
+    sum += new_value;
+
+    // 更新索引
+    index = (index + 1) % FILTER_SIZE;
+
+    // 返回平均值
+    return sum / FILTER_SIZE;
+}
+
+/**
+ * @brief  中位值滤波
+ * @param  values: 采样值数组
+ * @param  size: 数组大小
+ * @retval 中位值
+ */
+uint16_t ADC_MedianFilter(uint16_t *values, uint8_t size) {
+    uint16_t temp[size];
+
+    // 复制数组
+    for (uint8_t i = 0; i &lt; size; i++) {
+        temp[i] = values[i];
+    }
+
+    // 冒泡排序
+    for (uint8_t i = 0; i &lt; size - 1; i++) {
+        for (uint8_t j = 0; j &lt; size - i - 1; j++) {
+            if (temp[j] &gt; temp[j + 1]) {
+                uint16_t swap = temp[j];
+                temp[j] = temp[j + 1];
+                temp[j + 1] = swap;
+            }
+        }
+    }
+
+    // 返回中位值
+    return temp[size / 2];
+}
+
+/**
+ * @brief  主函数 - 滤波示例
+ */
+int main(void) {
+    uint16_t raw_value, filtered_value;
+
+    SystemInit();
+    UART1_Init(115200);
+    ADC1_GPIO_Init();
+    ADC1_ContinuousMode_Init(0);
+
+    printf(&quot;\r\n=== ADC Filtering Example ===\r\n\r\n&quot;);
+
+    while (1) {
+        // 读取原始值
+        raw_value = ADC1_ReadContinuous();
+
+        // 滤波处理
+        filtered_value = ADC_MovingAverage(raw_value);
+
+        // 输出对比
+        printf(&quot;Raw: %4d  Filtered: %4d  Diff: %4d\r\n&quot;,
+               raw_value, filtered_value, 
+               (int16_t)raw_value - (int16_t)filtered_value);
+
+        // 延时100ms
+        for (volatile int i = 0; i &lt; 210000; i++);
+    }
+}
+</code></pre>
+<h2 id="_9">深入理解</h2>
+<h3 id="adc_5">ADC校准</h3>
+<p>ADC在使用前应进行校准以提高精度。</p>
+<pre><code class="language-c">/**
+ * @brief  ADC校准
+ * @param  无
+ * @retval 无
+ */
+void ADC1_Calibration(void) {
+    // 1. 确保ADC已使能
+    if (!(ADC1-&gt;CR2 &amp; ADC_CR2_ADON)) {
+        ADC1-&gt;CR2 |= ADC_CR2_ADON;
+        for (volatile int i = 0; i &lt; 10000; i++);
+    }
+
+    // 2. 复位校准
+    ADC1-&gt;CR2 |= ADC_CR2_RSTCAL;
+    while (ADC1-&gt;CR2 &amp; ADC_CR2_RSTCAL);
+
+    // 3. 启动校准
+    ADC1-&gt;CR2 |= ADC_CR2_CAL;
+    while (ADC1-&gt;CR2 &amp; ADC_CR2_CAL);
+
+    // 4. 校准完成
+    printf(&quot;ADC Calibration Complete\r\n&quot;);
+}
+</code></pre>
+<p><strong>注意</strong>：STM32F4的ADC不需要手动校准，但STM32F1系列需要。</p>
+<h3 id="adc_6">ADC精度优化</h3>
+<p>提高ADC测量精度的方法：</p>
+<p><strong>1. 硬件优化</strong>：</p>
+<pre><code class="language-c">// 使用内部参考电压校准
+float ADC_GetVREF(void) {
+    uint16_t vrefint_data;
+
+    // 读取内部参考电压（CH17）
+    vrefint_data = ADC1_ReadChannel(17);
+
+    // VREFINT典型值：1.21V
+    // 实际VDDA = 1.21V × 4095 / vrefint_data
+    return 1.21f * 4095.0f / (float)vrefint_data;
+}
+
+// 使用校准后的VREF计算电压
+uint32_t ADC_ToVoltage_Calibrated(uint16_t adc_value) {
+    float vref = ADC_GetVREF();
+    return (uint32_t)(adc_value * vref * 1000.0f / 4095.0f);
+}
+</code></pre>
+<p><strong>2. 软件优化</strong>：</p>
+<pre><code class="language-c">// 多次采样取平均
+uint16_t ADC_ReadAverage(uint8_t channel, uint8_t samples) {
+    uint32_t sum = 0;
+
+    for (uint8_t i = 0; i &lt; samples; i++) {
+        sum += ADC1_ReadChannel(channel);
+    }
+
+    return sum / samples;
+}
+
+// 去除最大最小值后取平均
+uint16_t ADC_ReadTrimmedAverage(uint8_t channel, uint8_t samples) {
+    uint16_t values[samples];
+    uint32_t sum = 0;
+    uint16_t max = 0, min = 4095;
+
+    // 采样
+    for (uint8_t i = 0; i &lt; samples; i++) {
+        values[i] = ADC1_ReadChannel(channel);
+        sum += values[i];
+        if (values[i] &gt; max) max = values[i];
+        if (values[i] &lt; min) min = values[i];
+    }
+
+    // 去除最大最小值
+    sum = sum - max - min;
+
+    return sum / (samples - 2);
+}
+</code></pre>
+<h3 id="adc_7">定时器触发ADC</h3>
+<p>使用定时器触发ADC可以实现精确的定时采样。</p>
+<pre><code class="language-c">/**
+ * @brief  配置定时器触发ADC
+ * @param  无
+ * @retval 无
+ */
+void ADC1_TimerTrigger_Init(void) {
+    // 1. 配置TIM2触发ADC（1kHz采样率）
+    RCC-&gt;APB1ENR |= RCC_APB1ENR_TIM2EN;
+
+    TIM2-&gt;PSC = 8399;              // 预分频：84MHz / 8400 = 10kHz
+    TIM2-&gt;ARR = 9;                 // 自动重载：10kHz / 10 = 1kHz
+    TIM2-&gt;CR2 |= (0x02 &lt;&lt; 4);      // TRGO = Update event
+    TIM2-&gt;CR1 |= TIM_CR1_CEN;      // 启动定时器
+
+    // 2. 配置ADC外部触发
+    ADC1_GPIO_Init();
+    ADC-&gt;CCR |= ADC_CCR_ADCPRE_0;
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ADON;
+
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_RES;
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_SCAN;
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_CONT;    // 禁用连续模式
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_ALIGN;
+
+    // 配置外部触发源：TIM2 TRGO
+    ADC1-&gt;CR2 &amp;= ~ADC_CR2_EXTSEL;
+    ADC1-&gt;CR2 |= (0x06 &lt;&lt; 24);     // TIM2_TRGO
+    ADC1-&gt;CR2 |= ADC_CR2_EXTEN_0;  // 上升沿触发
+
+    // 配置通道
+    ADC1-&gt;SMPR2 |= (0x02 &lt;&lt; 0);
+    ADC1-&gt;SQR1 &amp;= ~ADC_SQR1_L;
+    ADC1-&gt;SQR3 = (0 &lt;&lt; 0);
+
+    // 使能ADC
+    ADC1-&gt;CR2 |= ADC_CR2_ADON;
+    for (volatile int i = 0; i &lt; 10000; i++);
+}
+</code></pre>
+<p><strong>定时触发优势</strong>：
+- 精确的采样间隔
+- 不占用CPU资源
+- 适合信号分析和FFT处理
+- 可配合DMA实现完全自动化采样</p>
+<h3 id="adc_8">ADC模拟看门狗</h3>
+<p>模拟看门狗可以监测ADC值是否超出设定范围。</p>
+<pre><code class="language-c">/**
+ * @brief  配置ADC模拟看门狗
+ * @param  low_threshold: 低阈值
+ * @param  high_threshold: 高阈值
+ * @retval 无
+ */
+void ADC1_Watchdog_Init(uint16_t low_threshold, uint16_t high_threshold) {
+    // 配置阈值
+    ADC1-&gt;LTR = low_threshold;
+    ADC1-&gt;HTR = high_threshold;
+
+    // 使能模拟看门狗（监测所有通道）
+    ADC1-&gt;CR1 |= ADC_CR1_AWDEN;    // 规则通道看门狗
+    ADC1-&gt;CR1 &amp;= ~ADC_CR1_AWDSGL;  // 监测所有通道
+
+    // 使能看门狗中断
+    ADC1-&gt;CR1 |= ADC_CR1_AWDIE;
+    NVIC_EnableIRQ(ADC_IRQn);
+}
+
+/**
+ * @brief  ADC中断服务函数
+ * @param  无
+ * @retval 无
+ */
+void ADC_IRQHandler(void) {
+    if (ADC1-&gt;SR &amp; ADC_SR_AWD) {
+        // 清除看门狗标志
+        ADC1-&gt;SR &amp;= ~ADC_SR_AWD;
+
+        // 处理超限事件
+        printf(&quot;ADC Watchdog Alert!\r\n&quot;);
+    }
+}
+</code></pre>
+<h2 id="_10">常见问题</h2>
+<h3 id="q1-adc">Q1: ADC读取值不稳定，跳动很大？</h3>
+<p><strong>可能原因</strong>：
+1. 电源噪声干扰
+2. 输入信号源阻抗过高
+3. 采样时间过短
+4. 参考电压不稳定
+5. PCB布线不当</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 增加采样时间
+ADC1-&gt;SMPR2 |= (0x07 &lt;&lt; 0);  // 480个周期
+
+// 2. 多次采样取平均
+uint16_t value = ADC_ReadAverage(0, 10);
+
+// 3. 使用滤波算法
+uint16_t filtered = ADC_MovingAverage(raw_value);
+
+// 4. 硬件上添加滤波电容（0.1μF + 10μF）
+// 5. 使用低阻抗信号源或添加运放缓冲
+</code></pre>
+<h3 id="q2-adc">Q2: ADC转换速度太慢？</h3>
+<p><strong>可能原因</strong>：
+1. 采样时间设置过长
+2. ADC时钟频率过低
+3. 使用轮询方式等待转换完成</p>
+<p><strong>优化方案</strong>：</p>
+<pre><code class="language-c">// 1. 减少采样时间（在精度允许的情况下）
+ADC1-&gt;SMPR2 &amp;= ~(0x07 &lt;&lt; 0);
+ADC1-&gt;SMPR2 |= (0x00 &lt;&lt; 0);  // 3个周期
+
+// 2. 提高ADC时钟频率
+ADC-&gt;CCR &amp;= ~ADC_CCR_ADCPRE;
+ADC-&gt;CCR |= (0x00 &lt;&lt; 16);    // 分频系数 = 2
+
+// 3. 使用DMA + 连续模式
+ADC1_DMA_Init(buffer, channels);
+
+// 4. 使用中断方式
+ADC1-&gt;CR1 |= ADC_CR1_EOCIE;  // 使能转换完成中断
+</code></pre>
+<h3 id="q3">Q3: 多通道采集时数据混乱？</h3>
+<p><strong>可能原因</strong>：
+1. 扫描模式配置错误
+2. DMA配置不正确
+3. 通道序列设置错误
+4. 数据对齐方式不匹配</p>
+<p><strong>排查步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查扫描模式是否使能
+if (!(ADC1-&gt;CR1 &amp; ADC_CR1_SCAN)) {
+    ADC1-&gt;CR1 |= ADC_CR1_SCAN;
+}
+
+// 2. 检查序列长度配置
+uint8_t length = ((ADC1-&gt;SQR1 &gt;&gt; 20) &amp; 0x0F) + 1;
+printf(&quot;Sequence Length: %d\r\n&quot;, length);
+
+// 3. 检查DMA配置
+printf(&quot;DMA NDTR: %d\r\n&quot;, DMA2_Stream0-&gt;NDTR);
+
+// 4. 使用调试输出验证每个通道
+for (uint8_t i = 0; i &lt; 4; i++) {
+    printf(&quot;CH%d: %d\r\n&quot;, i, adc_buffer[i]);
+}
+</code></pre>
+<h3 id="q4-adc">Q4: ADC测量值与实际电压不符？</h3>
+<p><strong>可能原因</strong>：
+1. 参考电压不准确
+2. 输入电压超出范围
+3. 计算公式错误
+4. ADC未校准</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 使用内部参考电压校准
+float vref = ADC_GetVREF();
+printf(&quot;VREF: %.3f V\r\n&quot;, vref);
+
+// 2. 检查输入电压范围
+if (adc_value &gt;= 4090) {
+    printf(&quot;Warning: Input voltage may exceed VREF+\r\n&quot;);
+}
+
+// 3. 使用正确的计算公式
+uint32_t voltage = (uint32_t)adc_value * 3300 / 4095;
+
+// 4. 使用万用表验证
+printf(&quot;Measured: %d mV (Please verify with multimeter)\r\n&quot;, voltage);
+</code></pre>
+<h3 id="q5-dma">Q5: DMA传输的数据不更新？</h3>
+<p><strong>可能原因</strong>：
+1. DMA未正确配置
+2. ADC的DMA请求未使能
+3. DMA循环模式未使能
+4. ADC未启动转换</p>
+<p><strong>排查步骤</strong>：</p>
+<pre><code class="language-c">// 1. 检查DMA是否使能
+if (!(DMA2_Stream0-&gt;CR &amp; DMA_SxCR_EN)) {
+    printf(&quot;DMA not enabled!\r\n&quot;);
+}
+
+// 2. 检查ADC DMA请求
+if (!(ADC1-&gt;CR2 &amp; ADC_CR2_DMA)) {
+    printf(&quot;ADC DMA request not enabled!\r\n&quot;);
+}
+
+// 3. 检查循环模式
+if (!(DMA2_Stream0-&gt;CR &amp; DMA_SxCR_CIRC)) {
+    printf(&quot;DMA circular mode not enabled!\r\n&quot;);
+}
+
+// 4. 检查ADC是否在转换
+if (!(ADC1-&gt;SR &amp; ADC_SR_STRT)) {
+    printf(&quot;ADC conversion not started!\r\n&quot;);
+    ADC1-&gt;CR2 |= ADC_CR2_SWSTART;
+}
+</code></pre>
+<h2 id="_11">总结</h2>
+<p>本教程全面介绍了ADC驱动开发的核心知识和实践技能。让我们回顾一下要点：</p>
+<p><strong>核心知识点</strong>：
+- ADC的工作原理：采样、量化、编码三个步骤
+- ADC关键参数：分辨率、采样时间、参考电压、转换速度
+- 采样模式：单次、连续、扫描、间断模式
+- DMA传输：实现高效的数据采集，不占用CPU资源
+- 数据处理：滤波、校准、精度优化</p>
+<p><strong>实践技能</strong>：
+- 单通道ADC采集：电位器电压测量
+- 多通道扫描采集：同时采集多个信号
+- DMA自动传输：高效的数据采集方案
+- 数据滤波处理：提高测量精度和稳定性
+- 定时器触发：实现精确的定时采样</p>
+<p><strong>最佳实践</strong>：
+- 合理选择采样时间，平衡速度和精度
+- 使用DMA + 连续模式实现高效采集
+- 对ADC数据进行滤波处理
+- 使用内部参考电压进行校准
+- 注意硬件电路设计，减少干扰</p>
+<p><strong>调试技巧</strong>：
+- 使用万用表验证测量结果
+- 通过串口输出调试信息
+- 检查寄存器配置是否正确
+- 使用示波器观察模拟信号
+- 逐步验证每个功能模块</p>
+<p>ADC是嵌入式系统与模拟世界交互的重要接口，掌握ADC驱动开发将为你的项目开发提供强大的数据采集能力。</p>
+<h2 id="_12">延伸阅读</h2>
+<p>推荐进一步学习的内容：</p>
+<p><strong>同模块内容</strong>：
+- <a href="01-gpio-driver.html">GPIO驱动开发：LED控制实战</a> - GPIO基础
+- <a href="02-uart-driver.html">UART串口驱动开发与调试</a> - 数据输出
+- <a href="05-timer-driver.html">定时器驱动基础与应用</a> - 定时触发ADC
+- <a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - DMA深入</p>
+<p><strong>相关主题</strong>：
+- <a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础概念</a> - 中断处理
+- <a href="../../05-clock-timer-management/beginner/01-clock-system.html">时钟系统架构与配置</a> - ADC时钟配置</p>
+<p><strong>官方文档</strong>：
+- <a href="https://www.st.com/resource/en/reference_manual/dm00031020.pdf">STM32F4xx参考手册</a> - ADC章节
+- <a href="https://www.st.com/resource/en/datasheet/stm32f407vg.pdf">STM32F4xx数据手册</a> - ADC电气特性
+- <a href="https://www.st.com/resource/en/application_note/cd00258017.pdf">AN3116: STM32 ADC模式和应用</a></p>
+<p><strong>开源项目</strong>：
+- <a href="https://github.com/STMicroelectronics/STM32CubeF4">STM32 HAL库</a> - 官方HAL库ADC驱动
+- <a href="https://github.com/libopencm3/libopencm3">libopencm3</a> - 开源STM32库</p>
+<h2 id="_13">参考资料</h2>
+<ol>
+<li>STM32F4xx参考手册 - STMicroelectronics</li>
+<li>ARM Cortex-M4权威指南 - Joseph Yiu</li>
+<li>嵌入式系统设计与实践 - Elecia White</li>
+<li>STM32库开发实战指南 - 野火团队</li>
+<li>深入浅出STM32 - 刘军</li>
+</ol>
+<h2 id="_14">练习题</h2>
+<h3 id="_15">基础练习</h3>
+<ol>
+<li>
+<p><strong>单通道采集练习</strong>：
+   - 使用电位器实现电压测量
+   - 通过串口输出ADC值和电压值
+   - 添加百分比显示（0-100%）</p>
+</li>
+<li>
+<p><strong>多通道采集练习</strong>：
+   - 同时采集4个通道的数据
+   - 使用DMA自动传输
+   - 通过串口输出所有通道的值</p>
+</li>
+<li>
+<p><strong>数据滤波练习</strong>：
+   - 实现滑动平均滤波
+   - 实现中位值滤波
+   - 对比滤波前后的效果</p>
+</li>
+</ol>
+<h3 id="_16">进阶练习</h3>
+<ol start="4">
+<li>
+<p><strong>温度监测系统</strong>：
+   - 读取芯片内部温度传感器
+   - 实现温度报警功能（超过阈值）
+   - 记录最高和最低温度</p>
+</li>
+<li>
+<p><strong>电压监测系统</strong>：
+   - 监测电池电压
+   - 实现低电压报警
+   - 显示电量百分比</p>
+</li>
+<li>
+<p><strong>数据采集系统</strong>：
+   - 使用定时器触发ADC
+   - 以固定频率采集数据（如1kHz）
+   - 将数据存储到缓冲区
+   - 通过串口上传到PC</p>
+</li>
+</ol>
+<h3 id="_17">综合练习</h3>
+<ol start="7">
+<li>
+<p><strong>多功能数据采集器</strong>：
+   - 采集温度、电压、光照等多个参数
+   - 实现数据滤波和校准
+   - 通过LCD显示实时数据
+   - 支持数据记录和导出</p>
+</li>
+<li>
+<p><strong>信号分析仪</strong>：
+   - 高速采集模拟信号
+   - 实现FFT频谱分析
+   - 显示波形和频谱
+   - 测量信号频率和幅值</p>
+</li>
+</ol>
+<h3 id="_18">思考题</h3>
+<ol>
+<li>
+<p>为什么ADC的采样时间不能设置得太短？会有什么影响？</p>
+</li>
+<li>
+<p>在什么情况下应该使用DMA传输ADC数据？有什么优势？</p>
+</li>
+<li>
+<p>如何选择合适的滤波算法？不同滤波算法的优缺点是什么？</p>
+</li>
+<li>
+<p>ADC的分辨率越高越好吗？在实际应用中如何权衡？</p>
+</li>
+<li>
+<p>如何设计一个高精度的ADC采集系统？需要考虑哪些因素？</p>
+</li>
+</ol>
+<h2 id="_19">实验任务</h2>
+<h3 id="1_1">任务1：电压表（必做）</h3>
+<p><strong>要求</strong>：
+- 使用ADC测量0-3.3V的电压
+- 通过串口输出电压值
+- 精度要求：±10mV
+- 更新频率：10Hz</p>
+<p><strong>提示</strong>：</p>
+<pre><code class="language-c">// 使用多次采样提高精度
+uint16_t value = ADC_ReadAverage(0, 10);
+uint32_t voltage = ADC_ToVoltage(value);
+printf(&quot;Voltage: %d.%03d V\r\n&quot;, voltage / 1000, voltage % 1000);
+</code></pre>
+<h3 id="2_1">任务2：温度监测（必做）</h3>
+<p><strong>要求</strong>：
+- 读取芯片内部温度传感器
+- 显示当前温度（℃）
+- 记录最高和最低温度
+- 温度超过50℃时报警</p>
+<h3 id="3_2">任务3：多通道数据采集（选做）</h3>
+<p><strong>要求</strong>：
+- 同时采集4个通道的数据
+- 使用DMA自动传输
+- 实现数据滤波
+- 通过串口输出格式化数据</p>
+<h3 id="4_1">任务4：信号采集系统（选做）</h3>
+<p><strong>要求</strong>：
+- 使用定时器触发ADC（1kHz采样率）
+- 采集1秒的数据（1000个点）
+- 计算信号的平均值、最大值、最小值
+- 通过串口上传数据到PC</p>
+<p><strong>评分标准</strong>：
+- 代码规范性（20分）
+- 功能完整性（30分）
+- 测量精度（30分）
+- 创新性和扩展性（20分）</p>
+<hr />
+<p><strong>下一步学习建议</strong>：</p>
+<p>完成本教程后，建议按以下顺序继续学习：</p>
+<ol>
+<li><a href="07-pwm-driver.html">PWM驱动开发：电机调速控制</a> - 学习PWM输出控制</li>
+<li><a href="../intermediate/01-dma-driver.html">DMA驱动开发：高效数据传输</a> - 深入学习DMA</li>
+<li><a href="05-timer-driver.html">定时器驱动基础与应用</a> - 定时器触发ADC</li>
+</ol>
+<p><strong>学习路线图</strong>：</p>
+<pre><code class="language-mermaid">graph LR
+    A[ADC驱动] --&gt; B[传感器接口]
+    A --&gt; C[信号处理]
+    B --&gt; D[温度采集]
+    B --&gt; E[电压监测]
+    C --&gt; F[数字滤波]
+    C --&gt; G[FFT分析]
+    D --&gt; H[环境监测系统]
+    E --&gt; H
+    F --&gt; H
+</code></pre>
+<p>祝你学习顺利！如有问题，欢迎在社区讨论。</p>
+<hr />
+<p><strong>文档信息</strong>：
+- 最后更新：2024-01-15
+- 版本：v1.0
+- 作者：嵌入式知识平台
+- 许可：CC BY-NC-SA 4.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

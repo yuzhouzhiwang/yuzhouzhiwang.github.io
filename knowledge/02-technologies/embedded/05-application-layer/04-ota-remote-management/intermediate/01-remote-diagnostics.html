@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>嵌入式远程诊断与调试技术 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/05-application-layer/">05-application-layer</a> / <a href="/knowledge/02-technologies/embedded/05-application-layer/04-ota-remote-management/">04-ota-remote-management</a> / <a href="/knowledge/02-technologies/embedded/05-application-layer/04-ota-remote-management/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">学习目标</a></li>
+<li><a href="#_3">前置要求</a></li>
+<li><a href="#_4">准备工作</a><ul>
+<li><a href="#_5">硬件准备</a></li>
+<li><a href="#_6">软件准备</a></li>
+<li><a href="#_7">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_8">远程诊断系统架构</a><ul>
+<li><a href="#_9">系统组成</a></li>
+<li><a href="#_10">诊断数据类型</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1：日志系统设计</a><ul>
+<li><a href="#11">1.1 日志级别定义</a></li>
+<li><a href="#12">1.2 日志管理器实现</a></li>
+<li><a href="#22-mqtt">2.2 MQTT日志上传</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：性能监控实现</a><ul>
+<li><a href="#31">3.1 性能指标定义</a></li>
+<li><a href="#32">3.2 性能数据采集</a></li>
+<li><a href="#33">3.3 性能数据上报</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：故障检测与上报</a><ul>
+<li><a href="#41">4.1 故障类型定义</a></li>
+<li><a href="#42">4.2 故障检测实现</a></li>
+<li><a href="#43">4.3 故障上报</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：远程调试命令</a><ul>
+<li><a href="#51">5.1 调试命令定义</a></li>
+<li><a href="#52">5.2 命令处理实现</a></li>
+<li><a href="#53">5.3 命令接收和分发</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：完整示例程序</a><ul>
+<li><a href="#61">6.1 主程序实现</a></li>
+<li><a href="#62">6.2 测试和验证</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7：远程调试测试</a><ul>
+<li><a href="#71">7.1 发送调试命令</a></li>
+<li><a href="#72">7.2 查看日志上传</a></li>
+<li><a href="#73">7.3 查看性能监控数据</a></li>
+<li><a href="#74">7.4 查看故障上报</a></li>
+</ul>
+</li>
+<li><a href="#_11">故障排除</a><ul>
+<li><a href="#1_1">问题1：日志未上传</a></li>
+<li><a href="#2">问题2：性能数据不准确</a></li>
+<li><a href="#3_1">问题3：故障检测误报</a></li>
+<li><a href="#4_1">问题4：远程命令无响应</a></li>
+<li><a href="#5_1">问题5：时间戳不准确</a></li>
+</ul>
+</li>
+<li><a href="#_12">总结</a></li>
+<li><a href="#_13">进阶挑战</a></li>
+<li><a href="#_14">完整代码</a></li>
+<li><a href="#_15">下一步</a></li>
+<li><a href="#_16">参考资料</a></li>
+<li><a href="#_17">附录：诊断数据格式规范</a><ul>
+<li><a href="#a1">A.1 日志消息格式</a></li>
+<li><a href="#a2">A.2 性能数据格式</a></li>
+<li><a href="#a3">A.3 故障记录格式</a></li>
+<li><a href="#a4">A.4 调试命令格式</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">嵌入式远程诊断与调试技术</h1>
+<h2 id="_2">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解远程诊断系统的架构和工作原理</li>
+<li>[ ] 实现远程日志收集和分级管理</li>
+<li>[ ] 掌握设备性能监控和数据上报</li>
+<li>[ ] 学会远程故障诊断和问题定位方法</li>
+<li>[ ] 实现远程调试命令和交互式诊断</li>
+<li>[ ] 处理诊断数据的存储和分析</li>
+</ul>
+<h2 id="_3">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 熟悉C/C++编程和嵌入式开发
+- 了解MQTT或HTTP协议
+- 掌握日志系统的基本概念
+- 理解系统性能指标（CPU、内存、网络）</p>
+<p><strong>技能要求</strong>：
+- 能够使用嵌入式开发环境
+- 会配置网络连接和MQTT通信
+- 了解基本的调试方法和工具
+- 掌握JSON数据格式</p>
+<h2 id="_4">准备工作</h2>
+<h3 id="_5">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>支持网络连接</td>
+<td>ESP32、STM32+W5500</td>
+</tr>
+<tr>
+<td>调试器</td>
+<td>1</td>
+<td>用于程序下载</td>
+<td>ST-Link、USB-TTL</td>
+</tr>
+<tr>
+<td>路由器</td>
+<td>1</td>
+<td>提供网络连接</td>
+<td>-</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推荐配置</strong>：
+- <strong>处理器</strong>：ESP32（双核、WiFi集成）
+- <strong>内存</strong>：至少512KB Flash、128KB RAM
+- <strong>网络</strong>：WiFi或以太网
+- <strong>存储</strong>：支持文件系统（LittleFS/SPIFFS）</p>
+<h3 id="_6">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：Arduino IDE、PlatformIO 或 ESP-IDF</li>
+<li><strong>MQTT服务器</strong>：EMQX、Mosquitto 或云服务</li>
+<li><strong>日志查看工具</strong>：MQTTX、Node-RED、Grafana</li>
+<li><strong>JSON库</strong>：ArduinoJson</li>
+<li><strong>时间同步</strong>：NTP客户端库</li>
+</ul>
+<h3 id="_7">环境配置</h3>
+<ol>
+<li>安装开发环境和必要的库</li>
+<li>搭建MQTT服务器（或使用云服务）</li>
+<li>配置网络连接参数</li>
+<li>准备日志查看和分析工具</li>
+</ol>
+<h2 id="_8">远程诊断系统架构</h2>
+<h3 id="_9">系统组成</h3>
+<p>远程诊断系统通常包含以下组件：</p>
+<pre><code>设备端诊断模块 ←→ 通信层 ←→ 云端诊断平台
+     ↓                         ↓
+  日志收集器              日志存储分析
+  性能监控器              监控仪表板
+  故障检测器              告警系统
+  调试接口                远程控制台
+</code></pre>
+<p><strong>架构层次</strong>：</p>
+<ol>
+<li>
+<p><strong>设备端层</strong>：
+   - 日志收集和缓存
+   - 性能数据采集
+   - 故障检测和上报
+   - 远程命令执行</p>
+</li>
+<li>
+<p><strong>通信层</strong>：
+   - MQTT/HTTP协议
+   - 数据压缩和加密
+   - 断线重连和队列
+   - 流量控制</p>
+</li>
+<li>
+<p><strong>云端层</strong>：
+   - 日志存储和检索
+   - 数据可视化
+   - 告警和通知
+   - 诊断分析工具</p>
+</li>
+</ol>
+<h3 id="_10">诊断数据类型</h3>
+<pre><code class="language-mermaid">graph TD
+    A[诊断数据] --&gt; B[日志数据]
+    A --&gt; C[性能数据]
+    A --&gt; D[故障数据]
+    A --&gt; E[调试数据]
+
+    B --&gt; B1[系统日志]
+    B --&gt; B2[应用日志]
+    B --&gt; B3[错误日志]
+
+    C --&gt; C1[CPU使用率]
+    C --&gt; C2[内存使用]
+    C --&gt; C3[网络状态]
+
+    D --&gt; D1[异常事件]
+    D --&gt; D2[错误代码]
+    D --&gt; D3[堆栈信息]
+
+    E --&gt; E1[变量值]
+    E --&gt; E2[寄存器状态]
+    E --&gt; E3[执行跟踪]
+</code></pre>
+<h2 id="1">步骤1：日志系统设计</h2>
+<h3 id="11">1.1 日志级别定义</h3>
+<pre><code class="language-c">// remote_log.h
+#ifndef REMOTE_LOG_H
+#define REMOTE_LOG_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 日志级别
+typedef enum {
+    LOG_LEVEL_NONE = 0,    // 不输出日志
+    LOG_LEVEL_ERROR = 1,   // 错误：严重问题
+    LOG_LEVEL_WARN = 2,    // 警告：潜在问题
+    LOG_LEVEL_INFO = 3,    // 信息：重要事件
+    LOG_LEVEL_DEBUG = 4,   // 调试：详细信息
+    LOG_LEVEL_TRACE = 5    // 跟踪：最详细
+} log_level_t;
+
+// 日志类别
+typedef enum {
+    LOG_CAT_SYSTEM = 0,    // 系统日志
+    LOG_CAT_NETWORK,       // 网络日志
+    LOG_CAT_SENSOR,        // 传感器日志
+    LOG_CAT_APP,           // 应用日志
+    LOG_CAT_MAX
+} log_category_t;
+
+// 日志条目结构
+typedef struct {
+    uint32_t timestamp;         // 时间戳（Unix时间）
+    log_level_t level;          // 日志级别
+    log_category_t category;    // 日志类别
+    char message[256];          // 日志消息
+    char file[32];              // 源文件名
+    uint16_t line;              // 行号
+    char function[32];          // 函数名
+} log_entry_t;
+
+// 日志配置
+typedef struct {
+    log_level_t console_level;  // 串口输出级别
+    log_level_t remote_level;   // 远程上报级别
+    log_level_t storage_level;  // 本地存储级别
+    bool enable_remote;         // 启用远程日志
+    uint16_t buffer_size;       // 缓冲区大小
+    uint16_t upload_interval;   // 上传间隔（秒）
+} log_config_t;
+
+#endif // REMOTE_LOG_H
+</code></pre>
+<h3 id="12">1.2 日志管理器实现</h3>
+<pre><code class="language-c">// remote_log.cpp
+#include &quot;remote_log.h&quot;
+#include &lt;Arduino.h&gt;
+#include &lt;time.h&gt;
+
+// 日志级别名称
+const char* log_level_names[] = {
+    &quot;NONE&quot;, &quot;ERROR&quot;, &quot;WARN&quot;, &quot;INFO&quot;, &quot;DEBUG&quot;, &quot;TRACE&quot;
+};
+
+// 日志类别名称
+const char* log_category_names[] = {
+    &quot;SYSTEM&quot;, &quot;NETWORK&quot;, &quot;SENSOR&quot;, &quot;APP&quot;
+};
+
+// 全局日志配置
+static log_config_t log_config = {
+    .console_level = LOG_LEVEL_INFO,
+    .remote_level = LOG_LEVEL_WARN,
+    .storage_level = LOG_LEVEL_ERROR,
+    .enable_remote = true,
+    .buffer_size = 100,
+    .upload_interval = 60
+};
+
+// 日志缓冲区
+#define LOG_BUFFER_SIZE 100
+static log_entry_t log_buffer[LOG_BUFFER_SIZE];
+static uint16_t log_buffer_head = 0;
+static uint16_t log_buffer_tail = 0;
+static uint16_t log_buffer_count = 0;
+
+// 初始化日志系统
+void log_init(void)
+{
+    Serial.println(&quot;Log system initialized&quot;);
+
+    // 同步系统时间（NTP）
+    configTime(8 * 3600, 0, &quot;pool.ntp.org&quot;, &quot;time.nist.gov&quot;);
+
+    // 等待时间同步
+    Serial.print(&quot;Waiting for time sync&quot;);
+    time_t now = time(nullptr);
+    int retry = 0;
+    while (now &lt; 1000000000 &amp;&amp; retry &lt; 20) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+        now = time(nullptr);
+        retry++;
+    }
+    Serial.println();
+
+    if (now &gt; 1000000000) {
+        Serial.printf(&quot;Time synced: %s&quot;, ctime(&amp;now));
+    } else {
+        Serial.println(&quot;Time sync failed, using relative time&quot;);
+    }
+}
+
+// 设置日志配置
+void log_set_config(const log_config_t *config)
+{
+    memcpy(&amp;log_config, config, sizeof(log_config_t));
+}
+
+// 获取当前时间戳
+uint32_t log_get_timestamp(void)
+{
+    time_t now = time(nullptr);
+    if (now &gt; 1000000000) {
+        return (uint32_t)now;
+    } else {
+        // 如果时间未同步，使用相对时间
+        return millis() / 1000;
+    }
+}
+</code></pre>
+<p>// 写入日志（内部函数）
+void log_write_internal(log_level_t level, 
+                       log_category_t category,
+                       const char <em>file,
+                       uint16_t line,
+                       const char </em>function,
+                       const char *format, 
+                       va_list args)
+{
+    // 创建日志条目
+    log_entry_t entry;
+    entry.timestamp = log_get_timestamp();
+    entry.level = level;
+    entry.category = category;
+    entry.line = line;</p>
+<pre><code>// 复制文件名和函数名
+strncpy(entry.file, file, sizeof(entry.file) - 1);
+strncpy(entry.function, function, sizeof(entry.function) - 1);
+
+// 格式化消息
+vsnprintf(entry.message, sizeof(entry.message), format, args);
+
+// 输出到串口
+if (level &lt;= log_config.console_level) {
+    Serial.printf("[%lu][%s][%s] %s (%s:%d %s)\n",
+                 entry.timestamp,
+                 log_level_names[level],
+                 log_category_names[category],
+                 entry.message,
+                 entry.file,
+                 entry.line,
+                 entry.function);
+}
+
+// 添加到缓冲区（用于远程上传）
+if (level &lt;= log_config.remote_level &amp;&amp; log_config.enable_remote) {
+    if (log_buffer_count &lt; LOG_BUFFER_SIZE) {
+        memcpy(&amp;log_buffer[log_buffer_head], &amp;entry, sizeof(log_entry_t));
+        log_buffer_head = (log_buffer_head + 1) % LOG_BUFFER_SIZE;
+        log_buffer_count++;
+    } else {
+        // 缓冲区满，覆盖最旧的日志
+        log_buffer_head = (log_buffer_head + 1) % LOG_BUFFER_SIZE;
+        log_buffer_tail = (log_buffer_tail + 1) % LOG_BUFFER_SIZE;
+    }
+}
+
+// 保存到本地存储（可选）
+if (level &lt;= log_config.storage_level) {
+    log_save_to_storage(&amp;entry);
+}
+</code></pre>
+<p>}</p>
+<p>// 日志宏定义
+#define LOG_ERROR(cat, fmt, ...) \
+    log_write(LOG_LEVEL_ERROR, cat, <strong>FILE</strong>, <strong>LINE</strong>, <strong>FUNCTION</strong>, fmt, ##<strong>VA_ARGS</strong>)</p>
+<p>#define LOG_WARN(cat, fmt, ...) \
+    log_write(LOG_LEVEL_WARN, cat, <strong>FILE</strong>, <strong>LINE</strong>, <strong>FUNCTION</strong>, fmt, ##<strong>VA_ARGS</strong>)</p>
+<p>#define LOG_INFO(cat, fmt, ...) \
+    log_write(LOG_LEVEL_INFO, cat, <strong>FILE</strong>, <strong>LINE</strong>, <strong>FUNCTION</strong>, fmt, ##<strong>VA_ARGS</strong>)</p>
+<p>#define LOG_DEBUG(cat, fmt, ...) \
+    log_write(LOG_LEVEL_DEBUG, cat, <strong>FILE</strong>, <strong>LINE</strong>, <strong>FUNCTION</strong>, fmt, ##<strong>VA_ARGS</strong>)</p>
+<p>// 日志写入函数
+void log_write(log_level_t level,
+              log_category_t category,
+              const char <em>file,
+              uint16_t line,
+              const char </em>function,
+              const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    log_write_internal(level, category, file, line, function, format, args);
+    va_end(args);
+}</p>
+<p>// 获取缓冲区中的日志数量
+uint16_t log_get_buffer_count(void)
+{
+    return log_buffer_count;
+}</p>
+<p>// 从缓冲区读取日志
+bool log_read_from_buffer(log_entry_t *entry)
+{
+    if (log_buffer_count == 0) {
+        return false;
+    }</p>
+<pre><code>memcpy(entry, &amp;log_buffer[log_buffer_tail], sizeof(log_entry_t));
+log_buffer_tail = (log_buffer_tail + 1) % LOG_BUFFER_SIZE;
+log_buffer_count--;
+
+return true;
+</code></pre>
+<p>}</p>
+<p>// 清空日志缓冲区
+void log_clear_buffer(void)
+{
+    log_buffer_head = 0;
+    log_buffer_tail = 0;
+    log_buffer_count = 0;
+}</p>
+<pre><code>
+**代码说明**：
+- 第1-20行：定义日志条目结构，包含时间戳、级别、类别和详细信息
+- 第40-60行：初始化时同步NTP时间，确保时间戳准确
+- 第75-110行：日志写入函数，支持多级别输出（串口、远程、存储）
+- 第112-117行：定义便捷的日志宏，自动捕获文件名、行号和函数名
+
+## 步骤2：远程日志上传
+
+### 2.1 日志JSON格式化
+
+```c
+// 将日志条目转换为JSON
+String log_entry_to_json(const log_entry_t *entry)
+{
+    DynamicJsonDocument doc(512);
+
+    doc[&quot;timestamp&quot;] = entry-&gt;timestamp;
+    doc[&quot;level&quot;] = log_level_names[entry-&gt;level];
+    doc[&quot;category&quot;] = log_category_names[entry-&gt;category];
+    doc[&quot;message&quot;] = entry-&gt;message;
+    doc[&quot;file&quot;] = entry-&gt;file;
+    doc[&quot;line&quot;] = entry-&gt;line;
+    doc[&quot;function&quot;] = entry-&gt;function;
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    return json_str;
+}
+
+// 批量日志JSON格式化
+String log_batch_to_json(const log_entry_t *entries, uint16_t count)
+{
+    DynamicJsonDocument doc(4096);
+
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;count&quot;] = count;
+    doc[&quot;upload_time&quot;] = log_get_timestamp();
+
+    JsonArray logs = doc.createNestedArray(&quot;logs&quot;);
+
+    for (uint16_t i = 0; i &lt; count; i++) {
+        JsonObject log_obj = logs.createNestedObject();
+        log_obj[&quot;timestamp&quot;] = entries[i].timestamp;
+        log_obj[&quot;level&quot;] = log_level_names[entries[i].level];
+        log_obj[&quot;category&quot;] = log_category_names[entries[i].category];
+        log_obj[&quot;message&quot;] = entries[i].message;
+        log_obj[&quot;file&quot;] = entries[i].file;
+        log_obj[&quot;line&quot;] = entries[i].line;
+        log_obj[&quot;function&quot;] = entries[i].function;
+    }
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    return json_str;
+}
+</code></pre>
+<h3 id="22-mqtt">2.2 MQTT日志上传</h3>
+<pre><code class="language-c">// MQTT主题定义
+#define TOPIC_LOG_UPLOAD    &quot;device/%s/log/upload&quot;
+#define TOPIC_LOG_CONTROL   &quot;device/%s/log/control&quot;
+
+// 上传单条日志
+bool log_upload_single(const log_entry_t *entry)
+{
+    if (!mqtt_client.connected()) {
+        return false;
+    }
+
+    String json_str = log_entry_to_json(entry);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), TOPIC_LOG_UPLOAD, device_id);
+
+    bool success = mqtt_client.publish(topic, json_str.c_str());
+
+    if (success) {
+        Serial.println(&quot;Log uploaded&quot;);
+    } else {
+        Serial.println(&quot;Log upload failed&quot;);
+    }
+
+    return success;
+}
+
+// 批量上传日志
+bool log_upload_batch(void)
+{
+    if (!mqtt_client.connected()) {
+        return false;
+    }
+
+    uint16_t count = log_get_buffer_count();
+    if (count == 0) {
+        return true;  // 没有日志需要上传
+    }
+
+    // 限制单次上传数量
+    const uint16_t MAX_BATCH_SIZE = 20;
+    if (count &gt; MAX_BATCH_SIZE) {
+        count = MAX_BATCH_SIZE;
+    }
+
+    // 读取日志到临时数组
+    log_entry_t entries[MAX_BATCH_SIZE];
+    for (uint16_t i = 0; i &lt; count; i++) {
+        if (!log_read_from_buffer(&amp;entries[i])) {
+            break;
+        }
+    }
+
+    // 转换为JSON并上传
+    String json_str = log_batch_to_json(entries, count);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), TOPIC_LOG_UPLOAD, device_id);
+
+    bool success = mqtt_client.publish(topic, json_str.c_str());
+
+    if (success) {
+        Serial.printf(&quot;Uploaded %d logs\n&quot;, count);
+    } else {
+        Serial.println(&quot;Batch upload failed&quot;);
+        // 上传失败，将日志放回缓冲区
+        // （实际实现中可能需要更复杂的重试机制）
+    }
+
+    return success;
+}
+
+// 定期上传任务
+void log_upload_task(void)
+{
+    static unsigned long last_upload = 0;
+    unsigned long now = millis();
+
+    if (now - last_upload &gt;= log_config.upload_interval * 1000) {
+        last_upload = now;
+
+        if (log_get_buffer_count() &gt; 0) {
+            log_upload_batch();
+        }
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第1-16行：将单条日志转换为JSON格式
+- 第19-44行：批量日志转换，减少网络传输次数
+- 第60-75行：单条日志上传函数
+- 第78-115行：批量上传函数，限制单次上传数量避免内存溢出
+- 第118-131行：定期上传任务，在主循环中调用</p>
+<h2 id="3">步骤3：性能监控实现</h2>
+<h3 id="31">3.1 性能指标定义</h3>
+<pre><code class="language-c">// performance_monitor.h
+#ifndef PERFORMANCE_MONITOR_H
+#define PERFORMANCE_MONITOR_H
+
+#include &lt;stdint.h&gt;
+
+// 性能指标结构
+typedef struct {
+    // CPU相关
+    float cpu_usage;           // CPU使用率 (%)
+    uint32_t cpu_frequency;    // CPU频率 (MHz)
+
+    // 内存相关
+    uint32_t heap_total;       // 堆总大小 (bytes)
+    uint32_t heap_free;        // 堆空闲大小 (bytes)
+    uint32_t heap_used;        // 堆已用大小 (bytes)
+    float heap_usage;          // 堆使用率 (%)
+    uint32_t heap_max_alloc;   // 最大可分配块 (bytes)
+
+    // 任务相关
+    uint16_t task_count;       // 任务数量
+    uint32_t stack_high_water; // 栈最小剩余 (bytes)
+
+    // 网络相关
+    bool wifi_connected;       // WiFi连接状态
+    int8_t wifi_rssi;          // WiFi信号强度 (dBm)
+    uint32_t bytes_sent;       // 发送字节数
+    uint32_t bytes_received;   // 接收字节数
+
+    // 系统相关
+    uint32_t uptime;           // 运行时间 (秒)
+    uint32_t free_storage;     // 存储空间剩余 (bytes)
+    float temperature;         // 芯片温度 (°C)
+
+    // 时间戳
+    uint32_t timestamp;
+} performance_metrics_t;
+
+#endif // PERFORMANCE_MONITOR_H
+</code></pre>
+<h3 id="32">3.2 性能数据采集</h3>
+<pre><code class="language-c">// performance_monitor.cpp
+#include &quot;performance_monitor.h&quot;
+#include &lt;Arduino.h&gt;
+#include &lt;WiFi.h&gt;
+#include &lt;LittleFS.h&gt;
+
+// 全局性能指标
+static performance_metrics_t current_metrics;
+static uint32_t last_idle_time = 0;
+static uint32_t last_total_time = 0;
+
+// 初始化性能监控
+void perf_monitor_init(void)
+{
+    memset(&amp;current_metrics, 0, sizeof(performance_metrics_t));
+    Serial.println(&quot;Performance monitor initialized&quot;);
+}
+
+// 采集CPU使用率
+float perf_get_cpu_usage(void)
+{
+    // ESP32特定实现
+    // 通过空闲任务的运行时间计算CPU使用率
+    uint32_t idle_time = 0;
+    uint32_t total_time = millis();
+
+    // 获取空闲任务运行时间（需要FreeRTOS支持）
+    #ifdef ESP32
+    TaskHandle_t idle_task = xTaskGetIdleTaskHandle();
+    if (idle_task != NULL) {
+        idle_time = uxTaskGetSystemState(NULL, 0, &amp;total_time);
+    }
+    #endif
+
+    // 计算CPU使用率
+    uint32_t idle_delta = idle_time - last_idle_time;
+    uint32_t total_delta = total_time - last_total_time;
+
+    float cpu_usage = 0.0;
+    if (total_delta &gt; 0) {
+        cpu_usage = 100.0 - (idle_delta * 100.0 / total_delta);
+    }
+
+    last_idle_time = idle_time;
+    last_total_time = total_time;
+
+    return cpu_usage;
+}
+
+// 采集内存信息
+void perf_get_memory_info(performance_metrics_t *metrics)
+{
+    metrics-&gt;heap_total = ESP.getHeapSize();
+    metrics-&gt;heap_free = ESP.getFreeHeap();
+    metrics-&gt;heap_used = metrics-&gt;heap_total - metrics-&gt;heap_free;
+    metrics-&gt;heap_usage = (float)metrics-&gt;heap_used * 100.0 / metrics-&gt;heap_total;
+    metrics-&gt;heap_max_alloc = ESP.getMaxAllocHeap();
+}
+
+// 采集网络信息
+void perf_get_network_info(performance_metrics_t *metrics)
+{
+    metrics-&gt;wifi_connected = WiFi.isConnected();
+    if (metrics-&gt;wifi_connected) {
+        metrics-&gt;wifi_rssi = WiFi.RSSI();
+    } else {
+        metrics-&gt;wifi_rssi = -100;
+    }
+
+    // 网络流量统计（需要自己维护计数器）
+    // metrics-&gt;bytes_sent = ...
+    // metrics-&gt;bytes_received = ...
+}
+
+// 采集系统信息
+void perf_get_system_info(performance_metrics_t *metrics)
+{
+    metrics-&gt;uptime = millis() / 1000;
+    metrics-&gt;cpu_frequency = ESP.getCpuFreqMHz();
+
+    // 获取存储空间信息
+    if (LittleFS.begin()) {
+        metrics-&gt;free_storage = LittleFS.totalBytes() - LittleFS.usedBytes();
+    }
+
+    // 获取芯片温度（ESP32特定）
+    #ifdef ESP32
+    metrics-&gt;temperature = temperatureRead();
+    #endif
+}
+
+// 采集所有性能指标
+void perf_collect_metrics(performance_metrics_t *metrics)
+{
+    metrics-&gt;timestamp = log_get_timestamp();
+
+    // 采集各项指标
+    metrics-&gt;cpu_usage = perf_get_cpu_usage();
+    perf_get_memory_info(metrics);
+    perf_get_network_info(metrics);
+    perf_get_system_info(metrics);
+
+    // 保存到全局变量
+    memcpy(&amp;current_metrics, metrics, sizeof(performance_metrics_t));
+}
+
+// 获取当前性能指标
+const performance_metrics_t* perf_get_current_metrics(void)
+{
+    return &amp;current_metrics;
+}
+</code></pre>
+<h3 id="33">3.3 性能数据上报</h3>
+<pre><code class="language-c">// 性能指标转JSON
+String perf_metrics_to_json(const performance_metrics_t *metrics)
+{
+    DynamicJsonDocument doc(1024);
+
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;timestamp&quot;] = metrics-&gt;timestamp;
+
+    // CPU信息
+    JsonObject cpu = doc.createNestedObject(&quot;cpu&quot;);
+    cpu[&quot;usage&quot;] = metrics-&gt;cpu_usage;
+    cpu[&quot;frequency&quot;] = metrics-&gt;cpu_frequency;
+
+    // 内存信息
+    JsonObject memory = doc.createNestedObject(&quot;memory&quot;);
+    memory[&quot;total&quot;] = metrics-&gt;heap_total;
+    memory[&quot;free&quot;] = metrics-&gt;heap_free;
+    memory[&quot;used&quot;] = metrics-&gt;heap_used;
+    memory[&quot;usage&quot;] = metrics-&gt;heap_usage;
+    memory[&quot;max_alloc&quot;] = metrics-&gt;heap_max_alloc;
+
+    // 网络信息
+    JsonObject network = doc.createNestedObject(&quot;network&quot;);
+    network[&quot;wifi_connected&quot;] = metrics-&gt;wifi_connected;
+    network[&quot;wifi_rssi&quot;] = metrics-&gt;wifi_rssi;
+    network[&quot;bytes_sent&quot;] = metrics-&gt;bytes_sent;
+    network[&quot;bytes_received&quot;] = metrics-&gt;bytes_received;
+
+    // 系统信息
+    JsonObject system = doc.createNestedObject(&quot;system&quot;);
+    system[&quot;uptime&quot;] = metrics-&gt;uptime;
+    system[&quot;free_storage&quot;] = metrics-&gt;free_storage;
+    system[&quot;temperature&quot;] = metrics-&gt;temperature;
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    return json_str;
+}
+
+// 上报性能数据
+bool perf_upload_metrics(const performance_metrics_t *metrics)
+{
+    if (!mqtt_client.connected()) {
+        return false;
+    }
+
+    String json_str = perf_metrics_to_json(metrics);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), &quot;device/%s/performance&quot;, device_id);
+
+    bool success = mqtt_client.publish(topic, json_str.c_str());
+
+    if (success) {
+        Serial.println(&quot;Performance metrics uploaded&quot;);
+    } else {
+        Serial.println(&quot;Performance upload failed&quot;);
+    }
+
+    return success;
+}
+
+// 定期性能监控任务
+void perf_monitor_task(void)
+{
+    static unsigned long last_collect = 0;
+    unsigned long now = millis();
+
+    // 每30秒采集一次
+    if (now - last_collect &gt;= 30000) {
+        last_collect = now;
+
+        performance_metrics_t metrics;
+        perf_collect_metrics(&amp;metrics);
+
+        // 上报到云端
+        perf_upload_metrics(&amp;metrics);
+
+        // 打印到串口
+        Serial.printf(&quot;CPU: %.1f%%, Mem: %d/%d (%.1f%%), WiFi: %ddBm\n&quot;,
+                     metrics.cpu_usage,
+                     metrics.heap_used,
+                     metrics.heap_total,
+                     metrics.heap_usage,
+                     metrics.wifi_rssi);
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第1-37行：将性能指标转换为结构化的JSON格式
+- 第40-60行：通过MQTT上报性能数据
+- 第63-87行：定期监控任务，每30秒采集并上报一次</p>
+<h2 id="4">步骤4：故障检测与上报</h2>
+<h3 id="41">4.1 故障类型定义</h3>
+<pre><code class="language-c">// fault_detector.h
+#ifndef FAULT_DETECTOR_H
+#define FAULT_DETECTOR_H
+
+#include &lt;stdint.h&gt;
+
+// 故障类型
+typedef enum {
+    FAULT_NONE = 0,
+    FAULT_MEMORY_LOW,          // 内存不足
+    FAULT_STORAGE_FULL,        // 存储空间满
+    FAULT_WIFI_DISCONNECTED,   // WiFi断开
+    FAULT_MQTT_DISCONNECTED,   // MQTT断开
+    FAULT_SENSOR_ERROR,        // 传感器错误
+    FAULT_WATCHDOG_RESET,      // 看门狗复位
+    FAULT_EXCEPTION,           // 异常/崩溃
+    FAULT_TEMPERATURE_HIGH,    // 温度过高
+    FAULT_CUSTOM              // 自定义故障
+} fault_type_t;
+
+// 故障严重程度
+typedef enum {
+    FAULT_SEVERITY_INFO = 0,   // 信息
+    FAULT_SEVERITY_WARNING,    // 警告
+    FAULT_SEVERITY_ERROR,      // 错误
+    FAULT_SEVERITY_CRITICAL    // 严重
+} fault_severity_t;
+
+// 故障记录
+typedef struct {
+    fault_type_t type;
+    fault_severity_t severity;
+    uint32_t timestamp;
+    uint32_t error_code;
+    char description[128];
+    char context[256];         // 上下文信息
+    uint32_t count;            // 发生次数
+} fault_record_t;
+
+#endif // FAULT_DETECTOR_H
+</code></pre>
+<h3 id="42">4.2 故障检测实现</h3>
+<pre><code class="language-c">// fault_detector.cpp
+#include &quot;fault_detector.h&quot;
+#include &lt;Arduino.h&gt;
+
+// 故障类型名称
+const char* fault_type_names[] = {
+    &quot;NONE&quot;, &quot;MEMORY_LOW&quot;, &quot;STORAGE_FULL&quot;, &quot;WIFI_DISCONNECTED&quot;,
+    &quot;MQTT_DISCONNECTED&quot;, &quot;SENSOR_ERROR&quot;, &quot;WATCHDOG_RESET&quot;,
+    &quot;EXCEPTION&quot;, &quot;TEMPERATURE_HIGH&quot;, &quot;CUSTOM&quot;
+};
+
+// 故障严重程度名称
+const char* fault_severity_names[] = {
+    &quot;INFO&quot;, &quot;WARNING&quot;, &quot;ERROR&quot;, &quot;CRITICAL&quot;
+};
+
+// 故障记录缓冲区
+#define FAULT_BUFFER_SIZE 20
+static fault_record_t fault_buffer[FAULT_BUFFER_SIZE];
+static uint8_t fault_count = 0;
+
+// 初始化故障检测器
+void fault_detector_init(void)
+{
+    memset(fault_buffer, 0, sizeof(fault_buffer));
+    fault_count = 0;
+
+    Serial.println(&quot;Fault detector initialized&quot;);
+}
+
+// 记录故障
+void fault_record(fault_type_t type,
+                 fault_severity_t severity,
+                 uint32_t error_code,
+                 const char *description,
+                 const char *context)
+{
+    // 检查是否已存在相同故障
+    for (uint8_t i = 0; i &lt; fault_count; i++) {
+        if (fault_buffer[i].type == type &amp;&amp; 
+            fault_buffer[i].error_code == error_code) {
+            // 更新现有故障记录
+            fault_buffer[i].count++;
+            fault_buffer[i].timestamp = log_get_timestamp();
+            return;
+        }
+    }
+
+    // 添加新故障记录
+    if (fault_count &lt; FAULT_BUFFER_SIZE) {
+        fault_record_t *record = &amp;fault_buffer[fault_count];
+        record-&gt;type = type;
+        record-&gt;severity = severity;
+        record-&gt;timestamp = log_get_timestamp();
+        record-&gt;error_code = error_code;
+        record-&gt;count = 1;
+
+        strncpy(record-&gt;description, description, sizeof(record-&gt;description) - 1);
+        strncpy(record-&gt;context, context, sizeof(record-&gt;context) - 1);
+
+        fault_count++;
+
+        // 记录日志
+        LOG_ERROR(LOG_CAT_SYSTEM, &quot;Fault detected: %s - %s&quot;, 
+                 fault_type_names[type], description);
+
+        // 立即上报严重故障
+        if (severity &gt;= FAULT_SEVERITY_ERROR) {
+            fault_upload_single(record);
+        }
+    }
+}
+
+// 检测内存故障
+void fault_check_memory(void)
+{
+    uint32_t free_heap = ESP.getFreeHeap();
+    uint32_t total_heap = ESP.getHeapSize();
+    float usage = (float)(total_heap - free_heap) * 100.0 / total_heap;
+
+    // 内存使用超过90%
+    if (usage &gt; 90.0) {
+        char context[256];
+        snprintf(context, sizeof(context),
+                &quot;Free: %d bytes, Total: %d bytes, Usage: %.1f%%&quot;,
+                free_heap, total_heap, usage);
+
+        fault_record(FAULT_MEMORY_LOW,
+                    FAULT_SEVERITY_WARNING,
+                    (uint32_t)usage,
+                    &quot;Memory usage critical&quot;,
+                    context);
+    }
+}
+
+// 检测存储故障
+void fault_check_storage(void)
+{
+    if (LittleFS.begin()) {
+        uint32_t total = LittleFS.totalBytes();
+        uint32_t used = LittleFS.usedBytes();
+        float usage = (float)used * 100.0 / total;
+
+        // 存储使用超过95%
+        if (usage &gt; 95.0) {
+            char context[256];
+            snprintf(context, sizeof(context),
+                    &quot;Used: %d bytes, Total: %d bytes, Usage: %.1f%%&quot;,
+                    used, total, usage);
+
+            fault_record(FAULT_STORAGE_FULL,
+                        FAULT_SEVERITY_ERROR,
+                        (uint32_t)usage,
+                        &quot;Storage almost full&quot;,
+                        context);
+        }
+    }
+}
+
+// 检测网络故障
+void fault_check_network(void)
+{
+    static bool last_wifi_state = false;
+    bool current_wifi_state = WiFi.isConnected();
+
+    // WiFi断开
+    if (last_wifi_state &amp;&amp; !current_wifi_state) {
+        fault_record(FAULT_WIFI_DISCONNECTED,
+                    FAULT_SEVERITY_WARNING,
+                    0,
+                    &quot;WiFi connection lost&quot;,
+                    &quot;&quot;);
+    }
+
+    last_wifi_state = current_wifi_state;
+
+    // MQTT断开
+    static bool last_mqtt_state = false;
+    bool current_mqtt_state = mqtt_client.connected();
+
+    if (last_mqtt_state &amp;&amp; !current_mqtt_state) {
+        fault_record(FAULT_MQTT_DISCONNECTED,
+                    FAULT_SEVERITY_WARNING,
+                    0,
+                    &quot;MQTT connection lost&quot;,
+                    &quot;&quot;);
+    }
+
+    last_mqtt_state = current_mqtt_state;
+}
+
+// 检测温度故障
+void fault_check_temperature(void)
+{
+    #ifdef ESP32
+    float temp = temperatureRead();
+
+    // 温度超过80°C
+    if (temp &gt; 80.0) {
+        char context[256];
+        snprintf(context, sizeof(context), &quot;Temperature: %.1f°C&quot;, temp);
+
+        fault_record(FAULT_TEMPERATURE_HIGH,
+                    FAULT_SEVERITY_CRITICAL,
+                    (uint32_t)(temp * 10),
+                    &quot;Chip temperature too high&quot;,
+                    context);
+    }
+    #endif
+}
+
+// 定期故障检测任务
+void fault_detection_task(void)
+{
+    static unsigned long last_check = 0;
+    unsigned long now = millis();
+
+    // 每10秒检测一次
+    if (now - last_check &gt;= 10000) {
+        last_check = now;
+
+        fault_check_memory();
+        fault_check_storage();
+        fault_check_network();
+        fault_check_temperature();
+    }
+}
+</code></pre>
+<h3 id="43">4.3 故障上报</h3>
+<pre><code class="language-c">// 故障记录转JSON
+String fault_record_to_json(const fault_record_t *record)
+{
+    DynamicJsonDocument doc(512);
+
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;timestamp&quot;] = record-&gt;timestamp;
+    doc[&quot;type&quot;] = fault_type_names[record-&gt;type];
+    doc[&quot;severity&quot;] = fault_severity_names[record-&gt;severity];
+    doc[&quot;error_code&quot;] = record-&gt;error_code;
+    doc[&quot;description&quot;] = record-&gt;description;
+    doc[&quot;context&quot;] = record-&gt;context;
+    doc[&quot;count&quot;] = record-&gt;count;
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    return json_str;
+}
+
+// 上报单个故障
+bool fault_upload_single(const fault_record_t *record)
+{
+    if (!mqtt_client.connected()) {
+        return false;
+    }
+
+    String json_str = fault_record_to_json(record);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), &quot;device/%s/fault&quot;, device_id);
+
+    bool success = mqtt_client.publish(topic, json_str.c_str());
+
+    if (success) {
+        Serial.printf(&quot;Fault uploaded: %s\n&quot;, fault_type_names[record-&gt;type]);
+    }
+
+    return success;
+}
+
+// 批量上报故障
+bool fault_upload_all(void)
+{
+    if (!mqtt_client.connected() || fault_count == 0) {
+        return false;
+    }
+
+    DynamicJsonDocument doc(2048);
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;count&quot;] = fault_count;
+    doc[&quot;timestamp&quot;] = log_get_timestamp();
+
+    JsonArray faults = doc.createNestedArray(&quot;faults&quot;);
+
+    for (uint8_t i = 0; i &lt; fault_count; i++) {
+        JsonObject fault_obj = faults.createNestedObject();
+        fault_obj[&quot;type&quot;] = fault_type_names[fault_buffer[i].type];
+        fault_obj[&quot;severity&quot;] = fault_severity_names[fault_buffer[i].severity];
+        fault_obj[&quot;timestamp&quot;] = fault_buffer[i].timestamp;
+        fault_obj[&quot;error_code&quot;] = fault_buffer[i].error_code;
+        fault_obj[&quot;description&quot;] = fault_buffer[i].description;
+        fault_obj[&quot;context&quot;] = fault_buffer[i].context;
+        fault_obj[&quot;count&quot;] = fault_buffer[i].count;
+    }
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), &quot;device/%s/fault/batch&quot;, device_id);
+
+    bool success = mqtt_client.publish(topic, json_str.c_str());
+
+    if (success) {
+        Serial.printf(&quot;Uploaded %d faults\n&quot;, fault_count);
+        // 清空故障缓冲区
+        fault_count = 0;
+    }
+
+    return success;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第34-64行：记录故障，支持相同故障的计数累加
+- 第67-90行：检测内存使用情况，超过90%触发警告
+- 第93-113行：检测存储空间，超过95%触发错误
+- 第116-145行：检测网络连接状态变化
+- 第148-163行：检测芯片温度，超过80°C触发严重告警</p>
+<h2 id="5">步骤5：远程调试命令</h2>
+<h3 id="51">5.1 调试命令定义</h3>
+<pre><code class="language-c">// remote_debug.h
+#ifndef REMOTE_DEBUG_H
+#define REMOTE_DEBUG_H
+
+#include &lt;stdint.h&gt;
+
+// 调试命令类型
+typedef enum {
+    CMD_GET_STATUS = 0,        // 获取设备状态
+    CMD_GET_CONFIG,            // 获取配置
+    CMD_SET_LOG_LEVEL,         // 设置日志级别
+    CMD_REBOOT,                // 重启设备
+    CMD_CLEAR_LOGS,            // 清空日志
+    CMD_GET_MEMORY_INFO,       // 获取内存信息
+    CMD_GET_TASK_LIST,         // 获取任务列表
+    CMD_RUN_DIAGNOSTIC,        // 运行诊断
+    CMD_CUSTOM                 // 自定义命令
+} debug_command_t;
+
+// 命令响应结构
+typedef struct {
+    debug_command_t command;
+    bool success;
+    char message[256];
+    char data[512];
+} debug_response_t;
+
+#endif // REMOTE_DEBUG_H
+</code></pre>
+<h3 id="52">5.2 命令处理实现</h3>
+<pre><code class="language-c">// remote_debug.cpp
+#include &quot;remote_debug.h&quot;
+#include &lt;Arduino.h&gt;
+#include &lt;ArduinoJson.h&gt;
+
+// 命令名称映射
+const char* command_names[] = {
+    &quot;get_status&quot;, &quot;get_config&quot;, &quot;set_log_level&quot;, &quot;reboot&quot;,
+    &quot;clear_logs&quot;, &quot;get_memory_info&quot;, &quot;get_task_list&quot;,
+    &quot;run_diagnostic&quot;, &quot;custom&quot;
+};
+
+// 处理获取状态命令
+void cmd_handle_get_status(debug_response_t *response)
+{
+    DynamicJsonDocument doc(512);
+
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;uptime&quot;] = millis() / 1000;
+    doc[&quot;wifi_connected&quot;] = WiFi.isConnected();
+    doc[&quot;mqtt_connected&quot;] = mqtt_client.connected();
+    doc[&quot;free_heap&quot;] = ESP.getFreeHeap();
+    doc[&quot;cpu_freq&quot;] = ESP.getCpuFreqMHz();
+
+    serializeJson(doc, response-&gt;data, sizeof(response-&gt;data));
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Status retrieved&quot;);
+}
+
+// 处理获取配置命令
+void cmd_handle_get_config(debug_response_t *response)
+{
+    device_config_t *config = config_get_current();
+
+    DynamicJsonDocument doc(1024);
+    doc[&quot;device_name&quot;] = config-&gt;system.device_name;
+    doc[&quot;report_interval&quot;] = config-&gt;system.report_interval;
+    doc[&quot;log_level&quot;] = config-&gt;system.log_level;
+    doc[&quot;mqtt_server&quot;] = config-&gt;network.mqtt_server;
+    doc[&quot;mqtt_port&quot;] = config-&gt;network.mqtt_port;
+
+    serializeJson(doc, response-&gt;data, sizeof(response-&gt;data));
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Config retrieved&quot;);
+}
+
+// 处理设置日志级别命令
+void cmd_handle_set_log_level(const char *params, debug_response_t *response)
+{
+    DynamicJsonDocument doc(256);
+    DeserializationError error = deserializeJson(doc, params);
+
+    if (error) {
+        response-&gt;success = false;
+        strcpy(response-&gt;message, &quot;Invalid parameters&quot;);
+        return;
+    }
+
+    int level = doc[&quot;level&quot;] | -1;
+    if (level &lt; 0 || level &gt; 5) {
+        response-&gt;success = false;
+        strcpy(response-&gt;message, &quot;Invalid log level&quot;);
+        return;
+    }
+
+    log_config_t config;
+    log_get_config(&amp;config);
+    config.console_level = (log_level_t)level;
+    config.remote_level = (log_level_t)level;
+    log_set_config(&amp;config);
+
+    response-&gt;success = true;
+    snprintf(response-&gt;message, sizeof(response-&gt;message),
+            &quot;Log level set to %d&quot;, level);
+}
+
+// 处理重启命令
+void cmd_handle_reboot(debug_response_t *response)
+{
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Rebooting in 3 seconds...&quot;);
+
+    // 延迟重启，确保响应发送成功
+    delay(3000);
+    ESP.restart();
+}
+
+// 处理清空日志命令
+void cmd_handle_clear_logs(debug_response_t *response)
+{
+    log_clear_buffer();
+
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Logs cleared&quot;);
+}
+
+// 处理获取内存信息命令
+void cmd_handle_get_memory_info(debug_response_t *response)
+{
+    DynamicJsonDocument doc(512);
+
+    doc[&quot;heap_total&quot;] = ESP.getHeapSize();
+    doc[&quot;heap_free&quot;] = ESP.getFreeHeap();
+    doc[&quot;heap_used&quot;] = ESP.getHeapSize() - ESP.getFreeHeap();
+    doc[&quot;heap_max_alloc&quot;] = ESP.getMaxAllocHeap();
+    doc[&quot;psram_total&quot;] = ESP.getPsramSize();
+    doc[&quot;psram_free&quot;] = ESP.getFreePsram();
+
+    serializeJson(doc, response-&gt;data, sizeof(response-&gt;data));
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Memory info retrieved&quot;);
+}
+
+// 处理获取任务列表命令
+void cmd_handle_get_task_list(debug_response_t *response)
+{
+    #ifdef ESP32
+    char task_list[512];
+    vTaskList(task_list);
+
+    strncpy(response-&gt;data, task_list, sizeof(response-&gt;data) - 1);
+    response-&gt;success = true;
+    strcpy(response-&gt;message, &quot;Task list retrieved&quot;);
+    #else
+    response-&gt;success = false;
+    strcpy(response-&gt;message, &quot;Not supported on this platform&quot;);
+    #endif
+}
+
+// 处理运行诊断命令
+void cmd_handle_run_diagnostic(debug_response_t *response)
+{
+    DynamicJsonDocument doc(1024);
+
+    // 运行各项诊断
+    doc[&quot;wifi_test&quot;] = WiFi.isConnected();
+    doc[&quot;mqtt_test&quot;] = mqtt_client.connected();
+    doc[&quot;storage_test&quot;] = LittleFS.begin();
+    doc[&quot;memory_ok&quot;] = (ESP.getFreeHeap() &gt; 10000);
+    doc[&quot;temperature&quot;] = temperatureRead();
+
+    // 综合诊断结果
+    bool all_ok = doc[&quot;wifi_test&quot;] &amp;&amp; doc[&quot;mqtt_test&quot;] &amp;&amp; 
+                  doc[&quot;storage_test&quot;] &amp;&amp; doc[&quot;memory_ok&quot;];
+    doc[&quot;overall&quot;] = all_ok ? &quot;PASS&quot; : &quot;FAIL&quot;;
+
+    serializeJson(doc, response-&gt;data, sizeof(response-&gt;data));
+    response-&gt;success = true;
+    strcpy(response-&gt;message, all_ok ? &quot;All tests passed&quot; : &quot;Some tests failed&quot;);
+}
+</code></pre>
+<h3 id="53">5.3 命令接收和分发</h3>
+<pre><code class="language-c">// MQTT命令主题
+#define TOPIC_DEBUG_COMMAND   &quot;device/%s/debug/command&quot;
+#define TOPIC_DEBUG_RESPONSE  &quot;device/%s/debug/response&quot;
+
+// 初始化远程调试
+void remote_debug_init(void)
+{
+    // 订阅调试命令主题
+    char topic[128];
+    snprintf(topic, sizeof(topic), TOPIC_DEBUG_COMMAND, device_id);
+    mqtt_client.subscribe(topic);
+
+    Serial.printf(&quot;Subscribed to debug commands: %s\n&quot;, topic);
+}
+
+// 解析并执行命令
+void remote_debug_execute(const char *json_str)
+{
+    DynamicJsonDocument doc(512);
+    DeserializationError error = deserializeJson(doc, json_str);
+
+    if (error) {
+        Serial.printf(&quot;Command parse error: %s\n&quot;, error.c_str());
+        return;
+    }
+
+    const char *cmd_str = doc[&quot;command&quot;];
+    const char *params = doc[&quot;params&quot;] | &quot;&quot;;
+
+    Serial.printf(&quot;Received command: %s\n&quot;, cmd_str);
+
+    // 创建响应
+    debug_response_t response;
+    memset(&amp;response, 0, sizeof(response));
+
+    // 查找并执行命令
+    bool command_found = false;
+
+    if (strcmp(cmd_str, &quot;get_status&quot;) == 0) {
+        response.command = CMD_GET_STATUS;
+        cmd_handle_get_status(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;get_config&quot;) == 0) {
+        response.command = CMD_GET_CONFIG;
+        cmd_handle_get_config(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;set_log_level&quot;) == 0) {
+        response.command = CMD_SET_LOG_LEVEL;
+        cmd_handle_set_log_level(params, &amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;reboot&quot;) == 0) {
+        response.command = CMD_REBOOT;
+        cmd_handle_reboot(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;clear_logs&quot;) == 0) {
+        response.command = CMD_CLEAR_LOGS;
+        cmd_handle_clear_logs(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;get_memory_info&quot;) == 0) {
+        response.command = CMD_GET_MEMORY_INFO;
+        cmd_handle_get_memory_info(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;get_task_list&quot;) == 0) {
+        response.command = CMD_GET_TASK_LIST;
+        cmd_handle_get_task_list(&amp;response);
+        command_found = true;
+    }
+    else if (strcmp(cmd_str, &quot;run_diagnostic&quot;) == 0) {
+        response.command = CMD_RUN_DIAGNOSTIC;
+        cmd_handle_run_diagnostic(&amp;response);
+        command_found = true;
+    }
+
+    if (!command_found) {
+        response.success = false;
+        strcpy(response.message, &quot;Unknown command&quot;);
+    }
+
+    // 发送响应
+    remote_debug_send_response(&amp;response);
+}
+
+// 发送命令响应
+void remote_debug_send_response(const debug_response_t *response)
+{
+    DynamicJsonDocument doc(1024);
+
+    doc[&quot;device_id&quot;] = device_id;
+    doc[&quot;command&quot;] = command_names[response-&gt;command];
+    doc[&quot;success&quot;] = response-&gt;success;
+    doc[&quot;message&quot;] = response-&gt;message;
+    doc[&quot;timestamp&quot;] = log_get_timestamp();
+
+    if (strlen(response-&gt;data) &gt; 0) {
+        // 解析data字段（可能是JSON）
+        DynamicJsonDocument data_doc(512);
+        DeserializationError error = deserializeJson(data_doc, response-&gt;data);
+
+        if (!error) {
+            doc[&quot;data&quot;] = data_doc.as&lt;JsonObject&gt;();
+        } else {
+            doc[&quot;data&quot;] = response-&gt;data;
+        }
+    }
+
+    String json_str;
+    serializeJson(doc, json_str);
+
+    char topic[128];
+    snprintf(topic, sizeof(topic), TOPIC_DEBUG_RESPONSE, device_id);
+
+    mqtt_client.publish(topic, json_str.c_str());
+
+    Serial.println(&quot;Response sent&quot;);
+}
+
+// MQTT回调中处理调试命令
+void mqtt_callback(char* topic, byte* payload, unsigned int length)
+{
+    // ... 其他消息处理 ...
+
+    // 检查是否是调试命令
+    char debug_topic[128];
+    snprintf(debug_topic, sizeof(debug_topic), TOPIC_DEBUG_COMMAND, device_id);
+
+    if (strcmp(topic, debug_topic) == 0) {
+        char* json_str = (char*)malloc(length + 1);
+        if (json_str) {
+            memcpy(json_str, payload, length);
+            json_str[length] = '\0';
+
+            remote_debug_execute(json_str);
+
+            free(json_str);
+        }
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 第14-26行：处理获取设备状态命令，返回运行时信息
+- 第47-70行：处理设置日志级别命令，支持动态调整
+- 第73-81行：处理重启命令，延迟3秒后重启
+- 第115-135行：处理运行诊断命令，执行多项系统检查
+- 第17-90行：命令分发器，根据命令名称调用相应处理函数</p>
+<h2 id="6">步骤6：完整示例程序</h2>
+<h3 id="61">6.1 主程序实现</h3>
+<pre><code class="language-c">// main.cpp
+#include &lt;Arduino.h&gt;
+#include &lt;WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+#include &quot;remote_log.h&quot;
+#include &quot;performance_monitor.h&quot;
+#include &quot;fault_detector.h&quot;
+#include &quot;remote_debug.h&quot;
+
+// WiFi和MQTT配置
+const char* wifi_ssid = &quot;YourWiFiSSID&quot;;
+const char* wifi_password = &quot;YourWiFiPassword&quot;;
+const char* mqtt_server = &quot;mqtt.example.com&quot;;
+const int mqtt_port = 1883;
+
+char device_id[32] = &quot;ESP32-DIAG-001&quot;;
+
+WiFiClient espClient;
+PubSubClient mqtt_client(espClient);
+
+void setup()
+{
+    Serial.begin(115200);
+    Serial.println(&quot;\n\nRemote Diagnostics System Demo&quot;);
+
+    // 初始化各模块
+    log_init();
+    perf_monitor_init();
+    fault_detector_init();
+
+    // 连接WiFi
+    Serial.printf(&quot;Connecting to WiFi: %s\n&quot;, wifi_ssid);
+    WiFi.begin(wifi_ssid, wifi_password);
+
+    int retry = 0;
+    while (WiFi.status() != WL_CONNECTED &amp;&amp; retry &lt; 40) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+        retry++;
+    }
+
+    if (WiFi.status() == WL_CONNECTED) {
+        Serial.println(&quot;\nWiFi connected&quot;);
+        Serial.printf(&quot;IP address: %s\n&quot;, WiFi.localIP().toString().c_str());
+
+        LOG_INFO(LOG_CAT_SYSTEM, &quot;WiFi connected, IP: %s&quot;, 
+                WiFi.localIP().toString().c_str());
+    } else {
+        Serial.println(&quot;\nWiFi connection failed&quot;);
+        LOG_ERROR(LOG_CAT_NETWORK, &quot;WiFi connection failed&quot;);
+    }
+
+    // 初始化MQTT
+    mqtt_client.setServer(mqtt_server, mqtt_port);
+    mqtt_client.setCallback(mqtt_callback);
+    mqtt_client.setBufferSize(2048);
+
+    mqtt_connect();
+
+    // 初始化远程调试
+    remote_debug_init();
+
+    // 记录启动日志
+    LOG_INFO(LOG_CAT_SYSTEM, &quot;System started, device ID: %s&quot;, device_id);
+
+    Serial.println(&quot;System ready&quot;);
+}
+
+void loop()
+{
+    // MQTT循环处理
+    mqtt_loop();
+
+    // 定期任务
+    log_upload_task();           // 日志上传
+    perf_monitor_task();         // 性能监控
+    fault_detection_task();      // 故障检测
+
+    // 模拟应用逻辑
+    static unsigned long last_work = 0;
+    if (millis() - last_work &gt;= 5000) {
+        last_work = millis();
+
+        // 模拟一些工作
+        LOG_DEBUG(LOG_CAT_APP, &quot;Application running, uptime: %lu seconds&quot;, 
+                 millis() / 1000);
+
+        // 随机生成一些测试日志
+        if (random(100) &lt; 10) {
+            LOG_WARN(LOG_CAT_APP, &quot;Random warning event&quot;);
+        }
+
+        if (random(100) &lt; 5) {
+            LOG_ERROR(LOG_CAT_APP, &quot;Random error event&quot;);
+        }
+    }
+
+    delay(10);
+}
+
+// MQTT连接函数
+bool mqtt_connect(void)
+{
+    Serial.print(&quot;Connecting to MQTT...&quot;);
+
+    char client_id[64];
+    snprintf(client_id, sizeof(client_id), &quot;device_%s&quot;, device_id);
+
+    if (mqtt_client.connect(client_id)) {
+        Serial.println(&quot;connected&quot;);
+
+        // 订阅主题
+        char topic[128];
+
+        // 订阅配置主题
+        snprintf(topic, sizeof(topic), &quot;device/%s/config/receive&quot;, device_id);
+        mqtt_client.subscribe(topic);
+
+        // 订阅调试命令主题
+        snprintf(topic, sizeof(topic), &quot;device/%s/debug/command&quot;, device_id);
+        mqtt_client.subscribe(topic);
+
+        LOG_INFO(LOG_CAT_NETWORK, &quot;MQTT connected&quot;);
+
+        return true;
+    } else {
+        Serial.printf(&quot;failed, rc=%d\n&quot;, mqtt_client.state());
+        LOG_ERROR(LOG_CAT_NETWORK, &quot;MQTT connection failed, rc=%d&quot;, 
+                 mqtt_client.state());
+        return false;
+    }
+}
+
+// MQTT循环处理
+void mqtt_loop(void)
+{
+    if (!mqtt_client.connected()) {
+        static unsigned long last_reconnect = 0;
+        unsigned long now = millis();
+
+        if (now - last_reconnect &gt; 5000) {
+            last_reconnect = now;
+            if (mqtt_connect()) {
+                last_reconnect = 0;
+            }
+        }
+    } else {
+        mqtt_client.loop();
+    }
+}
+</code></pre>
+<h3 id="62">6.2 测试和验证</h3>
+<p><strong>1. 编译和上传程序</strong></p>
+<pre><code class="language-bash"># 使用PlatformIO
+pio run -t upload -t monitor
+
+# 或使用Arduino IDE
+# 选择开发板和端口，点击上传
+</code></pre>
+<p><strong>2. 观察串口输出</strong></p>
+<pre><code>Remote Diagnostics System Demo
+Log system initialized
+Waiting for time sync...
+Time synced: Mon Jan 15 10:30:00 2024
+Performance monitor initialized
+Fault detector initialized
+Connecting to WiFi: YourWiFiSSID
+.........
+WiFi connected
+IP address: 192.168.1.100
+Connecting to MQTT...connected
+Subscribed to debug commands: device/ESP32-DIAG-001/debug/command
+System started, device ID: ESP32-DIAG-001
+System ready
+</code></pre>
+<p><strong>3. 使用MQTT客户端测试</strong></p>
+<p>使用MQTTX或MQTT.fx连接到MQTT服务器，订阅以下主题：</p>
+<pre><code>device/ESP32-DIAG-001/log/upload
+device/ESP32-DIAG-001/performance
+device/ESP32-DIAG-001/fault
+device/ESP32-DIAG-001/debug/response
+</code></pre>
+<h2 id="7">步骤7：远程调试测试</h2>
+<h3 id="71">7.1 发送调试命令</h3>
+<p><strong>命令1：获取设备状态</strong></p>
+<p>主题：<code>device/ESP32-DIAG-001/debug/command</code></p>
+<p>消息：</p>
+<pre><code class="language-json">{
+  &quot;command&quot;: &quot;get_status&quot;
+}
+</code></pre>
+<p>预期响应（主题：<code>device/ESP32-DIAG-001/debug/response</code>）：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;command&quot;: &quot;get_status&quot;,
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;Status retrieved&quot;,
+  &quot;timestamp&quot;: 1705305600,
+  &quot;data&quot;: {
+    &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+    &quot;uptime&quot;: 3600,
+    &quot;wifi_connected&quot;: true,
+    &quot;mqtt_connected&quot;: true,
+    &quot;free_heap&quot;: 245760,
+    &quot;cpu_freq&quot;: 240
+  }
+}
+</code></pre>
+<p><strong>命令2：设置日志级别</strong></p>
+<p>消息：</p>
+<pre><code class="language-json">{
+  &quot;command&quot;: &quot;set_log_level&quot;,
+  &quot;params&quot;: &quot;{\&quot;level\&quot;: 4}&quot;
+}
+</code></pre>
+<p>预期响应：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;command&quot;: &quot;set_log_level&quot;,
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;Log level set to 4&quot;,
+  &quot;timestamp&quot;: 1705305610
+}
+</code></pre>
+<p><strong>命令3：获取内存信息</strong></p>
+<p>消息：</p>
+<pre><code class="language-json">{
+  &quot;command&quot;: &quot;get_memory_info&quot;
+}
+</code></pre>
+<p>预期响应：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;command&quot;: &quot;get_memory_info&quot;,
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;Memory info retrieved&quot;,
+  &quot;timestamp&quot;: 1705305620,
+  &quot;data&quot;: {
+    &quot;heap_total&quot;: 327680,
+    &quot;heap_free&quot;: 245760,
+    &quot;heap_used&quot;: 81920,
+    &quot;heap_max_alloc&quot;: 110592,
+    &quot;psram_total&quot;: 0,
+    &quot;psram_free&quot;: 0
+  }
+}
+</code></pre>
+<p><strong>命令4：运行诊断</strong></p>
+<p>消息：</p>
+<pre><code class="language-json">{
+  &quot;command&quot;: &quot;run_diagnostic&quot;
+}
+</code></pre>
+<p>预期响应：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;command&quot;: &quot;run_diagnostic&quot;,
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;All tests passed&quot;,
+  &quot;timestamp&quot;: 1705305630,
+  &quot;data&quot;: {
+    &quot;wifi_test&quot;: true,
+    &quot;mqtt_test&quot;: true,
+    &quot;storage_test&quot;: true,
+    &quot;memory_ok&quot;: true,
+    &quot;temperature&quot;: 45.5,
+    &quot;overall&quot;: &quot;PASS&quot;
+  }
+}
+</code></pre>
+<h3 id="72">7.2 查看日志上传</h3>
+<p>订阅主题：<code>device/ESP32-DIAG-001/log/upload</code></p>
+<p>接收到的日志消息示例：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;count&quot;: 5,
+  &quot;upload_time&quot;: 1705305640,
+  &quot;logs&quot;: [
+    {
+      &quot;timestamp&quot;: 1705305600,
+      &quot;level&quot;: &quot;INFO&quot;,
+      &quot;category&quot;: &quot;SYSTEM&quot;,
+      &quot;message&quot;: &quot;WiFi connected, IP: 192.168.1.100&quot;,
+      &quot;file&quot;: &quot;main.cpp&quot;,
+      &quot;line&quot;: 45,
+      &quot;function&quot;: &quot;setup&quot;
+    },
+    {
+      &quot;timestamp&quot;: 1705305605,
+      &quot;level&quot;: &quot;INFO&quot;,
+      &quot;category&quot;: &quot;NETWORK&quot;,
+      &quot;message&quot;: &quot;MQTT connected&quot;,
+      &quot;file&quot;: &quot;main.cpp&quot;,
+      &quot;line&quot;: 120,
+      &quot;function&quot;: &quot;mqtt_connect&quot;
+    },
+    {
+      &quot;timestamp&quot;: 1705305610,
+      &quot;level&quot;: &quot;DEBUG&quot;,
+      &quot;category&quot;: &quot;APP&quot;,
+      &quot;message&quot;: &quot;Application running, uptime: 10 seconds&quot;,
+      &quot;file&quot;: &quot;main.cpp&quot;,
+      &quot;line&quot;: 82,
+      &quot;function&quot;: &quot;loop&quot;
+    }
+  ]
+}
+</code></pre>
+<h3 id="73">7.3 查看性能监控数据</h3>
+<p>订阅主题：<code>device/ESP32-DIAG-001/performance</code></p>
+<p>接收到的性能数据示例：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;timestamp&quot;: 1705305650,
+  &quot;cpu&quot;: {
+    &quot;usage&quot;: 15.5,
+    &quot;frequency&quot;: 240
+  },
+  &quot;memory&quot;: {
+    &quot;total&quot;: 327680,
+    &quot;free&quot;: 245760,
+    &quot;used&quot;: 81920,
+    &quot;usage&quot;: 25.0,
+    &quot;max_alloc&quot;: 110592
+  },
+  &quot;network&quot;: {
+    &quot;wifi_connected&quot;: true,
+    &quot;wifi_rssi&quot;: -45,
+    &quot;bytes_sent&quot;: 12345,
+    &quot;bytes_received&quot;: 54321
+  },
+  &quot;system&quot;: {
+    &quot;uptime&quot;: 3600,
+    &quot;free_storage&quot;: 1048576,
+    &quot;temperature&quot;: 45.5
+  }
+}
+</code></pre>
+<h3 id="74">7.4 查看故障上报</h3>
+<p>订阅主题：<code>device/ESP32-DIAG-001/fault</code></p>
+<p>接收到的故障消息示例：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;ESP32-DIAG-001&quot;,
+  &quot;timestamp&quot;: 1705305660,
+  &quot;type&quot;: &quot;MEMORY_LOW&quot;,
+  &quot;severity&quot;: &quot;WARNING&quot;,
+  &quot;error_code&quot;: 92,
+  &quot;description&quot;: &quot;Memory usage critical&quot;,
+  &quot;context&quot;: &quot;Free: 26214 bytes, Total: 327680 bytes, Usage: 92.0%&quot;,
+  &quot;count&quot;: 1
+}
+</code></pre>
+<h2 id="_11">故障排除</h2>
+<h3 id="1_1">问题1：日志未上传</h3>
+<p><strong>可能原因</strong>：
+- MQTT连接断开
+- 日志缓冲区为空
+- 日志级别设置过高
+- 网络延迟或丢包</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>检查MQTT连接状态</li>
+</ol>
+<pre><code class="language-c">if (!mqtt_client.connected()) {
+    Serial.println(&quot;MQTT not connected, logs cannot be uploaded&quot;);
+    mqtt_connect();
+}
+</code></pre>
+<ol start="2">
+<li>检查日志缓冲区</li>
+</ol>
+<pre><code class="language-c">uint16_t count = log_get_buffer_count();
+Serial.printf(&quot;Log buffer count: %d\n&quot;, count);
+</code></pre>
+<ol start="3">
+<li>降低日志级别</li>
+</ol>
+<pre><code class="language-c">log_config_t config;
+config.remote_level = LOG_LEVEL_DEBUG;  // 降低到DEBUG级别
+log_set_config(&amp;config);
+</code></pre>
+<ol start="4">
+<li>增加上传频率</li>
+</ol>
+<pre><code class="language-c">// 减少上传间隔
+log_config.upload_interval = 30;  // 改为30秒
+</code></pre>
+<h3 id="2">问题2：性能数据不准确</h3>
+<p><strong>可能原因</strong>：
+- CPU使用率计算方法不适用
+- 内存统计API不支持
+- 温度传感器未校准
+- 采样间隔太短</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>使用平台特定的API</li>
+</ol>
+<pre><code class="language-c">#ifdef ESP32
+    // ESP32特定实现
+    float cpu_usage = /* ESP32方法 */;
+#elif defined(STM32)
+    // STM32特定实现
+    float cpu_usage = /* STM32方法 */;
+#endif
+</code></pre>
+<ol start="2">
+<li>增加采样间隔</li>
+</ol>
+<pre><code class="language-c">// 性能监控间隔改为60秒
+if (now - last_collect &gt;= 60000) {
+    // 采集性能数据
+}
+</code></pre>
+<ol start="3">
+<li>添加数据平滑</li>
+</ol>
+<pre><code class="language-c">// 使用移动平均
+static float cpu_history[10] = {0};
+static int history_index = 0;
+
+cpu_history[history_index] = current_cpu_usage;
+history_index = (history_index + 1) % 10;
+
+float avg_cpu = 0;
+for (int i = 0; i &lt; 10; i++) {
+    avg_cpu += cpu_history[i];
+}
+avg_cpu /= 10.0;
+</code></pre>
+<h3 id="3_1">问题3：故障检测误报</h3>
+<p><strong>可能原因</strong>：
+- 阈值设置不合理
+- 瞬时波动触发检测
+- 检测频率太高
+- 环境因素影响</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>调整阈值</li>
+</ol>
+<pre><code class="language-c">// 提高内存告警阈值
+if (usage &gt; 95.0) {  // 从90%提高到95%
+    fault_record(FAULT_MEMORY_LOW, ...);
+}
+</code></pre>
+<ol start="2">
+<li>添加去抖动</li>
+</ol>
+<pre><code class="language-c">// 连续N次超过阈值才触发
+static int memory_high_count = 0;
+
+if (usage &gt; 90.0) {
+    memory_high_count++;
+    if (memory_high_count &gt;= 3) {  // 连续3次
+        fault_record(FAULT_MEMORY_LOW, ...);
+        memory_high_count = 0;
+    }
+} else {
+    memory_high_count = 0;
+}
+</code></pre>
+<ol start="3">
+<li>增加检测间隔</li>
+</ol>
+<pre><code class="language-c">// 故障检测间隔改为30秒
+if (now - last_check &gt;= 30000) {
+    fault_detection_task();
+}
+</code></pre>
+<h3 id="4_1">问题4：远程命令无响应</h3>
+<p><strong>可能原因</strong>：
+- 命令格式错误
+- 主题订阅失败
+- 命令处理异常
+- 响应发送失败</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>验证命令格式</li>
+</ol>
+<pre><code class="language-c">// 添加详细的错误日志
+DeserializationError error = deserializeJson(doc, json_str);
+if (error) {
+    Serial.printf(&quot;JSON parse error: %s\n&quot;, error.c_str());
+    Serial.printf(&quot;Received: %s\n&quot;, json_str);
+    return;
+}
+</code></pre>
+<ol start="2">
+<li>确认主题订阅</li>
+</ol>
+<pre><code class="language-c">// 在连接成功后打印订阅的主题
+Serial.printf(&quot;Subscribed to: device/%s/debug/command\n&quot;, device_id);
+</code></pre>
+<ol start="3">
+<li>添加命令日志</li>
+</ol>
+<pre><code class="language-c">void remote_debug_execute(const char *json_str)
+{
+    LOG_INFO(LOG_CAT_SYSTEM, &quot;Executing command: %s&quot;, json_str);
+
+    // 命令处理...
+
+    LOG_INFO(LOG_CAT_SYSTEM, &quot;Command result: %s&quot;, 
+            response.success ? &quot;success&quot; : &quot;failed&quot;);
+}
+</code></pre>
+<ol start="4">
+<li>检查响应发送</li>
+</ol>
+<pre><code class="language-c">bool success = mqtt_client.publish(topic, json_str.c_str());
+if (!success) {
+    Serial.println(&quot;Failed to send response&quot;);
+    LOG_ERROR(LOG_CAT_NETWORK, &quot;Response send failed&quot;);
+}
+</code></pre>
+<h3 id="5_1">问题5：时间戳不准确</h3>
+<p><strong>可能原因</strong>：
+- NTP同步失败
+- 网络延迟大
+- 时区设置错误
+- RTC未配置</p>
+<p><strong>解决方法</strong>：</p>
+<ol>
+<li>增加NTP同步重试</li>
+</ol>
+<pre><code class="language-c">void log_init(void)
+{
+    // 配置多个NTP服务器
+    configTime(8 * 3600, 0, 
+              &quot;pool.ntp.org&quot;, 
+              &quot;time.nist.gov&quot;,
+              &quot;time.windows.com&quot;);
+
+    // 增加等待时间
+    int retry = 0;
+    while (now &lt; 1000000000 &amp;&amp; retry &lt; 40) {  // 增加到40次
+        delay(500);
+        now = time(nullptr);
+        retry++;
+    }
+}
+</code></pre>
+<ol start="2">
+<li>使用相对时间戳</li>
+</ol>
+<pre><code class="language-c">// 如果NTP失败，使用启动后的相对时间
+uint32_t log_get_timestamp(void)
+{
+    time_t now = time(nullptr);
+    if (now &gt; 1000000000) {
+        return (uint32_t)now;  // 绝对时间
+    } else {
+        return millis() / 1000;  // 相对时间（秒）
+    }
+}
+</code></pre>
+<ol start="3">
+<li>定期重新同步</li>
+</ol>
+<pre><code class="language-c">void time_sync_task(void)
+{
+    static unsigned long last_sync = 0;
+    unsigned long now = millis();
+
+    // 每小时重新同步一次
+    if (now - last_sync &gt;= 3600000) {
+        last_sync = now;
+        configTime(8 * 3600, 0, &quot;pool.ntp.org&quot;);
+    }
+}
+</code></pre>
+<h2 id="_12">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ 远程诊断系统的完整架构和设计原则</li>
+<li>✅ 分级日志系统的实现和远程上传机制</li>
+<li>✅ 设备性能监控指标的采集和上报方法</li>
+<li>✅ 故障检测、记录和自动上报功能</li>
+<li>✅ 远程调试命令的设计和执行机制</li>
+<li>✅ 诊断数据的JSON格式化和MQTT传输</li>
+<li>✅ 完整的远程诊断系统集成和测试方法</li>
+</ul>
+<h2 id="_13">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现日志的本地持久化存储，支持离线缓存和补传</li>
+<li><strong>挑战2</strong>：添加日志压缩功能，减少网络传输量</li>
+<li><strong>挑战3</strong>：实现性能数据的趋势分析和异常检测</li>
+<li><strong>挑战4</strong>：开发Web控制台，可视化展示诊断数据</li>
+<li><strong>挑战5</strong>：实现远程代码注入和动态调试功能</li>
+<li><strong>挑战6</strong>：添加设备分组管理，支持批量诊断命令</li>
+</ol>
+<h2 id="_14">完整代码</h2>
+<p>完整的项目代码可以在这里下载：[GitHub链接]</p>
+<p>项目结构：</p>
+<pre><code>remote-diagnostics-demo/
+├── src/
+│   ├── main.cpp
+│   ├── remote_log.h
+│   ├── remote_log.cpp
+│   ├── performance_monitor.h
+│   ├── performance_monitor.cpp
+│   ├── fault_detector.h
+│   ├── fault_detector.cpp
+│   ├── remote_debug.h
+│   └── remote_debug.cpp
+├── include/
+├── lib/
+├── platformio.ini
+└── README.md
+</code></pre>
+<h2 id="_15">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="link">OTA升级机制设计</a> - 学习固件远程升级</li>
+<li><a href="link">设备管理平台开发</a> - 构建完整的IoT管理平台</li>
+<li><a href="link">数据可视化与分析</a> - 学习诊断数据的可视化展示</li>
+</ul>
+<h2 id="_16">参考资料</h2>
+<ol>
+<li>MQTT协议规范：https://mqtt.org/</li>
+<li>ESP32性能监控API：https://docs.espressif.com/</li>
+<li>FreeRTOS任务管理：https://www.freertos.org/</li>
+<li>《嵌入式系统调试技术》</li>
+<li>《物联网设备诊断最佳实践》</li>
+<li>ArduinoJson文档：https://arduinojson.org/</li>
+<li>《远程监控系统设计指南》</li>
+</ol>
+<h2 id="_17">附录：诊断数据格式规范</h2>
+<h3 id="a1">A.1 日志消息格式</h3>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;string&quot;,
+  &quot;timestamp&quot;: &quot;uint32&quot;,
+  &quot;level&quot;: &quot;ERROR|WARN|INFO|DEBUG|TRACE&quot;,
+  &quot;category&quot;: &quot;SYSTEM|NETWORK|SENSOR|APP&quot;,
+  &quot;message&quot;: &quot;string&quot;,
+  &quot;file&quot;: &quot;string&quot;,
+  &quot;line&quot;: &quot;uint16&quot;,
+  &quot;function&quot;: &quot;string&quot;
+}
+</code></pre>
+<h3 id="a2">A.2 性能数据格式</h3>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;string&quot;,
+  &quot;timestamp&quot;: &quot;uint32&quot;,
+  &quot;cpu&quot;: {
+    &quot;usage&quot;: &quot;float&quot;,
+    &quot;frequency&quot;: &quot;uint32&quot;
+  },
+  &quot;memory&quot;: {
+    &quot;total&quot;: &quot;uint32&quot;,
+    &quot;free&quot;: &quot;uint32&quot;,
+    &quot;used&quot;: &quot;uint32&quot;,
+    &quot;usage&quot;: &quot;float&quot;,
+    &quot;max_alloc&quot;: &quot;uint32&quot;
+  },
+  &quot;network&quot;: {
+    &quot;wifi_connected&quot;: &quot;boolean&quot;,
+    &quot;wifi_rssi&quot;: &quot;int8&quot;,
+    &quot;bytes_sent&quot;: &quot;uint32&quot;,
+    &quot;bytes_received&quot;: &quot;uint32&quot;
+  },
+  &quot;system&quot;: {
+    &quot;uptime&quot;: &quot;uint32&quot;,
+    &quot;free_storage&quot;: &quot;uint32&quot;,
+    &quot;temperature&quot;: &quot;float&quot;
+  }
+}
+</code></pre>
+<h3 id="a3">A.3 故障记录格式</h3>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;string&quot;,
+  &quot;timestamp&quot;: &quot;uint32&quot;,
+  &quot;type&quot;: &quot;string&quot;,
+  &quot;severity&quot;: &quot;INFO|WARNING|ERROR|CRITICAL&quot;,
+  &quot;error_code&quot;: &quot;uint32&quot;,
+  &quot;description&quot;: &quot;string&quot;,
+  &quot;context&quot;: &quot;string&quot;,
+  &quot;count&quot;: &quot;uint32&quot;
+}
+</code></pre>
+<h3 id="a4">A.4 调试命令格式</h3>
+<p><strong>请求</strong>：</p>
+<pre><code class="language-json">{
+  &quot;command&quot;: &quot;string&quot;,
+  &quot;params&quot;: &quot;string (optional JSON)&quot;
+}
+</code></pre>
+<p><strong>响应</strong>：</p>
+<pre><code class="language-json">{
+  &quot;device_id&quot;: &quot;string&quot;,
+  &quot;command&quot;: &quot;string&quot;,
+  &quot;success&quot;: &quot;boolean&quot;,
+  &quot;message&quot;: &quot;string&quot;,
+  &quot;timestamp&quot;: &quot;uint32&quot;,
+  &quot;data&quot;: &quot;object (optional)&quot;
+}
+</code></pre>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言！</p>
+<p><strong>相关文章</strong>：
+- <a href="link">嵌入式日志系统设计</a>
+- <a href="link">MQTT在物联网中的应用</a>
+- <a href="link">设备性能监控最佳实践</a>
+- <a href="link">远程调试技术详解</a></p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

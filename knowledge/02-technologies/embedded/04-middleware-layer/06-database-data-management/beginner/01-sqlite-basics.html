@@ -1,0 +1,2323 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>SQLite嵌入式数据库应用：轻量级数据存储解决方案 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/">06-database-data-management</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/06-database-data-management/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#sqlite_1">SQLite概述</a><ul>
+<li><a href="#sqlite_2">什么是SQLite</a></li>
+<li><a href="#sqlite_3">SQLite架构</a></li>
+<li><a href="#sqlite-vs">SQLite vs 其他数据库</a></li>
+</ul>
+</li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">电路连接</a></li>
+</ul>
+</li>
+<li><a href="#1sqlite">步骤1：获取和配置SQLite源码</a><ul>
+<li><a href="#11-sqlite">1.1 下载SQLite</a></li>
+<li><a href="#12-sqlite">1.2 配置SQLite编译选项</a></li>
+<li><a href="#13">1.3 添加到工程</a></li>
+</ul>
+</li>
+<li><a href="#2vfs">步骤2：实现VFS虚拟文件系统接口</a><ul>
+<li><a href="#21-vfs">2.1 定义VFS结构</a></li>
+<li><a href="#22-vfs">2.2 实现VFS接口</a></li>
+<li><a href="#23-vfs">2.3 实现VFS方法</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：初始化和打开数据库</a><ul>
+<li><a href="#31-sqlite">3.1 初始化SQLite</a></li>
+<li><a href="#32-main">3.2 在main函数中初始化</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：创建表和插入数据</a><ul>
+<li><a href="#41">4.1 创建表</a></li>
+<li><a href="#42">4.2 插入数据</a></li>
+<li><a href="#43">4.3 使用预编译语句（推荐）</a></li>
+<li><a href="#44">4.4 批量插入数据</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：查询数据</a><ul>
+<li><a href="#51">5.1 简单查询</a></li>
+<li><a href="#52">5.2 条件查询</a></li>
+<li><a href="#53">5.3 使用预编译语句查询</a></li>
+<li><a href="#54">5.4 聚合查询</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：更新和删除数据</a><ul>
+<li><a href="#61">6.1 更新数据</a></li>
+<li><a href="#62">6.2 删除数据</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7：事务处理</a><ul>
+<li><a href="#71">7.1 事务基础</a></li>
+<li><a href="#72">7.2 事务隔离级别</a></li>
+<li><a href="#73-savepoint">7.3 保存点（Savepoint）</a></li>
+</ul>
+</li>
+<li><a href="#8">步骤8：性能优化</a><ul>
+<li><a href="#81">8.1 创建索引</a></li>
+<li><a href="#82">8.2 优化配置</a></li>
+<li><a href="#83">8.3 批量操作优化</a></li>
+<li><a href="#84">8.4 查询优化</a></li>
+</ul>
+</li>
+<li><a href="#9">步骤9：数据库维护</a><ul>
+<li><a href="#91">9.1 数据库备份</a></li>
+<li><a href="#92">9.2 数据库恢复</a></li>
+<li><a href="#93">9.3 数据库完整性检查</a></li>
+</ul>
+</li>
+<li><a href="#10">步骤10：完整应用示例</a><ul>
+<li><a href="#101">10.1 传感器数据记录系统</a></li>
+<li><a href="#102">10.2 命令行接口</a></li>
+</ul>
+</li>
+<li><a href="#_7">故障排除</a><ul>
+<li><a href="#1">问题1：数据库无法打开</a></li>
+<li><a href="#2">问题2：插入数据很慢</a></li>
+<li><a href="#3_1">问题3：内存不足</a></li>
+<li><a href="#4_1">问题4：数据库损坏</a></li>
+<li><a href="#5_1">问题5：查询结果不正确</a></li>
+</ul>
+</li>
+<li><a href="#_8">总结</a></li>
+<li><a href="#_9">进阶挑战</a></li>
+<li><a href="#_10">完整代码</a></li>
+<li><a href="#_11">下一步</a></li>
+<li><a href="#_12">参考资料</a></li>
+<li><a href="#_13">常见问题</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="sqlite">SQLite嵌入式数据库应用：轻量级数据存储解决方案</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解SQLite的特点和应用场景</li>
+<li>[ ] 掌握SQLite在嵌入式系统中的移植和配置</li>
+<li>[ ] 熟练使用SQL语句进行数据操作</li>
+<li>[ ] 掌握数据库的创建、查询、更新和删除</li>
+<li>[ ] 理解事务处理和数据完整性</li>
+<li>[ ] 能够在嵌入式项目中集成SQLite</li>
+<li>[ ] 完成一个完整的数据记录系统</li>
+<li>[ ] 掌握SQLite的性能优化技巧</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟悉C语言编程
+- 了解文件系统的基本概念
+- 理解数据结构（表、记录、字段）
+- 掌握基本的SQL语法（可选）
+- 了解指针和内存管理</p>
+<p><strong>技能要求</strong>：
+- 能够编写嵌入式C代码
+- 会使用文件系统API
+- 熟悉基本的数据操作
+- 能够使用调试工具
+- 了解交叉编译</p>
+<p><strong>开发环境</strong>：
+- STM32或ESP32开发板
+- SD卡或SPI Flash存储
+- Keil MDK或STM32CubeIDE
+- 串口调试工具
+- SQLite源码</p>
+<h2 id="sqlite_1">SQLite概述</h2>
+<h3 id="sqlite_2">什么是SQLite</h3>
+<p>SQLite是一个轻量级的嵌入式关系型数据库管理系统，被广泛应用于嵌入式设备、移动应用和桌面软件中。它将整个数据库存储在单个文件中，无需独立的服务器进程。</p>
+<p><strong>核心特性</strong>：</p>
+<ol>
+<li>
+<p><strong>零配置</strong>
+   - 无需安装和配置
+   - 无需服务器进程
+   - 单个库文件即可使用
+   - 跨平台支持</p>
+</li>
+<li>
+<p><strong>轻量级</strong>
+   - 库文件小于600KB
+   - 内存占用低
+   - 适合资源受限的嵌入式系统
+   - 可配置功能裁剪</p>
+</li>
+<li>
+<p><strong>完整的SQL支持</strong>
+   - 支持标准SQL语法
+   - 支持事务（ACID）
+   - 支持触发器和视图
+   - 支持子查询和连接</p>
+</li>
+<li>
+<p><strong>高可靠性</strong>
+   - 原子性提交和回滚
+   - 断电保护
+   - 数据完整性约束
+   - 自动恢复机制</p>
+</li>
+</ol>
+<h3 id="sqlite_3">SQLite架构</h3>
+<p><strong>系统架构图</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│    应用层 (Application)                          │
+│    SQL查询、数据操作                             │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    SQLite API层                                  │
+│    sqlite3_open, sqlite3_exec, sqlite3_close... │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    SQL编译器                                     │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 词法分析器   │  │ 语法分析器   │          │
+│    └──────────────┘  └──────────────┘          │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 代码生成器   │  │ 虚拟机       │          │
+│    └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    后端引擎                                      │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ B-Tree       │  │ Pager        │          │
+│    └──────────────┘  └──────────────┘          │
+│    ┌──────────────┐  ┌──────────────┐          │
+│    │ 事务管理     │  │ 锁管理       │          │
+│    └──────────────┘  └──────────────┘          │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    操作系统接口层 (VFS)                          │
+│    文件I/O、内存分配、互斥锁                     │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    文件系统                                      │
+│    FAT32, LittleFS, SPIFFS                      │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<h3 id="sqlite-vs">SQLite vs 其他数据库</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>SQLite</th>
+<th>MySQL</th>
+<th>PostgreSQL</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>类型</td>
+<td>嵌入式</td>
+<td>客户端/服务器</td>
+<td>客户端/服务器</td>
+</tr>
+<tr>
+<td>配置</td>
+<td>零配置</td>
+<td>需要配置</td>
+<td>需要配置</td>
+</tr>
+<tr>
+<td>资源占用</td>
+<td>极低</td>
+<td>中等</td>
+<td>较高</td>
+</tr>
+<tr>
+<td>并发性</td>
+<td>读多写少</td>
+<td>高并发</td>
+<td>高并发</td>
+</tr>
+<tr>
+<td>网络访问</td>
+<td>不支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>嵌入式、移动端</td>
+<td>Web应用</td>
+<td>企业应用</td>
+</tr>
+<tr>
+<td>数据库大小</td>
+<td>&lt; 140TB</td>
+<td>无限制</td>
+<td>无限制</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>：
+- 嵌入式设备 → SQLite
+- 单机应用 → SQLite
+- Web应用 → MySQL/PostgreSQL
+- 大数据量 → PostgreSQL</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32F4或ESP32</td>
+<td>STM32F407VG</td>
+</tr>
+<tr>
+<td>SD卡</td>
+<td>1</td>
+<td>存储数据库文件</td>
+<td>8GB Class 10</td>
+</tr>
+<tr>
+<td>SD卡模块</td>
+<td>1</td>
+<td>SD卡接口</td>
+<td>SPI接口</td>
+</tr>
+<tr>
+<td>USB线</td>
+<td>1</td>
+<td>供电和调试</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>连接模块</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<p><strong>必需软件</strong>：
+- STM32CubeIDE 或 Arduino IDE（ESP32）
+- SQLite源码：https://www.sqlite.org/download.html
+- FATFS文件系统库
+- 串口调试助手</p>
+<p><strong>SQLite版本选择</strong>：
+- 推荐使用SQLite 3.x最新稳定版
+- 嵌入式系统建议使用精简版（约300KB）
+- 可以通过编译选项裁剪功能</p>
+<h3 id="_6">电路连接</h3>
+<p><strong>SD卡模块连接示意图</strong>：</p>
+<pre><code>STM32F407              SD Card Module
+  PA5 (SCK)  ────────► SCK
+  PA6 (MISO) ◄──────── MISO
+  PA7 (MOSI) ────────► MOSI
+  PA4 (CS)   ────────► CS
+  3.3V       ────────► VCC
+  GND        ────────► GND
+</code></pre>
+<p><strong>连接说明</strong>：
+- 确保SD卡模块供电为3.3V
+- 使用SPI接口连接
+- CS片选可以使用任意GPIO
+- 建议添加上拉电阻（10KΩ）</p>
+<h2 id="1sqlite">步骤1：获取和配置SQLite源码</h2>
+<h3 id="11-sqlite">1.1 下载SQLite</h3>
+<p>访问SQLite官网下载amalgamation版本（单文件版本）：</p>
+<pre><code class="language-bash"># 下载SQLite amalgamation
+wget https://www.sqlite.org/2024/sqlite-amalgamation-3440200.zip
+
+# 解压
+unzip sqlite-amalgamation-3440200.zip
+</code></pre>
+<p><strong>需要的文件</strong>：
+- <code>sqlite3.c</code> - SQLite核心实现（约250KB源码）
+- <code>sqlite3.h</code> - API头文件
+- <code>shell.c</code> - 命令行工具（可选）</p>
+<h3 id="12-sqlite">1.2 配置SQLite编译选项</h3>
+<p>创建配置文件 <code>sqlite3_config.h</code>：</p>
+<pre><code class="language-c">#ifndef SQLITE3_CONFIG_H
+#define SQLITE3_CONFIG_H
+
+// 基本配置
+#define SQLITE_OMIT_LOAD_EXTENSION     // 禁用扩展加载
+#define SQLITE_OMIT_VIRTUALTABLE       // 禁用虚拟表
+#define SQLITE_OMIT_DEPRECATED         // 禁用废弃API
+#define SQLITE_OMIT_SHARED_CACHE       // 禁用共享缓存
+
+// 内存配置
+#define SQLITE_DEFAULT_CACHE_SIZE 100  // 默认缓存页数
+#define SQLITE_DEFAULT_PAGE_SIZE 1024  // 页大小（字节）
+#define SQLITE_MAX_PAGE_SIZE 4096      // 最大页大小
+
+// 功能裁剪（可选，减小代码大小）
+// #define SQLITE_OMIT_AUTOVACUUM       // 禁用自动清理
+// #define SQLITE_OMIT_DATETIME_FUNCS   // 禁用日期时间函数
+// #define SQLITE_OMIT_FLOATING_POINT   // 禁用浮点数
+// #define SQLITE_OMIT_TRIGGER          // 禁用触发器
+// #define SQLITE_OMIT_VIEW             // 禁用视图
+
+// 线程安全（根据需要选择）
+#define SQLITE_THREADSAFE 0            // 0=单线程, 1=多线程
+
+// 临时文件配置
+#define SQLITE_TEMP_STORE 3            // 3=仅使用内存
+
+// 调试配置
+#ifdef DEBUG
+    #define SQLITE_DEBUG 1
+    #define SQLITE_ENABLE_API_ARMOR    // API参数检查
+#endif
+
+#endif // SQLITE3_CONFIG_H
+</code></pre>
+<p><strong>配置说明</strong>：
+- <code>SQLITE_OMIT_*</code>: 裁剪不需要的功能，减小代码大小
+- <code>SQLITE_DEFAULT_CACHE_SIZE</code>: 影响性能和内存占用
+- <code>SQLITE_THREADSAFE</code>: 单线程模式可减小代码大小
+- <code>SQLITE_TEMP_STORE</code>: 使用内存存储临时数据</p>
+<h3 id="13">1.3 添加到工程</h3>
+<p><strong>STM32CubeIDE步骤</strong>：</p>
+<ol>
+<li>
+<p>将SQLite源文件添加到工程
+   - 右键项目 → New → Folder → 创建 <code>Middlewares/SQLite</code>
+   - 复制 <code>sqlite3.c</code> 和 <code>sqlite3.h</code>
+   - 复制 <code>sqlite3_config.h</code> 到工程</p>
+</li>
+<li>
+<p>配置包含路径
+   - 右键项目 → Properties → C/C++ Build → Settings
+   - MCU GCC Compiler → Include paths
+   - 添加 <code>Middlewares/SQLite</code></p>
+</li>
+<li>
+<p>配置编译选项
+   - MCU GCC Compiler → Preprocessor
+   - 添加宏定义：
+     <code>SQLITE_OS_OTHER=1
+     SQLITE_THREADSAFE=0
+     SQLITE_OMIT_LOAD_EXTENSION</code></p>
+</li>
+<li>
+<p>编译测试
+   <code>bash
+   # 应该能够成功编译
+   Build Project</code></p>
+</li>
+</ol>
+<p><strong>注意事项</strong>：
+- SQLite源码较大，编译时间较长
+- 优化等级建议设置为 <code>-O2</code> 或 <code>-Os</code>
+- 如果内存不足，可以裁剪更多功能</p>
+<h2 id="2vfs">步骤2：实现VFS虚拟文件系统接口</h2>
+<p>SQLite需要我们实现VFS（Virtual File System）接口来访问底层文件系统。</p>
+<h3 id="21-vfs">2.1 定义VFS结构</h3>
+<p>创建文件 <code>sqlite3_vfs_fatfs.h</code>：</p>
+<pre><code class="language-c">#ifndef SQLITE3_VFS_FATFS_H
+#define SQLITE3_VFS_FATFS_H
+
+#include &quot;sqlite3.h&quot;
+#include &quot;ff.h&quot;  // FATFS头文件
+
+// VFS初始化函数
+int sqlite3_vfs_fatfs_register(void);
+
+// 文件系统初始化
+int fatfs_init(void);
+
+#endif // SQLITE3_VFS_FATFS_H
+</code></pre>
+<h3 id="22-vfs">2.2 实现VFS接口</h3>
+<p>创建文件 <code>sqlite3_vfs_fatfs.c</code>：</p>
+<pre><code class="language-c">#include &quot;sqlite3_vfs_fatfs.h&quot;
+#include &quot;ff.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+// 文件对象结构
+typedef struct FatfsFile {
+    sqlite3_file base;  // 基类
+    FIL fil;            // FATFS文件对象
+    char *path;         // 文件路径
+} FatfsFile;
+
+/**
+ * @brief  关闭文件
+ */
+static int fatfsClose(sqlite3_file *pFile)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+
+    if (p-&gt;fil.obj.fs) {
+        f_close(&amp;p-&gt;fil);
+    }
+
+    if (p-&gt;path) {
+        sqlite3_free(p-&gt;path);
+        p-&gt;path = NULL;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  读取文件
+ */
+static int fatfsRead(sqlite3_file *pFile, void *zBuf, int iAmt, sqlite3_int64 iOfst)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+    FRESULT res;
+    UINT br;
+
+    // 定位到指定位置
+    res = f_lseek(&amp;p-&gt;fil, (FSIZE_t)iOfst);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_READ;
+    }
+
+    // 读取数据
+    res = f_read(&amp;p-&gt;fil, zBuf, iAmt, &amp;br);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_READ;
+    }
+
+    // 检查是否读取完整
+    if (br &lt; (UINT)iAmt) {
+        // 未读取完整，填充0
+        memset(&amp;((char*)zBuf)[br], 0, iAmt - br);
+        return SQLITE_IOERR_SHORT_READ;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  写入文件
+ */
+static int fatfsWrite(sqlite3_file *pFile, const void *zBuf, int iAmt, sqlite3_int64 iOfst)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+    FRESULT res;
+    UINT bw;
+
+    // 定位到指定位置
+    res = f_lseek(&amp;p-&gt;fil, (FSIZE_t)iOfst);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_WRITE;
+    }
+
+    // 写入数据
+    res = f_write(&amp;p-&gt;fil, zBuf, iAmt, &amp;bw);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_WRITE;
+    }
+
+    // 检查是否写入完整
+    if (bw &lt; (UINT)iAmt) {
+        return SQLITE_FULL;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  截断文件
+ */
+static int fatfsTruncate(sqlite3_file *pFile, sqlite3_int64 size)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+    FRESULT res;
+
+    // 定位到指定大小
+    res = f_lseek(&amp;p-&gt;fil, (FSIZE_t)size);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_TRUNCATE;
+    }
+
+    // 截断文件
+    res = f_truncate(&amp;p-&gt;fil);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_TRUNCATE;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  同步文件
+ */
+static int fatfsSync(sqlite3_file *pFile, int flags)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+    FRESULT res;
+
+    // 同步文件数据
+    res = f_sync(&amp;p-&gt;fil);
+    if (res != FR_OK) {
+        return SQLITE_IOERR_FSYNC;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  获取文件大小
+ */
+static int fatfsFileSize(sqlite3_file *pFile, sqlite3_int64 *pSize)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+
+    *pSize = (sqlite3_int64)f_size(&amp;p-&gt;fil);
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  文件锁定（简化实现）
+ */
+static int fatfsLock(sqlite3_file *pFile, int eLock)
+{
+    // 单线程环境，简化实现
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  文件解锁（简化实现）
+ */
+static int fatfsUnlock(sqlite3_file *pFile, int eLock)
+{
+    // 单线程环境，简化实现
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  检查锁状态（简化实现）
+ */
+static int fatfsCheckReservedLock(sqlite3_file *pFile, int *pResOut)
+{
+    *pResOut = 0;
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  文件控制
+ */
+static int fatfsFileControl(sqlite3_file *pFile, int op, void *pArg)
+{
+    return SQLITE_NOTFOUND;
+}
+
+/**
+ * @brief  获取扇区大小
+ */
+static int fatfsSectorSize(sqlite3_file *pFile)
+{
+    return 512;  // SD卡扇区大小
+}
+
+/**
+ * @brief  获取设备特性
+ */
+static int fatfsDeviceCharacteristics(sqlite3_file *pFile)
+{
+    return 0;
+}
+
+// 文件方法表
+static const sqlite3_io_methods fatfs_io_methods = {
+    1,                              // iVersion
+    fatfsClose,                     // xClose
+    fatfsRead,                      // xRead
+    fatfsWrite,                     // xWrite
+    fatfsTruncate,                  // xTruncate
+    fatfsSync,                      // xSync
+    fatfsFileSize,                  // xFileSize
+    fatfsLock,                      // xLock
+    fatfsUnlock,                    // xUnlock
+    fatfsCheckReservedLock,         // xCheckReservedLock
+    fatfsFileControl,               // xFileControl
+    fatfsSectorSize,                // xSectorSize
+    fatfsDeviceCharacteristics,     // xDeviceCharacteristics
+};
+</code></pre>
+<h3 id="23-vfs">2.3 实现VFS方法</h3>
+<p>继续在 <code>sqlite3_vfs_fatfs.c</code> 中添加：</p>
+<pre><code class="language-c">/**
+ * @brief  打开文件
+ */
+static int fatfsOpen(sqlite3_vfs *pVfs, const char *zName, sqlite3_file *pFile,
+                    int flags, int *pOutFlags)
+{
+    FatfsFile *p = (FatfsFile*)pFile;
+    FRESULT res;
+    BYTE mode = 0;
+
+    // 清零文件对象
+    memset(p, 0, sizeof(FatfsFile));
+
+    // 设置方法表
+    p-&gt;base.pMethods = &amp;fatfs_io_methods;
+
+    // 保存文件路径
+    if (zName) {
+        p-&gt;path = sqlite3_mprintf(&quot;%s&quot;, zName);
+        if (!p-&gt;path) {
+            return SQLITE_NOMEM;
+        }
+    }
+
+    // 确定打开模式
+    if (flags &amp; SQLITE_OPEN_READONLY) {
+        mode = FA_READ;
+    } else if (flags &amp; SQLITE_OPEN_READWRITE) {
+        mode = FA_READ | FA_WRITE;
+    } else if (flags &amp; SQLITE_OPEN_CREATE) {
+        mode = FA_READ | FA_WRITE | FA_CREATE_ALWAYS;
+    }
+
+    // 打开文件
+    res = f_open(&amp;p-&gt;fil, zName, mode);
+    if (res != FR_OK) {
+        if (p-&gt;path) {
+            sqlite3_free(p-&gt;path);
+            p-&gt;path = NULL;
+        }
+        return SQLITE_CANTOPEN;
+    }
+
+    if (pOutFlags) {
+        *pOutFlags = flags;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  删除文件
+ */
+static int fatfsDelete(sqlite3_vfs *pVfs, const char *zPath, int syncDir)
+{
+    FRESULT res;
+
+    res = f_unlink(zPath);
+    if (res != FR_OK &amp;&amp; res != FR_NO_FILE) {
+        return SQLITE_IOERR_DELETE;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  检查文件访问权限
+ */
+static int fatfsAccess(sqlite3_vfs *pVfs, const char *zPath, int flags, int *pResOut)
+{
+    FILINFO fno;
+    FRESULT res;
+
+    res = f_stat(zPath, &amp;fno);
+
+    if (flags == SQLITE_ACCESS_EXISTS) {
+        *pResOut = (res == FR_OK);
+    } else if (flags == SQLITE_ACCESS_READWRITE) {
+        *pResOut = (res == FR_OK &amp;&amp; !(fno.fattrib &amp; AM_RDO));
+    } else {
+        *pResOut = 0;
+    }
+
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  获取完整路径
+ */
+static int fatfsFullPathname(sqlite3_vfs *pVfs, const char *zPath,
+                            int nOut, char *zOut)
+{
+    sqlite3_snprintf(nOut, zOut, &quot;%s&quot;, zPath);
+    return SQLITE_OK;
+}
+
+/**
+ * @brief  获取随机数
+ */
+static int fatfsRandomness(sqlite3_vfs *pVfs, int nByte, char *zOut)
+{
+    // 简单的随机数生成
+    for (int i = 0; i &lt; nByte; i++) {
+        zOut[i] = (char)(rand() &amp; 0xFF);
+    }
+    return nByte;
+}
+
+/**
+ * @brief  休眠
+ */
+static int fatfsSleep(sqlite3_vfs *pVfs, int microseconds)
+{
+    // 使用HAL延时
+    HAL_Delay(microseconds / 1000);
+    return microseconds;
+}
+
+/**
+ * @brief  获取当前时间
+ */
+static int fatfsCurrentTime(sqlite3_vfs *pVfs, double *prNow)
+{
+    // 简化实现：返回固定时间
+    // 实际应用中应该使用RTC
+    *prNow = 2440587.5;  // 1970-01-01 00:00:00
+    return SQLITE_OK;
+}
+
+// VFS对象
+static sqlite3_vfs fatfs_vfs = {
+    1,                      // iVersion
+    sizeof(FatfsFile),      // szOsFile
+    260,                    // mxPathname
+    0,                      // pNext
+    &quot;fatfs&quot;,                // zName
+    0,                      // pAppData
+    fatfsOpen,              // xOpen
+    fatfsDelete,            // xDelete
+    fatfsAccess,            // xAccess
+    fatfsFullPathname,      // xFullPathname
+    NULL,                   // xDlOpen
+    NULL,                   // xDlError
+    NULL,                   // xDlSym
+    NULL,                   // xDlClose
+    fatfsRandomness,        // xRandomness
+    fatfsSleep,             // xSleep
+    fatfsCurrentTime,       // xCurrentTime
+    NULL,                   // xGetLastError
+};
+
+/**
+ * @brief  注册VFS
+ */
+int sqlite3_vfs_fatfs_register(void)
+{
+    return sqlite3_vfs_register(&amp;fatfs_vfs, 1);
+}
+
+/**
+ * @brief  初始化文件系统
+ */
+int fatfs_init(void)
+{
+    FRESULT res;
+    static FATFS fs;
+
+    // 挂载文件系统
+    res = f_mount(&amp;fs, &quot;0:&quot;, 1);
+    if (res != FR_OK) {
+        printf(&quot;Failed to mount filesystem: %d\n&quot;, res);
+        return -1;
+    }
+
+    printf(&quot;Filesystem mounted successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>fatfsOpen</code>: 打开文件，支持创建、只读、读写模式
+- <code>fatfsRead/Write</code>: 读写文件数据
+- <code>fatfsSync</code>: 同步数据到存储设备
+- <code>fatfsDelete</code>: 删除文件
+- <code>fatfsAccess</code>: 检查文件是否存在</p>
+<h2 id="3">步骤3：初始化和打开数据库</h2>
+<h3 id="31-sqlite">3.1 初始化SQLite</h3>
+<p>创建文件 <code>sqlite3_app.c</code>：</p>
+<pre><code class="language-c">#include &quot;sqlite3.h&quot;
+#include &quot;sqlite3_vfs_fatfs.h&quot;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+// 数据库对象
+static sqlite3 *db = NULL;
+
+/**
+ * @brief  初始化SQLite
+ * @retval 0:成功, 负数:错误
+ */
+int sqlite3_app_init(void)
+{
+    int rc;
+
+    // 初始化文件系统
+    if (fatfs_init() != 0) {
+        printf(&quot;Failed to initialize filesystem\n&quot;);
+        return -1;
+    }
+
+    // 注册VFS
+    rc = sqlite3_vfs_fatfs_register();
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to register VFS: %d\n&quot;, rc);
+        return -1;
+    }
+
+    printf(&quot;SQLite initialized successfully\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  打开数据库
+ * @param  filename: 数据库文件名
+ * @retval 0:成功, 负数:错误
+ */
+int sqlite3_app_open(const char *filename)
+{
+    int rc;
+
+    // 打开数据库
+    rc = sqlite3_open(filename, &amp;db);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to open database: %s\n&quot;, sqlite3_errmsg(db));
+        sqlite3_close(db);
+        db = NULL;
+        return -1;
+    }
+
+    printf(&quot;Database opened: %s\n&quot;, filename);
+    return 0;
+}
+
+/**
+ * @brief  关闭数据库
+ * @retval 0:成功, 负数:错误
+ */
+int sqlite3_app_close(void)
+{
+    if (db) {
+        sqlite3_close(db);
+        db = NULL;
+        printf(&quot;Database closed\n&quot;);
+    }
+    return 0;
+}
+
+/**
+ * @brief  获取数据库对象
+ */
+sqlite3* sqlite3_app_get_db(void)
+{
+    return db;
+}
+</code></pre>
+<h3 id="32-main">3.2 在main函数中初始化</h3>
+<pre><code class="language-c">#include &quot;sqlite3_app.h&quot;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化外设
+    MX_GPIO_Init();
+    MX_SPI1_Init();
+    MX_USART1_UART_Init();
+    MX_FATFS_Init();
+
+    printf(&quot;SQLite Demo Starting...\n&quot;);
+
+    // 初始化SQLite
+    if (sqlite3_app_init() != 0) {
+        printf(&quot;Failed to initialize SQLite\n&quot;);
+        Error_Handler();
+    }
+
+    // 打开数据库
+    if (sqlite3_app_open(&quot;0:/test.db&quot;) != 0) {
+        printf(&quot;Failed to open database\n&quot;);
+        Error_Handler();
+    }
+
+    // 应用程序代码
+    // ...
+
+    // 关闭数据库
+    sqlite3_app_close();
+
+    while (1) {
+        // 主循环
+    }
+}
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>SQLite Demo Starting...
+Filesystem mounted successfully
+SQLite initialized successfully
+Database opened: 0:/test.db
+</code></pre>
+<h2 id="4">步骤4：创建表和插入数据</h2>
+<h3 id="41">4.1 创建表</h3>
+<pre><code class="language-c">/**
+ * @brief  创建传感器数据表
+ */
+int create_sensor_table(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // SQL创建表语句
+    const char *sql = 
+        &quot;CREATE TABLE IF NOT EXISTS sensor_data (&quot;
+        &quot;id INTEGER PRIMARY KEY AUTOINCREMENT,&quot;
+        &quot;timestamp INTEGER NOT NULL,&quot;
+        &quot;temperature REAL NOT NULL,&quot;
+        &quot;humidity REAL NOT NULL,&quot;
+        &quot;pressure REAL&quot;
+        &quot;);&quot;;
+
+    // 执行SQL语句
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to create table: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Table created successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>SQL语句说明</strong>：
+- <code>CREATE TABLE IF NOT EXISTS</code>: 如果表不存在则创建
+- <code>INTEGER PRIMARY KEY AUTOINCREMENT</code>: 自增主键
+- <code>NOT NULL</code>: 字段不能为空
+- <code>REAL</code>: 浮点数类型</p>
+<h3 id="42">4.2 插入数据</h3>
+<pre><code class="language-c">/**
+ * @brief  插入传感器数据
+ */
+int insert_sensor_data(uint32_t timestamp, float temperature, 
+                      float humidity, float pressure)
+{
+    char *err_msg = NULL;
+    int rc;
+    char sql[256];
+
+    // 构造SQL插入语句
+    snprintf(sql, sizeof(sql),
+            &quot;INSERT INTO sensor_data (timestamp, temperature, humidity, pressure) &quot;
+            &quot;VALUES (%lu, %.2f, %.2f, %.2f);&quot;,
+            timestamp, temperature, humidity, pressure);
+
+    // 执行SQL语句
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to insert data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Data inserted: T=%.2f, H=%.2f, P=%.2f\n&quot;, 
+           temperature, humidity, pressure);
+    return 0;
+}
+</code></pre>
+<h3 id="43">4.3 使用预编译语句（推荐）</h3>
+<pre><code class="language-c">/**
+ * @brief  使用预编译语句插入数据（更高效、更安全）
+ */
+int insert_sensor_data_prepared(uint32_t timestamp, float temperature,
+                               float humidity, float pressure)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    // 准备SQL语句
+    const char *sql = 
+        &quot;INSERT INTO sensor_data (timestamp, temperature, humidity, pressure) &quot;
+        &quot;VALUES (?, ?, ?, ?);&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to prepare statement: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // 绑定参数
+    sqlite3_bind_int(stmt, 1, timestamp);
+    sqlite3_bind_double(stmt, 2, temperature);
+    sqlite3_bind_double(stmt, 3, humidity);
+    sqlite3_bind_double(stmt, 4, pressure);
+
+    // 执行语句
+    rc = sqlite3_step(stmt);
+    if (rc != SQLITE_DONE) {
+        printf(&quot;Failed to execute statement: %s\n&quot;, sqlite3_errmsg(db));
+        sqlite3_finalize(stmt);
+        return -1;
+    }
+
+    // 释放语句
+    sqlite3_finalize(stmt);
+
+    printf(&quot;Data inserted (prepared): T=%.2f, H=%.2f\n&quot;, temperature, humidity);
+    return 0;
+}
+</code></pre>
+<p><strong>预编译语句优势</strong>：
+- 防止SQL注入攻击
+- 性能更好（可重复使用）
+- 类型安全
+- 代码更清晰</p>
+<h3 id="44">4.4 批量插入数据</h3>
+<pre><code class="language-c">/**
+ * @brief  批量插入数据（使用事务）
+ */
+int insert_batch_data(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // 开始事务
+    rc = sqlite3_exec(db, &quot;BEGIN TRANSACTION;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to begin transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 批量插入100条数据
+    for (int i = 0; i &lt; 100; i++) {
+        uint32_t timestamp = HAL_GetTick();
+        float temperature = 20.0f + (rand() % 100) / 10.0f;
+        float humidity = 40.0f + (rand() % 400) / 10.0f;
+        float pressure = 1000.0f + (rand() % 200) / 10.0f;
+
+        rc = insert_sensor_data_prepared(timestamp, temperature, 
+                                        humidity, pressure);
+        if (rc != 0) {
+            // 回滚事务
+            sqlite3_exec(db, &quot;ROLLBACK;&quot;, NULL, NULL, NULL);
+            return -1;
+        }
+    }
+
+    // 提交事务
+    rc = sqlite3_exec(db, &quot;COMMIT;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to commit transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, &quot;ROLLBACK;&quot;, NULL, NULL, NULL);
+        return -1;
+    }
+
+    printf(&quot;Batch insert completed: 100 records\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>事务的重要性</strong>：
+- 大幅提升批量插入性能（100倍以上）
+- 保证数据一致性
+- 支持回滚操作
+- 减少磁盘I/O次数</p>
+<h2 id="5">步骤5：查询数据</h2>
+<h3 id="51">5.1 简单查询</h3>
+<pre><code class="language-c">/**
+ * @brief  查询回调函数
+ */
+static int query_callback(void *data, int argc, char **argv, char **col_name)
+{
+    // argc: 列数
+    // argv: 列值数组
+    // col_name: 列名数组
+
+    for (int i = 0; i &lt; argc; i++) {
+        printf(&quot;%s = %s\n&quot;, col_name[i], argv[i] ? argv[i] : &quot;NULL&quot;);
+    }
+    printf(&quot;\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  查询所有数据
+ */
+int query_all_data(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    const char *sql = &quot;SELECT * FROM sensor_data;&quot;;
+
+    printf(&quot;Querying all data:\n&quot;);
+    printf(&quot;----------------------------------------\n&quot;);
+
+    rc = sqlite3_exec(db, sql, query_callback, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to query data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="52">5.2 条件查询</h3>
+<pre><code class="language-c">/**
+ * @brief  查询温度大于25度的数据
+ */
+int query_high_temperature(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    const char *sql = 
+        &quot;SELECT id, timestamp, temperature, humidity &quot;
+        &quot;FROM sensor_data &quot;
+        &quot;WHERE temperature &gt; 25.0 &quot;
+        &quot;ORDER BY timestamp DESC &quot;
+        &quot;LIMIT 10;&quot;;
+
+    printf(&quot;High temperature records:\n&quot;);
+    printf(&quot;----------------------------------------\n&quot;);
+
+    rc = sqlite3_exec(db, sql, query_callback, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to query data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="53">5.3 使用预编译语句查询</h3>
+<pre><code class="language-c">/**
+ * @brief  使用预编译语句查询数据
+ */
+int query_data_prepared(float min_temp, float max_temp)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    // 准备SQL语句
+    const char *sql = 
+        &quot;SELECT id, timestamp, temperature, humidity, pressure &quot;
+        &quot;FROM sensor_data &quot;
+        &quot;WHERE temperature BETWEEN ? AND ? &quot;
+        &quot;ORDER BY timestamp DESC;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to prepare statement: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // 绑定参数
+    sqlite3_bind_double(stmt, 1, min_temp);
+    sqlite3_bind_double(stmt, 2, max_temp);
+
+    printf(&quot;Temperature range: %.2f - %.2f\n&quot;, min_temp, max_temp);
+    printf(&quot;%-5s %-12s %-8s %-8s %-8s\n&quot;, 
+           &quot;ID&quot;, &quot;Timestamp&quot;, &quot;Temp&quot;, &quot;Humid&quot;, &quot;Press&quot;);
+    printf(&quot;------------------------------------------------\n&quot;);
+
+    // 遍历结果
+    while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+        int id = sqlite3_column_int(stmt, 0);
+        int timestamp = sqlite3_column_int(stmt, 1);
+        double temperature = sqlite3_column_double(stmt, 2);
+        double humidity = sqlite3_column_double(stmt, 3);
+        double pressure = sqlite3_column_double(stmt, 4);
+
+        printf(&quot;%-5d %-12d %-8.2f %-8.2f %-8.2f\n&quot;,
+               id, timestamp, temperature, humidity, pressure);
+    }
+
+    if (rc != SQLITE_DONE) {
+        printf(&quot;Query error: %s\n&quot;, sqlite3_errmsg(db));
+    }
+
+    // 释放语句
+    sqlite3_finalize(stmt);
+
+    return 0;
+}
+</code></pre>
+<h3 id="54">5.4 聚合查询</h3>
+<pre><code class="language-c">/**
+ * @brief  统计查询
+ */
+int query_statistics(void)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    // 准备SQL语句
+    const char *sql = 
+        &quot;SELECT &quot;
+        &quot;COUNT(*) as count, &quot;
+        &quot;AVG(temperature) as avg_temp, &quot;
+        &quot;MIN(temperature) as min_temp, &quot;
+        &quot;MAX(temperature) as max_temp, &quot;
+        &quot;AVG(humidity) as avg_humid &quot;
+        &quot;FROM sensor_data;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to prepare statement: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    // 获取结果
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        int count = sqlite3_column_int(stmt, 0);
+        double avg_temp = sqlite3_column_double(stmt, 1);
+        double min_temp = sqlite3_column_double(stmt, 2);
+        double max_temp = sqlite3_column_double(stmt, 3);
+        double avg_humid = sqlite3_column_double(stmt, 4);
+
+        printf(&quot;Statistics:\n&quot;);
+        printf(&quot;  Total records: %d\n&quot;, count);
+        printf(&quot;  Avg temperature: %.2f°C\n&quot;, avg_temp);
+        printf(&quot;  Min temperature: %.2f°C\n&quot;, min_temp);
+        printf(&quot;  Max temperature: %.2f°C\n&quot;, max_temp);
+        printf(&quot;  Avg humidity: %.2f%%\n&quot;, avg_humid);
+    }
+
+    sqlite3_finalize(stmt);
+    return 0;
+}
+</code></pre>
+<h2 id="6">步骤6：更新和删除数据</h2>
+<h3 id="61">6.1 更新数据</h3>
+<pre><code class="language-c">/**
+ * @brief  更新数据
+ */
+int update_sensor_data(int id, float new_temperature)
+{
+    char *err_msg = NULL;
+    int rc;
+    char sql[256];
+
+    // 构造UPDATE语句
+    snprintf(sql, sizeof(sql),
+            &quot;UPDATE sensor_data SET temperature = %.2f WHERE id = %d;&quot;,
+            new_temperature, id);
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to update data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 获取影响的行数
+    int changes = sqlite3_changes(db);
+    printf(&quot;Updated %d record(s)\n&quot;, changes);
+
+    return 0;
+}
+
+/**
+ * @brief  批量更新数据
+ */
+int update_batch_data(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // 开始事务
+    rc = sqlite3_exec(db, &quot;BEGIN TRANSACTION;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to begin transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 更新所有温度大于30度的记录
+    const char *sql = 
+        &quot;UPDATE sensor_data &quot;
+        &quot;SET temperature = temperature * 0.9 &quot;
+        &quot;WHERE temperature &gt; 30.0;&quot;;
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to update data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, &quot;ROLLBACK;&quot;, NULL, NULL, NULL);
+        return -1;
+    }
+
+    // 提交事务
+    rc = sqlite3_exec(db, &quot;COMMIT;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to commit transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    int changes = sqlite3_changes(db);
+    printf(&quot;Batch update completed: %d records\n&quot;, changes);
+
+    return 0;
+}
+</code></pre>
+<h3 id="62">6.2 删除数据</h3>
+<pre><code class="language-c">/**
+ * @brief  删除指定ID的数据
+ */
+int delete_sensor_data(int id)
+{
+    char *err_msg = NULL;
+    int rc;
+    char sql[128];
+
+    snprintf(sql, sizeof(sql), &quot;DELETE FROM sensor_data WHERE id = %d;&quot;, id);
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to delete data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    int changes = sqlite3_changes(db);
+    printf(&quot;Deleted %d record(s)\n&quot;, changes);
+
+    return 0;
+}
+
+/**
+ * @brief  删除旧数据（保留最新1000条）
+ */
+int delete_old_data(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    const char *sql = 
+        &quot;DELETE FROM sensor_data &quot;
+        &quot;WHERE id NOT IN (&quot;
+        &quot;  SELECT id FROM sensor_data &quot;
+        &quot;  ORDER BY timestamp DESC &quot;
+        &quot;  LIMIT 1000&quot;
+        &quot;);&quot;;
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to delete old data: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    int changes = sqlite3_changes(db);
+    printf(&quot;Deleted %d old record(s)\n&quot;, changes);
+
+    return 0;
+}
+
+/**
+ * @brief  清空表
+ */
+int truncate_table(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    const char *sql = &quot;DELETE FROM sensor_data;&quot;;
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to truncate table: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 重置自增ID
+    rc = sqlite3_exec(db, &quot;DELETE FROM sqlite_sequence WHERE name='sensor_data';&quot;,
+                     NULL, NULL, &amp;err_msg);
+
+    printf(&quot;Table truncated\n&quot;);
+    return 0;
+}
+</code></pre>
+<h2 id="7">步骤7：事务处理</h2>
+<h3 id="71">7.1 事务基础</h3>
+<pre><code class="language-c">/**
+ * @brief  事务示例
+ */
+int transaction_example(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    printf(&quot;Starting transaction...\n&quot;);
+
+    // 开始事务
+    rc = sqlite3_exec(db, &quot;BEGIN TRANSACTION;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to begin transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 执行多个操作
+    for (int i = 0; i &lt; 10; i++) {
+        uint32_t timestamp = HAL_GetTick();
+        float temperature = 20.0f + i;
+        float humidity = 50.0f + i;
+        float pressure = 1013.0f;
+
+        rc = insert_sensor_data_prepared(timestamp, temperature, 
+                                        humidity, pressure);
+        if (rc != 0) {
+            printf(&quot;Insert failed, rolling back...\n&quot;);
+            sqlite3_exec(db, &quot;ROLLBACK;&quot;, NULL, NULL, NULL);
+            return -1;
+        }
+    }
+
+    // 提交事务
+    rc = sqlite3_exec(db, &quot;COMMIT;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to commit: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_exec(db, &quot;ROLLBACK;&quot;, NULL, NULL, NULL);
+        return -1;
+    }
+
+    printf(&quot;Transaction committed successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="72">7.2 事务隔离级别</h3>
+<pre><code class="language-c">/**
+ * @brief  设置事务模式
+ */
+int set_transaction_mode(const char *mode)
+{
+    char *err_msg = NULL;
+    int rc;
+    char sql[128];
+
+    // SQLite支持三种事务模式：
+    // DEFERRED (默认): 延迟锁定
+    // IMMEDIATE: 立即获取写锁
+    // EXCLUSIVE: 独占锁
+
+    snprintf(sql, sizeof(sql), &quot;BEGIN %s TRANSACTION;&quot;, mode);
+
+    rc = sqlite3_exec(db, sql, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to begin transaction: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Transaction started in %s mode\n&quot;, mode);
+    return 0;
+}
+</code></pre>
+<h3 id="73-savepoint">7.3 保存点（Savepoint）</h3>
+<pre><code class="language-c">/**
+ * @brief  使用保存点
+ */
+int savepoint_example(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // 开始事务
+    sqlite3_exec(db, &quot;BEGIN TRANSACTION;&quot;, NULL, NULL, NULL);
+
+    // 插入一些数据
+    insert_sensor_data_prepared(HAL_GetTick(), 25.0f, 60.0f, 1013.0f);
+
+    // 创建保存点
+    rc = sqlite3_exec(db, &quot;SAVEPOINT sp1;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to create savepoint: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 插入更多数据
+    insert_sensor_data_prepared(HAL_GetTick(), 26.0f, 61.0f, 1014.0f);
+
+    // 回滚到保存点（撤销第二次插入）
+    rc = sqlite3_exec(db, &quot;ROLLBACK TO sp1;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to rollback to savepoint: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 提交事务（只有第一次插入会被保存）
+    sqlite3_exec(db, &quot;COMMIT;&quot;, NULL, NULL, NULL);
+
+    printf(&quot;Savepoint example completed\n&quot;);
+    return 0;
+}
+</code></pre>
+<h2 id="8">步骤8：性能优化</h2>
+<h3 id="81">8.1 创建索引</h3>
+<pre><code class="language-c">/**
+ * @brief  创建索引提升查询性能
+ */
+int create_indexes(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // 在timestamp列上创建索引
+    const char *sql1 = 
+        &quot;CREATE INDEX IF NOT EXISTS idx_timestamp &quot;
+        &quot;ON sensor_data(timestamp);&quot;;
+
+    rc = sqlite3_exec(db, sql1, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to create index: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 在temperature列上创建索引
+    const char *sql2 = 
+        &quot;CREATE INDEX IF NOT EXISTS idx_temperature &quot;
+        &quot;ON sensor_data(temperature);&quot;;
+
+    rc = sqlite3_exec(db, sql2, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to create index: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Indexes created successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<h3 id="82">8.2 优化配置</h3>
+<pre><code class="language-c">/**
+ * @brief  优化SQLite配置
+ */
+int optimize_sqlite_config(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // 设置同步模式（NORMAL比FULL快，但稍微不安全）
+    rc = sqlite3_exec(db, &quot;PRAGMA synchronous = NORMAL;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to set synchronous: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 设置日志模式（WAL模式性能更好）
+    rc = sqlite3_exec(db, &quot;PRAGMA journal_mode = WAL;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to set journal mode: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 设置缓存大小（页数）
+    rc = sqlite3_exec(db, &quot;PRAGMA cache_size = 200;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to set cache size: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    // 设置临时存储位置（使用内存）
+    rc = sqlite3_exec(db, &quot;PRAGMA temp_store = MEMORY;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to set temp store: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;SQLite configuration optimized\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>PRAGMA说明</strong>：
+- <code>synchronous = NORMAL</code>: 平衡性能和安全性
+- <code>journal_mode = WAL</code>: 写前日志，提升并发性能
+- <code>cache_size</code>: 缓存页数，影响内存占用和性能
+- <code>temp_store = MEMORY</code>: 临时数据存储在内存中</p>
+<h3 id="83">8.3 批量操作优化</h3>
+<pre><code class="language-c">/**
+ * @brief  性能测试：对比单条插入和批量插入
+ */
+void performance_test(void)
+{
+    uint32_t start_tick, end_tick;
+
+    // 测试1：单条插入（无事务）
+    printf(&quot;Test 1: Single insert without transaction\n&quot;);
+    start_tick = HAL_GetTick();
+
+    for (int i = 0; i &lt; 100; i++) {
+        insert_sensor_data_prepared(HAL_GetTick(), 
+                                   20.0f + i * 0.1f, 
+                                   50.0f + i * 0.1f, 
+                                   1013.0f);
+    }
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Time: %lu ms\n\n&quot;, end_tick - start_tick);
+
+    // 清空表
+    truncate_table();
+
+    // 测试2：批量插入（使用事务）
+    printf(&quot;Test 2: Batch insert with transaction\n&quot;);
+    start_tick = HAL_GetTick();
+
+    sqlite3_exec(db, &quot;BEGIN TRANSACTION;&quot;, NULL, NULL, NULL);
+
+    for (int i = 0; i &lt; 100; i++) {
+        insert_sensor_data_prepared(HAL_GetTick(), 
+                                   20.0f + i * 0.1f, 
+                                   50.0f + i * 0.1f, 
+                                   1013.0f);
+    }
+
+    sqlite3_exec(db, &quot;COMMIT;&quot;, NULL, NULL, NULL);
+
+    end_tick = HAL_GetTick();
+    printf(&quot;Time: %lu ms\n\n&quot;, end_tick - start_tick);
+
+    printf(&quot;Performance improvement: ~%lux faster\n&quot;, 
+           (end_tick - start_tick) &gt; 0 ? 
+           ((end_tick - start_tick) / (end_tick - start_tick)) : 1);
+}
+</code></pre>
+<h3 id="84">8.4 查询优化</h3>
+<pre><code class="language-c">/**
+ * @brief  使用EXPLAIN分析查询
+ */
+int analyze_query(const char *sql)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+    char explain_sql[512];
+
+    // 添加EXPLAIN QUERY PLAN前缀
+    snprintf(explain_sql, sizeof(explain_sql), &quot;EXPLAIN QUERY PLAN %s&quot;, sql);
+
+    rc = sqlite3_prepare_v2(db, explain_sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to prepare explain: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    printf(&quot;Query Plan:\n&quot;);
+    printf(&quot;----------------------------------------\n&quot;);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *detail = (const char*)sqlite3_column_text(stmt, 3);
+        printf(&quot;%s\n&quot;, detail);
+    }
+
+    sqlite3_finalize(stmt);
+    return 0;
+}
+</code></pre>
+<h2 id="9">步骤9：数据库维护</h2>
+<h3 id="91">9.1 数据库备份</h3>
+<pre><code class="language-c">/**
+ * @brief  备份数据库
+ */
+int backup_database(const char *backup_filename)
+{
+    sqlite3 *backup_db;
+    sqlite3_backup *backup;
+    int rc;
+
+    // 打开备份数据库
+    rc = sqlite3_open(backup_filename, &amp;backup_db);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to open backup database: %s\n&quot;, sqlite3_errmsg(backup_db));
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 初始化备份
+    backup = sqlite3_backup_init(backup_db, &quot;main&quot;, db, &quot;main&quot;);
+    if (!backup) {
+        printf(&quot;Failed to initialize backup: %s\n&quot;, sqlite3_errmsg(backup_db));
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 执行备份
+    rc = sqlite3_backup_step(backup, -1);
+    if (rc != SQLITE_DONE) {
+        printf(&quot;Backup failed: %s\n&quot;, sqlite3_errmsg(backup_db));
+        sqlite3_backup_finish(backup);
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 完成备份
+    sqlite3_backup_finish(backup);
+    sqlite3_close(backup_db);
+
+    printf(&quot;Database backed up to: %s\n&quot;, backup_filename);
+    return 0;
+}
+</code></pre>
+<h3 id="92">9.2 数据库恢复</h3>
+<pre><code class="language-c">/**
+ * @brief  从备份恢复数据库
+ */
+int restore_database(const char *backup_filename)
+{
+    sqlite3 *backup_db;
+    sqlite3_backup *backup;
+    int rc;
+
+    // 打开备份数据库
+    rc = sqlite3_open(backup_filename, &amp;backup_db);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to open backup database: %s\n&quot;, sqlite3_errmsg(backup_db));
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 初始化恢复
+    backup = sqlite3_backup_init(db, &quot;main&quot;, backup_db, &quot;main&quot;);
+    if (!backup) {
+        printf(&quot;Failed to initialize restore: %s\n&quot;, sqlite3_errmsg(db));
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 执行恢复
+    rc = sqlite3_backup_step(backup, -1);
+    if (rc != SQLITE_DONE) {
+        printf(&quot;Restore failed: %s\n&quot;, sqlite3_errmsg(db));
+        sqlite3_backup_finish(backup);
+        sqlite3_close(backup_db);
+        return -1;
+    }
+
+    // 完成恢复
+    sqlite3_backup_finish(backup);
+    sqlite3_close(backup_db);
+
+    printf(&quot;Database restored from: %s\n&quot;, backup_filename);
+    return 0;
+}
+</code></pre>
+<h3 id="93">9.3 数据库完整性检查</h3>
+<pre><code class="language-c">/**
+ * @brief  检查数据库完整性
+ */
+int check_database_integrity(void)
+{
+    sqlite3_stmt *stmt;
+    int rc;
+
+    const char *sql = &quot;PRAGMA integrity_check;&quot;;
+
+    rc = sqlite3_prepare_v2(db, sql, -1, &amp;stmt, NULL);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to prepare integrity check: %s\n&quot;, sqlite3_errmsg(db));
+        return -1;
+    }
+
+    printf(&quot;Database Integrity Check:\n&quot;);
+    printf(&quot;----------------------------------------\n&quot;);
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *result = (const char*)sqlite3_column_text(stmt, 0);
+        printf(&quot;%s\n&quot;, result);
+    }
+
+    sqlite3_finalize(stmt);
+    return 0;
+}
+
+/**
+ * @brief  优化数据库（VACUUM）
+ */
+int vacuum_database(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    printf(&quot;Vacuuming database...\n&quot;);
+
+    // VACUUM会重建数据库文件，回收未使用的空间
+    rc = sqlite3_exec(db, &quot;VACUUM;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to vacuum database: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Database vacuumed successfully\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  分析数据库统计信息
+ */
+int analyze_database(void)
+{
+    char *err_msg = NULL;
+    int rc;
+
+    // ANALYZE收集统计信息，帮助查询优化器
+    rc = sqlite3_exec(db, &quot;ANALYZE;&quot;, NULL, NULL, &amp;err_msg);
+    if (rc != SQLITE_OK) {
+        printf(&quot;Failed to analyze database: %s\n&quot;, err_msg);
+        sqlite3_free(err_msg);
+        return -1;
+    }
+
+    printf(&quot;Database analyzed successfully\n&quot;);
+    return 0;
+}
+</code></pre>
+<h2 id="10">步骤10：完整应用示例</h2>
+<h3 id="101">10.1 传感器数据记录系统</h3>
+<pre><code class="language-c">/**
+ * @brief  传感器数据记录系统主程序
+ */
+void sensor_data_logger_main(void)
+{
+    int rc;
+
+    // 初始化SQLite
+    if (sqlite3_app_init() != 0) {
+        printf(&quot;Failed to initialize SQLite\n&quot;);
+        return;
+    }
+
+    // 打开数据库
+    if (sqlite3_app_open(&quot;0:/sensor.db&quot;) != 0) {
+        printf(&quot;Failed to open database\n&quot;);
+        return;
+    }
+
+    // 优化配置
+    optimize_sqlite_config();
+
+    // 创建表
+    create_sensor_table();
+
+    // 创建索引
+    create_indexes();
+
+    // 主循环
+    uint32_t last_record_time = 0;
+    uint32_t last_backup_time = 0;
+
+    while (1) {
+        uint32_t current_time = HAL_GetTick();
+
+        // 每10秒记录一次数据
+        if (current_time - last_record_time &gt;= 10000) {
+            // 读取传感器数据（示例）
+            float temperature = read_temperature();
+            float humidity = read_humidity();
+            float pressure = read_pressure();
+
+            // 插入数据库
+            rc = insert_sensor_data_prepared(current_time, temperature, 
+                                            humidity, pressure);
+            if (rc == 0) {
+                printf(&quot;Data recorded: T=%.2f, H=%.2f, P=%.2f\n&quot;,
+                       temperature, humidity, pressure);
+            }
+
+            last_record_time = current_time;
+        }
+
+        // 每小时备份一次
+        if (current_time - last_backup_time &gt;= 3600000) {
+            backup_database(&quot;0:/sensor_backup.db&quot;);
+            last_backup_time = current_time;
+        }
+
+        // 每天清理旧数据（保留最新10000条）
+        static uint32_t last_cleanup_day = 0;
+        uint32_t current_day = current_time / 86400000;
+        if (current_day != last_cleanup_day) {
+            delete_old_data();
+            vacuum_database();
+            last_cleanup_day = current_day;
+        }
+
+        // 延时
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h3 id="102">10.2 命令行接口</h3>
+<pre><code class="language-c">/**
+ * @brief  简单的命令行接口
+ */
+void command_line_interface(void)
+{
+    char cmd[128];
+
+    printf(&quot;\nSQLite Command Line Interface\n&quot;);
+    printf(&quot;Commands:\n&quot;);
+    printf(&quot;  insert - Insert sample data\n&quot;);
+    printf(&quot;  query  - Query all data\n&quot;);
+    printf(&quot;  stats  - Show statistics\n&quot;);
+    printf(&quot;  backup - Backup database\n&quot;);
+    printf(&quot;  exit   - Exit\n&quot;);
+    printf(&quot;\n&quot;);
+
+    while (1) {
+        printf(&quot;&gt; &quot;);
+
+        // 读取命令（简化实现）
+        scanf(&quot;%s&quot;, cmd);
+
+        if (strcmp(cmd, &quot;insert&quot;) == 0) {
+            insert_sensor_data_prepared(HAL_GetTick(), 
+                                       25.0f, 60.0f, 1013.0f);
+            printf(&quot;Data inserted\n&quot;);
+        }
+        else if (strcmp(cmd, &quot;query&quot;) == 0) {
+            query_all_data();
+        }
+        else if (strcmp(cmd, &quot;stats&quot;) == 0) {
+            query_statistics();
+        }
+        else if (strcmp(cmd, &quot;backup&quot;) == 0) {
+            backup_database(&quot;0:/backup.db&quot;);
+        }
+        else if (strcmp(cmd, &quot;exit&quot;) == 0) {
+            break;
+        }
+        else {
+            printf(&quot;Unknown command\n&quot;);
+        }
+    }
+}
+</code></pre>
+<h2 id="_7">故障排除</h2>
+<h3 id="1">问题1：数据库无法打开</h3>
+<p><strong>可能原因</strong>：
+- 文件系统未正确挂载
+- 文件路径错误
+- 权限不足
+- 存储空间不足</p>
+<p><strong>解决方法</strong>：
+1. 检查文件系统是否挂载成功
+   <code>c
+   FRESULT res = f_mount(&amp;fs, "0:", 1);
+   if (res != FR_OK) {
+       printf("Mount failed: %d\n", res);
+   }</code></p>
+<ol start="2">
+<li>
+<p>验证文件路径
+   <code>c
+   // 确保路径格式正确
+   // 正确: "0:/test.db"
+   // 错误: "/test.db" 或 "test.db"</code></p>
+</li>
+<li>
+<p>检查存储空间
+   <code>c
+   FATFS *fs;
+   DWORD fre_clust;
+   f_getfree("0:", &amp;fre_clust, &amp;fs);
+   printf("Free space: %lu KB\n", 
+          fre_clust * fs-&gt;csize / 2);</code></p>
+</li>
+</ol>
+<h3 id="2">问题2：插入数据很慢</h3>
+<p><strong>可能原因</strong>：
+- 未使用事务
+- 同步模式设置为FULL
+- 频繁的磁盘同步</p>
+<p><strong>解决方法</strong>：
+1. 使用事务包装批量操作
+   <code>c
+   sqlite3_exec(db, "BEGIN TRANSACTION;", NULL, NULL, NULL);
+   // 批量插入
+   sqlite3_exec(db, "COMMIT;", NULL, NULL, NULL);</code></p>
+<ol start="2">
+<li>
+<p>调整同步模式
+   <code>c
+   sqlite3_exec(db, "PRAGMA synchronous = NORMAL;", 
+                NULL, NULL, NULL);</code></p>
+</li>
+<li>
+<p>使用WAL模式
+   <code>c
+   sqlite3_exec(db, "PRAGMA journal_mode = WAL;", 
+                NULL, NULL, NULL);</code></p>
+</li>
+</ol>
+<h3 id="3_1">问题3：内存不足</h3>
+<p><strong>可能原因</strong>：
+- 缓存设置过大
+- 查询结果集过大
+- 内存泄漏</p>
+<p><strong>解决方法</strong>：
+1. 减小缓存大小
+   <code>c
+   sqlite3_exec(db, "PRAGMA cache_size = 50;", 
+                NULL, NULL, NULL);</code></p>
+<ol start="2">
+<li>
+<p>使用分页查询
+   <code>c
+   const char *sql = 
+       "SELECT * FROM sensor_data "
+       "LIMIT 100 OFFSET 0;";</code></p>
+</li>
+<li>
+<p>及时释放语句
+   <code>c
+   sqlite3_finalize(stmt);  // 不要忘记释放</code></p>
+</li>
+<li>
+<p>裁剪SQLite功能
+   <code>c
+   // 在编译时定义
+   #define SQLITE_OMIT_VIRTUALTABLE
+   #define SQLITE_OMIT_TRIGGER</code></p>
+</li>
+</ol>
+<h3 id="4_1">问题4：数据库损坏</h3>
+<p><strong>可能原因</strong>：
+- 断电时正在写入
+- 存储介质故障
+- 文件系统错误</p>
+<p><strong>解决方法</strong>：
+1. 检查数据库完整性
+   <code>c
+   check_database_integrity();</code></p>
+<ol start="2">
+<li>尝试恢复
+   ```c
+   // 导出数据
+   sqlite3_exec(db, ".dump", callback, NULL, NULL);</li>
+</ol>
+<p>// 重建数据库
+   sqlite3_exec(db, ".read dump.sql", NULL, NULL, NULL);
+   ```</p>
+<ol start="3">
+<li>从备份恢复
+   <code>c
+   restore_database("0:/backup.db");</code></li>
+</ol>
+<h3 id="5_1">问题5：查询结果不正确</h3>
+<p><strong>可能原因</strong>：
+- SQL语句错误
+- 数据类型不匹配
+- 索引未更新</p>
+<p><strong>解决方法</strong>：
+1. 检查SQL语句
+   <code>c
+   // 使用EXPLAIN分析
+   analyze_query("SELECT * FROM sensor_data WHERE temperature &gt; 25");</code></p>
+<ol start="2">
+<li>
+<p>验证数据类型
+   <code>c
+   // 确保绑定正确的类型
+   sqlite3_bind_double(stmt, 1, temperature);  // 浮点数
+   sqlite3_bind_int(stmt, 2, id);              // 整数</code></p>
+</li>
+<li>
+<p>重建索引
+   <code>c
+   sqlite3_exec(db, "REINDEX;", NULL, NULL, NULL);</code></p>
+</li>
+</ol>
+<h2 id="_8">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ SQLite的特点和应用场景</li>
+<li>✅ 在嵌入式系统中移植SQLite</li>
+<li>✅ 实现VFS虚拟文件系统接口</li>
+<li>✅ 使用SQL语句进行数据操作</li>
+<li>✅ 创建表、插入、查询、更新和删除数据</li>
+<li>✅ 事务处理和数据完整性</li>
+<li>✅ 性能优化技巧</li>
+<li>✅ 数据库备份和恢复</li>
+<li>✅ 完整的数据记录系统实现</li>
+</ul>
+<h2 id="_9">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li>
+<p><strong>挑战1</strong>：实现数据加密存储
+   - 使用SQLite加密扩展（SEE）
+   - 或实现自定义加密VFS</p>
+</li>
+<li>
+<p><strong>挑战2</strong>：实现数据同步功能
+   - 本地数据库与云端同步
+   - 处理冲突解决</p>
+</li>
+<li>
+<p><strong>挑战3</strong>：优化大数据量查询
+   - 实现分页查询
+   - 使用虚拟表
+   - 优化索引策略</p>
+</li>
+<li>
+<p><strong>挑战4</strong>：实现数据导出功能
+   - 导出为CSV格式
+   - 导出为JSON格式
+   - 支持数据筛选</p>
+</li>
+</ol>
+<h2 id="_10">完整代码</h2>
+<p>完整的项目代码可以在这里下载：[GitHub链接]</p>
+<p><strong>项目结构</strong>：</p>
+<pre><code>sqlite_demo/
+├── Core/
+│   ├── Src/
+│   │   ├── main.c
+│   │   └── ...
+│   └── Inc/
+│       └── ...
+├── Middlewares/
+│   ├── SQLite/
+│   │   ├── sqlite3.c
+│   │   ├── sqlite3.h
+│   │   └── sqlite3_config.h
+│   └── FATFS/
+│       └── ...
+├── Application/
+│   ├── sqlite3_app.c
+│   ├── sqlite3_app.h
+│   ├── sqlite3_vfs_fatfs.c
+│   └── sqlite3_vfs_fatfs.h
+└── README.md
+</code></pre>
+<h2 id="_11">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="link">键值数据库实现</a> - 学习更简单的KV存储</li>
+<li><a href="link">时序数据库应用</a> - 学习时间序列数据处理</li>
+<li><a href="link">数据同步与备份策略</a> - 学习数据可靠性保证</li>
+</ul>
+<h2 id="_12">参考资料</h2>
+<ol>
+<li>
+<p><strong>官方文档</strong>
+   - SQLite官方网站：https://www.sqlite.org/
+   - SQLite C/C++ API：https://www.sqlite.org/c3ref/intro.html
+   - SQL语法参考：https://www.sqlite.org/lang.html</p>
+</li>
+<li>
+<p><strong>技术文章</strong>
+   - SQLite性能优化：https://www.sqlite.org/optoverview.html
+   - SQLite在嵌入式系统中的应用
+   - VFS实现指南</p>
+</li>
+<li>
+<p><strong>开源项目</strong>
+   - SQLite移植示例
+   - 嵌入式数据库应用案例</p>
+</li>
+<li>
+<p><strong>书籍推荐</strong>
+   - 《The Definitive Guide to SQLite》
+   - 《SQLite Database System: Design and Implementation》</p>
+</li>
+</ol>
+<h2 id="_13">常见问题</h2>
+<p><strong>Q1: SQLite适合什么样的应用？</strong></p>
+<p>A: SQLite适合：
+- 嵌入式设备数据存储
+- 移动应用本地数据库
+- 桌面应用配置存储
+- 小型Web应用
+- 数据分析和测试</p>
+<p>不适合：
+- 高并发写入场景
+- 需要网络访问的应用
+- 超大数据量（&gt;140TB）</p>
+<p><strong>Q2: 如何选择合适的页大小？</strong></p>
+<p>A: 页大小建议：
+- SD卡：1024或2048字节
+- SPI Flash：1024字节
+- 内部Flash：512或1024字节
+- 考虑存储介质的擦除块大小</p>
+<p><strong>Q3: WAL模式的优缺点？</strong></p>
+<p>A: 优点：
+- 提升并发性能
+- 减少锁竞争
+- 更快的写入速度</p>
+<p>缺点：
+- 需要额外的WAL文件
+- 占用更多存储空间
+- 某些文件系统不支持</p>
+<p><strong>Q4: 如何减小SQLite代码大小？</strong></p>
+<p>A: 方法：
+- 使用编译选项裁剪功能
+- 禁用不需要的特性
+- 使用-Os优化编译
+- 参考官方裁剪指南</p>
+<p><strong>Q5: 如何处理并发访问？</strong></p>
+<p>A: 建议：
+- 嵌入式系统通常单线程访问
+- 如需多线程，使用互斥锁保护
+- 考虑使用WAL模式
+- 设置合适的超时时间</p>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言！</p>
+<p><strong>版本历史</strong>：
+- v1.0 (2024-01-15): 初始版本，完整的SQLite教程</p>
+<p><strong>贡献者</strong>：嵌入式知识平台内容团队</p>
+<p><strong>许可证</strong>：本教程采用 CC BY-SA 4.0 许可协议</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

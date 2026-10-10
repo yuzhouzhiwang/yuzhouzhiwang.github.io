@@ -1,0 +1,1960 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>RTOS中断管理与延迟处理：高效处理中断和任务协作 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/">02-rtos-fundamentals</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a><ul>
+<li><a href="#_3">知识要求</a></li>
+<li><a href="#_4">技能要求</a></li>
+<li><a href="#_5">环境要求</a></li>
+</ul>
+</li>
+<li><a href="#_6">准备工作</a><ul>
+<li><a href="#_7">硬件准备</a></li>
+<li><a href="#_8">软件准备</a></li>
+<li><a href="#_9">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_10">概述</a><ul>
+<li><a href="#rtos_1">什么是RTOS中断管理？</a></li>
+<li><a href="#_11">为什么需要延迟处理？</a></li>
+<li><a href="#_12">相关概念</a></li>
+</ul>
+</li>
+<li><a href="#1rtos">步骤1：理解RTOS中断优先级</a><ul>
+<li><a href="#11">1.1 中断优先级分组</a></li>
+<li><a href="#12-freertos">1.2 FreeRTOS中断优先级分级</a></li>
+<li><a href="#13">1.3 中断优先级验证</a></li>
+</ul>
+</li>
+<li><a href="#2api">步骤2：中断安全API的使用</a><ul>
+<li><a href="#21-fromisr">2.1 FromISR函数概述</a></li>
+<li><a href="#22">2.2 使用信号量进行中断通知</a></li>
+<li><a href="#23">2.3 使用队列传递中断数据</a></li>
+<li><a href="#24">2.4 使用任务通知进行中断通知</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：延迟处理的实现模式</a><ul>
+<li><a href="#31">3.1 延迟处理的基本原则</a></li>
+<li><a href="#32-1">3.2 模式1：二值信号量模式</a></li>
+<li><a href="#33-2">3.3 模式2：计数信号量模式</a></li>
+<li><a href="#34-3">3.4 模式3：队列模式</a></li>
+<li><a href="#35-4">3.5 模式4：任务通知模式</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：中断嵌套和临界区</a><ul>
+<li><a href="#41">4.1 中断嵌套</a></li>
+<li><a href="#42">4.2 临界区保护</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：性能优化</a><ul>
+<li><a href="#51">5.1 减少中断延迟</a></li>
+<li><a href="#52">5.2 测量中断性能</a></li>
+<li><a href="#53">5.3 避免中断风暴</a></li>
+</ul>
+</li>
+<li><a href="#_13">实践示例</a><ul>
+<li><a href="#1">示例1：完整的中断延迟处理系统</a></li>
+<li><a href="#2">示例2：高频中断优化</a></li>
+</ul>
+</li>
+<li><a href="#_14">验证</a><ul>
+<li><a href="#_15">验证方法</a></li>
+<li><a href="#_16">预期结果</a></li>
+<li><a href="#_17">测试要点</a></li>
+</ul>
+</li>
+<li><a href="#_18">故障排除</a><ul>
+<li><a href="#1_1">问题1：系统崩溃或死机</a></li>
+<li><a href="#2_1">问题2：任务无法被中断唤醒</a></li>
+<li><a href="#3_1">问题3：中断响应慢</a></li>
+<li><a href="#4_1">问题4：数据丢失</a></li>
+</ul>
+</li>
+<li><a href="#_19">最佳实践</a><ul>
+<li><a href="#1_2">1. 中断服务函数设计原则</a></li>
+<li><a href="#2_2">2. 选择合适的通信机制</a></li>
+<li><a href="#3_2">3. 中断优先级配置指南</a></li>
+<li><a href="#4_2">4. 性能优化检查清单</a></li>
+</ul>
+</li>
+<li><a href="#_20">总结</a></li>
+<li><a href="#_21">扩展阅读</a></li>
+<li><a href="#_22">练习题</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rtos">RTOS中断管理与延迟处理：高效处理中断和任务协作</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>理解RTOS环境下中断的工作机制</li>
+<li>掌握中断服务函数(ISR)的编写规范</li>
+<li>学会使用中断安全API（FromISR函数）</li>
+<li>理解延迟处理的概念和实现方法</li>
+<li>掌握中断优先级的配置和影响</li>
+<li>学会使用信号量、队列和任务通知进行中断与任务通信</li>
+<li>能够优化中断响应时间和系统性能</li>
+<li>理解中断嵌套和临界区保护</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<h3 id="_3">知识要求</h3>
+<ul>
+<li>理解RTOS任务管理和调度机制</li>
+<li>掌握信号量和消息队列的使用</li>
+<li>了解ARM Cortex-M中断系统</li>
+<li>理解中断优先级和NVIC配置</li>
+</ul>
+<h3 id="_4">技能要求</h3>
+<ul>
+<li>能够配置和使用外设中断</li>
+<li>理解中断服务函数的基本概念</li>
+<li>掌握RTOS任务间通信机制</li>
+<li>具备基本的系统调试能力</li>
+</ul>
+<h3 id="_5">环境要求</h3>
+<ul>
+<li>STM32开发板（或其他支持FreeRTOS的开发板）</li>
+<li>STM32CubeIDE或Keil MDK开发环境</li>
+<li>FreeRTOS源码或HAL库</li>
+<li>串口调试工具</li>
+<li>逻辑分析仪或示波器（可选）</li>
+</ul>
+<h2 id="_6">准备工作</h2>
+<h3 id="_7">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>硬件</th>
+<th>数量</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32开发板</td>
+<td>1</td>
+<td>如STM32F407、STM32F103等</td>
+</tr>
+<tr>
+<td>按键</td>
+<td>2个</td>
+<td>用于触发外部中断</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>2个</td>
+<td>用于状态指示</td>
+</tr>
+<tr>
+<td>USB数据线</td>
+<td>1</td>
+<td>用于下载和供电</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">软件准备</h3>
+<ol>
+<li>
+<p><strong>安装开发环境</strong>
+   - STM32CubeIDE v1.10或更高版本
+   - 或Keil MDK v5.30或更高版本</p>
+</li>
+<li>
+<p><strong>配置FreeRTOS</strong>
+   - 在STM32CubeMX中启用FreeRTOS
+   - 或手动添加FreeRTOS源码到项目</p>
+</li>
+<li>
+<p><strong>配置串口</strong>
+   - 配置UART用于调试输出
+   - 波特率：115200
+   - 数据位：8，停止位：1，无校验</p>
+</li>
+</ol>
+<h3 id="_9">环境配置</h3>
+<pre><code class="language-c">// FreeRTOSConfig.h 关键配置
+#define configUSE_PREEMPTION                    1  // 启用抢占式调度
+#define configUSE_TICK_HOOK                     0  // 不使用tick hook
+#define configCPU_CLOCK_HZ                      72000000  // CPU频率
+#define configTICK_RATE_HZ                      1000  // 时钟节拍频率
+#define configMAX_PRIORITIES                    8  // 最大优先级数
+#define configMINIMAL_STACK_SIZE                128  // 最小栈大小
+
+// 中断优先级配置（重要！）
+#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY         15
+#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
+#define configKERNEL_INTERRUPT_PRIORITY                 (configLIBRARY_LOWEST_INTERRUPT_PRIORITY &lt;&lt; 4)
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY            (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY &lt;&lt; 4)
+</code></pre>
+<h2 id="_10">概述</h2>
+<h3 id="rtos_1">什么是RTOS中断管理？</h3>
+<p>在RTOS环境下，中断管理不仅仅是响应硬件事件，还需要与RTOS调度器协调工作，确保系统的实时性和稳定性。</p>
+<p><strong>RTOS中断的特点</strong>：</p>
+<ol>
+<li>
+<p><strong>中断优先级分级</strong>
+   - 高于RTOS管理的中断：不能调用RTOS API
+   - RTOS管理的中断：可以调用FromISR API
+   - 低于RTOS管理的中断：完全由RTOS管理</p>
+</li>
+<li>
+<p><strong>中断安全API</strong>
+   - 普通API：只能在任务中调用
+   - FromISR API：只能在中断中调用
+   - 两者不能混用</p>
+</li>
+<li>
+<p><strong>延迟处理机制</strong>
+   - 中断中只做最少的工作
+   - 复杂处理交给任务完成
+   - 通过信号量、队列或任务通知通信</p>
+</li>
+</ol>
+<h3 id="_11">为什么需要延迟处理？</h3>
+<p><strong>中断服务函数(ISR)的限制</strong>：</p>
+<ol>
+<li>
+<p><strong>执行时间要短</strong>
+   - ISR会阻塞其他中断和任务
+   - 长时间ISR会影响系统实时性
+   - 可能导致中断丢失</p>
+</li>
+<li>
+<p><strong>功能受限</strong>
+   - 不能调用阻塞函数
+   - 不能使用延时
+   - 不能进行复杂计算</p>
+</li>
+<li>
+<p><strong>资源限制</strong>
+   - 使用中断栈，空间有限
+   - 不能使用任务栈上的资源</p>
+</li>
+</ol>
+<p><strong>延迟处理的优势</strong>：</p>
+<pre><code>传统方式（不推荐）：
+中断 → 完整处理（读取、计算、存储、显示）→ 返回
+      ↑____________长时间阻塞____________↑
+
+延迟处理方式（推荐）：
+中断 → 快速读取 → 发送信号 → 返回
+                      ↓
+                   任务唤醒 → 完整处理
+</code></pre>
+<h3 id="_12">相关概念</h3>
+<p><strong>中断优先级分组</strong>：
+- ARM Cortex-M使用NVIC管理中断
+- 优先级分为抢占优先级和子优先级
+- FreeRTOS要求正确配置优先级分组</p>
+<p><strong>临界区(Critical Section)</strong>：
+- 不可被中断打断的代码段
+- 用于保护共享资源
+- 在RTOS中有特殊的实现方式</p>
+<p><strong>上下文切换(Context Switch)</strong>：
+- 从中断返回时可能切换任务
+- 需要使用特殊的返回机制
+- FromISR函数会设置切换标志</p>
+<h2 id="1rtos">步骤1：理解RTOS中断优先级</h2>
+<h3 id="11">1.1 中断优先级分组</h3>
+<p>ARM Cortex-M的中断优先级系统：</p>
+<pre><code>优先级寄存器（8位）：
+┌─────────────┬─────────────┐
+│ 抢占优先级  │  子优先级   │
+└─────────────┴─────────────┘
+     4位            4位
+
+优先级分组（PRIGROUP）：
+- 0: 0位抢占 + 4位子优先级
+- 1: 1位抢占 + 3位子优先级
+- 2: 2位抢占 + 2位子优先级
+- 3: 3位抢占 + 1位子优先级
+- 4: 4位抢占 + 0位子优先级
+</code></pre>
+<p><strong>FreeRTOS的优先级要求</strong>：</p>
+<pre><code class="language-c">// 在system_stm32f1xx.c或main.c中设置
+HAL_Init();  // 会调用HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4)
+
+// FreeRTOS要求使用PRIGROUP = 4（4位抢占优先级）
+// 这样可以有16个抢占优先级（0-15）
+</code></pre>
+<h3 id="12-freertos">1.2 FreeRTOS中断优先级分级</h3>
+<p>FreeRTOS将中断分为三个级别：</p>
+<pre><code>优先级数值越小，优先级越高
+┌─────────────────────────────────────────┐
+│  0-4: 高优先级中断（不受RTOS管理）      │  ← 不能调用RTOS API
+│       - 最高优先级                       │
+│       - 不会被RTOS禁用                   │
+│       - 延迟最小                         │
+├─────────────────────────────────────────┤
+│  5-14: RTOS管理的中断                   │  ← 可以调用FromISR API
+│       - 可以调用RTOS API                 │
+│       - 会被临界区禁用                   │
+│       - 可以触发任务切换                 │
+├─────────────────────────────────────────┤
+│  15: 最低优先级（PendSV和SysTick）      │  ← RTOS内部使用
+│       - 用于任务切换                     │
+│       - 不应被用户使用                   │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>配置示例</strong>：</p>
+<pre><code class="language-c">// FreeRTOSConfig.h
+#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
+
+// 这意味着：
+// - 优先级0-4：不能调用RTOS API
+// - 优先级5-14：可以调用FromISR API
+// - 优先级15：RTOS内部使用
+
+// 配置中断优先级
+void ConfigureInterrupts(void) {
+    // 高优先级中断（不调用RTOS API）
+    HAL_NVIC_SetPriority(TIM1_UP_IRQn, 2, 0);  // 优先级2，不能调用RTOS API
+
+    // RTOS管理的中断（可以调用FromISR API）
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0);    // 优先级6，可以调用FromISR API
+    HAL_NVIC_SetPriority(USART1_IRQn, 7, 0);   // 优先级7，可以调用FromISR API
+
+    // 启用中断
+    HAL_NVIC_EnableIRQ(TIM1_UP_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
+}
+</code></pre>
+<h3 id="13">1.3 中断优先级验证</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 检查中断优先级配置是否正确
+void CheckInterruptPriority(IRQn_Type IRQn) {
+    uint32_t priority = NVIC_GetPriority(IRQn);
+    uint32_t max_syscall_priority = configMAX_SYSCALL_INTERRUPT_PRIORITY &gt;&gt; 4;
+
+    printf(&quot;IRQ %d priority: %d\n&quot;, IRQn, priority);
+
+    if(priority &lt; max_syscall_priority) {
+        printf(&quot;  → Cannot call RTOS API (too high priority)\n&quot;);
+    } else {
+        printf(&quot;  → Can call FromISR API\n&quot;);
+    }
+}
+
+// 在main函数中调用
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置中断
+    ConfigureInterrupts();
+
+    // 检查配置
+    printf(&quot;Checking interrupt priorities:\n&quot;);
+    CheckInterruptPriority(TIM1_UP_IRQn);
+    CheckInterruptPriority(EXTI0_IRQn);
+    CheckInterruptPriority(USART1_IRQn);
+
+    // 创建任务并启动调度器
+    // ...
+}
+</code></pre>
+<h2 id="2api">步骤2：中断安全API的使用</h2>
+<h3 id="21-fromisr">2.1 FromISR函数概述</h3>
+<p>FreeRTOS为中断环境提供了专门的API函数，这些函数以<code>FromISR</code>结尾：</p>
+<p><strong>常用FromISR函数</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>任务API</th>
+<th>中断API</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>xSemaphoreGive()</code></td>
+<td><code>xSemaphoreGiveFromISR()</code></td>
+<td>释放信号量</td>
+</tr>
+<tr>
+<td><code>xSemaphoreTake()</code></td>
+<td><code>xSemaphoreTakeFromISR()</code></td>
+<td>获取信号量</td>
+</tr>
+<tr>
+<td><code>xQueueSend()</code></td>
+<td><code>xQueueSendFromISR()</code></td>
+<td>发送队列消息</td>
+</tr>
+<tr>
+<td><code>xQueueReceive()</code></td>
+<td><code>xQueueReceiveFromISR()</code></td>
+<td>接收队列消息</td>
+</tr>
+<tr>
+<td><code>xTaskNotifyGive()</code></td>
+<td><code>vTaskNotifyGiveFromISR()</code></td>
+<td>发送任务通知</td>
+</tr>
+<tr>
+<td><code>xEventGroupSetBits()</code></td>
+<td><code>xEventGroupSetBitsFromISR()</code></td>
+<td>设置事件标志</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键区别</strong>：</p>
+<pre><code class="language-c">// ❌ 错误：在中断中调用普通API
+void EXTI0_IRQHandler(void) {
+    xSemaphoreGive(sem);  // 错误！会导致系统崩溃
+}
+
+// ✅ 正确：在中断中调用FromISR API
+void EXTI0_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(sem, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<h3 id="22">2.2 使用信号量进行中断通知</h3>
+<p><strong>场景</strong>：按键中断通知任务处理</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 信号量句柄
+SemaphoreHandle_t button_sem;
+
+// 按键中断服务函数
+void EXTI0_IRQHandler(void) {
+    // 清除中断标志
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET) {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        // 发送信号量通知任务
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xSemaphoreGiveFromISR(button_sem, &amp;xHigherPriorityTaskWoken);
+
+        // 如果有更高优先级任务被唤醒，进行任务切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 按键处理任务
+void Button_Task(void *param) {
+    while(1) {
+        // 等待信号量（阻塞）
+        if(xSemaphoreTake(button_sem, portMAX_DELAY) == pdTRUE) {
+            printf(&quot;[%d] Button pressed!\n&quot;, xTaskGetTickCount());
+
+            // 执行复杂的处理
+            ProcessButtonPress();
+            UpdateDisplay();
+            SaveToFlash();
+
+            printf(&quot;[%d] Button processing complete\n&quot;, xTaskGetTickCount());
+        }
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置按键GPIO和中断
+    ConfigureButtonInterrupt();
+
+    // 创建二值信号量
+    button_sem = xSemaphoreCreateBinary();
+
+    if(button_sem != NULL) {
+        // 创建任务
+        xTaskCreate(Button_Task, &quot;Button&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>时序分析</strong>：</p>
+<pre><code>时间轴：
+0ms     中断发生     任务唤醒     处理完成
+|----------|----------|----------|----------|
+           ↓          ↓          ↓
+中断：     ISR执行    返回
+           (快速)
+
+任务：     阻塞       运行       阻塞
+                     (复杂处理)
+</code></pre>
+<h3 id="23">2.3 使用队列传递中断数据</h3>
+<p><strong>场景</strong>：串口接收中断传递数据到任务</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 接收数据结构
+typedef struct {
+    uint32_t timestamp;
+    uint8_t data;
+} UartData_t;
+
+// 队列句柄
+QueueHandle_t uart_queue;
+
+// 串口接收中断
+void USART1_IRQHandler(void) {
+    if(__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        // 读取数据
+        uint8_t received_data = (uint8_t)(huart1.Instance-&gt;DR &amp; 0xFF);
+
+        // 准备数据包
+        UartData_t data_packet;
+        data_packet.timestamp = xTaskGetTickCountFromISR();
+        data_packet.data = received_data;
+
+        // 发送到队列
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(uart_queue, &amp;data_packet, &amp;xHigherPriorityTaskWoken);
+
+        // 任务切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 串口处理任务
+void Uart_Task(void *param) {
+    UartData_t received_packet;
+
+    while(1) {
+        // 从队列接收数据
+        if(xQueueReceive(uart_queue, &amp;received_packet, portMAX_DELAY) == pdTRUE) {
+            printf(&quot;[%d] Received: 0x%02X\n&quot;, 
+                   received_packet.timestamp, 
+                   received_packet.data);
+
+            // 处理数据
+            ProcessUartData(received_packet.data);
+        }
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置串口
+    MX_USART1_UART_Init();
+
+    // 创建队列（可以存储10个数据包）
+    uart_queue = xQueueCreate(10, sizeof(UartData_t));
+
+    if(uart_queue != NULL) {
+        // 创建任务
+        xTaskCreate(Uart_Task, &quot;UART&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>优势</strong>：
+- 中断中只做数据读取和入队（快速）
+- 复杂处理在任务中完成（不阻塞中断）
+- 队列提供缓冲，防止数据丢失
+- 时间戳记录精确的接收时间</p>
+<h3 id="24">2.4 使用任务通知进行中断通知</h3>
+<p><strong>任务通知</strong>是FreeRTOS提供的轻量级通信机制，比信号量和队列更快：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+
+// 任务句柄
+TaskHandle_t sensor_task_handle;
+
+// 定时器中断（每100ms触发一次）
+void TIM2_IRQHandler(void) {
+    if(__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+        // 发送任务通知
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        vTaskNotifyGiveFromISR(sensor_task_handle, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 传感器任务
+void Sensor_Task(void *param) {
+    while(1) {
+        // 等待任务通知
+        uint32_t notification_value = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+
+        if(notification_value &gt; 0) {
+            // 读取传感器
+            float temperature = ReadTemperature();
+            float humidity = ReadHumidity();
+
+            printf(&quot;Temp: %.1f°C, Humidity: %.1f%%\n&quot;, temperature, humidity);
+
+            // 处理数据
+            ProcessSensorData(temperature, humidity);
+        }
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置定时器
+    MX_TIM2_Init();
+    HAL_TIM_Base_Start_IT(&amp;htim2);
+
+    // 创建任务
+    xTaskCreate(Sensor_Task, &quot;Sensor&quot;, 256, NULL, 2, &amp;sensor_task_handle);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>任务通知 vs 信号量 vs 队列</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>任务通知</th>
+<th>信号量</th>
+<th>队列</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>速度</strong></td>
+<td>最快</td>
+<td>快</td>
+<td>较慢</td>
+</tr>
+<tr>
+<td><strong>内存</strong></td>
+<td>无额外开销</td>
+<td>需要信号量对象</td>
+<td>需要队列对象和缓冲区</td>
+</tr>
+<tr>
+<td><strong>数据传递</strong></td>
+<td>32位值</td>
+<td>无</td>
+<td>任意大小</td>
+</tr>
+<tr>
+<td><strong>多任务等待</strong></td>
+<td>不支持</td>
+<td>支持</td>
+<td>支持</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>简单通知</td>
+<td>同步/计数</td>
+<td>数据传递</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3">步骤3：延迟处理的实现模式</h2>
+<h3 id="31">3.1 延迟处理的基本原则</h3>
+<p><strong>中断中应该做什么</strong>：
+- ✅ 读取硬件寄存器
+- ✅ 清除中断标志
+- ✅ 读取简单数据
+- ✅ 发送信号/数据到任务
+- ✅ 更新简单的全局变量</p>
+<p><strong>中断中不应该做什么</strong>：
+- ❌ 复杂计算
+- ❌ 浮点运算（除非硬件支持）
+- ❌ 字符串处理
+- ❌ 文件操作
+- ❌ 网络通信
+- ❌ 显示更新
+- ❌ 调用阻塞函数
+- ❌ 使用延时</p>
+<h3 id="32-1">3.2 模式1：二值信号量模式</h3>
+<p><strong>适用场景</strong>：简单的事件通知，不需要传递数据</p>
+<pre><code class="language-c">// 全局变量
+SemaphoreHandle_t event_sem;
+TaskHandle_t handler_task_handle;
+
+// 中断服务函数
+void Event_IRQHandler(void) {
+    // 清除中断标志
+    ClearInterruptFlag();
+
+    // 发送信号量
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(event_sem, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// 处理任务
+void Handler_Task(void *param) {
+    while(1) {
+        // 等待事件
+        if(xSemaphoreTake(event_sem, portMAX_DELAY) == pdTRUE) {
+            // 处理事件
+            HandleEvent();
+        }
+    }
+}
+
+// 初始化
+void Init(void) {
+    event_sem = xSemaphoreCreateBinary();
+    xTaskCreate(Handler_Task, &quot;Handler&quot;, 256, NULL, 3, &amp;handler_task_handle);
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 实现简单
+- 开销小
+- 适合简单通知</p>
+<p><strong>缺点</strong>：
+- 不能传递数据
+- 不能计数（多次触发只记录一次）</p>
+<h3 id="33-2">3.3 模式2：计数信号量模式</h3>
+<p><strong>适用场景</strong>：需要记录事件发生次数</p>
+<pre><code class="language-c">// 全局变量
+SemaphoreHandle_t count_sem;
+
+// 中断服务函数（可能快速连续触发）
+void FastEvent_IRQHandler(void) {
+    ClearInterruptFlag();
+
+    // 每次中断增加计数
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(count_sem, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// 处理任务
+void Handler_Task(void *param) {
+    while(1) {
+        // 获取一个计数
+        if(xSemaphoreTake(count_sem, portMAX_DELAY) == pdTRUE) {
+            // 处理一个事件
+            ProcessOneEvent();
+        }
+    }
+}
+
+// 初始化
+void Init(void) {
+    // 创建计数信号量（最大计数10）
+    count_sem = xSemaphoreCreateCounting(10, 0);
+    xTaskCreate(Handler_Task, &quot;Handler&quot;, 256, NULL, 3, NULL);
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 可以记录多次事件
+- 不会丢失事件（在计数范围内）</p>
+<p><strong>缺点</strong>：
+- 仍然不能传递数据
+- 计数上限有限制</p>
+<h3 id="34-3">3.4 模式3：队列模式</h3>
+<p><strong>适用场景</strong>：需要传递数据，保持数据顺序</p>
+<pre><code class="language-c">// 数据结构
+typedef struct {
+    uint32_t timestamp;
+    uint16_t adc_value;
+    uint8_t channel;
+} AdcData_t;
+
+// 全局变量
+QueueHandle_t adc_queue;
+
+// ADC中断
+void ADC_IRQHandler(void) {
+    if(__HAL_ADC_GET_FLAG(&amp;hadc1, ADC_FLAG_EOC)) {
+        // 读取ADC值
+        uint16_t adc_value = HAL_ADC_GetValue(&amp;hadc1);
+
+        // 准备数据包
+        AdcData_t data;
+        data.timestamp = xTaskGetTickCountFromISR();
+        data.adc_value = adc_value;
+        data.channel = 1;
+
+        // 发送到队列
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(adc_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 处理任务
+void Adc_Task(void *param) {
+    AdcData_t received_data;
+
+    while(1) {
+        // 从队列接收数据
+        if(xQueueReceive(adc_queue, &amp;received_data, portMAX_DELAY) == pdTRUE) {
+            // 处理ADC数据
+            float voltage = (received_data.adc_value * 3.3f) / 4096.0f;
+
+            printf(&quot;[%d] CH%d: %d (%.2fV)\n&quot;,
+                   received_data.timestamp,
+                   received_data.channel,
+                   received_data.adc_value,
+                   voltage);
+
+            // 进一步处理
+            ProcessAdcData(voltage);
+        }
+    }
+}
+
+// 初始化
+void Init(void) {
+    // 创建队列（可以存储20个数据包）
+    adc_queue = xQueueCreate(20, sizeof(AdcData_t));
+    xTaskCreate(Adc_Task, &quot;ADC&quot;, 512, NULL, 3, NULL);
+}
+</code></pre>
+<p><strong>优点</strong>：
+- 可以传递复杂数据
+- 保持数据顺序
+- 提供缓冲机制</p>
+<p><strong>缺点</strong>：
+- 内存开销较大
+- 速度相对较慢</p>
+<h3 id="35-4">3.5 模式4：任务通知模式</h3>
+<p><strong>适用场景</strong>：单任务等待，需要传递简单数值</p>
+<pre><code class="language-c">// 任务句柄
+TaskHandle_t encoder_task_handle;
+
+// 编码器中断
+void EXTI_IRQHandler(void) {
+    static int32_t encoder_count = 0;
+
+    // 读取编码器方向
+    if(GPIO_ReadPin(ENCODER_A) == GPIO_ReadPin(ENCODER_B)) {
+        encoder_count++;
+    } else {
+        encoder_count--;
+    }
+
+    // 发送任务通知（传递计数值）
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xTaskNotifyFromISR(encoder_task_handle, 
+                       encoder_count, 
+                       eSetValueWithOverwrite,
+                       &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+    // 清除中断标志
+    __HAL_GPIO_EXTI_CLEAR_IT(ENCODER_PIN);
+}
+
+// 编码器任务
+void Encoder_Task(void *param) {
+    uint32_t notification_value;
+
+    while(1) {
+        // 等待任务通知
+        if(xTaskNotifyWait(0, 0xFFFFFFFF, &amp;notification_value, portMAX_DELAY) == pdTRUE) {
+            int32_t count = (int32_t)notification_value;
+
+            printf(&quot;Encoder count: %d\n&quot;, count);
+
+            // 根据计数值更新显示或控制
+            UpdateDisplay(count);
+        }
+    }
+}
+
+// 初始化
+void Init(void) {
+    xTaskCreate(Encoder_Task, &quot;Encoder&quot;, 256, NULL, 3, &amp;encoder_task_handle);
+}
+</code></pre>
+<p><strong>任务通知的四种模式</strong>：</p>
+<pre><code class="language-c">// 1. 不覆盖模式（如果有未读通知，不发送新的）
+xTaskNotifyFromISR(task_handle, value, eNoAction, &amp;xHigherPriorityTaskWoken);
+
+// 2. 设置位模式（按位或）
+xTaskNotifyFromISR(task_handle, 0x01, eSetBits, &amp;xHigherPriorityTaskWoken);
+
+// 3. 递增模式（计数）
+xTaskNotifyFromISR(task_handle, 0, eIncrement, &amp;xHigherPriorityTaskWoken);
+
+// 4. 覆盖模式（总是更新为新值）
+xTaskNotifyFromISR(task_handle, value, eSetValueWithOverwrite, &amp;xHigherPriorityTaskWoken);
+</code></pre>
+<p><strong>优点</strong>：
+- 最快的通信方式
+- 无额外内存开销
+- 可以传递32位数值</p>
+<p><strong>缺点</strong>：
+- 只能通知一个任务
+- 数据可能被覆盖
+- 不适合多生产者场景</p>
+<h2 id="4">步骤4：中断嵌套和临界区</h2>
+<h3 id="41">4.1 中断嵌套</h3>
+<p>ARM Cortex-M支持中断嵌套，高优先级中断可以打断低优先级中断：</p>
+<pre><code>时间轴：
+|------------|------------|------------|
+低优先级中断：
+|████████████████████████████|
+     ↑                  ↑
+     高优先级中断打断
+     |████████|
+</code></pre>
+<p><strong>FreeRTOS中的中断嵌套</strong>：</p>
+<pre><code class="language-c">// 配置中断优先级
+void ConfigureNestedInterrupts(void) {
+    // 高优先级中断（优先级2，不调用RTOS API）
+    HAL_NVIC_SetPriority(TIM1_UP_IRQn, 2, 0);
+
+    // 中优先级中断（优先级6，可以调用RTOS API）
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0);
+
+    // 低优先级中断（优先级8，可以调用RTOS API）
+    HAL_NVIC_SetPriority(USART1_IRQn, 8, 0);
+
+    // 启用中断
+    HAL_NVIC_EnableIRQ(TIM1_UP_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+    HAL_NVIC_EnableIRQ(USART1_IRQn);
+}
+
+// 高优先级中断（不调用RTOS API）
+void TIM1_UP_IRQHandler(void) {
+    if(__HAL_TIM_GET_FLAG(&amp;htim1, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim1, TIM_FLAG_UPDATE);
+
+        // 紧急处理，不调用RTOS API
+        EmergencyHandler();
+    }
+}
+
+// 中优先级中断（可以调用RTOS API）
+void EXTI0_IRQHandler(void) {
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET) {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        // 可以被TIM1中断打断
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xSemaphoreGiveFromISR(button_sem, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 低优先级中断（可以调用RTOS API）
+void USART1_IRQHandler(void) {
+    if(__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        uint8_t data = (uint8_t)(huart1.Instance-&gt;DR &amp; 0xFF);
+
+        // 可以被TIM1和EXTI0中断打断
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(uart_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<h3 id="42">4.2 临界区保护</h3>
+<p><strong>临界区</strong>是不能被中断打断的代码段，用于保护共享资源：</p>
+<pre><code class="language-c">// 方法1：禁用所有中断（不推荐）
+void CriticalSection_Method1(void) {
+    __disable_irq();  // 禁用所有中断
+
+    // 临界区代码
+    shared_variable++;
+
+    __enable_irq();   // 恢复中断
+}
+
+// 方法2：使用FreeRTOS临界区（推荐）
+void CriticalSection_Method2(void) {
+    taskENTER_CRITICAL();  // 禁用RTOS管理的中断
+
+    // 临界区代码
+    shared_variable++;
+
+    taskEXIT_CRITICAL();   // 恢复中断
+}
+
+// 方法3：在中断中使用临界区
+void ISR_CriticalSection(void) {
+    UBaseType_t uxSavedInterruptStatus;
+
+    uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+
+    // 临界区代码
+    shared_variable++;
+
+    taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+}
+</code></pre>
+<p><strong>临界区的工作原理</strong>：</p>
+<pre><code class="language-c">// taskENTER_CRITICAL() 的实现（简化版）
+#define taskENTER_CRITICAL()  \
+    portDISABLE_INTERRUPTS(); \
+    uxCriticalNesting++;
+
+// 它会：
+// 1. 禁用优先级 &gt;= configMAX_SYSCALL_INTERRUPT_PRIORITY 的中断
+// 2. 高优先级中断（&lt; configMAX_SYSCALL_INTERRUPT_PRIORITY）仍然可以响应
+// 3. 支持嵌套（通过计数器）
+</code></pre>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">// 共享变量
+volatile uint32_t shared_counter = 0;
+
+// 任务1
+void Task1(void *param) {
+    while(1) {
+        taskENTER_CRITICAL();
+        shared_counter++;
+        uint32_t local_copy = shared_counter;
+        taskEXIT_CRITICAL();
+
+        printf(&quot;Task1: %d\n&quot;, local_copy);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+// 任务2
+void Task2(void *param) {
+    while(1) {
+        taskENTER_CRITICAL();
+        shared_counter += 10;
+        uint32_t local_copy = shared_counter;
+        taskEXIT_CRITICAL();
+
+        printf(&quot;Task2: %d\n&quot;, local_copy);
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+}
+
+// 中断
+void EXTI_IRQHandler(void) {
+    UBaseType_t uxSavedInterruptStatus;
+
+    uxSavedInterruptStatus = taskENTER_CRITICAL_FROM_ISR();
+    shared_counter += 100;
+    taskEXIT_CRITICAL_FROM_ISR(uxSavedInterruptStatus);
+
+    // 清除中断标志
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
+</code></pre>
+<p><strong>注意事项</strong>：</p>
+<pre><code class="language-c">// ❌ 错误：临界区太长
+taskENTER_CRITICAL();
+ReadSensor();        // 耗时操作
+ProcessData();       // 耗时操作
+WriteToFlash();      // 耗时操作
+taskEXIT_CRITICAL();
+
+// ✅ 正确：临界区尽可能短
+ReadSensor();        // 在临界区外
+ProcessData();       // 在临界区外
+
+taskENTER_CRITICAL();
+UpdateSharedData();  // 只保护必要的操作
+taskEXIT_CRITICAL();
+
+WriteToFlash();      // 在临界区外
+
+// ❌ 错误：在临界区中调用阻塞函数
+taskENTER_CRITICAL();
+vTaskDelay(100);     // 错误！会导致死锁
+taskEXIT_CRITICAL();
+
+// ❌ 错误：忘记退出临界区
+taskENTER_CRITICAL();
+if(error) {
+    return;          // 错误！没有退出临界区
+}
+taskEXIT_CRITICAL();
+
+// ✅ 正确：确保总是退出
+taskENTER_CRITICAL();
+if(error) {
+    taskEXIT_CRITICAL();
+    return;
+}
+taskEXIT_CRITICAL();
+</code></pre>
+<h2 id="5">步骤5：性能优化</h2>
+<h3 id="51">5.1 减少中断延迟</h3>
+<p><strong>中断延迟的组成</strong>：</p>
+<pre><code>中断发生 → 硬件响应 → 保存上下文 → ISR执行 → 恢复上下文 → 返回
+         ↑_______↑   ↑________↑   ↑_____↑   ↑________↑
+         硬件延迟    软件延迟      ISR时间   软件延迟
+</code></pre>
+<p><strong>优化方法</strong>：</p>
+<ol>
+<li><strong>缩短ISR执行时间</strong></li>
+</ol>
+<pre><code class="language-c">// ❌ 不好：ISR中做太多事情
+void EXTI_IRQHandler(void) {
+    uint8_t data = ReadSensor();
+    float result = ComplexCalculation(data);  // 耗时
+    UpdateDisplay(result);                    // 耗时
+    SaveToFlash(result);                      // 耗时
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
+
+// ✅ 更好：只做必要的工作
+void EXTI_IRQHandler(void) {
+    uint8_t data = ReadSensor();  // 快速读取
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xQueueSendFromISR(data_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
+</code></pre>
+<ol start="2">
+<li><strong>使用DMA减少中断频率</strong></li>
+</ol>
+<pre><code class="language-c">// ❌ 不好：每个字节触发一次中断
+void USART_IRQHandler(void) {
+    if(__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE)) {
+        uint8_t data = (uint8_t)(huart1.Instance-&gt;DR &amp; 0xFF);
+        ProcessByte(data);  // 每个字节都中断一次
+    }
+}
+
+// ✅ 更好：使用DMA，只在传输完成时中断
+uint8_t rx_buffer[256];
+
+void DMA_IRQHandler(void) {
+    if(__HAL_DMA_GET_FLAG(&amp;hdma_usart1_rx, DMA_FLAG_TC)) {
+        __HAL_DMA_CLEAR_FLAG(&amp;hdma_usart1_rx, DMA_FLAG_TC);
+
+        // 一次处理整个缓冲区
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(data_queue, rx_buffer, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<ol start="3">
+<li><strong>合理配置中断优先级</strong></li>
+</ol>
+<pre><code class="language-c">// 根据实时性要求配置优先级
+void ConfigureOptimalPriorities(void) {
+    // 最高优先级：紧急事件（不调用RTOS API）
+    HAL_NVIC_SetPriority(EMERGENCY_IRQn, 2, 0);
+
+    // 高优先级：实时数据采集
+    HAL_NVIC_SetPriority(ADC_IRQn, 6, 0);
+
+    // 中优先级：通信接口
+    HAL_NVIC_SetPriority(USART1_IRQn, 7, 0);
+
+    // 低优先级：非关键事件
+    HAL_NVIC_SetPriority(BUTTON_IRQn, 9, 0);
+}
+</code></pre>
+<h3 id="52">5.2 测量中断性能</h3>
+<pre><code class="language-c">// 测量ISR执行时间
+void EXTI_IRQHandler(void) {
+    // 设置GPIO高电平（用示波器测量）
+    HAL_GPIO_WritePin(DEBUG_GPIO_Port, DEBUG_Pin, GPIO_PIN_SET);
+
+    // ISR代码
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(sem, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+    // 清除中断标志
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+    // 设置GPIO低电平
+    HAL_GPIO_WritePin(DEBUG_GPIO_Port, DEBUG_Pin, GPIO_PIN_RESET);
+}
+
+// 测量中断频率和响应时间
+volatile uint32_t interrupt_count = 0;
+volatile uint32_t max_response_time = 0;
+
+void EXTI_IRQHandler(void) {
+    uint32_t entry_time = DWT-&gt;CYCCNT;  // 使用DWT计数器
+
+    interrupt_count++;
+
+    // ISR代码
+    ProcessInterrupt();
+
+    uint32_t exit_time = DWT-&gt;CYCCNT;
+    uint32_t execution_time = exit_time - entry_time;
+
+    if(execution_time &gt; max_response_time) {
+        max_response_time = execution_time;
+    }
+
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
+
+// 监控任务
+void Monitor_Task(void *param) {
+    while(1) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        printf(&quot;Interrupt statistics:\n&quot;);
+        printf(&quot;  Count: %d\n&quot;, interrupt_count);
+        printf(&quot;  Max execution time: %d cycles (%.2f us)\n&quot;,
+               max_response_time,
+               (float)max_response_time / (SystemCoreClock / 1000000));
+
+        // 重置统计
+        interrupt_count = 0;
+        max_response_time = 0;
+    }
+}
+</code></pre>
+<h3 id="53">5.3 避免中断风暴</h3>
+<p><strong>中断风暴</strong>：中断触发频率过高，导致系统无法正常工作</p>
+<pre><code class="language-c">// ❌ 问题：高频中断导致系统卡死
+void HighFrequency_IRQHandler(void) {
+    // 每1ms触发一次，ISR需要0.5ms
+    // 结果：CPU 50%时间在ISR中，系统响应变慢
+    ProcessData();  // 耗时0.5ms
+    __HAL_TIM_CLEAR_FLAG(&amp;htim, TIM_FLAG_UPDATE);
+}
+
+// ✅ 解决方案1：降低中断频率
+void LowerFrequency_IRQHandler(void) {
+    // 改为每10ms触发一次
+    // CPU占用降低到5%
+    ProcessData();
+    __HAL_TIM_CLEAR_FLAG(&amp;htim, TIM_FLAG_UPDATE);
+}
+
+// ✅ 解决方案2：使用DMA
+void DMA_Solution(void) {
+    // 使用DMA自动传输数据
+    // 只在传输完成时中断一次
+    HAL_ADC_Start_DMA(&amp;hadc1, adc_buffer, BUFFER_SIZE);
+}
+
+// ✅ 解决方案3：批量处理
+#define BATCH_SIZE 10
+uint8_t batch_buffer[BATCH_SIZE];
+uint8_t batch_index = 0;
+
+void Batch_IRQHandler(void) {
+    // 收集数据到缓冲区
+    batch_buffer[batch_index++] = ReadData();
+
+    // 只在缓冲区满时通知任务
+    if(batch_index &gt;= BATCH_SIZE) {
+        batch_index = 0;
+
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(data_queue, batch_buffer, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+
+    __HAL_UART_CLEAR_FLAG(&amp;huart1, UART_FLAG_RXNE);
+}
+</code></pre>
+<h2 id="_13">实践示例</h2>
+<h3 id="1">示例1：完整的中断延迟处理系统</h3>
+<p>创建一个多传感器数据采集系统，演示中断与任务的协作：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+#include &quot;semphr.h&quot;
+
+// 传感器数据结构
+typedef struct {
+    uint32_t timestamp;
+    uint8_t sensor_id;
+    float value;
+} SensorData_t;
+
+// 全局变量
+QueueHandle_t sensor_queue;
+TaskHandle_t process_task_handle;
+TaskHandle_t display_task_handle;
+
+// ADC中断（传感器1）
+void ADC1_IRQHandler(void) {
+    if(__HAL_ADC_GET_FLAG(&amp;hadc1, ADC_FLAG_EOC)) {
+        // 快速读取ADC值
+        uint16_t adc_raw = HAL_ADC_GetValue(&amp;hadc1);
+
+        // 准备数据包
+        SensorData_t data;
+        data.timestamp = xTaskGetTickCountFromISR();
+        data.sensor_id = 1;
+        data.value = (float)adc_raw * 3.3f / 4096.0f;
+
+        // 发送到队列
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(sensor_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 定时器中断（传感器2）
+void TIM2_IRQHandler(void) {
+    if(__HAL_TIM_GET_FLAG(&amp;htim2, TIM_FLAG_UPDATE)) {
+        __HAL_TIM_CLEAR_FLAG(&amp;htim2, TIM_FLAG_UPDATE);
+
+        // 读取温度传感器
+        float temperature = ReadTemperatureSensor();
+
+        // 准备数据包
+        SensorData_t data;
+        data.timestamp = xTaskGetTickCountFromISR();
+        data.sensor_id = 2;
+        data.value = temperature;
+
+        // 发送到队列
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(sensor_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 外部中断（传感器3）
+void EXTI0_IRQHandler(void) {
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET) {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        // 读取数字传感器
+        uint8_t digital_value = ReadDigitalSensor();
+
+        // 准备数据包
+        SensorData_t data;
+        data.timestamp = xTaskGetTickCountFromISR();
+        data.sensor_id = 3;
+        data.value = (float)digital_value;
+
+        // 发送到队列
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(sensor_queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// 数据处理任务（高优先级）
+void Process_Task(void *param) {
+    SensorData_t received_data;
+
+    while(1) {
+        // 从队列接收数据
+        if(xQueueReceive(sensor_queue, &amp;received_data, portMAX_DELAY) == pdTRUE) {
+            printf(&quot;[%d] Sensor %d: %.2f\n&quot;,
+                   received_data.timestamp,
+                   received_data.sensor_id,
+                   received_data.value);
+
+            // 数据处理
+            ProcessSensorData(&amp;received_data);
+
+            // 检查阈值
+            if(received_data.value &gt; THRESHOLD) {
+                printf(&quot;Warning: Sensor %d exceeded threshold!\n&quot;, 
+                       received_data.sensor_id);
+                TriggerAlarm();
+            }
+
+            // 保存到存储
+            SaveToStorage(&amp;received_data);
+        }
+    }
+}
+
+// 显示任务（低优先级）
+void Display_Task(void *param) {
+    while(1) {
+        // 更新显示
+        UpdateLCD();
+
+        // 每500ms更新一次
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// 监控任务
+void Monitor_Task(void *param) {
+    while(1) {
+        vTaskDelay(pdMS_TO_TICKS(10000));
+
+        // 检查队列状态
+        UBaseType_t queue_items = uxQueueMessagesWaiting(sensor_queue);
+        UBaseType_t queue_spaces = uxQueueSpacesAvailable(sensor_queue);
+
+        printf(&quot;\n=== System Status ===\n&quot;);
+        printf(&quot;Queue: %d/%d items\n&quot;, queue_items, queue_items + queue_spaces);
+        printf(&quot;Free heap: %d bytes\n&quot;, xPortGetFreeHeapSize());
+
+        // 检查任务栈
+        printf(&quot;Process task stack: %d words free\n&quot;,
+               uxTaskGetStackHighWaterMark(process_task_handle));
+        printf(&quot;Display task stack: %d words free\n&quot;,
+               uxTaskGetStackHighWaterMark(display_task_handle));
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置外设和中断
+    MX_GPIO_Init();
+    MX_ADC1_Init();
+    MX_TIM2_Init();
+
+    // 配置中断优先级
+    HAL_NVIC_SetPriority(ADC1_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(TIM2_IRQn, 7, 0);
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 8, 0);
+
+    // 启用中断
+    HAL_NVIC_EnableIRQ(ADC1_IRQn);
+    HAL_NVIC_EnableIRQ(TIM2_IRQn);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+    // 创建队列（可以存储50个数据包）
+    sensor_queue = xQueueCreate(50, sizeof(SensorData_t));
+
+    if(sensor_queue != NULL) {
+        // 创建任务
+        xTaskCreate(Process_Task, &quot;Process&quot;, 512, NULL, 4, &amp;process_task_handle);
+        xTaskCreate(Display_Task, &quot;Display&quot;, 256, NULL, 2, &amp;display_task_handle);
+        xTaskCreate(Monitor_Task, &quot;Monitor&quot;, 256, NULL, 1, NULL);
+
+        // 启动外设
+        HAL_ADC_Start_IT(&amp;hadc1);
+        HAL_TIM_Base_Start_IT(&amp;htim2);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<h3 id="2">示例2：高频中断优化</h3>
+<p>演示如何处理高频中断，避免系统过载：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;semphr.h&quot;
+
+// 使用双缓冲技术
+#define BUFFER_SIZE 128
+uint16_t buffer_a[BUFFER_SIZE];
+uint16_t buffer_b[BUFFER_SIZE];
+uint16_t *active_buffer = buffer_a;
+uint16_t *process_buffer = buffer_b;
+volatile uint16_t buffer_index = 0;
+
+// 信号量
+SemaphoreHandle_t buffer_ready_sem;
+
+// 高频ADC中断（每100us触发一次）
+void ADC_IRQHandler(void) {
+    if(__HAL_ADC_GET_FLAG(&amp;hadc1, ADC_FLAG_EOC)) {
+        // 快速读取并存储
+        active_buffer[buffer_index++] = HAL_ADC_GetValue(&amp;hadc1);
+
+        // 缓冲区满时切换
+        if(buffer_index &gt;= BUFFER_SIZE) {
+            buffer_index = 0;
+
+            // 交换缓冲区
+            uint16_t *temp = active_buffer;
+            active_buffer = process_buffer;
+            process_buffer = temp;
+
+            // 通知处理任务
+            BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+            xSemaphoreGiveFromISR(buffer_ready_sem, &amp;xHigherPriorityTaskWoken);
+            portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+        }
+    }
+}
+
+// 数据处理任务
+void Process_Task(void *param) {
+    while(1) {
+        // 等待缓冲区就绪
+        if(xSemaphoreTake(buffer_ready_sem, portMAX_DELAY) == pdTRUE) {
+            uint32_t start_time = xTaskGetTickCount();
+
+            // 处理整个缓冲区
+            float average = 0;
+            float max_value = 0;
+            float min_value = 4095;
+
+            for(uint16_t i = 0; i &lt; BUFFER_SIZE; i++) {
+                float value = (float)process_buffer[i] * 3.3f / 4096.0f;
+                average += value;
+
+                if(value &gt; max_value) max_value = value;
+                if(value &lt; min_value) min_value = value;
+            }
+
+            average /= BUFFER_SIZE;
+
+            uint32_t process_time = xTaskGetTickCount() - start_time;
+
+            printf(&quot;Processed %d samples in %d ms\n&quot;, BUFFER_SIZE, process_time);
+            printf(&quot;  Average: %.3fV, Max: %.3fV, Min: %.3fV\n&quot;,
+                   average, max_value, min_value);
+        }
+    }
+}
+
+int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 配置ADC（100kHz采样率）
+    MX_ADC1_Init();
+
+    // 配置中断优先级
+    HAL_NVIC_SetPriority(ADC1_IRQn, 6, 0);
+    HAL_NVIC_EnableIRQ(ADC1_IRQn);
+
+    // 创建信号量
+    buffer_ready_sem = xSemaphoreCreateBinary();
+
+    if(buffer_ready_sem != NULL) {
+        // 创建处理任务
+        xTaskCreate(Process_Task, &quot;Process&quot;, 512, NULL, 3, NULL);
+
+        // 启动ADC
+        HAL_ADC_Start_IT(&amp;hadc1);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>优化效果</strong>：
+- 中断频率：10,000次/秒
+- 每次中断时间：~2us（只做读取和存储）
+- CPU占用：2us × 10,000 = 20ms/s = 2%
+- 批量处理：每12.8ms处理一次（128个样本）</p>
+<h2 id="_14">验证</h2>
+<h3 id="_15">验证方法</h3>
+<ol>
+<li><strong>编译项目</strong>
+   ```bash
+   # 在STM32CubeIDE中
+   Project → Build Project</li>
+</ol>
+<p># 或使用命令行
+   make
+   ```</p>
+<ol start="2">
+<li>
+<p><strong>下载到开发板</strong>
+   - 连接开发板
+   - 点击"Debug"或"Run"按钮
+   - 程序自动下载并运行</p>
+</li>
+<li>
+<p><strong>测试中断响应</strong>
+   - 触发按键中断
+   - 观察串口输出
+   - 检查LED状态变化</p>
+</li>
+<li>
+<p><strong>测量性能</strong>
+   - 使用示波器测量中断响应时间
+   - 使用逻辑分析仪观察任务切换
+   - 检查系统CPU占用率</p>
+</li>
+</ol>
+<h3 id="_16">预期结果</h3>
+<p><strong>正常工作</strong>：
+- 中断能够正确触发
+- 任务能够及时响应中断
+- 数据传递正确无误
+- 系统运行稳定</p>
+<p><strong>性能指标</strong>：
+- 中断响应时间：&lt; 10us
+- ISR执行时间：&lt; 50us
+- 任务唤醒延迟：&lt; 1ms
+- CPU占用率：&lt; 50%</p>
+<h3 id="_17">测试要点</h3>
+<ol>
+<li>
+<p><strong>功能测试</strong>
+   - [ ] 中断能够正确触发
+   - [ ] FromISR函数工作正常
+   - [ ] 任务能够接收中断通知
+   - [ ] 数据传递完整准确</p>
+</li>
+<li>
+<p><strong>性能测试</strong>
+   - [ ] 测量中断响应时间
+   - [ ] 测量ISR执行时间
+   - [ ] 测量任务唤醒延迟
+   - [ ] 检查CPU占用率</p>
+</li>
+<li>
+<p><strong>压力测试</strong>
+   - [ ] 高频中断下系统稳定性
+   - [ ] 多个中断同时触发
+   - [ ] 队列满时的处理
+   - [ ] 长时间运行稳定性</p>
+</li>
+</ol>
+<h2 id="_18">故障排除</h2>
+<h3 id="1_1">问题1：系统崩溃或死机</h3>
+<p><strong>现象</strong>：
+- 系统运行一段时间后死机
+- 触发中断后系统崩溃
+- 串口输出乱码或停止</p>
+<p><strong>可能原因</strong>：
+1. 在中断中调用了普通API（非FromISR）
+2. 中断优先级配置错误
+3. 栈溢出</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 检查是否使用了FromISR函数
+// ❌ 错误
+void EXTI_IRQHandler(void) {
+    xSemaphoreGive(sem);  // 错误！应该用FromISR版本
+}
+
+// ✅ 正确
+void EXTI_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(sem, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// 2. 检查中断优先级
+void CheckPriority(void) {
+    uint32_t priority = NVIC_GetPriority(EXTI0_IRQn);
+    uint32_t max_syscall = configMAX_SYSCALL_INTERRUPT_PRIORITY &gt;&gt; 4;
+
+    if(priority &lt; max_syscall) {
+        printf(&quot;ERROR: Priority too high to call RTOS API!\n&quot;);
+        printf(&quot;Current: %d, Required: &gt;= %d\n&quot;, priority, max_syscall);
+    }
+}
+
+// 3. 启用栈溢出检测
+// FreeRTOSConfig.h
+#define configCHECK_FOR_STACK_OVERFLOW  2
+
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+    printf(&quot;Stack overflow in task: %s\n&quot;, pcTaskName);
+    while(1);  // 停止系统
+}
+</code></pre>
+<h3 id="2_1">问题2：任务无法被中断唤醒</h3>
+<p><strong>现象</strong>：
+- 中断触发了，但任务没有响应
+- 任务一直处于阻塞状态
+- 数据没有传递到任务</p>
+<p><strong>可能原因</strong>：
+1. 忘记调用portYIELD_FROM_ISR()
+2. 信号量或队列未创建
+3. 任务优先级太低</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 确保调用portYIELD_FROM_ISR()
+void EXTI_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xSemaphoreGiveFromISR(sem, &amp;xHigherPriorityTaskWoken);
+
+    // 必须调用！否则任务不会立即切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+}
+
+// 2. 检查信号量是否创建成功
+SemaphoreHandle_t sem = xSemaphoreCreateBinary();
+if(sem == NULL) {
+    printf(&quot;ERROR: Failed to create semaphore!\n&quot;);
+    printf(&quot;Free heap: %d bytes\n&quot;, xPortGetFreeHeapSize());
+}
+
+// 3. 提高任务优先级
+// 确保处理任务的优先级高于其他任务
+xTaskCreate(Handler_Task, &quot;Handler&quot;, 256, NULL, 5, NULL);  // 高优先级
+</code></pre>
+<h3 id="3_1">问题3：中断响应慢</h3>
+<p><strong>现象</strong>：
+- 中断延迟很大
+- 实时性不满足要求
+- 系统响应迟钝</p>
+<p><strong>可能原因</strong>：
+1. ISR执行时间太长
+2. 中断优先级太低
+3. 临界区太长</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 缩短ISR执行时间
+// ❌ 不好
+void EXTI_IRQHandler(void) {
+    float result = ComplexCalculation();  // 耗时
+    UpdateDisplay(result);                // 耗时
+    SaveToFlash(result);                  // 耗时
+}
+
+// ✅ 更好
+void EXTI_IRQHandler(void) {
+    uint8_t data = ReadData();  // 快速读取
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xQueueSendFromISR(queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// 2. 提高中断优先级
+HAL_NVIC_SetPriority(EXTI0_IRQn, 6, 0);  // 较高优先级
+
+// 3. 缩短临界区
+// ❌ 不好
+taskENTER_CRITICAL();
+ReadSensor();
+ProcessData();
+WriteToFlash();
+taskEXIT_CRITICAL();
+
+// ✅ 更好
+ReadSensor();
+ProcessData();
+
+taskENTER_CRITICAL();
+UpdateSharedData();  // 只保护必要的操作
+taskEXIT_CRITICAL();
+
+WriteToFlash();
+</code></pre>
+<h3 id="4_1">问题4：数据丢失</h3>
+<p><strong>现象</strong>：
+- 队列满，数据被丢弃
+- 中断触发但数据没有处理
+- 数据不完整</p>
+<p><strong>可能原因</strong>：
+1. 队列太小
+2. 处理任务太慢
+3. 中断频率太高</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 1. 增大队列
+// ❌ 太小
+QueueHandle_t queue = xQueueCreate(5, sizeof(Data_t));
+
+// ✅ 更大
+QueueHandle_t queue = xQueueCreate(50, sizeof(Data_t));
+
+// 2. 检查队列状态
+void Monitor_Task(void *param) {
+    while(1) {
+        UBaseType_t items = uxQueueMessagesWaiting(queue);
+        UBaseType_t spaces = uxQueueSpacesAvailable(queue);
+
+        if(spaces &lt; 5) {
+            printf(&quot;WARNING: Queue almost full! (%d/%d)\n&quot;, 
+                   items, items + spaces);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 3. 使用覆盖队列（只保留最新数据）
+QueueHandle_t queue = xQueueCreate(1, sizeof(Data_t));
+
+void EXTI_IRQHandler(void) {
+    Data_t data = ReadData();
+
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    // 覆盖旧数据
+    xQueueOverwriteFromISR(queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// 4. 使用批量处理
+#define BATCH_SIZE 10
+Data_t batch[BATCH_SIZE];
+uint8_t batch_count = 0;
+
+void EXTI_IRQHandler(void) {
+    batch[batch_count++] = ReadData();
+
+    if(batch_count &gt;= BATCH_SIZE) {
+        batch_count = 0;
+
+        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+        xQueueSendFromISR(queue, batch, &amp;xHigherPriorityTaskWoken);
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<h2 id="_19">最佳实践</h2>
+<h3 id="1_2">1. 中断服务函数设计原则</h3>
+<pre><code class="language-c">// ✅ 好的ISR设计
+void Good_IRQHandler(void) {
+    // 1. 快速读取硬件
+    uint8_t data = ReadHardwareRegister();
+
+    // 2. 清除中断标志
+    ClearInterruptFlag();
+
+    // 3. 发送数据到任务
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xQueueSendFromISR(queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+
+    // 4. 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+
+// ❌ 不好的ISR设计
+void Bad_IRQHandler(void) {
+    // 1. 复杂计算
+    float result = sqrt(data * 3.14159);
+
+    // 2. 字符串处理
+    sprintf(buffer, &quot;Result: %.2f&quot;, result);
+
+    // 3. 文件操作
+    WriteToFile(buffer);
+
+    // 4. 延时
+    HAL_Delay(100);
+
+    // 5. 忘记清除中断标志
+    // ClearInterruptFlag();  // 忘记了！
+}
+</code></pre>
+<h3 id="2_2">2. 选择合适的通信机制</h3>
+<pre><code class="language-c">// 场景1：简单通知，不需要数据
+// 使用：任务通知（最快）
+vTaskNotifyGiveFromISR(task_handle, &amp;xHigherPriorityTaskWoken);
+
+// 场景2：简单通知，需要计数
+// 使用：计数信号量
+xSemaphoreGiveFromISR(count_sem, &amp;xHigherPriorityTaskWoken);
+
+// 场景3：传递数据，保持顺序
+// 使用：队列
+xQueueSendFromISR(queue, &amp;data, &amp;xHigherPriorityTaskWoken);
+
+// 场景4：传递简单数值
+// 使用：任务通知（带值）
+xTaskNotifyFromISR(task_handle, value, eSetValueWithOverwrite, &amp;xHigherPriorityTaskWoken);
+
+// 场景5：多个事件标志
+// 使用：事件标志组
+xEventGroupSetBitsFromISR(event_group, EVENT_BIT, &amp;xHigherPriorityTaskWoken);
+</code></pre>
+<h3 id="3_2">3. 中断优先级配置指南</h3>
+<pre><code class="language-c">// 优先级配置建议
+void ConfigureInterruptPriorities(void) {
+    // 0-4: 最高优先级（不调用RTOS API）
+    // 用于：紧急事件、安全关键功能
+    HAL_NVIC_SetPriority(EMERGENCY_IRQn, 2, 0);
+
+    // 5-7: 高优先级（可以调用RTOS API）
+    // 用于：实时数据采集、高速通信
+    HAL_NVIC_SetPriority(ADC_IRQn, 6, 0);
+    HAL_NVIC_SetPriority(SPI_IRQn, 7, 0);
+
+    // 8-11: 中优先级（可以调用RTOS API）
+    // 用于：普通通信、定时器
+    HAL_NVIC_SetPriority(USART_IRQn, 9, 0);
+    HAL_NVIC_SetPriority(TIM_IRQn, 10, 0);
+
+    // 12-14: 低优先级（可以调用RTOS API）
+    // 用于：非关键事件、按键
+    HAL_NVIC_SetPriority(BUTTON_IRQn, 13, 0);
+
+    // 15: 最低优先级（RTOS内部使用）
+    // 不要使用！
+}
+</code></pre>
+<h3 id="4_2">4. 性能优化检查清单</h3>
+<ul>
+<li>[ ] ISR执行时间 &lt; 50us</li>
+<li>[ ] 使用FromISR函数</li>
+<li>[ ] 正确调用portYIELD_FROM_ISR()</li>
+<li>[ ] 中断优先级配置正确</li>
+<li>[ ] 队列大小足够</li>
+<li>[ ] 临界区尽可能短</li>
+<li>[ ] 避免在ISR中使用浮点运算</li>
+<li>[ ] 使用DMA减少中断频率</li>
+<li>[ ] 批量处理高频数据</li>
+<li>[ ] 定期监控系统性能</li>
+</ul>
+<h2 id="_20">总结</h2>
+<p>本教程深入讲解了RTOS环境下的中断管理和延迟处理技术。关键要点：</p>
+<ol>
+<li><strong>中断优先级</strong>：正确配置中断优先级，区分RTOS管理和非管理的中断</li>
+<li><strong>FromISR函数</strong>：在中断中必须使用FromISR版本的API</li>
+<li><strong>延迟处理</strong>：中断中只做最少的工作，复杂处理交给任务</li>
+<li><strong>通信机制</strong>：根据场景选择合适的通信方式（信号量、队列、任务通知）</li>
+<li><strong>性能优化</strong>：缩短ISR时间，使用DMA，批量处理</li>
+</ol>
+<p>掌握这些技术后，你就能构建高效、稳定的实时嵌入式系统。</p>
+<h2 id="_21">扩展阅读</h2>
+<ul>
+<li><a href="../beginner/02-rtos-task-management.html">RTOS任务管理基础</a></li>
+<li><a href="../beginner/03-rtos-scheduling.html">RTOS调度算法详解</a></li>
+<li><a href="./03-priority-inversion.html">优先级反转问题与解决</a></li>
+<li><a href="https://www.freertos.org/RTOS-interrupt-service-routines.html">FreeRTOS官方文档 - 中断管理</a></li>
+<li>ARM Cortex-M中断系统参考手册</li>
+</ul>
+<h2 id="_22">练习题</h2>
+<ol>
+<li>解释为什么在中断中不能调用普通的RTOS API函数？</li>
+<li>什么是延迟处理？为什么需要延迟处理？</li>
+<li>比较信号量、队列和任务通知的优缺点，说明各自的适用场景。</li>
+<li>如何配置中断优先级才能在ISR中调用FromISR函数？</li>
+<li>设计一个高频ADC采集系统，要求采样率100kHz，如何优化以减少CPU占用？</li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

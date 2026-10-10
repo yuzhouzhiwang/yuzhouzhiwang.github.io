@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>Rust嵌入式开发入门 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/">10-cross-cutting-concerns</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/01-programming-languages/">01-programming-languages</a> / <a href="/knowledge/02-technologies/embedded/10-cross-cutting-concerns/01-programming-languages/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a><ul>
+<li><a href="#1-rust">1. 安装Rust工具链</a></li>
+<li><a href="#2">2. 添加嵌入式目标支持</a></li>
+<li><a href="#3-cargo-binutils">3. 安装cargo-binutils</a></li>
+<li><a href="#4-openocdgdb">4. 安装OpenOCD和GDB</a></li>
+<li><a href="#5-cargo-flash">5. 安装cargo-flash (可选)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#1rust">步骤1：Rust语言核心概念</a><ul>
+<li><a href="#11-ownership">1.1 所有权系统 (Ownership)</a></li>
+<li><a href="#12-borrowing-references">1.2 借用和引用 (Borrowing &amp; References)</a></li>
+<li><a href="#13-lifetimes">1.3 生命周期 (Lifetimes)</a></li>
+</ul>
+</li>
+<li><a href="#2rust">步骤2：嵌入式Rust生态系统</a><ul>
+<li><a href="#21-crate">2.1 核心crate介绍</a></li>
+<li><a href="#22">2.2 常用工具</a></li>
+<li><a href="#23">2.3 项目结构</a></li>
+</ul>
+</li>
+<li><a href="#3no_std">步骤3：创建第一个no_std项目</a><ul>
+<li><a href="#31">3.1 创建项目</a></li>
+<li><a href="#32-cargotoml">3.2 配置Cargo.toml</a></li>
+<li><a href="#33-cargoconfigtoml">3.3 配置.cargo/config.toml</a></li>
+<li><a href="#34-memoryx">3.4 创建memory.x链接脚本</a></li>
+<li><a href="#35">3.5 编写主程序</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：编译和烧录</a><ul>
+<li><a href="#41">4.1 编译项目</a></li>
+<li><a href="#42-cargo-flash">4.2 使用cargo-flash烧录</a></li>
+<li><a href="#43-openocd">4.3 使用OpenOCD烧录</a></li>
+<li><a href="#44-probe-run">4.4 使用probe-run运行</a></li>
+</ul>
+</li>
+<li><a href="#5-">步骤5：进阶示例 - 串口通信</a><ul>
+<li><a href="#51">5.1 添加依赖</a></li>
+<li><a href="#52">5.2 实现串口通信</a></li>
+<li><a href="#53">5.3 测试串口通信</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：中断处理</a><ul>
+<li><a href="#61">6.1 配置定时器中断</a></li>
+</ul>
+</li>
+<li><a href="#_7">验证方法</a><ul>
+<li><a href="#1led">验证步骤1：基础LED闪烁</a></li>
+<li><a href="#2_1">验证步骤2：串口通信</a></li>
+<li><a href="#3">验证步骤3：中断处理</a></li>
+</ul>
+</li>
+<li><a href="#_8">故障排除</a><ul>
+<li><a href="#1-">问题1：编译错误 - 找不到目标</a></li>
+<li><a href="#2-">问题2：链接错误 - 内存溢出</a></li>
+<li><a href="#3_1">问题3：烧录失败</a></li>
+<li><a href="#4_1">问题4：程序不运行</a></li>
+<li><a href="#5">问题5：中断不触发</a></li>
+</ul>
+</li>
+<li><a href="#_9">常见问题</a><ul>
+<li><a href="#q1-rustc">Q1: Rust嵌入式开发相比C有什么优势？</a></li>
+<li><a href="#q2-no_std">Q2: no_std是什么意思？</a></li>
+<li><a href="#q3-rust">Q3: 如何在Rust中使用动态内存分配？</a></li>
+<li><a href="#q4-rust">Q4: 如何调试Rust嵌入式程序？</a></li>
+<li><a href="#q5-rust">Q5: Rust嵌入式的学习曲线陡峭吗？</a></li>
+</ul>
+</li>
+<li><a href="#_10">总结</a><ul>
+<li><a href="#_11">关键要点回顾</a></li>
+<li><a href="#_12">学到的技能</a></li>
+<li><a href="#_13">下一步学习建议</a></li>
+</ul>
+</li>
+<li><a href="#_14">延伸阅读</a><ul>
+<li><a href="#_15">官方资源</a></li>
+<li><a href="#_16">进阶主题</a></li>
+<li><a href="#_17">社区资源</a></li>
+<li><a href="#_18">相关教程</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rust">Rust嵌入式开发入门</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解Rust语言的核心特性和优势</li>
+<li>[ ] 掌握Rust的所有权系统和借用检查器</li>
+<li>[ ] 了解嵌入式Rust生态系统和工具链</li>
+<li>[ ] 学会使用no_std进行裸机开发</li>
+<li>[ ] 编写并运行第一个Rust嵌入式项目</li>
+<li>[ ] 理解Rust如何保证内存安全和线程安全</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 掌握至少一门编程语言（C/C++优先）
+- 了解基本的嵌入式系统概念
+- 熟悉GPIO、中断等基本外设概念
+- 了解内存管理的基本原理</p>
+<p><strong>技能要求</strong>：
+- 能够使用命令行工具
+- 会使用Git进行版本控制
+- 了解基本的电路连接
+- 有C语言嵌入式开发经验（推荐但非必需）</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>STM32F103C8T6开发板</td>
+<td>1</td>
+<td>蓝色药丸板</td>
+<td><a href="https://example.com">购买链接</a></td>
+</tr>
+<tr>
+<td>ST-Link V2调试器</td>
+<td>1</td>
+<td>用于程序下载和调试</td>
+<td><a href="https://example.com">购买链接</a></td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>1</td>
+<td>任意颜色</td>
+<td>-</td>
+</tr>
+<tr>
+<td>电阻</td>
+<td>1</td>
+<td>220Ω</td>
+<td>-</td>
+</tr>
+<tr>
+<td>面包板</td>
+<td>1</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>公对公、公对母</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>Rust工具链</strong>：rustup、cargo</li>
+<li><strong>目标平台支持</strong>：thumbv7m-none-eabi</li>
+<li><strong>调试工具</strong>：OpenOCD、GDB</li>
+<li><strong>开发工具</strong>：</li>
+<li>VS Code + rust-analyzer扩展</li>
+<li>或 CLion + Rust插件</li>
+<li><strong>烧录工具</strong>：cargo-flash或st-flash</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<h4 id="1-rust">1. 安装Rust工具链</h4>
+<pre><code class="language-bash"># 安装rustup (Rust版本管理工具)
+# Linux/macOS:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Windows: 从 https://rustup.rs 下载安装程序
+
+# 验证安装
+rustc --version
+cargo --version
+</code></pre>
+<h4 id="2">2. 添加嵌入式目标支持</h4>
+<pre><code class="language-bash"># 添加ARM Cortex-M3目标支持
+rustup target add thumbv7m-none-eabi
+
+# 验证目标已安装
+rustup target list | grep thumbv7m
+</code></pre>
+<h4 id="3-cargo-binutils">3. 安装cargo-binutils</h4>
+<pre><code class="language-bash"># 安装二进制工具集
+cargo install cargo-binutils
+rustup component add llvm-tools-preview
+
+# 这些工具包括：
+# - cargo-objdump: 查看二进制文件
+# - cargo-size: 查看程序大小
+# - cargo-nm: 查看符号表
+</code></pre>
+<h4 id="4-openocdgdb">4. 安装OpenOCD和GDB</h4>
+<pre><code class="language-bash"># Ubuntu/Debian
+sudo apt-get install openocd gdb-multiarch
+
+# macOS
+brew install openocd arm-none-eabi-gdb
+
+# Windows: 从官网下载安装包
+# OpenOCD: https://openocd.org/
+# GDB: https://developer.arm.com/tools-and-software/open-source-software/developer-tools/gnu-toolchain
+</code></pre>
+<h4 id="5-cargo-flash">5. 安装cargo-flash (可选)</h4>
+<pre><code class="language-bash"># 更方便的烧录工具
+cargo install cargo-flash
+</code></pre>
+<h2 id="1rust">步骤1：Rust语言核心概念</h2>
+<h3 id="11-ownership">1.1 所有权系统 (Ownership)</h3>
+<p>Rust的所有权系统是其最核心的特性，它在编译时保证内存安全，无需垃圾回收器。</p>
+<p><strong>所有权规则</strong>：
+1. Rust中的每个值都有一个所有者（owner）
+2. 值在任一时刻只能有一个所有者
+3. 当所有者离开作用域时，值将被丢弃</p>
+<pre><code class="language-rust">fn ownership_example() {
+    // s1拥有字符串的所有权
+    let s1 = String::from(&quot;hello&quot;);
+
+    // 所有权转移给s2，s1不再有效
+    let s2 = s1;
+
+    // 编译错误！s1已经失效
+    // println!(&quot;{}&quot;, s1);
+
+    // s2有效
+    println!(&quot;{}&quot;, s2);
+
+} // s2离开作用域，内存被自动释放
+</code></pre>
+<p><strong>在嵌入式中的意义</strong>：
+- 编译时检查内存错误，避免运行时崩溃
+- 无需手动管理内存，减少内存泄漏
+- 零成本抽象，无运行时开销</p>
+<h3 id="12-borrowing-references">1.2 借用和引用 (Borrowing &amp; References)</h3>
+<p>借用允许你引用某个值而不获取其所有权。</p>
+<pre><code class="language-rust">fn borrowing_example() {
+    let s1 = String::from(&quot;hello&quot;);
+
+    // 不可变借用
+    let len = calculate_length(&amp;s1);
+
+    // s1仍然有效
+    println!(&quot;The length of '{}' is {}.&quot;, s1, len);
+}
+
+fn calculate_length(s: &amp;String) -&gt; usize {
+    s.len()
+} // s离开作用域，但因为它不拥有所有权，所以什么也不会发生
+</code></pre>
+<p><strong>借用规则</strong>：
+- 在任意给定时间，要么只能有一个可变引用，要么只能有多个不可变引用
+- 引用必须总是有效的</p>
+<pre><code class="language-rust">fn mutable_borrowing() {
+    let mut s = String::from(&quot;hello&quot;);
+
+    // 可变借用
+    change(&amp;mut s);
+
+    println!(&quot;{}&quot;, s); // 输出: hello, world
+}
+
+fn change(s: &amp;mut String) {
+    s.push_str(&quot;, world&quot;);
+}
+</code></pre>
+<p><strong>在嵌入式中的应用</strong>：
+- 安全地共享外设访问权限
+- 避免数据竞争
+- 编译时检查并发访问</p>
+<h3 id="13-lifetimes">1.3 生命周期 (Lifetimes)</h3>
+<p>生命周期确保引用在使用期间始终有效。</p>
+<pre><code class="language-rust">// 生命周期注解
+fn longest&lt;'a&gt;(x: &amp;'a str, y: &amp;'a str) -&gt; &amp;'a str {
+    if x.len() &gt; y.len() {
+        x
+    } else {
+        y
+    }
+}
+
+fn lifetime_example() {
+    let string1 = String::from(&quot;long string&quot;);
+    let string2 = String::from(&quot;short&quot;);
+
+    let result = longest(string1.as_str(), string2.as_str());
+    println!(&quot;The longest string is {}&quot;, result);
+}
+</code></pre>
+<p><strong>在嵌入式中的意义</strong>：
+- 确保外设引用的有效性
+- 防止悬垂指针
+- 静态分析资源生命周期</p>
+<h2 id="2rust">步骤2：嵌入式Rust生态系统</h2>
+<h3 id="21-crate">2.1 核心crate介绍</h3>
+<p>嵌入式Rust生态系统由多个层次的crate组成：</p>
+<pre><code class="language-mermaid">graph TD
+    A[应用程序] --&gt; B[HAL Crate]
+    B --&gt; C[PAC Crate]
+    C --&gt; D[cortex-m Crate]
+    D --&gt; E[硬件]
+
+    B --&gt; F[embedded-hal Traits]
+
+    style A fill:#e1f5ff
+    style B fill:#b3e5fc
+    style C fill:#81d4fa
+    style D fill:#4fc3f7
+    style E fill:#29b6f6
+    style F fill:#ffecb3
+</code></pre>
+<p><strong>核心crate说明</strong>：</p>
+<ol>
+<li>
+<p><strong>cortex-m</strong>: Cortex-M处理器的底层支持
+   - 中断处理
+   - 异常处理
+   - 处理器特定功能</p>
+</li>
+<li>
+<p><strong>PAC (Peripheral Access Crate)</strong>: 外设访问层
+   - 由SVD文件自动生成
+   - 提供寄存器级别的访问
+   - 类型安全的寄存器操作</p>
+</li>
+<li>
+<p><strong>HAL (Hardware Abstraction Layer)</strong>: 硬件抽象层
+   - 高级API
+   - 实现embedded-hal traits
+   - 简化外设使用</p>
+</li>
+<li>
+<p><strong>embedded-hal</strong>: 硬件抽象trait定义
+   - 定义通用接口
+   - 实现跨平台兼容
+   - 驱动程序可移植</p>
+</li>
+</ol>
+<h3 id="22">2.2 常用工具</h3>
+<pre><code class="language-bash"># cargo-generate: 从模板创建项目
+cargo install cargo-generate
+
+# cargo-embed: 烧录和调试
+cargo install cargo-embed
+
+# probe-run: 运行和查看输出
+cargo install probe-run
+
+# flip-link: 栈溢出保护
+cargo install flip-link
+</code></pre>
+<h3 id="23">2.3 项目结构</h3>
+<p>典型的嵌入式Rust项目结构：</p>
+<pre><code>my-project/
+├── Cargo.toml          # 项目配置
+├── .cargo/
+│   └── config.toml     # Cargo配置
+├── memory.x            # 链接脚本
+├── build.rs            # 构建脚本
+└── src/
+    └── main.rs         # 主程序
+</code></pre>
+<h2 id="3no_std">步骤3：创建第一个no_std项目</h2>
+<h3 id="31">3.1 创建项目</h3>
+<pre><code class="language-bash"># 使用cargo-generate从模板创建项目
+cargo generate --git https://github.com/rust-embedded/cortex-m-quickstart
+
+# 或手动创建
+cargo new --bin blinky
+cd blinky
+</code></pre>
+<h3 id="32-cargotoml">3.2 配置Cargo.toml</h3>
+<pre><code class="language-toml">[package]
+name = &quot;blinky&quot;
+version = &quot;0.1.0&quot;
+edition = &quot;2021&quot;
+
+[dependencies]
+# Cortex-M运行时
+cortex-m = &quot;0.7&quot;
+cortex-m-rt = &quot;0.7&quot;
+
+# STM32F1 HAL
+stm32f1xx-hal = { version = &quot;0.10&quot;, features = [&quot;stm32f103&quot;, &quot;rt&quot;] }
+
+# 恐慌处理
+panic-halt = &quot;0.2&quot;
+
+[profile.release]
+# 优化代码大小
+opt-level = &quot;z&quot;
+# 链接时优化
+lto = true
+# 减少代码大小
+codegen-units = 1
+</code></pre>
+<h3 id="33-cargoconfigtoml">3.3 配置.cargo/config.toml</h3>
+<pre><code class="language-toml">[target.thumbv7m-none-eabi]
+# 使用自定义链接脚本
+rustflags = [
+  &quot;-C&quot;, &quot;link-arg=-Tmemory.x&quot;,
+  &quot;-C&quot;, &quot;link-arg=-Tlink.x&quot;,
+]
+
+[build]
+# 默认目标平台
+target = &quot;thumbv7m-none-eabi&quot;
+
+[target.'cfg(all(target_arch = &quot;arm&quot;, target_os = &quot;none&quot;))']
+# 使用probe-run作为运行器
+runner = &quot;probe-run --chip STM32F103C8&quot;
+</code></pre>
+<h3 id="34-memoryx">3.4 创建memory.x链接脚本</h3>
+<pre><code class="language-ld">/* STM32F103C8T6内存布局 */
+MEMORY
+{
+  /* Flash: 64KB */
+  FLASH : ORIGIN = 0x08000000, LENGTH = 64K
+
+  /* RAM: 20KB */
+  RAM : ORIGIN = 0x20000000, LENGTH = 20K
+}
+
+/* 栈大小 */
+_stack_start = ORIGIN(RAM) + LENGTH(RAM);
+</code></pre>
+<h3 id="35">3.5 编写主程序</h3>
+<pre><code class="language-rust">#![no_std]  // 不使用标准库
+#![no_main] // 不使用标准main函数
+
+use panic_halt as _; // 恐慌时停机
+
+use cortex_m_rt::entry;
+use stm32f1xx_hal::{pac, prelude::*};
+
+#[entry]
+fn main() -&gt; ! {
+    // 获取外设访问权限
+    let dp = pac::Peripherals::take().unwrap();
+
+    // 获取RCC (复位和时钟控制)
+    let mut rcc = dp.RCC.constrain();
+
+    // 配置时钟
+    let mut flash = dp.FLASH.constrain();
+    let clocks = rcc.cfgr.freeze(&amp;mut flash.acr);
+
+    // 获取GPIOC
+    let mut gpioc = dp.GPIOC.split();
+
+    // 配置PC13为推挽输出 (板载LED)
+    let mut led = gpioc.pc13.into_push_pull_output(&amp;mut gpioc.crh);
+
+    // 主循环
+    loop {
+        // LED点亮
+        led.set_low();
+        cortex_m::asm::delay(8_000_000); // 延时约1秒
+
+        // LED熄灭
+        led.set_high();
+        cortex_m::asm::delay(8_000_000); // 延时约1秒
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：</p>
+<ol>
+<li><code>#![no_std]</code>: 不使用标准库，因为嵌入式环境没有操作系统</li>
+<li><code>#![no_main]</code>: 不使用标准的main函数入口</li>
+<li><code>#[entry]</code>: 标记程序入口点</li>
+<li><code>-&gt; !</code>: 返回Never类型，表示函数永不返回</li>
+<li><code>take()</code>: 单例模式，确保外设只被初始化一次</li>
+</ol>
+<h2 id="4">步骤4：编译和烧录</h2>
+<h3 id="41">4.1 编译项目</h3>
+<pre><code class="language-bash"># 编译debug版本
+cargo build
+
+# 编译release版本 (优化代码大小)
+cargo build --release
+
+# 查看生成的二进制文件大小
+cargo size --release -- -A
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>section              size        addr
+.vector_table         256   0x8000000
+.text                2048   0x8000100
+.rodata               128   0x8000900
+.data                  64   0x20000000
+.bss                  256   0x20000040
+</code></pre>
+<h3 id="42-cargo-flash">4.2 使用cargo-flash烧录</h3>
+<pre><code class="language-bash"># 烧录并运行
+cargo flash --chip STM32F103C8 --release
+
+# 输出:
+# Flashing target/thumbv7m-none-eabi/release/blinky
+# Finished in 2.3s
+</code></pre>
+<h3 id="43-openocd">4.3 使用OpenOCD烧录</h3>
+<p><strong>启动OpenOCD</strong>：</p>
+<pre><code class="language-bash"># 在一个终端启动OpenOCD
+openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg
+</code></pre>
+<p><strong>在另一个终端烧录</strong>：</p>
+<pre><code class="language-bash"># 连接到OpenOCD
+arm-none-eabi-gdb target/thumbv7m-none-eabi/release/blinky
+
+# 在GDB中执行
+(gdb) target remote :3333
+(gdb) load
+(gdb) monitor reset halt
+(gdb) continue
+</code></pre>
+<h3 id="44-probe-run">4.4 使用probe-run运行</h3>
+<pre><code class="language-bash"># 直接运行并查看输出
+cargo run --release
+
+# 输出:
+# Flashing...
+# Finished in 2.1s
+# Running...
+# (程序输出会显示在这里)
+</code></pre>
+<h2 id="5-">步骤5：进阶示例 - 串口通信</h2>
+<h3 id="51">5.1 添加依赖</h3>
+<pre><code class="language-toml">[dependencies]
+cortex-m = &quot;0.7&quot;
+cortex-m-rt = &quot;0.7&quot;
+stm32f1xx-hal = { version = &quot;0.10&quot;, features = [&quot;stm32f103&quot;, &quot;rt&quot;] }
+panic-halt = &quot;0.2&quot;
+
+# 添加格式化支持
+cortex-m-semihosting = &quot;0.5&quot;
+</code></pre>
+<h3 id="52">5.2 实现串口通信</h3>
+<pre><code class="language-rust">#![no_std]
+#![no_main]
+
+use panic_halt as _;
+use cortex_m_rt::entry;
+use stm32f1xx_hal::{pac, prelude::*, serial::{Config, Serial}};
+use core::fmt::Write; // 用于write!宏
+
+#[entry]
+fn main() -&gt; ! {
+    // 获取外设
+    let dp = pac::Peripherals::take().unwrap();
+
+    // 配置时钟
+    let mut flash = dp.FLASH.constrain();
+    let rcc = dp.RCC.constrain();
+    let clocks = rcc.cfgr.freeze(&amp;mut flash.acr);
+
+    // 配置GPIO
+    let mut afio = dp.AFIO.constrain();
+    let mut gpioa = dp.GPIOA.split();
+
+    // 配置USART1引脚
+    // PA9: TX, PA10: RX
+    let tx = gpioa.pa9.into_alternate_push_pull(&amp;mut gpioa.crh);
+    let rx = gpioa.pa10;
+
+    // 配置串口
+    let serial = Serial::new(
+        dp.USART1,
+        (tx, rx),
+        &amp;mut afio.mapr,
+        Config::default().baudrate(115200.bps()),
+        &amp;clocks,
+    );
+
+    // 分离发送和接收
+    let (mut tx, mut rx) = serial.split();
+
+    // 发送欢迎消息
+    writeln!(tx, &quot;Hello from Rust!&quot;).unwrap();
+
+    let mut counter = 0u32;
+
+    loop {
+        // 发送计数值
+        writeln!(tx, &quot;Counter: {}&quot;, counter).unwrap();
+        counter = counter.wrapping_add(1);
+
+        // 延时
+        cortex_m::asm::delay(8_000_000);
+
+        // 检查是否有接收数据
+        if let Ok(byte) = rx.read() {
+            // 回显接收到的数据
+            writeln!(tx, &quot;Received: {}&quot;, byte as char).unwrap();
+        }
+    }
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 使用<code>Serial</code>配置USART1
+- 波特率设置为115200
+- 使用<code>write!</code>宏进行格式化输出
+- 实现简单的回显功能</p>
+<h3 id="53">5.3 测试串口通信</h3>
+<pre><code class="language-bash"># 编译并烧录
+cargo flash --chip STM32F103C8 --release
+
+# 使用串口工具连接
+# Linux/macOS:
+screen /dev/ttyUSB0 115200
+
+# Windows: 使用PuTTY或其他串口工具
+# 端口: COM3 (根据实际情况)
+# 波特率: 115200
+</code></pre>
+<p><strong>预期输出</strong>：</p>
+<pre><code>Hello from Rust!
+Counter: 0
+Counter: 1
+Counter: 2
+...
+</code></pre>
+<h2 id="6">步骤6：中断处理</h2>
+<h3 id="61">6.1 配置定时器中断</h3>
+<pre><code class="language-rust">#![no_std]
+#![no_main]
+
+use panic_halt as _;
+use cortex_m_rt::entry;
+use stm32f1xx_hal::{
+    pac::{self, interrupt, Interrupt},
+    prelude::*,
+    timer::{Event, Timer},
+};
+use core::cell::RefCell;
+use cortex_m::interrupt::Mutex;
+
+// 全局变量，用于在中断中访问
+static LED: Mutex&lt;RefCell&lt;Option&lt;stm32f1xx_hal::gpio::gpioc::PC13&lt;stm32f1xx_hal::gpio::Output&lt;stm32f1xx_hal::gpio::PushPull&gt;&gt;&gt;&gt;&gt; = 
+    Mutex::new(RefCell::new(None));
+
+#[entry]
+fn main() -&gt; ! {
+    let dp = pac::Peripherals::take().unwrap();
+    let cp = cortex_m::Peripherals::take().unwrap();
+
+    // 配置时钟
+    let mut flash = dp.FLASH.constrain();
+    let rcc = dp.RCC.constrain();
+    let clocks = rcc.cfgr.freeze(&amp;mut flash.acr);
+
+    // 配置LED
+    let mut gpioc = dp.GPIOC.split();
+    let led = gpioc.pc13.into_push_pull_output(&amp;mut gpioc.crh);
+
+    // 将LED移动到全局变量
+    cortex_m::interrupt::free(|cs| {
+        LED.borrow(cs).replace(Some(led));
+    });
+
+    // 配置定时器
+    let mut timer = Timer::tim2(dp.TIM2, &amp;clocks).start_count_down(1.Hz());
+
+    // 启用定时器中断
+    timer.listen(Event::Update);
+
+    // 启用NVIC中断
+    unsafe {
+        cortex_m::peripheral::NVIC::unmask(Interrupt::TIM2);
+    }
+
+    loop {
+        // 主循环可以做其他事情
+        cortex_m::asm::wfi(); // 等待中断
+    }
+}
+
+// 定时器中断处理函数
+#[interrupt]
+fn TIM2() {
+    // 清除中断标志
+    unsafe {
+        (*pac::TIM2::ptr()).sr.modify(|_, w| w.uif().clear_bit());
+    }
+
+    // 切换LED状态
+    cortex_m::interrupt::free(|cs| {
+        if let Some(ref mut led) = LED.borrow(cs).borrow_mut().as_mut() {
+            led.toggle();
+        }
+    });
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- 使用<code>Mutex</code>和<code>RefCell</code>实现中断安全的共享状态
+- <code>#[interrupt]</code>宏标记中断处理函数
+- <code>wfi()</code>指令让CPU进入低功耗模式，等待中断
+- 中断中切换LED状态，实现定时闪烁</p>
+<h2 id="_7">验证方法</h2>
+<h3 id="1led">验证步骤1：基础LED闪烁</h3>
+<ol>
+<li>编译并烧录基础LED闪烁程序</li>
+<li>观察板载LED是否以1秒间隔闪烁</li>
+<li>使用<code>cargo size</code>检查程序大小是否合理（应小于10KB）</li>
+</ol>
+<p><strong>预期结果</strong>：
+- LED规律闪烁
+- 程序大小约2-5KB
+- 无编译警告或错误</p>
+<h3 id="2_1">验证步骤2：串口通信</h3>
+<ol>
+<li>连接串口工具到开发板</li>
+<li>烧录串口通信程序</li>
+<li>观察串口输出</li>
+<li>发送字符，观察回显</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 看到"Hello from Rust!"消息
+- 计数器持续递增
+- 发送的字符被正确回显</p>
+<h3 id="3">验证步骤3：中断处理</h3>
+<ol>
+<li>烧录中断处理程序</li>
+<li>观察LED闪烁</li>
+<li>使用调试器验证中断触发</li>
+</ol>
+<p><strong>预期结果</strong>：
+- LED以1Hz频率闪烁
+- CPU大部分时间处于低功耗模式
+- 中断响应及时</p>
+<h2 id="_8">故障排除</h2>
+<h3 id="1-">问题1：编译错误 - 找不到目标</h3>
+<p><strong>错误信息</strong>：</p>
+<pre><code>error: couldn't find crate for `std`
+</code></pre>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-bash"># 确保已添加目标支持
+rustup target add thumbv7m-none-eabi
+
+# 检查.cargo/config.toml中的target配置
+</code></pre>
+<h3 id="2-">问题2：链接错误 - 内存溢出</h3>
+<p><strong>错误信息</strong>：</p>
+<pre><code>error: linking with `rust-lld` failed
+region `FLASH' overflowed by 1024 bytes
+</code></pre>
+<p><strong>解决方案</strong>：
+1. 检查memory.x中的内存配置是否正确
+2. 启用release模式优化：<code>cargo build --release</code>
+3. 减少代码大小：</p>
+<pre><code class="language-toml">[profile.release]
+opt-level = &quot;z&quot;  # 优化代码大小
+lto = true       # 链接时优化
+</code></pre>
+<h3 id="3_1">问题3：烧录失败</h3>
+<p><strong>错误信息</strong>：</p>
+<pre><code>Error: Could not find a connected probe
+</code></pre>
+<p><strong>解决方案</strong>：
+1. 检查ST-Link连接
+2. 确认驱动已安装
+3. 尝试使用OpenOCD：</p>
+<pre><code class="language-bash">openocd -f interface/stlink-v2.cfg -f target/stm32f1x.cfg
+</code></pre>
+<h3 id="4_1">问题4：程序不运行</h3>
+<p><strong>可能原因</strong>：
+1. BOOT0引脚设置错误
+2. 程序入口地址不正确
+3. 时钟配置错误</p>
+<p><strong>解决方案</strong>：
+1. 确保BOOT0接地（从Flash启动）
+2. 检查memory.x中的FLASH起始地址
+3. 验证时钟配置代码</p>
+<h3 id="5">问题5：中断不触发</h3>
+<p><strong>检查清单</strong>：
+- [ ] 中断已在NVIC中启用
+- [ ] 外设中断已启用
+- [ ] 中断优先级配置正确
+- [ ] 中断标志已清除</p>
+<h2 id="_9">常见问题</h2>
+<h3 id="q1-rustc">Q1: Rust嵌入式开发相比C有什么优势？</h3>
+<p><strong>A</strong>: 主要优势包括：
+1. <strong>内存安全</strong>：编译时检查，避免空指针、缓冲区溢出等问题
+2. <strong>并发安全</strong>：所有权系统防止数据竞争
+3. <strong>零成本抽象</strong>：高级特性无运行时开销
+4. <strong>现代工具链</strong>：cargo、rustfmt、clippy等工具
+5. <strong>强类型系统</strong>：编译时捕获更多错误</p>
+<h3 id="q2-no_std">Q2: no_std是什么意思？</h3>
+<p><strong>A</strong>: <code>no_std</code>表示不使用Rust标准库，因为：
+- 标准库依赖操作系统
+- 嵌入式系统通常没有OS
+- 使用<code>core</code>库代替，提供基础功能
+- 需要自己实现panic处理、内存分配等</p>
+<h3 id="q3-rust">Q3: 如何在Rust中使用动态内存分配？</h3>
+<p><strong>A</strong>: 在嵌入式Rust中使用堆：</p>
+<pre><code class="language-rust">// 添加依赖
+// alloc-cortex-m = &quot;0.4&quot;
+
+use alloc_cortex_m::CortexMHeap;
+
+#[global_allocator]
+static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
+
+fn init_heap() {
+    const HEAP_SIZE: usize = 1024;
+    static mut HEAP: [u8; HEAP_SIZE] = [0; HEAP_SIZE];
+    unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+}
+</code></pre>
+<h3 id="q4-rust">Q4: 如何调试Rust嵌入式程序？</h3>
+<p><strong>A</strong>: 调试方法：
+1. <strong>使用probe-run</strong>：直接查看输出
+2. <strong>使用GDB</strong>：断点调试
+3. <strong>使用RTT</strong>：实时传输调试信息
+4. <strong>使用defmt</strong>：高效的日志框架</p>
+<pre><code class="language-rust">// 使用defmt进行日志输出
+use defmt::info;
+
+info!(&quot;LED state: {}&quot;, led_state);
+</code></pre>
+<h3 id="q5-rust">Q5: Rust嵌入式的学习曲线陡峭吗？</h3>
+<p><strong>A</strong>: 确实有一定学习曲线：
+- <strong>Rust语言本身</strong>：所有权、生命周期等概念需要时间理解
+- <strong>嵌入式概念</strong>：如果已有嵌入式经验，这部分较容易
+- <strong>工具链</strong>：Rust工具链相对现代化，容易上手
+- <strong>建议</strong>：先学习Rust基础，再学习嵌入式应用</p>
+<h2 id="_10">总结</h2>
+<h3 id="_11">关键要点回顾</h3>
+<ol>
+<li>
+<p><strong>Rust核心特性</strong>：
+   - 所有权系统保证内存安全
+   - 借用检查器防止数据竞争
+   - 生命周期确保引用有效性
+   - 零成本抽象无运行时开销</p>
+</li>
+<li>
+<p><strong>嵌入式Rust生态</strong>：
+   - cortex-m: 处理器支持
+   - PAC: 寄存器级访问
+   - HAL: 硬件抽象层
+   - embedded-hal: 通用trait</p>
+</li>
+<li>
+<p><strong>no_std开发</strong>：
+   - 不依赖标准库
+   - 使用core库
+   - 自定义panic处理
+   - 可选的堆分配</p>
+</li>
+<li>
+<p><strong>开发流程</strong>：
+   - 配置工具链和目标
+   - 编写no_std代码
+   - 配置链接脚本
+   - 编译、烧录、调试</p>
+</li>
+</ol>
+<h3 id="_12">学到的技能</h3>
+<p>通过本教程，你已经掌握：
+- ✅ Rust语言的核心概念
+- ✅ 嵌入式Rust生态系统
+- ✅ no_std项目的创建和配置
+- ✅ GPIO控制和LED闪烁
+- ✅ 串口通信实现
+- ✅ 中断处理机制</p>
+<h3 id="_13">下一步学习建议</h3>
+<ol>
+<li>
+<p><strong>深入Rust语言</strong>：
+   - 学习trait和泛型
+   - 理解宏系统
+   - 掌握异步编程</p>
+</li>
+<li>
+<p><strong>扩展嵌入式知识</strong>：
+   - 学习更多外设（I2C、SPI、ADC）
+   - 实现驱动程序
+   - 使用RTIC框架</p>
+</li>
+<li>
+<p><strong>实践项目</strong>：
+   - 温湿度监测系统
+   - 电机控制
+   - 无线通信应用</p>
+</li>
+<li>
+<p><strong>参与社区</strong>：
+   - 阅读embedded-hal文档
+   - 参与开源项目
+   - 分享学习经验</p>
+</li>
+</ol>
+<h2 id="_14">延伸阅读</h2>
+<h3 id="_15">官方资源</h3>
+<ul>
+<li><a href="https://docs.rust-embedded.org/book/">The Embedded Rust Book</a> - 官方嵌入式Rust教程</li>
+<li><a href="https://doc.rust-lang.org/book/">The Rust Programming Language</a> - Rust语言官方教程</li>
+<li><a href="https://docs.rs/embedded-hal/">embedded-hal文档</a> - HAL trait文档</li>
+<li><a href="https://docs.rs/cortex-m/">cortex-m文档</a> - Cortex-M支持文档</li>
+</ul>
+<h3 id="_16">进阶主题</h3>
+<ul>
+<li><a href="https://rtic.rs/">RTIC框架</a> - 实时中断驱动并发框架</li>
+<li><a href="https://embassy.dev/">Embassy</a> - 异步嵌入式框架</li>
+<li><a href="https://defmt.ferrous-systems.com/">defmt</a> - 高效日志框架</li>
+<li><a href="https://probe.rs/">probe-rs</a> - 现代化调试工具</li>
+</ul>
+<h3 id="_17">社区资源</h3>
+<ul>
+<li><a href="https://github.com/rust-embedded">Rust Embedded Working Group</a> - 官方工作组</li>
+<li><a href="https://github.com/rust-embedded/awesome-embedded-rust">Awesome Embedded Rust</a> - 资源列表</li>
+<li><a href="https://matrix.to/#/#rust-embedded:matrix.org">Rust Embedded Community</a> - Matrix聊天室</li>
+</ul>
+<h3 id="_18">相关教程</h3>
+<p>建议继续学习：
+- <a href="../advanced/02-rust-advanced-embedded.html">Rust高级嵌入式开发</a> - 深入学习异步、RTIC等高级主题
+- <a href="../intermediate/06-assembly-in-embedded.html">汇编语言在嵌入式中的应用</a> - 结合汇编优化性能
+- <a href="../advanced/01-multi-language-programming.html">多语言混合编程实践</a> - Rust与C的互操作</p>
+<hr />
+<p><strong>版权声明</strong>: 本教程由嵌入式知识平台创作，采用CC BY-SA 4.0许可协议。</p>
+<p><strong>反馈与改进</strong>: 如发现错误或有改进建议，请通过平台反馈系统提交。</p>
+<p><strong>最后更新</strong>: 2026-03-10</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

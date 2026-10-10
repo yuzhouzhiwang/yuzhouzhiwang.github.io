@@ -1,0 +1,2444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>Linux进程与线程编程：掌握多任务并发编程 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/05-embedded-linux/">05-embedded-linux</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/05-embedded-linux/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">进程与线程概述</a><ul>
+<li><a href="#_4">进程的概念</a></li>
+<li><a href="#_5">线程的概念</a></li>
+<li><a href="#_6">进程与线程对比</a></li>
+</ul>
+</li>
+<li><a href="#_7">进程编程</a><ul>
+<li><a href="#-fork">进程创建 - fork()</a></li>
+<li><a href="#-waitwaitpid">进程等待 - wait()和waitpid()</a></li>
+<li><a href="#-exec">进程替换 - exec系列函数</a></li>
+</ul>
+</li>
+<li><a href="#_8">线程编程</a><ul>
+<li><a href="#posixpthread">POSIX线程(pthread)基础</a></li>
+<li><a href="#_9">线程创建和终止</a></li>
+<li><a href="#_10">线程分离</a></li>
+<li><a href="#-mutex">线程同步 - 互斥锁(Mutex)</a></li>
+<li><a href="#-">线程同步 - 条件变量</a></li>
+</ul>
+</li>
+<li><a href="#ipc">进程间通信(IPC)</a><ul>
+<li><a href="#pipe">管道(Pipe)</a></li>
+<li><a href="#fifo">命名管道(FIFO)</a></li>
+<li><a href="#shared-memory">共享内存(Shared Memory)</a></li>
+<li><a href="#message-queue">消息队列(Message Queue)</a></li>
+<li><a href="#semaphore">信号量(Semaphore)</a></li>
+<li><a href="#ipc_1">IPC机制对比</a></li>
+</ul>
+</li>
+<li><a href="#_11">实战项目：多任务数据采集系统</a><ul>
+<li><a href="#_12">项目概述</a></li>
+<li><a href="#_13">项目架构</a></li>
+<li><a href="#_14">完整代码实现</a></li>
+<li><a href="#_15">项目要点</a></li>
+</ul>
+</li>
+<li><a href="#_16">调试和优化</a><ul>
+<li><a href="#_17">调试技巧</a><ul>
+<li><a href="#gdb">使用GDB调试多线程程序</a></li>
+<li><a href="#_18">检测死锁</a></li>
+<li><a href="#valgrind">使用Valgrind检测内存问题</a></li>
+</ul>
+</li>
+<li><a href="#_19">性能优化</a><ul>
+<li><a href="#_20">减少锁竞争</a></li>
+<li><a href="#_21">线程池</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_22">常见问题和解决方案</a><ul>
+<li><a href="#1">问题1：僵尸进程</a></li>
+<li><a href="#2">问题2：线程安全</a></li>
+<li><a href="#3">问题3：优先级反转</a></li>
+</ul>
+</li>
+<li><a href="#_23">总结</a></li>
+<li><a href="#_24">延伸阅读</a></li>
+<li><a href="#_25">练习题</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="linux">Linux进程与线程编程：掌握多任务并发编程</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解Linux进程和线程的概念与区别</li>
+<li>[ ] 掌握进程创建和管理的方法</li>
+<li>[ ] 熟练使用POSIX线程(pthread)编程</li>
+<li>[ ] 实现多种进程间通信(IPC)机制</li>
+<li>[ ] 掌握线程同步和互斥技术</li>
+<li>[ ] 处理并发编程中的常见问题</li>
+<li>[ ] 开发实际的多任务应用程序</li>
+<li>[ ] 调试和优化多任务程序</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟练掌握C语言编程
+- 了解Linux系统编程基础
+- 理解操作系统基本概念
+- 掌握指针和内存管理
+- 了解文件I/O操作</p>
+<p><strong>技能要求</strong>：
+- 能够使用GCC编译器
+- 会使用Makefile构建项目
+- 熟悉Linux命令行操作
+- 了解调试工具(gdb)的使用</p>
+<p><strong>硬件和软件准备</strong>：
+- Linux开发环境（Ubuntu 20.04+推荐）
+- GCC编译器（支持pthread）
+- 开发板或QEMU模拟器（可选）
+- 文本编辑器或IDE</p>
+<h2 id="_3">进程与线程概述</h2>
+<h3 id="_4">进程的概念</h3>
+<p><strong>进程(Process)</strong>是操作系统进行资源分配和调度的基本单位。</p>
+<pre><code>┌─────────────────────────────────────────┐
+│         进程 (Process)                   │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    代码段 (Text Segment)          │  │
+│  │    - 可执行指令                   │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    数据段 (Data Segment)          │  │
+│  │    - 全局变量                     │  │
+│  │    - 静态变量                     │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    堆 (Heap)                      │  │
+│  │    - 动态分配内存                 │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    栈 (Stack)                     │  │
+│  │    - 局部变量                     │  │
+│  │    - 函数调用                     │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    进程控制块 (PCB)               │  │
+│  │    - 进程ID                       │  │
+│  │    - 进程状态                     │  │
+│  │    - 寄存器信息                   │  │
+│  └──────────────────────────────────┘  │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>进程特点</strong>：
+- 独立的地址空间
+- 拥有独立的资源
+- 进程间相互隔离
+- 创建开销较大
+- 切换开销较大</p>
+<h3 id="_5">线程的概念</h3>
+<p><strong>线程(Thread)</strong>是进程内的执行单元，是CPU调度的基本单位。</p>
+<pre><code>┌─────────────────────────────────────────┐
+│         进程 (Process)                   │
+│                                         │
+│  ┌──────────────────────────────────┐  │
+│  │    共享资源                       │  │
+│  │    - 代码段                       │  │
+│  │    - 数据段                       │  │
+│  │    - 堆                           │  │
+│  │    - 文件描述符                   │  │
+│  └──────────────────────────────────┘  │
+│                                         │
+│  ┌────────┐  ┌────────┐  ┌────────┐  │
+│  │ 线程1   │  │ 线程2   │  │ 线程3   │  │
+│  │        │  │        │  │        │  │
+│  │ 栈     │  │ 栈     │  │ 栈     │  │
+│  │ 寄存器 │  │ 寄存器 │  │ 寄存器 │  │
+│  │ 程序计数│  │ 程序计数│  │ 程序计数│  │
+│  └────────┘  └────────┘  └────────┘  │
+└─────────────────────────────────────────┘
+</code></pre>
+<p><strong>线程特点</strong>：
+- 共享进程地址空间
+- 共享进程资源
+- 拥有独立的栈
+- 创建开销较小
+- 切换开销较小</p>
+<h3 id="_6">进程与线程对比</h3>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>进程</th>
+<th>线程</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>地址空间</td>
+<td>独立</td>
+<td>共享</td>
+</tr>
+<tr>
+<td>资源拥有</td>
+<td>独立</td>
+<td>共享</td>
+</tr>
+<tr>
+<td>创建开销</td>
+<td>大</td>
+<td>小</td>
+</tr>
+<tr>
+<td>切换开销</td>
+<td>大</td>
+<td>小</td>
+</tr>
+<tr>
+<td>通信方式</td>
+<td>IPC</td>
+<td>共享内存</td>
+</tr>
+<tr>
+<td>安全性</td>
+<td>高（隔离）</td>
+<td>低（共享）</td>
+</tr>
+<tr>
+<td>适用场景</td>
+<td>独立任务</td>
+<td>协作任务</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_7">进程编程</h2>
+<h3 id="-fork">进程创建 - fork()</h3>
+<p><strong>fork()系统调用</strong>用于创建新进程。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;unistd.h&gt;
+
+pid_t fork(void);
+</code></pre>
+<p><strong>返回值</strong>：
+- 父进程：返回子进程的PID
+- 子进程：返回0
+- 失败：返回-1</p>
+<p><strong>基本示例</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+int main(void)
+{
+    pid_t pid;
+
+    printf(&quot;Before fork: PID = %d\n&quot;, getpid());
+
+    // 创建子进程
+    pid = fork();
+
+    if (pid &lt; 0) {
+        // fork失败
+        perror(&quot;fork failed&quot;);
+        return 1;
+    }
+    else if (pid == 0) {
+        // 子进程代码
+        printf(&quot;Child process: PID = %d, Parent PID = %d\n&quot;,
+               getpid(), getppid());
+    }
+    else {
+        // 父进程代码
+        printf(&quot;Parent process: PID = %d, Child PID = %d\n&quot;,
+               getpid(), pid);
+    }
+
+    printf(&quot;Process %d: Exiting\n&quot;, getpid());
+
+    return 0;
+}
+</code></pre>
+<p><strong>编译和运行</strong>：</p>
+<pre><code class="language-bash">gcc -o fork_demo fork_demo.c
+./fork_demo
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Before fork: PID = 1234
+Parent process: PID = 1234, Child PID = 1235
+Process 1234: Exiting
+Child process: PID = 1235, Parent PID = 1234
+Process 1235: Exiting
+</code></pre>
+<p><strong>代码说明</strong>：
+- fork()后，父子进程从fork()返回处继续执行
+- 父子进程拥有独立的地址空间
+- 子进程复制父进程的数据段、堆和栈
+- 父子进程共享代码段</p>
+<h3 id="-waitwaitpid">进程等待 - wait()和waitpid()</h3>
+<p><strong>wait()函数</strong>用于等待子进程结束。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;sys/wait.h&gt;
+
+pid_t wait(int *status);
+pid_t waitpid(pid_t pid, int *status, int options);
+</code></pre>
+<p><strong>示例：父进程等待子进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+int main(void)
+{
+    pid_t pid, wpid;
+    int status;
+
+    pid = fork();
+
+    if (pid &lt; 0) {
+        perror(&quot;fork failed&quot;);
+        return 1;
+    }
+    else if (pid == 0) {
+        // 子进程
+        printf(&quot;Child: PID = %d, sleeping for 2 seconds\n&quot;, getpid());
+        sleep(2);
+        printf(&quot;Child: Exiting with status 42\n&quot;);
+        exit(42);
+    }
+    else {
+        // 父进程
+        printf(&quot;Parent: Waiting for child %d\n&quot;, pid);
+
+        // 等待子进程结束
+        wpid = wait(&amp;status);
+
+        if (wpid == -1) {
+            perror(&quot;wait failed&quot;);
+            return 1;
+        }
+
+        printf(&quot;Parent: Child %d terminated\n&quot;, wpid);
+
+        // 检查退出状态
+        if (WIFEXITED(status)) {
+            printf(&quot;Parent: Child exited with status %d\n&quot;,
+                   WEXITSTATUS(status));
+        }
+        else if (WIFSIGNALED(status)) {
+            printf(&quot;Parent: Child killed by signal %d\n&quot;,
+                   WTERMSIG(status));
+        }
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>状态宏说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>宏</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WIFEXITED(status)</td>
+<td>子进程正常退出返回true</td>
+</tr>
+<tr>
+<td>WEXITSTATUS(status)</td>
+<td>获取退出状态码</td>
+</tr>
+<tr>
+<td>WIFSIGNALED(status)</td>
+<td>子进程被信号终止返回true</td>
+</tr>
+<tr>
+<td>WTERMSIG(status)</td>
+<td>获取终止信号编号</td>
+</tr>
+<tr>
+<td>WIFSTOPPED(status)</td>
+<td>子进程被停止返回true</td>
+</tr>
+<tr>
+<td>WSTOPSIG(status)</td>
+<td>获取停止信号编号</td>
+</tr>
+</tbody>
+</table>
+<p><strong>waitpid()高级用法</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+int main(void)
+{
+    pid_t pid1, pid2;
+    int status;
+
+    // 创建两个子进程
+    pid1 = fork();
+    if (pid1 == 0) {
+        printf(&quot;Child 1: PID = %d\n&quot;, getpid());
+        sleep(2);
+        exit(1);
+    }
+
+    pid2 = fork();
+    if (pid2 == 0) {
+        printf(&quot;Child 2: PID = %d\n&quot;, getpid());
+        sleep(1);
+        exit(2);
+    }
+
+    // 父进程等待特定子进程
+    printf(&quot;Parent: Waiting for child %d\n&quot;, pid2);
+    waitpid(pid2, &amp;status, 0);
+    printf(&quot;Parent: Child %d exited with status %d\n&quot;,
+           pid2, WEXITSTATUS(status));
+
+    // 等待任意子进程（非阻塞）
+    pid_t wpid;
+    while ((wpid = waitpid(-1, &amp;status, WNOHANG)) &gt; 0) {
+        printf(&quot;Parent: Child %d exited with status %d\n&quot;,
+               wpid, WEXITSTATUS(status));
+    }
+
+    // 等待所有子进程
+    while (wait(NULL) &gt; 0);
+
+    printf(&quot;Parent: All children terminated\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>waitpid()参数说明</strong>：</p>
+<p><strong>pid参数</strong>：
+- <code>pid &gt; 0</code>: 等待指定PID的子进程
+- <code>pid = -1</code>: 等待任意子进程
+- <code>pid = 0</code>: 等待同组的任意子进程
+- <code>pid &lt; -1</code>: 等待进程组ID为|pid|的任意子进程</p>
+<p><strong>options参数</strong>：
+- <code>0</code>: 阻塞等待
+- <code>WNOHANG</code>: 非阻塞，立即返回
+- <code>WUNTRACED</code>: 报告停止的子进程
+- <code>WCONTINUED</code>: 报告继续运行的子进程</p>
+<h3 id="-exec">进程替换 - exec系列函数</h3>
+<p><strong>exec系列函数</strong>用于在当前进程中执行新程序。</p>
+<p><strong>函数族</strong>：</p>
+<pre><code class="language-c">#include &lt;unistd.h&gt;
+
+int execl(const char *path, const char *arg, ...);
+int execlp(const char *file, const char *arg, ...);
+int execle(const char *path, const char *arg, ..., char *const envp[]);
+int execv(const char *path, char *const argv[]);
+int execvp(const char *file, char *const argv[]);
+int execve(const char *path, char *const argv[], char *const envp[]);
+</code></pre>
+<p><strong>命名规则</strong>：
+- <code>l</code>: 参数列表(list)
+- <code>v</code>: 参数数组(vector)
+- <code>p</code>: 使用PATH环境变量搜索
+- <code>e</code>: 指定环境变量</p>
+<p><strong>示例：使用exec执行新程序</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+int main(void)
+{
+    pid_t pid;
+
+    pid = fork();
+
+    if (pid &lt; 0) {
+        perror(&quot;fork failed&quot;);
+        return 1;
+    }
+    else if (pid == 0) {
+        // 子进程：执行ls命令
+        printf(&quot;Child: Executing ls command\n&quot;);
+
+        // 方法1：使用execl
+        execl(&quot;/bin/ls&quot;, &quot;ls&quot;, &quot;-l&quot;, &quot;/tmp&quot;, NULL);
+
+        // 如果exec成功，下面的代码不会执行
+        perror(&quot;execl failed&quot;);
+        exit(1);
+    }
+    else {
+        // 父进程：等待子进程
+        int status;
+        wait(&amp;status);
+        printf(&quot;Parent: Child completed\n&quot;);
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：使用execv</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void)
+{
+    pid_t pid;
+
+    pid = fork();
+
+    if (pid == 0) {
+        // 子进程
+        char *args[] = {
+            &quot;ls&quot;,
+            &quot;-l&quot;,
+            &quot;-a&quot;,
+            &quot;/home&quot;,
+            NULL  // 必须以NULL结尾
+        };
+
+        execv(&quot;/bin/ls&quot;, args);
+
+        // 如果到达这里，说明exec失败
+        perror(&quot;execv failed&quot;);
+        exit(1);
+    }
+    else {
+        // 父进程
+        wait(NULL);
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：实现简单的shell</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+#define MAX_CMD_LEN 1024
+#define MAX_ARGS 64
+
+int main(void)
+{
+    char cmd[MAX_CMD_LEN];
+    char *args[MAX_ARGS];
+    pid_t pid;
+
+    while (1) {
+        // 显示提示符
+        printf(&quot;myshell&gt; &quot;);
+        fflush(stdout);
+
+        // 读取命令
+        if (fgets(cmd, sizeof(cmd), stdin) == NULL) {
+            break;
+        }
+
+        // 移除换行符
+        cmd[strcspn(cmd, &quot;\n&quot;)] = 0;
+
+        // 检查退出命令
+        if (strcmp(cmd, &quot;exit&quot;) == 0) {
+            break;
+        }
+
+        // 解析命令
+        int argc = 0;
+        char *token = strtok(cmd, &quot; &quot;);
+        while (token != NULL &amp;&amp; argc &lt; MAX_ARGS - 1) {
+            args[argc++] = token;
+            token = strtok(NULL, &quot; &quot;);
+        }
+        args[argc] = NULL;
+
+        if (argc == 0) {
+            continue;
+        }
+
+        // 创建子进程执行命令
+        pid = fork();
+
+        if (pid &lt; 0) {
+            perror(&quot;fork failed&quot;);
+            continue;
+        }
+        else if (pid == 0) {
+            // 子进程：执行命令
+            execvp(args[0], args);
+
+            // 如果到达这里，说明exec失败
+            perror(&quot;exec failed&quot;);
+            exit(1);
+        }
+        else {
+            // 父进程：等待子进程
+            wait(NULL);
+        }
+    }
+
+    printf(&quot;Goodbye!\n&quot;);
+    return 0;
+}
+</code></pre>
+<p><strong>编译和测试</strong>：</p>
+<pre><code class="language-bash">gcc -o myshell myshell.c
+./myshell
+
+# 在shell中测试
+myshell&gt; ls -l
+myshell&gt; pwd
+myshell&gt; echo &quot;Hello World&quot;
+myshell&gt; exit
+</code></pre>
+<h2 id="_8">线程编程</h2>
+<h3 id="posixpthread">POSIX线程(pthread)基础</h3>
+<p><strong>pthread库</strong>是Linux下的标准线程库。</p>
+<p><strong>编译时需要链接pthread库</strong>：</p>
+<pre><code class="language-bash">gcc -o program program.c -lpthread
+</code></pre>
+<h3 id="_9">线程创建和终止</h3>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;pthread.h&gt;
+
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+                   void *(*start_routine)(void *), void *arg);
+void pthread_exit(void *retval);
+int pthread_join(pthread_t thread, void **retval);
+int pthread_detach(pthread_t thread);
+</code></pre>
+<p><strong>基本示例</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+// 线程函数
+void *thread_function(void *arg)
+{
+    int thread_id = *(int *)arg;
+
+    printf(&quot;Thread %d: Started\n&quot;, thread_id);
+
+    // 模拟工作
+    sleep(2);
+
+    printf(&quot;Thread %d: Finished\n&quot;, thread_id);
+
+    // 返回值
+    int *result = malloc(sizeof(int));
+    *result = thread_id * 10;
+
+    pthread_exit(result);
+}
+
+int main(void)
+{
+    pthread_t threads[3];
+    int thread_ids[3] = {1, 2, 3};
+    int i;
+
+    // 创建线程
+    for (i = 0; i &lt; 3; i++) {
+        if (pthread_create(&amp;threads[i], NULL, thread_function,
+                          &amp;thread_ids[i]) != 0) {
+            perror(&quot;pthread_create failed&quot;);
+            return 1;
+        }
+        printf(&quot;Main: Created thread %d\n&quot;, i + 1);
+    }
+
+    // 等待线程结束
+    for (i = 0; i &lt; 3; i++) {
+        void *result;
+        if (pthread_join(threads[i], &amp;result) != 0) {
+            perror(&quot;pthread_join failed&quot;);
+            continue;
+        }
+
+        printf(&quot;Main: Thread %d returned %d\n&quot;, i + 1, *(int *)result);
+        free(result);
+    }
+
+    printf(&quot;Main: All threads completed\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>编译和运行</strong>：</p>
+<pre><code class="language-bash">gcc -o pthread_demo pthread_demo.c -lpthread
+./pthread_demo
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Main: Created thread 1
+Main: Created thread 2
+Main: Created thread 3
+Thread 1: Started
+Thread 2: Started
+Thread 3: Started
+Thread 1: Finished
+Thread 2: Finished
+Thread 3: Finished
+Main: Thread 1 returned 10
+Main: Thread 2 returned 20
+Main: Thread 3 returned 30
+Main: All threads completed
+</code></pre>
+<h3 id="_10">线程分离</h3>
+<p><strong>分离线程</strong>不需要pthread_join()，资源自动回收。</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+void *detached_thread(void *arg)
+{
+    printf(&quot;Detached thread: Running\n&quot;);
+    sleep(1);
+    printf(&quot;Detached thread: Exiting\n&quot;);
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t thread;
+
+    // 创建线程
+    pthread_create(&amp;thread, NULL, detached_thread, NULL);
+
+    // 分离线程
+    pthread_detach(thread);
+
+    printf(&quot;Main: Thread detached\n&quot;);
+
+    // 主线程继续运行
+    sleep(2);
+
+    printf(&quot;Main: Exiting\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>或者在创建时设置分离属性</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+void *detached_thread(void *arg)
+{
+    printf(&quot;Detached thread: Running\n&quot;);
+    sleep(1);
+    printf(&quot;Detached thread: Exiting\n&quot;);
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t thread;
+    pthread_attr_t attr;
+
+    // 初始化线程属性
+    pthread_attr_init(&amp;attr);
+
+    // 设置分离状态
+    pthread_attr_setdetachstate(&amp;attr, PTHREAD_CREATE_DETACHED);
+
+    // 创建分离线程
+    pthread_create(&amp;thread, &amp;attr, detached_thread, NULL);
+
+    // 销毁属性对象
+    pthread_attr_destroy(&amp;attr);
+
+    printf(&quot;Main: Thread created as detached\n&quot;);
+
+    sleep(2);
+
+    return 0;
+}
+</code></pre>
+<h3 id="-mutex">线程同步 - 互斥锁(Mutex)</h3>
+<p><strong>互斥锁</strong>用于保护共享资源，防止竞态条件。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;pthread.h&gt;
+
+int pthread_mutex_init(pthread_mutex_t *mutex,
+                       const pthread_mutexattr_t *attr);
+int pthread_mutex_destroy(pthread_mutex_t *mutex);
+int pthread_mutex_lock(pthread_mutex_t *mutex);
+int pthread_mutex_trylock(pthread_mutex_t *mutex);
+int pthread_mutex_unlock(pthread_mutex_t *mutex);
+</code></pre>
+<p><strong>示例：使用互斥锁保护共享变量</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+
+#define NUM_THREADS 5
+#define NUM_INCREMENTS 100000
+
+// 共享变量
+int counter = 0;
+
+// 互斥锁
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+
+// 不使用互斥锁的线程函数
+void *unsafe_increment(void *arg)
+{
+    int i;
+    for (i = 0; i &lt; NUM_INCREMENTS; i++) {
+        counter++;  // 竞态条件！
+    }
+    return NULL;
+}
+
+// 使用互斥锁的线程函数
+void *safe_increment(void *arg)
+{
+    int i;
+    for (i = 0; i &lt; NUM_INCREMENTS; i++) {
+        pthread_mutex_lock(&amp;mutex);
+        counter++;
+        pthread_mutex_unlock(&amp;mutex);
+    }
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t threads[NUM_THREADS];
+    int i;
+
+    // 测试不安全的版本
+    printf(&quot;Testing unsafe increment:\n&quot;);
+    counter = 0;
+
+    for (i = 0; i &lt; NUM_THREADS; i++) {
+        pthread_create(&amp;threads[i], NULL, unsafe_increment, NULL);
+    }
+
+    for (i = 0; i &lt; NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    printf(&quot;Expected: %d, Actual: %d\n&quot;,
+           NUM_THREADS * NUM_INCREMENTS, counter);
+
+    // 测试安全的版本
+    printf(&quot;\nTesting safe increment:\n&quot;);
+    counter = 0;
+
+    for (i = 0; i &lt; NUM_THREADS; i++) {
+        pthread_create(&amp;threads[i], NULL, safe_increment, NULL);
+    }
+
+    for (i = 0; i &lt; NUM_THREADS; i++) {
+        pthread_join(threads[i], NULL);
+    }
+
+    printf(&quot;Expected: %d, Actual: %d\n&quot;,
+           NUM_THREADS * NUM_INCREMENTS, counter);
+
+    pthread_mutex_destroy(&amp;mutex);
+
+    return 0;
+}
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Testing unsafe increment:
+Expected: 500000, Actual: 387654  # 结果不正确！
+
+Testing safe increment:
+Expected: 500000, Actual: 500000  # 结果正确
+</code></pre>
+<p><strong>互斥锁的使用模式</strong>：</p>
+<pre><code class="language-c">// 模式1：基本使用
+pthread_mutex_lock(&amp;mutex);
+// 临界区代码
+pthread_mutex_unlock(&amp;mutex);
+
+// 模式2：尝试加锁
+if (pthread_mutex_trylock(&amp;mutex) == 0) {
+    // 获得锁，执行临界区代码
+    pthread_mutex_unlock(&amp;mutex);
+} else {
+    // 未获得锁，执行其他操作
+}
+
+// 模式3：带超时的加锁（需要POSIX.1-2001）
+struct timespec timeout;
+clock_gettime(CLOCK_REALTIME, &amp;timeout);
+timeout.tv_sec += 5;  // 5秒超时
+
+if (pthread_mutex_timedlock(&amp;mutex, &amp;timeout) == 0) {
+    // 获得锁
+    pthread_mutex_unlock(&amp;mutex);
+} else {
+    // 超时或错误
+}
+</code></pre>
+<h3 id="-">线程同步 - 条件变量</h3>
+<p><strong>条件变量</strong>用于线程间的同步，等待某个条件成立。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;pthread.h&gt;
+
+int pthread_cond_init(pthread_cond_t *cond,
+                      const pthread_condattr_t *attr);
+int pthread_cond_destroy(pthread_cond_t *cond);
+int pthread_cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex);
+int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+                           const struct timespec *abstime);
+int pthread_cond_signal(pthread_cond_t *cond);
+int pthread_cond_broadcast(pthread_cond_t *cond);
+</code></pre>
+<p><strong>示例：生产者-消费者模型</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+#define BUFFER_SIZE 10
+
+// 共享缓冲区
+int buffer[BUFFER_SIZE];
+int count = 0;  // 缓冲区中的数据数量
+
+// 同步原语
+pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t not_full = PTHREAD_COND_INITIALIZER;
+pthread_cond_t not_empty = PTHREAD_COND_INITIALIZER;
+
+// 生产者线程
+void *producer(void *arg)
+{
+    int id = *(int *)arg;
+    int item;
+
+    for (item = 0; item &lt; 20; item++) {
+        // 加锁
+        pthread_mutex_lock(&amp;mutex);
+
+        // 等待缓冲区不满
+        while (count == BUFFER_SIZE) {
+            printf(&quot;Producer %d: Buffer full, waiting...\n&quot;, id);
+            pthread_cond_wait(&amp;not_full, &amp;mutex);
+        }
+
+        // 生产数据
+        buffer[count] = item;
+        count++;
+        printf(&quot;Producer %d: Produced item %d (count = %d)\n&quot;,
+               id, item, count);
+
+        // 通知消费者
+        pthread_cond_signal(&amp;not_empty);
+
+        // 解锁
+        pthread_mutex_unlock(&amp;mutex);
+
+        // 模拟生产时间
+        usleep(100000);  // 100ms
+    }
+
+    return NULL;
+}
+
+// 消费者线程
+void *consumer(void *arg)
+{
+    int id = *(int *)arg;
+    int item;
+
+    for (int i = 0; i &lt; 20; i++) {
+        // 加锁
+        pthread_mutex_lock(&amp;mutex);
+
+        // 等待缓冲区不空
+        while (count == 0) {
+            printf(&quot;Consumer %d: Buffer empty, waiting...\n&quot;, id);
+            pthread_cond_wait(&amp;not_empty, &amp;mutex);
+        }
+
+        // 消费数据
+        count--;
+        item = buffer[count];
+        printf(&quot;Consumer %d: Consumed item %d (count = %d)\n&quot;,
+               id, item, count);
+
+        // 通知生产者
+        pthread_cond_signal(&amp;not_full);
+
+        // 解锁
+        pthread_mutex_unlock(&amp;mutex);
+
+        // 模拟消费时间
+        usleep(150000);  // 150ms
+    }
+
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t prod_thread, cons_thread;
+    int prod_id = 1, cons_id = 1;
+
+    // 创建生产者和消费者线程
+    pthread_create(&amp;prod_thread, NULL, producer, &amp;prod_id);
+    pthread_create(&amp;cons_thread, NULL, consumer, &amp;cons_id);
+
+    // 等待线程结束
+    pthread_join(prod_thread, NULL);
+    pthread_join(cons_thread, NULL);
+
+    // 清理
+    pthread_mutex_destroy(&amp;mutex);
+    pthread_cond_destroy(&amp;not_full);
+    pthread_cond_destroy(&amp;not_empty);
+
+    printf(&quot;Main: All threads completed\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>条件变量使用要点</strong>：</p>
+<ol>
+<li><strong>必须与互斥锁配合使用</strong></li>
+<li><strong>等待前必须持有锁</strong></li>
+<li><strong>使用while循环检查条件</strong>（防止虚假唤醒）</li>
+<li><strong>signal唤醒一个线程，broadcast唤醒所有线程</strong></li>
+</ol>
+<h2 id="ipc">进程间通信(IPC)</h2>
+<h3 id="pipe">管道(Pipe)</h3>
+<p><strong>管道</strong>是最简单的IPC机制，用于父子进程间通信。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;unistd.h&gt;
+
+int pipe(int pipefd[2]);
+</code></pre>
+<p><strong>参数说明</strong>：
+- <code>pipefd[0]</code>: 读端
+- <code>pipefd[1]</code>: 写端</p>
+<p><strong>示例：父子进程通过管道通信</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+int main(void)
+{
+    int pipefd[2];
+    pid_t pid;
+    char write_msg[] = &quot;Hello from parent!&quot;;
+    char read_msg[100];
+
+    // 创建管道
+    if (pipe(pipefd) == -1) {
+        perror(&quot;pipe failed&quot;);
+        return 1;
+    }
+
+    // 创建子进程
+    pid = fork();
+
+    if (pid &lt; 0) {
+        perror(&quot;fork failed&quot;);
+        return 1;
+    }
+    else if (pid == 0) {
+        // 子进程：读取数据
+        close(pipefd[1]);  // 关闭写端
+
+        ssize_t n = read(pipefd[0], read_msg, sizeof(read_msg));
+        if (n &gt; 0) {
+            read_msg[n] = '\0';
+            printf(&quot;Child: Received: %s\n&quot;, read_msg);
+        }
+
+        close(pipefd[0]);
+        exit(0);
+    }
+    else {
+        // 父进程：写入数据
+        close(pipefd[0]);  // 关闭读端
+
+        printf(&quot;Parent: Sending: %s\n&quot;, write_msg);
+        write(pipefd[1], write_msg, strlen(write_msg));
+
+        close(pipefd[1]);
+        wait(NULL);
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：实现简单的管道命令</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/wait.h&gt;
+
+// 实现: ls | wc -l
+int main(void)
+{
+    int pipefd[2];
+    pid_t pid1, pid2;
+
+    // 创建管道
+    if (pipe(pipefd) == -1) {
+        perror(&quot;pipe failed&quot;);
+        return 1;
+    }
+
+    // 创建第一个子进程（ls）
+    pid1 = fork();
+    if (pid1 == 0) {
+        // 重定向stdout到管道写端
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+
+        // 执行ls命令
+        execlp(&quot;ls&quot;, &quot;ls&quot;, NULL);
+        perror(&quot;execlp ls failed&quot;);
+        exit(1);
+    }
+
+    // 创建第二个子进程（wc）
+    pid2 = fork();
+    if (pid2 == 0) {
+        // 重定向stdin到管道读端
+        dup2(pipefd[0], STDIN_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+
+        // 执行wc命令
+        execlp(&quot;wc&quot;, &quot;wc&quot;, &quot;-l&quot;, NULL);
+        perror(&quot;execlp wc failed&quot;);
+        exit(1);
+    }
+
+    // 父进程关闭管道
+    close(pipefd[0]);
+    close(pipefd[1]);
+
+    // 等待子进程
+    waitpid(pid1, NULL, 0);
+    waitpid(pid2, NULL, 0);
+
+    return 0;
+}
+</code></pre>
+<h3 id="fifo">命名管道(FIFO)</h3>
+<p><strong>命名管道</strong>可用于无亲缘关系的进程间通信。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;sys/types.h&gt;
+#include &lt;sys/stat.h&gt;
+
+int mkfifo(const char *pathname, mode_t mode);
+</code></pre>
+<p><strong>示例：写进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/stat.h&gt;
+
+#define FIFO_NAME &quot;/tmp/myfifo&quot;
+
+int main(void)
+{
+    int fd;
+    char message[] = &quot;Hello from writer!&quot;;
+
+    // 创建FIFO
+    if (mkfifo(FIFO_NAME, 0666) == -1) {
+        perror(&quot;mkfifo failed&quot;);
+        // 如果FIFO已存在，继续
+    }
+
+    printf(&quot;Writer: Opening FIFO...\n&quot;);
+
+    // 打开FIFO（阻塞直到有读者）
+    fd = open(FIFO_NAME, O_WRONLY);
+    if (fd == -1) {
+        perror(&quot;open failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Writer: Writing message...\n&quot;);
+
+    // 写入数据
+    write(fd, message, strlen(message));
+
+    printf(&quot;Writer: Message sent\n&quot;);
+
+    close(fd);
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：读进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;fcntl.h&gt;
+#include &lt;unistd.h&gt;
+
+#define FIFO_NAME &quot;/tmp/myfifo&quot;
+
+int main(void)
+{
+    int fd;
+    char buffer[100];
+    ssize_t n;
+
+    printf(&quot;Reader: Opening FIFO...\n&quot;);
+
+    // 打开FIFO（阻塞直到有写者）
+    fd = open(FIFO_NAME, O_RDONLY);
+    if (fd == -1) {
+        perror(&quot;open failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Reader: Reading message...\n&quot;);
+
+    // 读取数据
+    n = read(fd, buffer, sizeof(buffer) - 1);
+    if (n &gt; 0) {
+        buffer[n] = '\0';
+        printf(&quot;Reader: Received: %s\n&quot;, buffer);
+    }
+
+    close(fd);
+
+    // 删除FIFO
+    unlink(FIFO_NAME);
+
+    return 0;
+}
+</code></pre>
+<p><strong>编译和测试</strong>：</p>
+<pre><code class="language-bash"># 编译
+gcc -o fifo_writer fifo_writer.c
+gcc -o fifo_reader fifo_reader.c
+
+# 在两个终端中运行
+# 终端1
+./fifo_reader
+
+# 终端2
+./fifo_writer
+</code></pre>
+<h3 id="shared-memory">共享内存(Shared Memory)</h3>
+<p><strong>共享内存</strong>是最快的IPC机制，多个进程可以访问同一块内存。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;sys/shm.h&gt;
+
+int shmget(key_t key, size_t size, int shmflg);
+void *shmat(int shmid, const void *shmaddr, int shmflg);
+int shmdt(const void *shmaddr);
+int shmctl(int shmid, int cmd, struct shmid_ds *buf);
+</code></pre>
+<p><strong>示例：写进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/shm.h&gt;
+#include &lt;sys/ipc.h&gt;
+
+#define SHM_SIZE 1024
+#define SHM_KEY 1234
+
+int main(void)
+{
+    int shmid;
+    char *shmaddr;
+    char message[] = &quot;Hello from shared memory!&quot;;
+
+    // 创建共享内存
+    shmid = shmget(SHM_KEY, SHM_SIZE, IPC_CREAT | 0666);
+    if (shmid == -1) {
+        perror(&quot;shmget failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Writer: Shared memory created (ID: %d)\n&quot;, shmid);
+
+    // 连接共享内存
+    shmaddr = shmat(shmid, NULL, 0);
+    if (shmaddr == (char *)-1) {
+        perror(&quot;shmat failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Writer: Writing to shared memory...\n&quot;);
+
+    // 写入数据
+    strcpy(shmaddr, message);
+
+    printf(&quot;Writer: Message written\n&quot;);
+    printf(&quot;Writer: Press Enter to detach...\n&quot;);
+    getchar();
+
+    // 分离共享内存
+    shmdt(shmaddr);
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：读进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/shm.h&gt;
+#include &lt;sys/ipc.h&gt;
+
+#define SHM_SIZE 1024
+#define SHM_KEY 1234
+
+int main(void)
+{
+    int shmid;
+    char *shmaddr;
+
+    // 获取共享内存
+    shmid = shmget(SHM_KEY, SHM_SIZE, 0666);
+    if (shmid == -1) {
+        perror(&quot;shmget failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Reader: Shared memory found (ID: %d)\n&quot;, shmid);
+
+    // 连接共享内存
+    shmaddr = shmat(shmid, NULL, 0);
+    if (shmaddr == (char *)-1) {
+        perror(&quot;shmat failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Reader: Reading from shared memory...\n&quot;);
+
+    // 读取数据
+    printf(&quot;Reader: Message: %s\n&quot;, shmaddr);
+
+    // 分离共享内存
+    shmdt(shmaddr);
+
+    // 删除共享内存
+    shmctl(shmid, IPC_RMID, NULL);
+    printf(&quot;Reader: Shared memory deleted\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<p><strong>编译和测试</strong>：</p>
+<pre><code class="language-bash"># 编译
+gcc -o shm_writer shm_writer.c
+gcc -o shm_reader shm_reader.c
+
+# 运行
+# 终端1
+./shm_writer
+
+# 终端2
+./shm_reader
+
+# 查看共享内存
+ipcs -m
+
+# 删除共享内存（如果需要）
+ipcrm -m &lt;shmid&gt;
+</code></pre>
+<h3 id="message-queue">消息队列(Message Queue)</h3>
+<p><strong>消息队列</strong>允许进程以消息的形式交换数据。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;sys/msg.h&gt;
+
+int msgget(key_t key, int msgflg);
+int msgsnd(int msqid, const void *msgp, size_t msgsz, int msgflg);
+ssize_t msgrcv(int msqid, void *msgp, size_t msgsz, long msgtyp, int msgflg);
+int msgctl(int msqid, int cmd, struct msqid_ds *buf);
+</code></pre>
+<p><strong>示例：发送进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;sys/msg.h&gt;
+#include &lt;sys/ipc.h&gt;
+
+#define MSG_KEY 5678
+
+// 消息结构
+struct message {
+    long msg_type;
+    char msg_text[100];
+};
+
+int main(void)
+{
+    int msqid;
+    struct message msg;
+
+    // 创建消息队列
+    msqid = msgget(MSG_KEY, IPC_CREAT | 0666);
+    if (msqid == -1) {
+        perror(&quot;msgget failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Sender: Message queue created (ID: %d)\n&quot;, msqid);
+
+    // 发送消息
+    msg.msg_type = 1;
+    strcpy(msg.msg_text, &quot;Hello from message queue!&quot;);
+
+    if (msgsnd(msqid, &amp;msg, strlen(msg.msg_text) + 1, 0) == -1) {
+        perror(&quot;msgsnd failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Sender: Message sent: %s\n&quot;, msg.msg_text);
+
+    return 0;
+}
+</code></pre>
+<p><strong>示例：接收进程</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;sys/msg.h&gt;
+#include &lt;sys/ipc.h&gt;
+
+#define MSG_KEY 5678
+
+// 消息结构
+struct message {
+    long msg_type;
+    char msg_text[100];
+};
+
+int main(void)
+{
+    int msqid;
+    struct message msg;
+
+    // 获取消息队列
+    msqid = msgget(MSG_KEY, 0666);
+    if (msqid == -1) {
+        perror(&quot;msgget failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Receiver: Message queue found (ID: %d)\n&quot;, msqid);
+
+    // 接收消息
+    if (msgrcv(msqid, &amp;msg, sizeof(msg.msg_text), 1, 0) == -1) {
+        perror(&quot;msgrcv failed&quot;);
+        return 1;
+    }
+
+    printf(&quot;Receiver: Message received: %s\n&quot;, msg.msg_text);
+
+    // 删除消息队列
+    msgctl(msqid, IPC_RMID, NULL);
+    printf(&quot;Receiver: Message queue deleted\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h3 id="semaphore">信号量(Semaphore)</h3>
+<p><strong>信号量</strong>用于进程间同步和互斥。</p>
+<p><strong>函数原型</strong>：</p>
+<pre><code class="language-c">#include &lt;sys/sem.h&gt;
+
+int semget(key_t key, int nsems, int semflg);
+int semop(int semid, struct sembuf *sops, size_t nsops);
+int semctl(int semid, int semnum, int cmd, ...);
+</code></pre>
+<p><strong>示例：使用信号量保护共享资源</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/sem.h&gt;
+#include &lt;sys/ipc.h&gt;
+#include &lt;sys/shm.h&gt;
+#include &lt;sys/wait.h&gt;
+
+#define SEM_KEY 9999
+#define SHM_KEY 8888
+
+// 信号量操作
+union semun {
+    int val;
+    struct semid_ds *buf;
+    unsigned short *array;
+};
+
+// P操作（等待）
+void sem_wait(int semid)
+{
+    struct sembuf sb = {0, -1, 0};
+    semop(semid, &amp;sb, 1);
+}
+
+// V操作（信号）
+void sem_signal(int semid)
+{
+    struct sembuf sb = {0, 1, 0};
+    semop(semid, &amp;sb, 1);
+}
+
+int main(void)
+{
+    int semid, shmid;
+    int *counter;
+    union semun arg;
+    pid_t pid;
+
+    // 创建信号量
+    semid = semget(SEM_KEY, 1, IPC_CREAT | 0666);
+    if (semid == -1) {
+        perror(&quot;semget failed&quot;);
+        return 1;
+    }
+
+    // 初始化信号量为1（互斥锁）
+    arg.val = 1;
+    semctl(semid, 0, SETVAL, arg);
+
+    // 创建共享内存
+    shmid = shmget(SHM_KEY, sizeof(int), IPC_CREAT | 0666);
+    counter = shmat(shmid, NULL, 0);
+    *counter = 0;
+
+    // 创建多个子进程
+    for (int i = 0; i &lt; 5; i++) {
+        pid = fork();
+        if (pid == 0) {
+            // 子进程
+            for (int j = 0; j &lt; 1000; j++) {
+                sem_wait(semid);  // P操作
+                (*counter)++;
+                sem_signal(semid);  // V操作
+            }
+            exit(0);
+        }
+    }
+
+    // 等待所有子进程
+    for (int i = 0; i &lt; 5; i++) {
+        wait(NULL);
+    }
+
+    printf(&quot;Final counter value: %d (expected: 5000)\n&quot;, *counter);
+
+    // 清理
+    shmdt(counter);
+    shmctl(shmid, IPC_RMID, NULL);
+    semctl(semid, 0, IPC_RMID);
+
+    return 0;
+}
+</code></pre>
+<h3 id="ipc_1">IPC机制对比</h3>
+<table>
+<thead>
+<tr>
+<th>IPC机制</th>
+<th>速度</th>
+<th>使用难度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>管道</td>
+<td>中</td>
+<td>简单</td>
+<td>父子进程通信</td>
+</tr>
+<tr>
+<td>命名管道</td>
+<td>中</td>
+<td>简单</td>
+<td>无亲缘关系进程</td>
+</tr>
+<tr>
+<td>共享内存</td>
+<td>快</td>
+<td>复杂</td>
+<td>大量数据交换</td>
+</tr>
+<tr>
+<td>消息队列</td>
+<td>中</td>
+<td>中等</td>
+<td>消息传递</td>
+</tr>
+<tr>
+<td>信号量</td>
+<td>快</td>
+<td>中等</td>
+<td>同步和互斥</td>
+</tr>
+<tr>
+<td>套接字</td>
+<td>慢</td>
+<td>复杂</td>
+<td>网络通信</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_11">实战项目：多任务数据采集系统</h2>
+<h3 id="_12">项目概述</h3>
+<p>实现一个多任务数据采集系统，包含：
+- 数据采集线程（模拟传感器读取）
+- 数据处理线程（数据分析）
+- 数据存储线程（写入文件）
+- 监控线程（系统状态监控）</p>
+<h3 id="_13">项目架构</h3>
+<pre><code>┌─────────────────────────────────────────┐
+│         主进程                           │
+│                                         │
+│  ┌──────────┐  ┌──────────┐           │
+│  │ 采集线程  │  │ 处理线程  │           │
+│  │          │  │          │           │
+│  │ 读取数据  │→│ 分析数据  │           │
+│  └──────────┘  └──────────┘           │
+│       ↓             ↓                  │
+│  ┌──────────┐  ┌──────────┐           │
+│  │ 存储线程  │  │ 监控线程  │           │
+│  │          │  │          │           │
+│  │ 写入文件  │  │ 状态监控  │           │
+│  └──────────┘  └──────────┘           │
+└─────────────────────────────────────────┘
+</code></pre>
+<h3 id="_14">完整代码实现</h3>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;time.h&gt;
+
+#define BUFFER_SIZE 100
+#define MAX_SAMPLES 1000
+
+// 数据结构
+typedef struct {
+    int id;
+    double value;
+    time_t timestamp;
+} SensorData;
+
+// 循环缓冲区
+typedef struct {
+    SensorData data[BUFFER_SIZE];
+    int read_pos;
+    int write_pos;
+    int count;
+    pthread_mutex_t mutex;
+    pthread_cond_t not_full;
+    pthread_cond_t not_empty;
+} CircularBuffer;
+
+// 统计信息
+typedef struct {
+    int samples_collected;
+    int samples_processed;
+    int samples_stored;
+    double avg_value;
+    pthread_mutex_t mutex;
+} Statistics;
+
+// 全局变量
+CircularBuffer buffer;
+Statistics stats;
+int running = 1;
+
+// 初始化缓冲区
+void buffer_init(CircularBuffer *buf)
+{
+    buf-&gt;read_pos = 0;
+    buf-&gt;write_pos = 0;
+    buf-&gt;count = 0;
+    pthread_mutex_init(&amp;buf-&gt;mutex, NULL);
+    pthread_cond_init(&amp;buf-&gt;not_full, NULL);
+    pthread_cond_init(&amp;buf-&gt;not_empty, NULL);
+}
+
+// 写入缓冲区
+void buffer_write(CircularBuffer *buf, SensorData *data)
+{
+    pthread_mutex_lock(&amp;buf-&gt;mutex);
+
+    // 等待缓冲区不满
+    while (buf-&gt;count == BUFFER_SIZE) {
+        pthread_cond_wait(&amp;buf-&gt;not_full, &amp;buf-&gt;mutex);
+    }
+
+    // 写入数据
+    buf-&gt;data[buf-&gt;write_pos] = *data;
+    buf-&gt;write_pos = (buf-&gt;write_pos + 1) % BUFFER_SIZE;
+    buf-&gt;count++;
+
+    // 通知读者
+    pthread_cond_signal(&amp;buf-&gt;not_empty);
+
+    pthread_mutex_unlock(&amp;buf-&gt;mutex);
+}
+
+// 读取缓冲区
+int buffer_read(CircularBuffer *buf, SensorData *data)
+{
+    pthread_mutex_lock(&amp;buf-&gt;mutex);
+
+    // 等待缓冲区不空
+    while (buf-&gt;count == 0 &amp;&amp; running) {
+        pthread_cond_wait(&amp;buf-&gt;not_empty, &amp;buf-&gt;mutex);
+    }
+
+    if (buf-&gt;count == 0) {
+        pthread_mutex_unlock(&amp;buf-&gt;mutex);
+        return 0;  // 缓冲区空且系统停止
+    }
+
+    // 读取数据
+    *data = buf-&gt;data[buf-&gt;read_pos];
+    buf-&gt;read_pos = (buf-&gt;read_pos + 1) % BUFFER_SIZE;
+    buf-&gt;count--;
+
+    // 通知写者
+    pthread_cond_signal(&amp;buf-&gt;not_full);
+
+    pthread_mutex_unlock(&amp;buf-&gt;mutex);
+    return 1;
+}
+
+// 数据采集线程
+void *collector_thread(void *arg)
+{
+    SensorData data;
+    int id = 0;
+
+    printf(&quot;Collector: Started\n&quot;);
+
+    while (running &amp;&amp; id &lt; MAX_SAMPLES) {
+        // 模拟传感器读取
+        data.id = id++;
+        data.value = 20.0 + (rand() % 100) / 10.0;  // 20.0-30.0
+        data.timestamp = time(NULL);
+
+        // 写入缓冲区
+        buffer_write(&amp;buffer, &amp;data);
+
+        // 更新统计
+        pthread_mutex_lock(&amp;stats.mutex);
+        stats.samples_collected++;
+        pthread_mutex_unlock(&amp;stats.mutex);
+
+        // 模拟采集间隔
+        usleep(10000);  // 10ms
+    }
+
+    printf(&quot;Collector: Finished (%d samples)\n&quot;, id);
+    return NULL;
+}
+
+// 数据处理线程
+void *processor_thread(void *arg)
+{
+    SensorData data;
+    double sum = 0;
+    int count = 0;
+
+    printf(&quot;Processor: Started\n&quot;);
+
+    while (running || buffer.count &gt; 0) {
+        // 从缓冲区读取
+        if (!buffer_read(&amp;buffer, &amp;data)) {
+            break;
+        }
+
+        // 处理数据（计算平均值）
+        sum += data.value;
+        count++;
+
+        // 更新统计
+        pthread_mutex_lock(&amp;stats.mutex);
+        stats.samples_processed++;
+        stats.avg_value = sum / count;
+        pthread_mutex_unlock(&amp;stats.mutex);
+
+        // 模拟处理时间
+        usleep(5000);  // 5ms
+    }
+
+    printf(&quot;Processor: Finished (%d samples, avg=%.2f)\n&quot;,
+           count, sum / count);
+    return NULL;
+}
+
+// 数据存储线程
+void *storage_thread(void *arg)
+{
+    FILE *fp;
+    SensorData data;
+
+    printf(&quot;Storage: Started\n&quot;);
+
+    // 打开文件
+    fp = fopen(&quot;sensor_data.txt&quot;, &quot;w&quot;);
+    if (!fp) {
+        perror(&quot;fopen failed&quot;);
+        return NULL;
+    }
+
+    fprintf(fp, &quot;ID,Value,Timestamp\n&quot;);
+
+    while (running || buffer.count &gt; 0) {
+        // 从缓冲区读取
+        if (!buffer_read(&amp;buffer, &amp;data)) {
+            break;
+        }
+
+        // 写入文件
+        fprintf(fp, &quot;%d,%.2f,%ld\n&quot;,
+                data.id, data.value, data.timestamp);
+
+        // 更新统计
+        pthread_mutex_lock(&amp;stats.mutex);
+        stats.samples_stored++;
+        pthread_mutex_unlock(&amp;stats.mutex);
+
+        // 定期刷新
+        if (stats.samples_stored % 100 == 0) {
+            fflush(fp);
+        }
+    }
+
+    fclose(fp);
+    printf(&quot;Storage: Finished (%d samples)\n&quot;, stats.samples_stored);
+    return NULL;
+}
+
+// 监控线程
+void *monitor_thread(void *arg)
+{
+    printf(&quot;Monitor: Started\n&quot;);
+
+    while (running) {
+        sleep(1);
+
+        pthread_mutex_lock(&amp;stats.mutex);
+        printf(&quot;Monitor: Collected=%d, Processed=%d, Stored=%d, &quot;
+               &quot;Avg=%.2f, Buffer=%d\n&quot;,
+               stats.samples_collected,
+               stats.samples_processed,
+               stats.samples_stored,
+               stats.avg_value,
+               buffer.count);
+        pthread_mutex_unlock(&amp;stats.mutex);
+    }
+
+    printf(&quot;Monitor: Finished\n&quot;);
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t collector, processor, storage, monitor;
+
+    // 初始化
+    buffer_init(&amp;buffer);
+    memset(&amp;stats, 0, sizeof(stats));
+    pthread_mutex_init(&amp;stats.mutex, NULL);
+    srand(time(NULL));
+
+    printf(&quot;Main: Starting data acquisition system\n&quot;);
+
+    // 创建线程
+    pthread_create(&amp;collector, NULL, collector_thread, NULL);
+    pthread_create(&amp;processor, NULL, processor_thread, NULL);
+    pthread_create(&amp;storage, NULL, storage_thread, NULL);
+    pthread_create(&amp;monitor, NULL, monitor_thread, NULL);
+
+    // 运行10秒
+    sleep(10);
+
+    // 停止系统
+    printf(&quot;\nMain: Stopping system...\n&quot;);
+    running = 0;
+
+    // 唤醒所有等待的线程
+    pthread_cond_broadcast(&amp;buffer.not_empty);
+    pthread_cond_broadcast(&amp;buffer.not_full);
+
+    // 等待线程结束
+    pthread_join(collector, NULL);
+    pthread_join(processor, NULL);
+    pthread_join(storage, NULL);
+    pthread_join(monitor, NULL);
+
+    // 清理
+    pthread_mutex_destroy(&amp;buffer.mutex);
+    pthread_cond_destroy(&amp;buffer.not_full);
+    pthread_cond_destroy(&amp;buffer.not_empty);
+    pthread_mutex_destroy(&amp;stats.mutex);
+
+    printf(&quot;\nMain: System stopped\n&quot;);
+    printf(&quot;Final statistics:\n&quot;);
+    printf(&quot;  Collected: %d samples\n&quot;, stats.samples_collected);
+    printf(&quot;  Processed: %d samples\n&quot;, stats.samples_processed);
+    printf(&quot;  Stored: %d samples\n&quot;, stats.samples_stored);
+    printf(&quot;  Average value: %.2f\n&quot;, stats.avg_value);
+
+    return 0;
+}
+</code></pre>
+<p><strong>编译和运行</strong>：</p>
+<pre><code class="language-bash">gcc -o data_acquisition data_acquisition.c -lpthread
+./data_acquisition
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Main: Starting data acquisition system
+Collector: Started
+Processor: Started
+Storage: Started
+Monitor: Started
+Monitor: Collected=100, Processed=95, Stored=90, Avg=25.34, Buffer=5
+Monitor: Collected=200, Processed=195, Stored=190, Avg=25.12, Buffer=5
+...
+Main: Stopping system...
+Collector: Finished (1000 samples)
+Processor: Finished (1000 samples, avg=25.23)
+Storage: Finished (1000 samples)
+Monitor: Finished
+
+Main: System stopped
+Final statistics:
+  Collected: 1000 samples
+  Processed: 1000 samples
+  Stored: 1000 samples
+  Average value: 25.23
+</code></pre>
+<h3 id="_15">项目要点</h3>
+<p><strong>1. 线程同步</strong>：
+- 使用互斥锁保护共享数据
+- 使用条件变量实现生产者-消费者模型
+- 避免死锁和竞态条件</p>
+<p><strong>2. 资源管理</strong>：
+- 正确初始化和销毁同步原语
+- 及时释放资源
+- 处理异常情况</p>
+<p><strong>3. 性能优化</strong>：
+- 使用循环缓冲区减少内存分配
+- 批量写入文件减少I/O次数
+- 合理设置线程优先级</p>
+<p><strong>4. 错误处理</strong>：
+- 检查所有系统调用返回值
+- 提供清晰的错误信息
+- 优雅地处理异常</p>
+<h2 id="_16">调试和优化</h2>
+<h3 id="_17">调试技巧</h3>
+<h4 id="gdb">使用GDB调试多线程程序</h4>
+<pre><code class="language-bash"># 编译时加入调试信息
+gcc -g -o program program.c -lpthread
+
+# 启动GDB
+gdb ./program
+
+# GDB命令
+(gdb) break main              # 设置断点
+(gdb) run                     # 运行程序
+(gdb) info threads            # 查看所有线程
+(gdb) thread 2                # 切换到线程2
+(gdb) bt                      # 查看调用栈
+(gdb) print variable          # 打印变量
+(gdb) continue                # 继续执行
+</code></pre>
+<h4 id="_18">检测死锁</h4>
+<p><strong>示例：死锁场景</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+pthread_mutex_t mutex1 = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t mutex2 = PTHREAD_MUTEX_INITIALIZER;
+
+void *thread1_func(void *arg)
+{
+    pthread_mutex_lock(&amp;mutex1);
+    printf(&quot;Thread 1: Locked mutex1\n&quot;);
+    sleep(1);
+
+    printf(&quot;Thread 1: Waiting for mutex2...\n&quot;);
+    pthread_mutex_lock(&amp;mutex2);  // 死锁！
+    printf(&quot;Thread 1: Locked mutex2\n&quot;);
+
+    pthread_mutex_unlock(&amp;mutex2);
+    pthread_mutex_unlock(&amp;mutex1);
+    return NULL;
+}
+
+void *thread2_func(void *arg)
+{
+    pthread_mutex_lock(&amp;mutex2);
+    printf(&quot;Thread 2: Locked mutex2\n&quot;);
+    sleep(1);
+
+    printf(&quot;Thread 2: Waiting for mutex1...\n&quot;);
+    pthread_mutex_lock(&amp;mutex1);  // 死锁！
+    printf(&quot;Thread 2: Locked mutex1\n&quot;);
+
+    pthread_mutex_unlock(&amp;mutex1);
+    pthread_mutex_unlock(&amp;mutex2);
+    return NULL;
+}
+
+int main(void)
+{
+    pthread_t t1, t2;
+
+    pthread_create(&amp;t1, NULL, thread1_func, NULL);
+    pthread_create(&amp;t2, NULL, thread2_func, NULL);
+
+    pthread_join(t1, NULL);
+    pthread_join(t2, NULL);
+
+    return 0;
+}
+</code></pre>
+<p><strong>避免死锁的方法</strong>：</p>
+<ol>
+<li><strong>按固定顺序获取锁</strong>：</li>
+</ol>
+<pre><code class="language-c">// 总是先锁mutex1，再锁mutex2
+void *thread_func(void *arg)
+{
+    pthread_mutex_lock(&amp;mutex1);
+    pthread_mutex_lock(&amp;mutex2);
+
+    // 临界区代码
+
+    pthread_mutex_unlock(&amp;mutex2);
+    pthread_mutex_unlock(&amp;mutex1);
+    return NULL;
+}
+</code></pre>
+<ol start="2">
+<li><strong>使用trylock</strong>：</li>
+</ol>
+<pre><code class="language-c">void *thread_func(void *arg)
+{
+    while (1) {
+        pthread_mutex_lock(&amp;mutex1);
+
+        if (pthread_mutex_trylock(&amp;mutex2) == 0) {
+            // 成功获取两个锁
+            // 临界区代码
+            pthread_mutex_unlock(&amp;mutex2);
+            pthread_mutex_unlock(&amp;mutex1);
+            break;
+        }
+
+        // 未获取mutex2，释放mutex1重试
+        pthread_mutex_unlock(&amp;mutex1);
+        usleep(1000);
+    }
+    return NULL;
+}
+</code></pre>
+<h4 id="valgrind">使用Valgrind检测内存问题</h4>
+<pre><code class="language-bash"># 安装Valgrind
+sudo apt install valgrind
+
+# 检测内存泄漏
+valgrind --leak-check=full ./program
+
+# 检测线程错误
+valgrind --tool=helgrind ./program
+
+# 检测数据竞争
+valgrind --tool=drd ./program
+</code></pre>
+<h3 id="_19">性能优化</h3>
+<h4 id="_20">减少锁竞争</h4>
+<p><strong>1. 减小临界区</strong>：</p>
+<pre><code class="language-c">// 不好的做法
+pthread_mutex_lock(&amp;mutex);
+// 大量非共享数据的操作
+int result = complex_calculation();
+shared_data = result;
+pthread_mutex_unlock(&amp;mutex);
+
+// 好的做法
+int result = complex_calculation();  // 在锁外计算
+pthread_mutex_lock(&amp;mutex);
+shared_data = result;  // 只在必要时加锁
+pthread_mutex_unlock(&amp;mutex);
+</code></pre>
+<p><strong>2. 使用读写锁</strong>：</p>
+<pre><code class="language-c">#include &lt;pthread.h&gt;
+
+pthread_rwlock_t rwlock = PTHREAD_RWLOCK_INITIALIZER;
+
+// 读操作（可以并发）
+void *reader_thread(void *arg)
+{
+    pthread_rwlock_rdlock(&amp;rwlock);
+    // 读取共享数据
+    pthread_rwlock_unlock(&amp;rwlock);
+    return NULL;
+}
+
+// 写操作（独占）
+void *writer_thread(void *arg)
+{
+    pthread_rwlock_wrlock(&amp;rwlock);
+    // 修改共享数据
+    pthread_rwlock_unlock(&amp;rwlock);
+    return NULL;
+}
+</code></pre>
+<p><strong>3. 使用原子操作</strong>：</p>
+<pre><code class="language-c">#include &lt;stdatomic.h&gt;
+
+atomic_int counter = 0;
+
+void *thread_func(void *arg)
+{
+    for (int i = 0; i &lt; 10000; i++) {
+        atomic_fetch_add(&amp;counter, 1);  // 原子递增
+    }
+    return NULL;
+}
+</code></pre>
+<h4 id="_21">线程池</h4>
+<p><strong>实现简单的线程池</strong>：</p>
+<pre><code class="language-c">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;unistd.h&gt;
+
+#define THREAD_POOL_SIZE 4
+#define TASK_QUEUE_SIZE 100
+
+// 任务结构
+typedef struct {
+    void (*function)(void *);
+    void *argument;
+} Task;
+
+// 线程池结构
+typedef struct {
+    pthread_t threads[THREAD_POOL_SIZE];
+    Task task_queue[TASK_QUEUE_SIZE];
+    int queue_front;
+    int queue_rear;
+    int queue_count;
+    pthread_mutex_t mutex;
+    pthread_cond_t not_empty;
+    pthread_cond_t not_full;
+    int shutdown;
+} ThreadPool;
+
+ThreadPool pool;
+
+// 工作线程函数
+void *worker_thread(void *arg)
+{
+    while (1) {
+        pthread_mutex_lock(&amp;pool.mutex);
+
+        // 等待任务
+        while (pool.queue_count == 0 &amp;&amp; !pool.shutdown) {
+            pthread_cond_wait(&amp;pool.not_empty, &amp;pool.mutex);
+        }
+
+        if (pool.shutdown) {
+            pthread_mutex_unlock(&amp;pool.mutex);
+            break;
+        }
+
+        // 取出任务
+        Task task = pool.task_queue[pool.queue_front];
+        pool.queue_front = (pool.queue_front + 1) % TASK_QUEUE_SIZE;
+        pool.queue_count--;
+
+        pthread_cond_signal(&amp;pool.not_full);
+        pthread_mutex_unlock(&amp;pool.mutex);
+
+        // 执行任务
+        task.function(task.argument);
+    }
+
+    return NULL;
+}
+
+// 初始化线程池
+void threadpool_init(void)
+{
+    pool.queue_front = 0;
+    pool.queue_rear = 0;
+    pool.queue_count = 0;
+    pool.shutdown = 0;
+
+    pthread_mutex_init(&amp;pool.mutex, NULL);
+    pthread_cond_init(&amp;pool.not_empty, NULL);
+    pthread_cond_init(&amp;pool.not_full, NULL);
+
+    // 创建工作线程
+    for (int i = 0; i &lt; THREAD_POOL_SIZE; i++) {
+        pthread_create(&amp;pool.threads[i], NULL, worker_thread, NULL);
+    }
+}
+
+// 添加任务
+void threadpool_add_task(void (*function)(void *), void *argument)
+{
+    pthread_mutex_lock(&amp;pool.mutex);
+
+    // 等待队列不满
+    while (pool.queue_count == TASK_QUEUE_SIZE) {
+        pthread_cond_wait(&amp;pool.not_full, &amp;pool.mutex);
+    }
+
+    // 添加任务
+    pool.task_queue[pool.queue_rear].function = function;
+    pool.task_queue[pool.queue_rear].argument = argument;
+    pool.queue_rear = (pool.queue_rear + 1) % TASK_QUEUE_SIZE;
+    pool.queue_count++;
+
+    pthread_cond_signal(&amp;pool.not_empty);
+    pthread_mutex_unlock(&amp;pool.mutex);
+}
+
+// 销毁线程池
+void threadpool_destroy(void)
+{
+    pthread_mutex_lock(&amp;pool.mutex);
+    pool.shutdown = 1;
+    pthread_cond_broadcast(&amp;pool.not_empty);
+    pthread_mutex_unlock(&amp;pool.mutex);
+
+    // 等待所有线程结束
+    for (int i = 0; i &lt; THREAD_POOL_SIZE; i++) {
+        pthread_join(pool.threads[i], NULL);
+    }
+
+    pthread_mutex_destroy(&amp;pool.mutex);
+    pthread_cond_destroy(&amp;pool.not_empty);
+    pthread_cond_destroy(&amp;pool.not_full);
+}
+
+// 示例任务函数
+void task_function(void *arg)
+{
+    int task_id = *(int *)arg;
+    printf(&quot;Task %d: Processing...\n&quot;, task_id);
+    sleep(1);
+    printf(&quot;Task %d: Done\n&quot;, task_id);
+    free(arg);
+}
+
+int main(void)
+{
+    // 初始化线程池
+    threadpool_init();
+
+    // 添加任务
+    for (int i = 0; i &lt; 10; i++) {
+        int *task_id = malloc(sizeof(int));
+        *task_id = i;
+        threadpool_add_task(task_function, task_id);
+    }
+
+    // 等待任务完成
+    sleep(5);
+
+    // 销毁线程池
+    threadpool_destroy();
+
+    printf(&quot;All tasks completed\n&quot;);
+
+    return 0;
+}
+</code></pre>
+<h2 id="_22">常见问题和解决方案</h2>
+<h3 id="1">问题1：僵尸进程</h3>
+<p><strong>现象</strong>：子进程结束后，父进程未调用wait()，导致子进程成为僵尸进程。</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">#include &lt;signal.h&gt;
+#include &lt;sys/wait.h&gt;
+
+// 信号处理函数
+void sigchld_handler(int sig)
+{
+    // 回收所有已结束的子进程
+    while (waitpid(-1, NULL, WNOHANG) &gt; 0);
+}
+
+int main(void)
+{
+    // 注册SIGCHLD信号处理函数
+    signal(SIGCHLD, sigchld_handler);
+
+    // 创建子进程
+    if (fork() == 0) {
+        // 子进程
+        exit(0);
+    }
+
+    // 父进程继续运行
+    while (1) {
+        sleep(1);
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="2">问题2：线程安全</h3>
+<p><strong>现象</strong>：多个线程访问共享资源导致数据不一致。</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 使用线程局部存储
+__thread int thread_local_var = 0;
+
+// 或使用pthread_key
+pthread_key_t key;
+
+void destructor(void *value)
+{
+    free(value);
+}
+
+void init_thread_specific(void)
+{
+    pthread_key_create(&amp;key, destructor);
+}
+
+void set_thread_specific(int value)
+{
+    int *ptr = malloc(sizeof(int));
+    *ptr = value;
+    pthread_setspecific(key, ptr);
+}
+
+int get_thread_specific(void)
+{
+    int *ptr = pthread_getspecific(key);
+    return ptr ? *ptr : 0;
+}
+</code></pre>
+<h3 id="3">问题3：优先级反转</h3>
+<p><strong>现象</strong>：高优先级线程等待低优先级线程释放锁。</p>
+<p><strong>解决方法</strong>：</p>
+<pre><code class="language-c">// 使用优先级继承互斥锁
+pthread_mutexattr_t attr;
+pthread_mutex_t mutex;
+
+pthread_mutexattr_init(&amp;attr);
+pthread_mutexattr_setprotocol(&amp;attr, PTHREAD_PRIO_INHERIT);
+pthread_mutex_init(&amp;mutex, &amp;attr);
+</code></pre>
+<h2 id="_23">总结</h2>
+<p>本教程介绍了Linux进程和线程编程的核心概念和实践技巧：</p>
+<p><strong>进程编程</strong>：
+- 使用fork()创建进程
+- 使用wait()等待子进程
+- 使用exec系列函数执行新程序</p>
+<p><strong>线程编程</strong>：
+- 使用pthread创建和管理线程
+- 使用互斥锁保护共享资源
+- 使用条件变量实现线程同步</p>
+<p><strong>进程间通信</strong>：
+- 管道和命名管道
+- 共享内存
+- 消息队列
+- 信号量</p>
+<p><strong>调试和优化</strong>：
+- 使用GDB调试多线程程序
+- 避免死锁和竞态条件
+- 使用线程池提高性能</p>
+<h2 id="_24">延伸阅读</h2>
+<p><strong>推荐书籍</strong>：
+- 《Unix环境高级编程》(APUE)
+- 《Linux系统编程》
+- 《POSIX多线程程序设计》</p>
+<p><strong>在线资源</strong>：
+- <a href="https://man7.org/linux/man-pages/">Linux man pages</a>
+- <a href="https://computing.llnl.gov/tutorials/pthreads/">POSIX Threads Programming</a>
+- <a href="http://man7.org/tlpi/">The Linux Programming Interface</a></p>
+<p><strong>相关主题</strong>：
+- 信号处理
+- 网络编程(Socket)
+- 异步I/O
+- 实时调度</p>
+<h2 id="_25">练习题</h2>
+<ol>
+<li>
+<p><strong>基础练习</strong>：
+   - 编写程序创建5个子进程，每个子进程打印自己的PID
+   - 实现一个简单的命令行解释器
+   - 使用管道实现两个进程间的双向通信</p>
+</li>
+<li>
+<p><strong>进阶练习</strong>：
+   - 实现一个多线程的文件搜索工具
+   - 使用共享内存实现进程间的大数据传输
+   - 实现一个生产者-消费者模型，支持多个生产者和消费者</p>
+</li>
+<li>
+<p><strong>项目练习</strong>：
+   - 实现一个多线程的Web服务器
+   - 开发一个多进程的任务调度系统
+   - 创建一个实时数据采集和分析系统</p>
+</li>
+</ol>
+<hr />
+<p><strong>文档版本</strong>: 1.0<br />
+<strong>最后更新</strong>: 2024-01-15<br />
+<strong>作者</strong>: 嵌入式知识平台</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

@@ -1,0 +1,2810 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>安全通信系统设计：构建企业级TLS/SSL加密通信 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/">05-security-encryption</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/05-security-encryption/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">项目概述</a><ul>
+<li><a href="#_2">项目特点</a></li>
+<li><a href="#_3">学习目标</a></li>
+<li><a href="#_4">适用人群</a></li>
+<li><a href="#_5">应用场景</a></li>
+</ul>
+</li>
+<li><a href="#_6">技术栈</a><ul>
+<li><a href="#_7">硬件清单</a></li>
+<li><a href="#_8">软件要求</a></li>
+</ul>
+</li>
+<li><a href="#_9">系统架构</a><ul>
+<li><a href="#_10">整体架构设计</a></li>
+<li><a href="#_11">软件架构</a></li>
+<li><a href="#tls">TLS握手流程</a></li>
+</ul>
+</li>
+<li><a href="#1">阶段1：证书体系搭建</a><ul>
+<li><a href="#11">1.1 理解证书体系</a></li>
+<li><a href="#12">1.2 生成证书体系</a></li>
+<li><a href="#13">1.3 证书格式转换</a></li>
+</ul>
+</li>
+<li><a href="#2tls">阶段2：TLS服务器实现</a><ul>
+<li><a href="#21">2.1 服务器初始化</a></li>
+<li><a href="#22">2.2 服务器应用程序</a></li>
+</ul>
+</li>
+<li><a href="#3tls">阶段3：TLS客户端实现</a><ul>
+<li><a href="#31">3.1 客户端初始化</a></li>
+<li><a href="#32">3.2 客户端应用程序</a></li>
+</ul>
+</li>
+<li><a href="#4">阶段4：安全增强功能</a><ul>
+<li><a href="#41">4.1 证书管理器</a></li>
+<li><a href="#42">4.2 安全日志系统</a></li>
+</ul>
+</li>
+<li><a href="#5">阶段5：测试与验证</a><ul>
+<li><a href="#51">5.1 单元测试</a></li>
+<li><a href="#52">5.2 集成测试</a></li>
+<li><a href="#53">5.3 安全测试</a></li>
+</ul>
+</li>
+<li><a href="#6">阶段6：性能优化与部署</a><ul>
+<li><a href="#61">6.1 性能优化</a></li>
+<li><a href="#62">6.2 安全加固</a></li>
+<li><a href="#63">6.3 部署指南</a></li>
+</ul>
+</li>
+<li><a href="#_12">完整代码</a><ul>
+<li><a href="#_13">项目结构</a></li>
+<li><a href="#_14">主程序</a></li>
+<li><a href="#_15">代码仓库</a></li>
+</ul>
+</li>
+<li><a href="#_16">故障排除</a><ul>
+<li><a href="#_17">常见问题</a><ul>
+<li><a href="#1tls">问题1：TLS握手失败</a></li>
+<li><a href="#2">问题2：证书验证失败</a></li>
+<li><a href="#3">问题3：内存不足</a></li>
+<li><a href="#4_1">问题4：性能问题</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_18">扩展思路</a><ul>
+<li><a href="#_19">功能扩展</a></li>
+<li><a href="#_20">性能优化</a></li>
+</ul>
+</li>
+<li><a href="#_21">项目总结</a><ul>
+<li><a href="#_22">技术要点</a></li>
+<li><a href="#_23">学习收获</a></li>
+<li><a href="#_24">安全最佳实践</a></li>
+<li><a href="#_25">改进建议</a></li>
+</ul>
+</li>
+<li><a href="#_26">相关资源</a><ul>
+<li><a href="#_27">文档资料</a></li>
+<li><a href="#_28">视频教程</a></li>
+<li><a href="#_29">开源项目</a></li>
+<li><a href="#_30">安全工具</a></li>
+</ul>
+</li>
+<li><a href="#_31">下一步</a></li>
+<li><a href="#_32">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="tlsssl">安全通信系统设计：构建企业级TLS/SSL加密通信</h1>
+<h2 id="_1">项目概述</h2>
+<p>本项目将指导你构建一个功能完整的安全通信系统，实现基于TLS/SSL协议的加密通信、双向身份认证、证书管理和安全策略控制。项目采用mbedTLS库，支持多种加密算法和认证方式，适用于IoT设备、工业控制、金融支付等高安全要求场景。</p>
+<h3 id="_2">项目特点</h3>
+<ul>
+<li>✅ <strong>完整的TLS/SSL实现</strong>：支持TLS 1.2/1.3协议，实现握手、加密传输和会话管理</li>
+<li>✅ <strong>双向身份认证</strong>：客户端和服务器相互验证，防止中间人攻击</li>
+<li>✅ <strong>证书管理系统</strong>：支持证书生成、签名、验证和撤销</li>
+<li>✅ <strong>多种加密套件</strong>：支持AES、RSA、ECDSA等多种加密算法</li>
+<li>✅ <strong>安全密钥管理</strong>：集成硬件安全模块，保护私钥安全</li>
+<li>✅ <strong>会话恢复机制</strong>：支持会话缓存和票据机制，提高连接效率</li>
+<li>✅ <strong>安全审计日志</strong>：记录所有安全事件，便于追踪和分析</li>
+</ul>
+<h3 id="_3">学习目标</h3>
+<p>完成本项目后，你将能够：</p>
+<ul>
+<li>[ ] 深入理解TLS/SSL协议的工作原理和握手流程</li>
+<li>[ ] 掌握X.509证书的结构和证书链验证机制</li>
+<li>[ ] 实现完整的加密通信系统，包括客户端和服务器</li>
+<li>[ ] 配置和管理证书颁发机构(CA)</li>
+<li>[ ] 实现双向身份认证和访问控制</li>
+<li>[ ] 集成硬件安全模块保护密钥</li>
+<li>[ ] 处理各种安全威胁和攻击场景</li>
+<li>[ ] 优化安全通信的性能和资源使用</li>
+</ul>
+<h3 id="_4">适用人群</h3>
+<ul>
+<li>有加密算法基础，希望深入学习安全通信的开发者</li>
+<li>需要为IoT设备实现安全通信的工程师</li>
+<li>从事工业控制、金融支付等高安全领域的开发者</li>
+<li>准备从事网络安全和信息安全的学习者</li>
+</ul>
+<h3 id="_5">应用场景</h3>
+<ul>
+<li><strong>IoT设备通信</strong>：智能家居、工业传感器的安全数据传输</li>
+<li><strong>远程控制系统</strong>：工业设备、医疗设备的远程安全控制</li>
+<li><strong>金融支付终端</strong>：POS机、ATM的安全交易通信</li>
+<li><strong>车联网通信</strong>：车载系统与云端的安全数据交换</li>
+<li><strong>智能电网</strong>：电力设备的安全监控和控制</li>
+</ul>
+<h2 id="_6">技术栈</h2>
+<h3 id="_7">硬件清单</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>规格</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考价格</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>STM32F429/ESP32</td>
+<td>2</td>
+<td>一个作为客户端，一个作为服务器</td>
+<td>¥160-300</td>
+</tr>
+<tr>
+<td>安全芯片</td>
+<td>ATECC608A</td>
+<td>1</td>
+<td>硬件安全模块，存储私钥</td>
+<td>¥15-25</td>
+</tr>
+<tr>
+<td>以太网模块</td>
+<td>W5500/ENC28J60</td>
+<td>2</td>
+<td>网络通信（如主控无以太网）</td>
+<td>¥30-60</td>
+</tr>
+<tr>
+<td>SD卡模块</td>
+<td>MicroSD</td>
+<td>1</td>
+<td>存储证书和日志</td>
+<td>¥5-10</td>
+</tr>
+<tr>
+<td>调试器</td>
+<td>ST-Link V2</td>
+<td>1</td>
+<td>程序下载和调试</td>
+<td>¥20-40</td>
+</tr>
+<tr>
+<td>电源模块</td>
+<td>5V/2A</td>
+<td>2</td>
+<td>系统供电</td>
+<td>¥20-40</td>
+</tr>
+</tbody>
+</table>
+<p><strong>总预算</strong>：约 ¥250-475</p>
+<h3 id="_8">软件要求</h3>
+<p><strong>开发环境</strong>：
+- STM32CubeIDE 1.12+ / ESP-IDF 5.0+
+- OpenSSL 3.0+ (用于证书生成)
+- Python 3.8+ (用于测试脚本)
+- Git版本控制</p>
+<p><strong>第三方库</strong>：
+- mbedTLS 3.3+：TLS/SSL协议栈
+- FreeRTOS：实时操作系统
+- lwIP：轻量级TCP/IP协议栈
+- FatFs：文件系统(用于证书存储)</p>
+<p><strong>调试工具</strong>：
+- Wireshark：网络抓包分析
+- OpenSSL命令行工具：证书管理
+- MQTT Explorer：测试MQTT over TLS
+- Postman：测试HTTPS API</p>
+<h2 id="_9">系统架构</h2>
+<h3 id="_10">整体架构设计</h3>
+<pre><code class="language-mermaid">graph TB
+    subgraph &quot;客户端 Client&quot;
+        A1[应用层] --&gt; A2[TLS客户端]
+        A2 --&gt; A3[证书验证]
+        A3 --&gt; A4[TCP/IP栈]
+    end
+
+    subgraph &quot;服务器 Server&quot;
+        B1[应用层] --&gt; B2[TLS服务器]
+        B2 --&gt; B3[证书验证]
+        B3 --&gt; B4[TCP/IP栈]
+    end
+
+    subgraph &quot;证书管理 CA&quot;
+        C1[根证书]
+        C2[中间证书]
+        C3[设备证书]
+        C1 --&gt; C2
+        C2 --&gt; C3
+    end
+
+    subgraph &quot;安全模块 HSM&quot;
+        D1[密钥存储]
+        D2[加密运算]
+        D3[随机数生成]
+    end
+
+    A4 &lt;--&gt; B4
+    A3 --&gt; C3
+    B3 --&gt; C3
+    A2 --&gt; D1
+    B2 --&gt; D1
+</code></pre>
+<h3 id="_11">软件架构</h3>
+<p>采用分层架构设计：</p>
+<pre><code>secure_communication/
+├── App/
+│   ├── client/                # 客户端应用
+│   │   ├── tls_client.c/h
+│   │   ├── client_app.c/h
+│   │   └── client_config.h
+│   ├── server/                # 服务器应用
+│   │   ├── tls_server.c/h
+│   │   ├── server_app.c/h
+│   │   └── server_config.h
+│   ├── common/                # 公共模块
+│   │   ├── cert_manager.c/h   # 证书管理
+│   │   ├── key_manager.c/h    # 密钥管理
+│   │   ├── session_manager.c/h # 会话管理
+│   │   └── security_log.c/h   # 安全日志
+│   └── test/                  # 测试程序
+│       ├── test_tls.c
+│       └── test_cert.c
+├── Drivers/
+│   ├── atecc608/              # 安全芯片驱动
+│   ├── ethernet/              # 以太网驱动
+│   └── sdcard/                # SD卡驱动
+├── Middlewares/
+│   ├── mbedTLS/               # TLS协议栈
+│   ├── FreeRTOS/              # 操作系统
+│   ├── lwIP/                  # TCP/IP协议栈
+│   └── FatFs/                 # 文件系统
+├── Certificates/              # 证书文件
+│   ├── ca/                    # CA证书
+│   ├── server/                # 服务器证书
+│   └── client/                # 客户端证书
+├── Scripts/                   # 辅助脚本
+│   ├── generate_certs.sh      # 证书生成脚本
+│   ├── test_connection.py     # 连接测试脚本
+│   └── analyze_traffic.py     # 流量分析脚本
+└── main.c
+</code></pre>
+<h3 id="tls">TLS握手流程</h3>
+<pre><code class="language-mermaid">sequenceDiagram
+    participant C as 客户端
+    participant S as 服务器
+
+    C-&gt;&gt;S: 1. ClientHello (支持的加密套件)
+    S-&gt;&gt;C: 2. ServerHello (选择的加密套件)
+    S-&gt;&gt;C: 3. Certificate (服务器证书)
+    S-&gt;&gt;C: 4. CertificateRequest (请求客户端证书)
+    S-&gt;&gt;C: 5. ServerHelloDone
+
+    C-&gt;&gt;S: 6. Certificate (客户端证书)
+    C-&gt;&gt;S: 7. ClientKeyExchange (加密的预主密钥)
+    C-&gt;&gt;S: 8. CertificateVerify (证书验证)
+    C-&gt;&gt;S: 9. ChangeCipherSpec
+    C-&gt;&gt;S: 10. Finished (握手完成)
+
+    S-&gt;&gt;C: 11. ChangeCipherSpec
+    S-&gt;&gt;C: 12. Finished (握手完成)
+
+    Note over C,S: 加密通信开始
+    C-&gt;&gt;S: 应用数据 (加密)
+    S-&gt;&gt;C: 应用数据 (加密)
+</code></pre>
+<h2 id="1">阶段1：证书体系搭建</h2>
+<h3 id="11">1.1 理解证书体系</h3>
+<p><strong>证书链结构</strong>：</p>
+<pre><code>根证书 (Root CA)
+    ↓ 签名
+中间证书 (Intermediate CA)
+    ↓ 签名
+设备证书 (Device Certificate)
+</code></pre>
+<p><strong>证书内容</strong>：
+- 版本号
+- 序列号
+- 签名算法
+- 颁发者信息
+- 有效期
+- 主体信息
+- 公钥
+- 扩展字段
+- 数字签名</p>
+<h3 id="12">1.2 生成证书体系</h3>
+<p>创建证书生成脚本 <code>Scripts/generate_certs.sh</code>：</p>
+<pre><code class="language-bash">#!/bin/bash
+
+# 证书生成脚本
+# 用于生成完整的证书链：根证书 -&gt; 中间证书 -&gt; 设备证书
+
+set -e
+
+# 创建目录结构
+mkdir -p Certificates/{ca,server,client}
+cd Certificates
+
+echo &quot;=== 生成证书体系 ===&quot;
+
+# 1. 生成根CA私钥和证书
+echo &quot;1. 生成根CA证书...&quot;
+openssl genrsa -out ca/ca-key.pem 4096
+
+openssl req -new -x509 -days 3650 -key ca/ca-key.pem \
+    -out ca/ca-cert.pem \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=Security/CN=Root CA&quot;
+
+echo &quot;✓ 根CA证书生成完成&quot;
+
+# 2. 生成中间CA私钥和证书签名请求
+echo &quot;2. 生成中间CA证书...&quot;
+openssl genrsa -out ca/intermediate-key.pem 4096
+
+openssl req -new -key ca/intermediate-key.pem \
+    -out ca/intermediate-csr.pem \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=Security/CN=Intermediate CA&quot;
+
+# 使用根CA签名中间CA证书
+openssl x509 -req -days 1825 -in ca/intermediate-csr.pem \
+    -CA ca/ca-cert.pem -CAkey ca/ca-key.pem -CAcreateserial \
+    -out ca/intermediate-cert.pem \
+    -extensions v3_ca
+
+echo &quot;✓ 中间CA证书生成完成&quot;
+
+# 3. 生成服务器私钥和证书
+echo &quot;3. 生成服务器证书...&quot;
+openssl genrsa -out server/server-key.pem 2048
+
+openssl req -new -key server/server-key.pem \
+    -out server/server-csr.pem \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=IoT/CN=iot-server.local&quot;
+
+# 创建服务器证书扩展配置
+cat &gt; server/server-ext.cnf &lt;&lt; EOF
+subjectAltName = DNS:iot-server.local,DNS:localhost,IP:192.168.1.100
+extendedKeyUsage = serverAuth
+EOF
+
+# 使用中间CA签名服务器证书
+openssl x509 -req -days 365 -in server/server-csr.pem \
+    -CA ca/intermediate-cert.pem -CAkey ca/intermediate-key.pem -CAcreateserial \
+    -out server/server-cert.pem \
+    -extfile server/server-ext.cnf
+
+echo &quot;✓ 服务器证书生成完成&quot;
+
+# 4. 生成客户端私钥和证书
+echo &quot;4. 生成客户端证书...&quot;
+openssl genrsa -out client/client-key.pem 2048
+
+openssl req -new -key client/client-key.pem \
+    -out client/client-csr.pem \
+    -subj &quot;/C=CN/ST=Beijing/L=Beijing/O=MyCompany/OU=IoT/CN=device-001&quot;
+
+# 创建客户端证书扩展配置
+cat &gt; client/client-ext.cnf &lt;&lt; EOF
+extendedKeyUsage = clientAuth
+EOF
+
+# 使用中间CA签名客户端证书
+openssl x509 -req -days 365 -in client/client-csr.pem \
+    -CA ca/intermediate-cert.pem -CAkey ca/intermediate-key.pem -CAcreateserial \
+    -out client/client-cert.pem \
+    -extfile client/client-ext.cnf
+
+echo &quot;✓ 客户端证书生成完成&quot;
+
+# 5. 创建证书链文件
+echo &quot;5. 创建证书链...&quot;
+cat ca/intermediate-cert.pem ca/ca-cert.pem &gt; ca/ca-chain.pem
+cat server/server-cert.pem ca/intermediate-cert.pem &gt; server/server-chain.pem
+cat client/client-cert.pem ca/intermediate-cert.pem &gt; client/client-chain.pem
+
+echo &quot;✓ 证书链创建完成&quot;
+
+# 6. 验证证书
+echo &quot;6. 验证证书...&quot;
+openssl verify -CAfile ca/ca-chain.pem server/server-cert.pem
+openssl verify -CAfile ca/ca-chain.pem client/client-cert.pem
+
+echo &quot;&quot;
+echo &quot;=== 证书生成完成 ===&quot;
+echo &quot;根CA证书: ca/ca-cert.pem&quot;
+echo &quot;服务器证书: server/server-cert.pem&quot;
+echo &quot;服务器私钥: server/server-key.pem&quot;
+echo &quot;客户端证书: client/client-cert.pem&quot;
+echo &quot;客户端私钥: client/client-key.pem&quot;
+echo &quot;证书链: ca/ca-chain.pem&quot;
+</code></pre>
+<h3 id="13">1.3 证书格式转换</h3>
+<p>将PEM格式证书转换为C数组：</p>
+<pre><code class="language-bash">#!/bin/bash
+
+# 证书转换脚本
+# 将PEM格式证书转换为C语言数组
+
+convert_to_c_array() {
+    local input_file=$1
+    local output_file=$2
+    local array_name=$3
+
+    echo &quot;// Auto-generated from $input_file&quot; &gt; $output_file
+    echo &quot;const unsigned char ${array_name}[] = {&quot; &gt;&gt; $output_file
+
+    xxd -i &lt; $input_file | sed 's/^/    /' &gt;&gt; $output_file
+
+    echo &quot;};&quot; &gt;&gt; $output_file
+    echo &quot;const size_t ${array_name}_len = sizeof(${array_name});&quot; &gt;&gt; $output_file
+}
+
+# 转换证书
+convert_to_c_array &quot;ca/ca-chain.pem&quot; &quot;ca/ca_chain.h&quot; &quot;ca_chain_pem&quot;
+convert_to_c_array &quot;server/server-cert.pem&quot; &quot;server/server_cert.h&quot; &quot;server_cert_pem&quot;
+convert_to_c_array &quot;server/server-key.pem&quot; &quot;server/server_key.h&quot; &quot;server_key_pem&quot;
+convert_to_c_array &quot;client/client-cert.pem&quot; &quot;client/client_cert.h&quot; &quot;client_cert_pem&quot;
+convert_to_c_array &quot;client/client-key.pem&quot; &quot;client/client_key.h&quot; &quot;client_key_pem&quot;
+
+echo &quot;证书转换完成&quot;
+</code></pre>
+<h2 id="2tls">阶段2：TLS服务器实现</h2>
+<h3 id="21">2.1 服务器初始化</h3>
+<p>创建 <code>App/server/tls_server.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef TLS_SERVER_H
+#define TLS_SERVER_H
+
+#include &quot;mbedtls/net_sockets.h&quot;
+#include &quot;mbedtls/ssl.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &quot;mbedtls/x509.h&quot;
+#include &quot;mbedtls/error.h&quot;
+
+/* 服务器配置 */
+#define SERVER_PORT         &quot;4433&quot;
+#define SERVER_NAME         &quot;iot-server.local&quot;
+#define MAX_CLIENTS         5
+
+/* TLS服务器上下文 */
+typedef struct {
+    mbedtls_net_context listen_fd;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ssl_config conf;
+    mbedtls_x509_crt srvcert;
+    mbedtls_x509_crt cachain;
+    mbedtls_pk_context pkey;
+    mbedtls_ssl_cache_context cache;
+    bool initialized;
+} TLSServer_t;
+
+/* 客户端会话 */
+typedef struct {
+    mbedtls_net_context client_fd;
+    mbedtls_ssl_context ssl;
+    bool active;
+    uint32_t session_id;
+    char client_ip[16];
+    uint16_t client_port;
+} ClientSession_t;
+
+/* 函数声明 */
+int TLSServer_Init(TLSServer_t *server);
+int TLSServer_Start(TLSServer_t *server);
+int TLSServer_AcceptClient(TLSServer_t *server, ClientSession_t *session);
+int TLSServer_HandleClient(ClientSession_t *session);
+void TLSServer_CloseClient(ClientSession_t *session);
+void TLSServer_Shutdown(TLSServer_t *server);
+
+#endif
+</code></pre>
+<p>创建 <code>App/server/tls_server.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;tls_server.h&quot;
+#include &quot;server_cert.h&quot;
+#include &quot;server_key.h&quot;
+#include &quot;ca_chain.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/* 调试回调函数 */
+static void debug_callback(void *ctx, int level, const char *file, int line, const char *str)
+{
+    printf(&quot;[TLS] %s:%04d: %s&quot;, file, line, str);
+}
+
+/**
+ * @brief  初始化TLS服务器
+ * @param  server: 服务器上下文
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSServer_Init(TLSServer_t *server)
+{
+    int ret;
+    const char *pers = &quot;tls_server&quot;;
+
+    printf(&quot;=== 初始化TLS服务器 ===\n&quot;);
+
+    /* 初始化结构体 */
+    mbedtls_net_init(&amp;server-&gt;listen_fd);
+    mbedtls_ssl_config_init(&amp;server-&gt;conf);
+    mbedtls_x509_crt_init(&amp;server-&gt;srvcert);
+    mbedtls_x509_crt_init(&amp;server-&gt;cachain);
+    mbedtls_pk_init(&amp;server-&gt;pkey);
+    mbedtls_entropy_init(&amp;server-&gt;entropy);
+    mbedtls_ctr_drbg_init(&amp;server-&gt;ctr_drbg);
+    mbedtls_ssl_cache_init(&amp;server-&gt;cache);
+
+    /* 1. 初始化随机数生成器 */
+    printf(&quot;1. 初始化随机数生成器...\n&quot;);
+    ret = mbedtls_ctr_drbg_seed(&amp;server-&gt;ctr_drbg, mbedtls_entropy_func, &amp;server-&gt;entropy,
+                                (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ctr_drbg_seed 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 2. 加载服务器证书 */
+    printf(&quot;2. 加载服务器证书...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;server-&gt;srvcert, server_cert_pem, server_cert_pem_len);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_x509_crt_parse 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 3. 加载CA证书链 */
+    printf(&quot;3. 加载CA证书链...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;server-&gt;cachain, ca_chain_pem, ca_chain_pem_len);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_x509_crt_parse 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 4. 加载服务器私钥 */
+    printf(&quot;4. 加载服务器私钥...\n&quot;);
+    ret = mbedtls_pk_parse_key(&amp;server-&gt;pkey, server_key_pem, server_key_pem_len, NULL, 0);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_pk_parse_key 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 5. 配置SSL/TLS参数 */
+    printf(&quot;5. 配置SSL/TLS参数...\n&quot;);
+    ret = mbedtls_ssl_config_defaults(&amp;server-&gt;conf,
+                                     MBEDTLS_SSL_IS_SERVER,
+                                     MBEDTLS_SSL_TRANSPORT_STREAM,
+                                     MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_config_defaults 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置随机数生成器 */
+    mbedtls_ssl_conf_rng(&amp;server-&gt;conf, mbedtls_ctr_drbg_random, &amp;server-&gt;ctr_drbg);
+
+    /* 设置调试回调 */
+    mbedtls_ssl_conf_dbg(&amp;server-&gt;conf, debug_callback, NULL);
+
+    /* 设置证书和私钥 */
+    ret = mbedtls_ssl_conf_own_cert(&amp;server-&gt;conf, &amp;server-&gt;srvcert, &amp;server-&gt;pkey);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_conf_own_cert 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置CA证书链（用于验证客户端证书） */
+    mbedtls_ssl_conf_ca_chain(&amp;server-&gt;conf, &amp;server-&gt;cachain, NULL);
+
+    /* 要求客户端证书 */
+    mbedtls_ssl_conf_authmode(&amp;server-&gt;conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+
+    /* 设置会话缓存 */
+    mbedtls_ssl_conf_session_cache(&amp;server-&gt;conf, &amp;server-&gt;cache,
+                                   mbedtls_ssl_cache_get,
+                                   mbedtls_ssl_cache_set);
+
+    /* 设置支持的加密套件 */
+    static const int ciphersuites[] = {
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+        MBEDTLS_TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+        MBEDTLS_TLS_RSA_WITH_AES_256_CBC_SHA256,
+        MBEDTLS_TLS_RSA_WITH_AES_128_CBC_SHA256,
+        0
+    };
+    mbedtls_ssl_conf_ciphersuites(&amp;server-&gt;conf, ciphersuites);
+
+    server-&gt;initialized = true;
+    printf(&quot;✓ TLS服务器初始化完成\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  启动TLS服务器
+ * @param  server: 服务器上下文
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSServer_Start(TLSServer_t *server)
+{
+    int ret;
+
+    if (!server-&gt;initialized) {
+        printf(&quot;错误: 服务器未初始化\n&quot;);
+        return -1;
+    }
+
+    printf(&quot;=== 启动TLS服务器 ===\n&quot;);
+    printf(&quot;监听端口: %s\n&quot;, SERVER_PORT);
+
+    /* 绑定端口并监听 */
+    ret = mbedtls_net_bind(&amp;server-&gt;listen_fd, NULL, SERVER_PORT, MBEDTLS_NET_PROTO_TCP);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_net_bind 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;✓ 服务器启动成功，等待客户端连接...\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  接受客户端连接
+ * @param  server: 服务器上下文
+ * @param  session: 客户端会话
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSServer_AcceptClient(TLSServer_t *server, ClientSession_t *session)
+{
+    int ret;
+
+    /* 初始化客户端会话 */
+    mbedtls_net_init(&amp;session-&gt;client_fd);
+    mbedtls_ssl_init(&amp;session-&gt;ssl);
+
+    /* 等待客户端连接 */
+    printf(&quot;等待客户端连接...\n&quot;);
+    ret = mbedtls_net_accept(&amp;server-&gt;listen_fd, &amp;session-&gt;client_fd,
+                            session-&gt;client_ip, sizeof(session-&gt;client_ip),
+                            &amp;session-&gt;client_port);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_net_accept 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;✓ 客户端已连接: %s:%d\n&quot;, session-&gt;client_ip, session-&gt;client_port);
+
+    /* 设置SSL上下文 */
+    ret = mbedtls_ssl_setup(&amp;session-&gt;ssl, &amp;server-&gt;conf);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_setup 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置网络IO回调 */
+    mbedtls_ssl_set_bio(&amp;session-&gt;ssl, &amp;session-&gt;client_fd,
+                       mbedtls_net_send, mbedtls_net_recv, NULL);
+
+    /* 执行TLS握手 */
+    printf(&quot;执行TLS握手...\n&quot;);
+    while ((ret = mbedtls_ssl_handshake(&amp;session-&gt;ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &amp;&amp; ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            printf(&quot;错误: mbedtls_ssl_handshake 返回 -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+    }
+
+    printf(&quot;✓ TLS握手完成\n&quot;);
+
+    /* 验证客户端证书 */
+    uint32_t flags = mbedtls_ssl_get_verify_result(&amp;session-&gt;ssl);
+    if (flags != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), &quot;  ! &quot;, flags);
+        printf(&quot;证书验证失败:\n%s\n&quot;, vrfy_buf);
+        return -1;
+    }
+
+    printf(&quot;✓ 客户端证书验证通过\n&quot;);
+
+    /* 获取客户端证书信息 */
+    const mbedtls_x509_crt *client_cert = mbedtls_ssl_get_peer_cert(&amp;session-&gt;ssl);
+    if (client_cert != NULL) {
+        char cert_info[1024];
+        mbedtls_x509_crt_info(cert_info, sizeof(cert_info), &quot;  &quot;, client_cert);
+        printf(&quot;客户端证书信息:\n%s\n&quot;, cert_info);
+    }
+
+    /* 显示协商的加密套件 */
+    printf(&quot;使用的加密套件: %s\n&quot;, mbedtls_ssl_get_ciphersuite(&amp;session-&gt;ssl));
+    printf(&quot;TLS版本: %s\n&quot;, mbedtls_ssl_get_version(&amp;session-&gt;ssl));
+
+    session-&gt;active = true;
+    session-&gt;session_id = (uint32_t)HAL_GetTick();
+
+    return 0;
+}
+
+/**
+ * @brief  处理客户端请求
+ * @param  session: 客户端会话
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSServer_HandleClient(ClientSession_t *session)
+{
+    int ret;
+    unsigned char buf[1024];
+    int len;
+
+    printf(&quot;\n=== 处理客户端请求 ===\n&quot;);
+
+    /* 读取客户端数据 */
+    memset(buf, 0, sizeof(buf));
+    ret = mbedtls_ssl_read(&amp;session-&gt;ssl, buf, sizeof(buf) - 1);
+
+    if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        return 0;  // 需要继续等待
+    }
+
+    if (ret &lt;= 0) {
+        if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+            printf(&quot;客户端关闭连接\n&quot;);
+        } else {
+            printf(&quot;错误: mbedtls_ssl_read 返回 -0x%04x\n&quot;, -ret);
+        }
+        return ret;
+    }
+
+    len = ret;
+    printf(&quot;收到数据 (%d 字节): %s\n&quot;, len, buf);
+
+    /* 处理请求并生成响应 */
+    char response[256];
+    snprintf(response, sizeof(response), 
+             &quot;HTTP/1.1 200 OK\r\n&quot;
+             &quot;Content-Type: text/plain\r\n&quot;
+             &quot;Content-Length: 13\r\n&quot;
+             &quot;\r\n&quot;
+             &quot;Hello, TLS!\r\n&quot;);
+
+    /* 发送响应 */
+    ret = mbedtls_ssl_write(&amp;session-&gt;ssl, (unsigned char *)response, strlen(response));
+    if (ret &lt;= 0) {
+        printf(&quot;错误: mbedtls_ssl_write 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;发送响应 (%d 字节)\n&quot;, ret);
+
+    return 0;
+}
+
+/**
+ * @brief  关闭客户端连接
+ * @param  session: 客户端会话
+ */
+void TLSServer_CloseClient(ClientSession_t *session)
+{
+    if (!session-&gt;active) {
+        return;
+    }
+
+    printf(&quot;关闭客户端连接: %s:%d\n&quot;, session-&gt;client_ip, session-&gt;client_port);
+
+    /* 发送关闭通知 */
+    mbedtls_ssl_close_notify(&amp;session-&gt;ssl);
+
+    /* 释放资源 */
+    mbedtls_net_free(&amp;session-&gt;client_fd);
+    mbedtls_ssl_free(&amp;session-&gt;ssl);
+
+    session-&gt;active = false;
+}
+
+/**
+ * @brief  关闭TLS服务器
+ * @param  server: 服务器上下文
+ */
+void TLSServer_Shutdown(TLSServer_t *server)
+{
+    printf(&quot;关闭TLS服务器...\n&quot;);
+
+    mbedtls_net_free(&amp;server-&gt;listen_fd);
+    mbedtls_x509_crt_free(&amp;server-&gt;srvcert);
+    mbedtls_x509_crt_free(&amp;server-&gt;cachain);
+    mbedtls_pk_free(&amp;server-&gt;pkey);
+    mbedtls_ssl_config_free(&amp;server-&gt;conf);
+    mbedtls_ctr_drbg_free(&amp;server-&gt;ctr_drbg);
+    mbedtls_entropy_free(&amp;server-&gt;entropy);
+    mbedtls_ssl_cache_free(&amp;server-&gt;cache);
+
+    server-&gt;initialized = false;
+
+    printf(&quot;✓ 服务器已关闭\n&quot;);
+}
+</code></pre>
+<h3 id="22">2.2 服务器应用程序</h3>
+<p>创建 <code>App/server/server_app.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;tls_server.h&quot;
+#include &quot;security_log.h&quot;
+
+static TLSServer_t tls_server;
+static ClientSession_t client_sessions[MAX_CLIENTS];
+
+/**
+ * @brief  TLS服务器任务
+ */
+void TLSServer_Task(void *pvParameters)
+{
+    int ret;
+
+    /* 初始化服务器 */
+    ret = TLSServer_Init(&amp;tls_server);
+    if (ret != 0) {
+        printf(&quot;服务器初始化失败\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* 启动服务器 */
+    ret = TLSServer_Start(&amp;tls_server);
+    if (ret != 0) {
+        printf(&quot;服务器启动失败\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* 初始化客户端会话数组 */
+    memset(client_sessions, 0, sizeof(client_sessions));
+
+    while (1) {
+        /* 查找空闲会话槽 */
+        ClientSession_t *session = NULL;
+        for (int i = 0; i &lt; MAX_CLIENTS; i++) {
+            if (!client_sessions[i].active) {
+                session = &amp;client_sessions[i];
+                break;
+            }
+        }
+
+        if (session == NULL) {
+            printf(&quot;警告: 达到最大客户端连接数\n&quot;);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            continue;
+        }
+
+        /* 接受客户端连接 */
+        ret = TLSServer_AcceptClient(&amp;tls_server, session);
+        if (ret == 0) {
+            /* 记录安全事件 */
+            SecurityLog_Event(LOG_LEVEL_INFO, &quot;CLIENT_CONNECTED&quot;,
+                            session-&gt;client_ip, session-&gt;session_id);
+
+            /* 创建客户端处理任务 */
+            char task_name[16];
+            snprintf(task_name, sizeof(task_name), &quot;Client%d&quot;, session-&gt;session_id % 1000);
+            xTaskCreate(ClientHandler_Task, task_name, 2048, session, 2, NULL);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+/**
+ * @brief  客户端处理任务
+ */
+void ClientHandler_Task(void *pvParameters)
+{
+    ClientSession_t *session = (ClientSession_t *)pvParameters;
+    int ret;
+
+    printf(&quot;客户端处理任务启动: Session %lu\n&quot;, session-&gt;session_id);
+
+    while (session-&gt;active) {
+        /* 处理客户端请求 */
+        ret = TLSServer_HandleClient(session);
+
+        if (ret &lt; 0) {
+            /* 连接错误，关闭会话 */
+            SecurityLog_Event(LOG_LEVEL_WARNING, &quot;CLIENT_ERROR&quot;,
+                            session-&gt;client_ip, session-&gt;session_id);
+            break;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    /* 关闭客户端连接 */
+    TLSServer_CloseClient(session);
+
+    SecurityLog_Event(LOG_LEVEL_INFO, &quot;CLIENT_DISCONNECTED&quot;,
+                     session-&gt;client_ip, session-&gt;session_id);
+
+    printf(&quot;客户端处理任务结束: Session %lu\n&quot;, session-&gt;session_id);
+
+    vTaskDelete(NULL);
+}
+</code></pre>
+<h2 id="3tls">阶段3：TLS客户端实现</h2>
+<h3 id="31">3.1 客户端初始化</h3>
+<p>创建 <code>App/client/tls_client.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef TLS_CLIENT_H
+#define TLS_CLIENT_H
+
+#include &quot;mbedtls/net_sockets.h&quot;
+#include &quot;mbedtls/ssl.h&quot;
+#include &quot;mbedtls/entropy.h&quot;
+#include &quot;mbedtls/ctr_drbg.h&quot;
+#include &quot;mbedtls/x509.h&quot;
+
+/* 客户端配置 */
+#define SERVER_HOST         &quot;192.168.1.100&quot;
+#define SERVER_PORT         &quot;4433&quot;
+#define SERVER_NAME         &quot;iot-server.local&quot;
+
+/* TLS客户端上下文 */
+typedef struct {
+    mbedtls_net_context server_fd;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    mbedtls_ssl_context ssl;
+    mbedtls_ssl_config conf;
+    mbedtls_x509_crt cacert;
+    mbedtls_x509_crt clicert;
+    mbedtls_pk_context pkey;
+    bool connected;
+} TLSClient_t;
+
+/* 函数声明 */
+int TLSClient_Init(TLSClient_t *client);
+int TLSClient_Connect(TLSClient_t *client, const char *host, const char *port);
+int TLSClient_Send(TLSClient_t *client, const unsigned char *data, size_t len);
+int TLSClient_Receive(TLSClient_t *client, unsigned char *buf, size_t max_len);
+void TLSClient_Disconnect(TLSClient_t *client);
+void TLSClient_Cleanup(TLSClient_t *client);
+
+#endif
+</code></pre>
+<p>创建 <code>App/client/tls_client.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;tls_client.h&quot;
+#include &quot;client_cert.h&quot;
+#include &quot;client_key.h&quot;
+#include &quot;ca_chain.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/**
+ * @brief  初始化TLS客户端
+ * @param  client: 客户端上下文
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSClient_Init(TLSClient_t *client)
+{
+    int ret;
+    const char *pers = &quot;tls_client&quot;;
+
+    printf(&quot;=== 初始化TLS客户端 ===\n&quot;);
+
+    /* 初始化结构体 */
+    mbedtls_net_init(&amp;client-&gt;server_fd);
+    mbedtls_ssl_init(&amp;client-&gt;ssl);
+    mbedtls_ssl_config_init(&amp;client-&gt;conf);
+    mbedtls_x509_crt_init(&amp;client-&gt;cacert);
+    mbedtls_x509_crt_init(&amp;client-&gt;clicert);
+    mbedtls_pk_init(&amp;client-&gt;pkey);
+    mbedtls_ctr_drbg_init(&amp;client-&gt;ctr_drbg);
+    mbedtls_entropy_init(&amp;client-&gt;entropy);
+
+    /* 1. 初始化随机数生成器 */
+    printf(&quot;1. 初始化随机数生成器...\n&quot;);
+    ret = mbedtls_ctr_drbg_seed(&amp;client-&gt;ctr_drbg, mbedtls_entropy_func, &amp;client-&gt;entropy,
+                                (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ctr_drbg_seed 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 2. 加载CA证书 */
+    printf(&quot;2. 加载CA证书...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;client-&gt;cacert, ca_chain_pem, ca_chain_pem_len);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_x509_crt_parse 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 3. 加载客户端证书 */
+    printf(&quot;3. 加载客户端证书...\n&quot;);
+    ret = mbedtls_x509_crt_parse(&amp;client-&gt;clicert, client_cert_pem, client_cert_pem_len);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_x509_crt_parse 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 4. 加载客户端私钥 */
+    printf(&quot;4. 加载客户端私钥...\n&quot;);
+    ret = mbedtls_pk_parse_key(&amp;client-&gt;pkey, client_key_pem, client_key_pem_len, NULL, 0);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_pk_parse_key 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 5. 配置SSL/TLS参数 */
+    printf(&quot;5. 配置SSL/TLS参数...\n&quot;);
+    ret = mbedtls_ssl_config_defaults(&amp;client-&gt;conf,
+                                     MBEDTLS_SSL_IS_CLIENT,
+                                     MBEDTLS_SSL_TRANSPORT_STREAM,
+                                     MBEDTLS_SSL_PRESET_DEFAULT);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_config_defaults 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置随机数生成器 */
+    mbedtls_ssl_conf_rng(&amp;client-&gt;conf, mbedtls_ctr_drbg_random, &amp;client-&gt;ctr_drbg);
+
+    /* 设置CA证书 */
+    mbedtls_ssl_conf_ca_chain(&amp;client-&gt;conf, &amp;client-&gt;cacert, NULL);
+
+    /* 设置客户端证书和私钥 */
+    ret = mbedtls_ssl_conf_own_cert(&amp;client-&gt;conf, &amp;client-&gt;clicert, &amp;client-&gt;pkey);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_conf_own_cert 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 要求验证服务器证书 */
+    mbedtls_ssl_conf_authmode(&amp;client-&gt;conf, MBEDTLS_SSL_VERIFY_REQUIRED);
+
+    printf(&quot;✓ TLS客户端初始化完成\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  连接到TLS服务器
+ * @param  client: 客户端上下文
+ * @param  host: 服务器地址
+ * @param  port: 服务器端口
+ * @retval 0=成功, 负数=错误码
+ */
+int TLSClient_Connect(TLSClient_t *client, const char *host, const char *port)
+{
+    int ret;
+
+    printf(&quot;=== 连接到TLS服务器 ===\n&quot;);
+    printf(&quot;服务器: %s:%s\n&quot;, host, port);
+
+    /* 1. 建立TCP连接 */
+    printf(&quot;1. 建立TCP连接...\n&quot;);
+    ret = mbedtls_net_connect(&amp;client-&gt;server_fd, host, port, MBEDTLS_NET_PROTO_TCP);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_net_connect 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+    printf(&quot;✓ TCP连接已建立\n&quot;);
+
+    /* 2. 设置SSL上下文 */
+    ret = mbedtls_ssl_setup(&amp;client-&gt;ssl, &amp;client-&gt;conf);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_setup 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置服务器名称（用于SNI） */
+    ret = mbedtls_ssl_set_hostname(&amp;client-&gt;ssl, SERVER_NAME);
+    if (ret != 0) {
+        printf(&quot;错误: mbedtls_ssl_set_hostname 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 设置网络IO回调 */
+    mbedtls_ssl_set_bio(&amp;client-&gt;ssl, &amp;client-&gt;server_fd,
+                       mbedtls_net_send, mbedtls_net_recv, NULL);
+
+    /* 3. 执行TLS握手 */
+    printf(&quot;2. 执行TLS握手...\n&quot;);
+    while ((ret = mbedtls_ssl_handshake(&amp;client-&gt;ssl)) != 0) {
+        if (ret != MBEDTLS_ERR_SSL_WANT_READ &amp;&amp; ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+            printf(&quot;错误: mbedtls_ssl_handshake 返回 -0x%04x\n&quot;, -ret);
+            return ret;
+        }
+    }
+    printf(&quot;✓ TLS握手完成\n&quot;);
+
+    /* 4. 验证服务器证书 */
+    printf(&quot;3. 验证服务器证书...\n&quot;);
+    uint32_t flags = mbedtls_ssl_get_verify_result(&amp;client-&gt;ssl);
+    if (flags != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), &quot;  ! &quot;, flags);
+        printf(&quot;证书验证失败:\n%s\n&quot;, vrfy_buf);
+        return -1;
+    }
+    printf(&quot;✓ 服务器证书验证通过\n&quot;);
+
+    /* 显示协商的加密套件 */
+    printf(&quot;使用的加密套件: %s\n&quot;, mbedtls_ssl_get_ciphersuite(&amp;client-&gt;ssl));
+    printf(&quot;TLS版本: %s\n&quot;, mbedtls_ssl_get_version(&amp;client-&gt;ssl));
+
+    client-&gt;connected = true;
+    printf(&quot;✓ 已连接到服务器\n\n&quot;);
+
+    return 0;
+}
+
+/**
+ * @brief  发送数据
+ * @param  client: 客户端上下文
+ * @param  data: 要发送的数据
+ * @param  len: 数据长度
+ * @retval 发送的字节数，负数表示错误
+ */
+int TLSClient_Send(TLSClient_t *client, const unsigned char *data, size_t len)
+{
+    int ret;
+
+    if (!client-&gt;connected) {
+        printf(&quot;错误: 未连接到服务器\n&quot;);
+        return -1;
+    }
+
+    ret = mbedtls_ssl_write(&amp;client-&gt;ssl, data, len);
+    if (ret &lt; 0) {
+        printf(&quot;错误: mbedtls_ssl_write 返回 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;发送数据 (%d 字节)\n&quot;, ret);
+
+    return ret;
+}
+
+/**
+ * @brief  接收数据
+ * @param  client: 客户端上下文
+ * @param  buf: 接收缓冲区
+ * @param  max_len: 缓冲区大小
+ * @retval 接收的字节数，负数表示错误
+ */
+int TLSClient_Receive(TLSClient_t *client, unsigned char *buf, size_t max_len)
+{
+    int ret;
+
+    if (!client-&gt;connected) {
+        printf(&quot;错误: 未连接到服务器\n&quot;);
+        return -1;
+    }
+
+    memset(buf, 0, max_len);
+    ret = mbedtls_ssl_read(&amp;client-&gt;ssl, buf, max_len - 1);
+
+    if (ret == MBEDTLS_ERR_SSL_WANT_READ || ret == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        return 0;  // 需要继续等待
+    }
+
+    if (ret &lt; 0) {
+        if (ret == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY) {
+            printf(&quot;服务器关闭连接\n&quot;);
+        } else {
+            printf(&quot;错误: mbedtls_ssl_read 返回 -0x%04x\n&quot;, -ret);
+        }
+        return ret;
+    }
+
+    printf(&quot;接收数据 (%d 字节): %s\n&quot;, ret, buf);
+
+    return ret;
+}
+
+/**
+ * @brief  断开连接
+ * @param  client: 客户端上下文
+ */
+void TLSClient_Disconnect(TLSClient_t *client)
+{
+    if (!client-&gt;connected) {
+        return;
+    }
+
+    printf(&quot;断开连接...\n&quot;);
+
+    /* 发送关闭通知 */
+    mbedtls_ssl_close_notify(&amp;client-&gt;ssl);
+
+    /* 关闭网络连接 */
+    mbedtls_net_free(&amp;client-&gt;server_fd);
+
+    client-&gt;connected = false;
+
+    printf(&quot;✓ 已断开连接\n&quot;);
+}
+
+/**
+ * @brief  清理客户端资源
+ * @param  client: 客户端上下文
+ */
+void TLSClient_Cleanup(TLSClient_t *client)
+{
+    printf(&quot;清理客户端资源...\n&quot;);
+
+    mbedtls_net_free(&amp;client-&gt;server_fd);
+    mbedtls_x509_crt_free(&amp;client-&gt;cacert);
+    mbedtls_x509_crt_free(&amp;client-&gt;clicert);
+    mbedtls_pk_free(&amp;client-&gt;pkey);
+    mbedtls_ssl_free(&amp;client-&gt;ssl);
+    mbedtls_ssl_config_free(&amp;client-&gt;conf);
+    mbedtls_ctr_drbg_free(&amp;client-&gt;ctr_drbg);
+    mbedtls_entropy_free(&amp;client-&gt;entropy);
+
+    printf(&quot;✓ 资源已清理\n&quot;);
+}
+</code></pre>
+<h3 id="32">3.2 客户端应用程序</h3>
+<p>创建 <code>App/client/client_app.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;tls_client.h&quot;
+#include &quot;security_log.h&quot;
+
+static TLSClient_t tls_client;
+
+/**
+ * @brief  TLS客户端任务
+ */
+void TLSClient_Task(void *pvParameters)
+{
+    int ret;
+    unsigned char buf[1024];
+
+    /* 初始化客户端 */
+    ret = TLSClient_Init(&amp;tls_client);
+    if (ret != 0) {
+        printf(&quot;客户端初始化失败\n&quot;);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    /* 连接到服务器 */
+    ret = TLSClient_Connect(&amp;tls_client, SERVER_HOST, SERVER_PORT);
+    if (ret != 0) {
+        printf(&quot;连接服务器失败\n&quot;);
+        TLSClient_Cleanup(&amp;tls_client);
+        vTaskDelete(NULL);
+        return;
+    }
+
+    SecurityLog_Event(LOG_LEVEL_INFO, &quot;CONNECTED_TO_SERVER&quot;, SERVER_HOST, 0);
+
+    /* 发送测试请求 */
+    const char *request = &quot;GET / HTTP/1.1\r\nHost: iot-server.local\r\n\r\n&quot;;
+    ret = TLSClient_Send(&amp;tls_client, (const unsigned char *)request, strlen(request));
+    if (ret &lt; 0) {
+        printf(&quot;发送请求失败\n&quot;);
+        goto cleanup;
+    }
+
+    /* 接收响应 */
+    ret = TLSClient_Receive(&amp;tls_client, buf, sizeof(buf));
+    if (ret &lt; 0) {
+        printf(&quot;接收响应失败\n&quot;);
+        goto cleanup;
+    }
+
+    printf(&quot;收到服务器响应:\n%s\n&quot;, buf);
+
+    /* 保持连接，定期发送心跳 */
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(10000));  // 10秒
+
+        const char *heartbeat = &quot;PING\r\n&quot;;
+        ret = TLSClient_Send(&amp;tls_client, (const unsigned char *)heartbeat, strlen(heartbeat));
+        if (ret &lt; 0) {
+            printf(&quot;心跳发送失败，重新连接...\n&quot;);
+            TLSClient_Disconnect(&amp;tls_client);
+
+            ret = TLSClient_Connect(&amp;tls_client, SERVER_HOST, SERVER_PORT);
+            if (ret != 0) {
+                printf(&quot;重新连接失败\n&quot;);
+                break;
+            }
+        }
+    }
+
+cleanup:
+    TLSClient_Disconnect(&amp;tls_client);
+    TLSClient_Cleanup(&amp;tls_client);
+
+    SecurityLog_Event(LOG_LEVEL_INFO, &quot;DISCONNECTED_FROM_SERVER&quot;, SERVER_HOST, 0);
+
+    vTaskDelete(NULL);
+}
+</code></pre>
+<h2 id="4">阶段4：安全增强功能</h2>
+<h3 id="41">4.1 证书管理器</h3>
+<p>创建 <code>App/common/cert_manager.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef CERT_MANAGER_H
+#define CERT_MANAGER_H
+
+#include &quot;mbedtls/x509_crt.h&quot;
+#include &lt;stdbool.h&gt;
+
+/* 证书信息 */
+typedef struct {
+    char subject[256];
+    char issuer[256];
+    char serial[64];
+    char not_before[32];
+    char not_after[32];
+    bool is_valid;
+} CertInfo_t;
+
+/* 函数声明 */
+int CertManager_Init(void);
+int CertManager_LoadFromFile(const char *path, mbedtls_x509_crt *cert);
+int CertManager_SaveToFile(const char *path, const mbedtls_x509_crt *cert);
+int CertManager_GetInfo(const mbedtls_x509_crt *cert, CertInfo_t *info);
+bool CertManager_Verify(const mbedtls_x509_crt *cert, const mbedtls_x509_crt *ca);
+bool CertManager_IsExpired(const mbedtls_x509_crt *cert);
+int CertManager_GenerateCSR(const char *subject, mbedtls_pk_context *key, unsigned char *csr_buf, size_t buf_len);
+
+#endif
+</code></pre>
+<p>创建 <code>App/common/cert_manager.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;cert_manager.h&quot;
+#include &quot;ff.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+
+/**
+ * @brief  初始化证书管理器
+ */
+int CertManager_Init(void)
+{
+    printf(&quot;初始化证书管理器...\n&quot;);
+
+    /* 挂载文件系统 */
+    FATFS fs;
+    FRESULT res = f_mount(&amp;fs, &quot;0:&quot;, 1);
+    if (res != FR_OK) {
+        printf(&quot;错误: 文件系统挂载失败 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    /* 创建证书目录 */
+    f_mkdir(&quot;0:/certs&quot;);
+    f_mkdir(&quot;0:/certs/ca&quot;);
+    f_mkdir(&quot;0:/certs/server&quot;);
+    f_mkdir(&quot;0:/certs/client&quot;);
+
+    printf(&quot;✓ 证书管理器初始化完成\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  从文件加载证书
+ * @param  path: 文件路径
+ * @param  cert: 证书对象
+ * @retval 0=成功, 负数=错误码
+ */
+int CertManager_LoadFromFile(const char *path, mbedtls_x509_crt *cert)
+{
+    FIL file;
+    FRESULT res;
+    UINT bytes_read;
+    unsigned char buf[2048];
+
+    printf(&quot;从文件加载证书: %s\n&quot;, path);
+
+    /* 打开文件 */
+    res = f_open(&amp;file, path, FA_READ);
+    if (res != FR_OK) {
+        printf(&quot;错误: 无法打开文件 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    /* 读取文件内容 */
+    res = f_read(&amp;file, buf, sizeof(buf), &amp;bytes_read);
+    f_close(&amp;file);
+
+    if (res != FR_OK) {
+        printf(&quot;错误: 读取文件失败 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    /* 解析证书 */
+    int ret = mbedtls_x509_crt_parse(cert, buf, bytes_read);
+    if (ret != 0) {
+        printf(&quot;错误: 证书解析失败 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    printf(&quot;✓ 证书加载成功\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  保存证书到文件
+ * @param  path: 文件路径
+ * @param  cert: 证书对象
+ * @retval 0=成功, 负数=错误码
+ */
+int CertManager_SaveToFile(const char *path, const mbedtls_x509_crt *cert)
+{
+    FIL file;
+    FRESULT res;
+    UINT bytes_written;
+    unsigned char buf[2048];
+    size_t len;
+
+    printf(&quot;保存证书到文件: %s\n&quot;, path);
+
+    /* 将证书转换为PEM格式 */
+    int ret = mbedtls_pem_write_buffer(&quot;-----BEGIN CERTIFICATE-----\n&quot;,
+                                       &quot;-----END CERTIFICATE-----\n&quot;,
+                                       cert-&gt;raw.p, cert-&gt;raw.len,
+                                       buf, sizeof(buf), &amp;len);
+    if (ret != 0) {
+        printf(&quot;错误: PEM转换失败 -0x%04x\n&quot;, -ret);
+        return ret;
+    }
+
+    /* 打开文件 */
+    res = f_open(&amp;file, path, FA_CREATE_ALWAYS | FA_WRITE);
+    if (res != FR_OK) {
+        printf(&quot;错误: 无法创建文件 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    /* 写入文件 */
+    res = f_write(&amp;file, buf, len, &amp;bytes_written);
+    f_close(&amp;file);
+
+    if (res != FR_OK || bytes_written != len) {
+        printf(&quot;错误: 写入文件失败 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    printf(&quot;✓ 证书保存成功\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  获取证书信息
+ * @param  cert: 证书对象
+ * @param  info: 证书信息结构
+ * @retval 0=成功, 负数=错误码
+ */
+int CertManager_GetInfo(const mbedtls_x509_crt *cert, CertInfo_t *info)
+{
+    char buf[1024];
+
+    /* 获取主体信息 */
+    mbedtls_x509_dn_gets(info-&gt;subject, sizeof(info-&gt;subject), &amp;cert-&gt;subject);
+
+    /* 获取颁发者信息 */
+    mbedtls_x509_dn_gets(info-&gt;issuer, sizeof(info-&gt;issuer), &amp;cert-&gt;issuer);
+
+    /* 获取序列号 */
+    mbedtls_x509_serial_gets(info-&gt;serial, sizeof(info-&gt;serial), &amp;cert-&gt;serial);
+
+    /* 获取有效期 */
+    snprintf(info-&gt;not_before, sizeof(info-&gt;not_before), &quot;%04d-%02d-%02d %02d:%02d:%02d&quot;,
+             cert-&gt;valid_from.year, cert-&gt;valid_from.mon, cert-&gt;valid_from.day,
+             cert-&gt;valid_from.hour, cert-&gt;valid_from.min, cert-&gt;valid_from.sec);
+
+    snprintf(info-&gt;not_after, sizeof(info-&gt;not_after), &quot;%04d-%02d-%02d %02d:%02d:%02d&quot;,
+             cert-&gt;valid_to.year, cert-&gt;valid_to.mon, cert-&gt;valid_to.day,
+             cert-&gt;valid_to.hour, cert-&gt;valid_to.min, cert-&gt;valid_to.sec);
+
+    /* 检查是否过期 */
+    info-&gt;is_valid = !CertManager_IsExpired(cert);
+
+    return 0;
+}
+
+/**
+ * @brief  验证证书
+ * @param  cert: 要验证的证书
+ * @param  ca: CA证书
+ * @retval true=验证通过, false=验证失败
+ */
+bool CertManager_Verify(const mbedtls_x509_crt *cert, const mbedtls_x509_crt *ca)
+{
+    uint32_t flags;
+
+    int ret = mbedtls_x509_crt_verify((mbedtls_x509_crt *)cert, (mbedtls_x509_crt *)ca,
+                                     NULL, NULL, &amp;flags, NULL, NULL);
+
+    if (ret != 0 || flags != 0) {
+        char vrfy_buf[512];
+        mbedtls_x509_crt_verify_info(vrfy_buf, sizeof(vrfy_buf), &quot;  ! &quot;, flags);
+        printf(&quot;证书验证失败:\n%s\n&quot;, vrfy_buf);
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * @brief  检查证书是否过期
+ * @param  cert: 证书对象
+ * @retval true=已过期, false=未过期
+ */
+bool CertManager_IsExpired(const mbedtls_x509_crt *cert)
+{
+    mbedtls_x509_time now;
+
+    /* 获取当前时间（简化示例，实际应从RTC获取） */
+    now.year = 2024;
+    now.mon = 1;
+    now.day = 15;
+    now.hour = 12;
+    now.min = 0;
+    now.sec = 0;
+
+    /* 比较时间 */
+    if (mbedtls_x509_time_is_past(&amp;cert-&gt;valid_to)) {
+        return true;  // 已过期
+    }
+
+    if (mbedtls_x509_time_is_future(&amp;cert-&gt;valid_from)) {
+        return true;  // 尚未生效
+    }
+
+    return false;
+}
+
+/**
+ * @brief  生成证书签名请求(CSR)
+ * @param  subject: 主体信息
+ * @param  key: 私钥
+ * @param  csr_buf: CSR输出缓冲区
+ * @param  buf_len: 缓冲区大小
+ * @retval 0=成功, 负数=错误码
+ */
+int CertManager_GenerateCSR(const char *subject, mbedtls_pk_context *key,
+                           unsigned char *csr_buf, size_t buf_len)
+{
+    mbedtls_x509write_csr csr;
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    const char *pers = &quot;csr_gen&quot;;
+    int ret;
+
+    printf(&quot;生成证书签名请求...\n&quot;);
+
+    /* 初始化 */
+    mbedtls_x509write_csr_init(&amp;csr);
+    mbedtls_entropy_init(&amp;entropy);
+    mbedtls_ctr_drbg_init(&amp;ctr_drbg);
+
+    /* 初始化随机数生成器 */
+    ret = mbedtls_ctr_drbg_seed(&amp;ctr_drbg, mbedtls_entropy_func, &amp;entropy,
+                                (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        goto cleanup;
+    }
+
+    /* 设置主体信息 */
+    ret = mbedtls_x509write_csr_set_subject_name(&amp;csr, subject);
+    if (ret != 0) {
+        goto cleanup;
+    }
+
+    /* 设置密钥 */
+    mbedtls_x509write_csr_set_key(&amp;csr, key);
+
+    /* 设置MD算法 */
+    mbedtls_x509write_csr_set_md_alg(&amp;csr, MBEDTLS_MD_SHA256);
+
+    /* 生成CSR */
+    ret = mbedtls_x509write_csr_pem(&amp;csr, csr_buf, buf_len,
+                                   mbedtls_ctr_drbg_random, &amp;ctr_drbg);
+    if (ret &lt; 0) {
+        printf(&quot;错误: CSR生成失败 -0x%04x\n&quot;, -ret);
+        goto cleanup;
+    }
+
+    printf(&quot;✓ CSR生成成功\n&quot;);
+    ret = 0;
+
+cleanup:
+    mbedtls_x509write_csr_free(&amp;csr);
+    mbedtls_ctr_drbg_free(&amp;ctr_drbg);
+    mbedtls_entropy_free(&amp;entropy);
+
+    return ret;
+}
+</code></pre>
+<h3 id="42">4.2 安全日志系统</h3>
+<p>创建 <code>App/common/security_log.h</code> 文件：</p>
+<pre><code class="language-c">#ifndef SECURITY_LOG_H
+#define SECURITY_LOG_H
+
+#include &lt;stdint.h&gt;
+
+/* 日志级别 */
+typedef enum {
+    LOG_LEVEL_DEBUG = 0,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARNING,
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_CRITICAL
+} LogLevel_t;
+
+/* 日志条目 */
+typedef struct {
+    uint32_t timestamp;
+    LogLevel_t level;
+    char event[32];
+    char source[64];
+    uint32_t session_id;
+    char message[128];
+} LogEntry_t;
+
+/* 函数声明 */
+int SecurityLog_Init(void);
+void SecurityLog_Event(LogLevel_t level, const char *event, const char *source, uint32_t session_id);
+void SecurityLog_Message(LogLevel_t level, const char *format, ...);
+int SecurityLog_Query(LogLevel_t min_level, LogEntry_t *entries, uint32_t max_count);
+int SecurityLog_Export(const char *filename);
+void SecurityLog_Clear(void);
+
+#endif
+</code></pre>
+<p>创建 <code>App/common/security_log.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;security_log.h&quot;
+#include &quot;ff.h&quot;
+#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;stdarg.h&gt;
+
+#define MAX_LOG_ENTRIES 1000
+
+static LogEntry_t log_buffer[MAX_LOG_ENTRIES];
+static uint32_t log_count = 0;
+static uint32_t log_index = 0;
+
+static const char *level_names[] = {
+    &quot;DEBUG&quot;, &quot;INFO&quot;, &quot;WARNING&quot;, &quot;ERROR&quot;, &quot;CRITICAL&quot;
+};
+
+/**
+ * @brief  初始化安全日志系统
+ */
+int SecurityLog_Init(void)
+{
+    printf(&quot;初始化安全日志系统...\n&quot;);
+
+    memset(log_buffer, 0, sizeof(log_buffer));
+    log_count = 0;
+    log_index = 0;
+
+    /* 创建日志目录 */
+    f_mkdir(&quot;0:/logs&quot;);
+
+    printf(&quot;✓ 安全日志系统初始化完成\n&quot;);
+    return 0;
+}
+
+/**
+ * @brief  记录安全事件
+ * @param  level: 日志级别
+ * @param  event: 事件类型
+ * @param  source: 事件来源
+ * @param  session_id: 会话ID
+ */
+void SecurityLog_Event(LogLevel_t level, const char *event, const char *source, uint32_t session_id)
+{
+    LogEntry_t *entry = &amp;log_buffer[log_index];
+
+    entry-&gt;timestamp = HAL_GetTick();
+    entry-&gt;level = level;
+    strncpy(entry-&gt;event, event, sizeof(entry-&gt;event) - 1);
+    strncpy(entry-&gt;source, source, sizeof(entry-&gt;source) - 1);
+    entry-&gt;session_id = session_id;
+    entry-&gt;message[0] = '\0';
+
+    /* 更新索引 */
+    log_index = (log_index + 1) % MAX_LOG_ENTRIES;
+    if (log_count &lt; MAX_LOG_ENTRIES) {
+        log_count++;
+    }
+
+    /* 输出到控制台 */
+    printf(&quot;[%s] %s from %s (Session: %lu)\n&quot;,
+           level_names[level], event, source, session_id);
+}
+
+/**
+ * @brief  记录日志消息
+ * @param  level: 日志级别
+ * @param  format: 格式化字符串
+ */
+void SecurityLog_Message(LogLevel_t level, const char *format, ...)
+{
+    LogEntry_t *entry = &amp;log_buffer[log_index];
+    va_list args;
+
+    entry-&gt;timestamp = HAL_GetTick();
+    entry-&gt;level = level;
+    entry-&gt;event[0] = '\0';
+    entry-&gt;source[0] = '\0';
+    entry-&gt;session_id = 0;
+
+    /* 格式化消息 */
+    va_start(args, format);
+    vsnprintf(entry-&gt;message, sizeof(entry-&gt;message), format, args);
+    va_end(args);
+
+    /* 更新索引 */
+    log_index = (log_index + 1) % MAX_LOG_ENTRIES;
+    if (log_count &lt; MAX_LOG_ENTRIES) {
+        log_count++;
+    }
+
+    /* 输出到控制台 */
+    printf(&quot;[%s] %s\n&quot;, level_names[level], entry-&gt;message);
+}
+
+/**
+ * @brief  查询日志
+ * @param  min_level: 最小日志级别
+ * @param  entries: 输出缓冲区
+ * @param  max_count: 最大条目数
+ * @retval 返回的条目数
+ */
+int SecurityLog_Query(LogLevel_t min_level, LogEntry_t *entries, uint32_t max_count)
+{
+    uint32_t count = 0;
+    uint32_t start_index = (log_index + MAX_LOG_ENTRIES - log_count) % MAX_LOG_ENTRIES;
+
+    for (uint32_t i = 0; i &lt; log_count &amp;&amp; count &lt; max_count; i++) {
+        uint32_t idx = (start_index + i) % MAX_LOG_ENTRIES;
+        if (log_buffer[idx].level &gt;= min_level) {
+            entries[count++] = log_buffer[idx];
+        }
+    }
+
+    return count;
+}
+
+/**
+ * @brief  导出日志到文件
+ * @param  filename: 文件名
+ * @retval 0=成功, 负数=错误码
+ */
+int SecurityLog_Export(const char *filename)
+{
+    FIL file;
+    FRESULT res;
+    char line[256];
+
+    printf(&quot;导出日志到文件: %s\n&quot;, filename);
+
+    /* 打开文件 */
+    res = f_open(&amp;file, filename, FA_CREATE_ALWAYS | FA_WRITE);
+    if (res != FR_OK) {
+        printf(&quot;错误: 无法创建文件 (%d)\n&quot;, res);
+        return -1;
+    }
+
+    /* 写入日志头 */
+    f_printf(&amp;file, &quot;Timestamp,Level,Event,Source,SessionID,Message\n&quot;);
+
+    /* 写入日志条目 */
+    uint32_t start_index = (log_index + MAX_LOG_ENTRIES - log_count) % MAX_LOG_ENTRIES;
+    for (uint32_t i = 0; i &lt; log_count; i++) {
+        uint32_t idx = (start_index + i) % MAX_LOG_ENTRIES;
+        LogEntry_t *entry = &amp;log_buffer[idx];
+
+        f_printf(&amp;file, &quot;%lu,%s,%s,%s,%lu,%s\n&quot;,
+                entry-&gt;timestamp,
+                level_names[entry-&gt;level],
+                entry-&gt;event,
+                entry-&gt;source,
+                entry-&gt;session_id,
+                entry-&gt;message);
+    }
+
+    f_close(&amp;file);
+
+    printf(&quot;✓ 日志导出完成 (%lu 条)\n&quot;, log_count);
+    return 0;
+}
+
+/**
+ * @brief  清空日志
+ */
+void SecurityLog_Clear(void)
+{
+    printf(&quot;清空日志...\n&quot;);
+
+    memset(log_buffer, 0, sizeof(log_buffer));
+    log_count = 0;
+    log_index = 0;
+
+    printf(&quot;✓ 日志已清空\n&quot;);
+}
+</code></pre>
+<h2 id="5">阶段5：测试与验证</h2>
+<h3 id="51">5.1 单元测试</h3>
+<p>创建 <code>App/test/test_tls.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;unity.h&quot;
+#include &quot;tls_client.h&quot;
+#include &quot;tls_server.h&quot;
+#include &quot;cert_manager.h&quot;
+
+void setUp(void) {
+    /* 测试前初始化 */
+}
+
+void tearDown(void) {
+    /* 测试后清理 */
+}
+
+/**
+ * @brief  测试证书加载
+ */
+void test_certificate_loading(void) {
+    mbedtls_x509_crt cert;
+    mbedtls_x509_crt_init(&amp;cert);
+
+    int ret = mbedtls_x509_crt_parse(&amp;cert, ca_chain_pem, ca_chain_pem_len);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    mbedtls_x509_crt_free(&amp;cert);
+}
+
+/**
+ * @brief  测试证书验证
+ */
+void test_certificate_verification(void) {
+    mbedtls_x509_crt ca_cert, server_cert;
+
+    mbedtls_x509_crt_init(&amp;ca_cert);
+    mbedtls_x509_crt_init(&amp;server_cert);
+
+    /* 加载证书 */
+    mbedtls_x509_crt_parse(&amp;ca_cert, ca_chain_pem, ca_chain_pem_len);
+    mbedtls_x509_crt_parse(&amp;server_cert, server_cert_pem, server_cert_pem_len);
+
+    /* 验证证书 */
+    bool valid = CertManager_Verify(&amp;server_cert, &amp;ca_cert);
+    TEST_ASSERT_TRUE(valid);
+
+    mbedtls_x509_crt_free(&amp;ca_cert);
+    mbedtls_x509_crt_free(&amp;server_cert);
+}
+
+/**
+ * @brief  测试TLS客户端初始化
+ */
+void test_tls_client_init(void) {
+    TLSClient_t client;
+
+    int ret = TLSClient_Init(&amp;client);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    TLSClient_Cleanup(&amp;client);
+}
+
+/**
+ * @brief  测试TLS服务器初始化
+ */
+void test_tls_server_init(void) {
+    TLSServer_t server;
+
+    int ret = TLSServer_Init(&amp;server);
+    TEST_ASSERT_EQUAL(0, ret);
+
+    TLSServer_Shutdown(&amp;server);
+}
+
+/**
+ * @brief  测试加密套件协商
+ */
+void test_cipher_suite_negotiation(void) {
+    /* 测试客户端和服务器能否协商出共同支持的加密套件 */
+    TLSClient_t client;
+    TLSServer_t server;
+
+    TLSClient_Init(&amp;client);
+    TLSServer_Init(&amp;server);
+
+    /* 这里应该测试实际的握手过程 */
+    /* 简化示例，实际需要完整的握手流程 */
+
+    TLSClient_Cleanup(&amp;client);
+    TLSServer_Shutdown(&amp;server);
+}
+
+int main(void) {
+    UNITY_BEGIN();
+
+    RUN_TEST(test_certificate_loading);
+    RUN_TEST(test_certificate_verification);
+    RUN_TEST(test_tls_client_init);
+    RUN_TEST(test_tls_server_init);
+    RUN_TEST(test_cipher_suite_negotiation);
+
+    return UNITY_END();
+}
+</code></pre>
+<h3 id="52">5.2 集成测试</h3>
+<p>创建 <code>Scripts/test_connection.py</code> 测试脚本：</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+TLS连接测试脚本
+用于测试客户端和服务器之间的TLS连接
+&quot;&quot;&quot;
+
+import socket
+import ssl
+import time
+import sys
+
+def test_tls_connection(host, port, ca_cert, client_cert, client_key):
+    &quot;&quot;&quot;测试TLS连接&quot;&quot;&quot;
+
+    print(f&quot;=== 测试TLS连接 ===&quot;)
+    print(f&quot;服务器: {host}:{port}&quot;)
+
+    try:
+        # 创建SSL上下文
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.load_verify_locations(ca_cert)
+        context.load_cert_chain(client_cert, client_key)
+        context.check_hostname = False
+
+        # 创建socket并连接
+        with socket.create_connection((host, port), timeout=10) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as ssock:
+                print(f&quot;✓ TLS连接已建立&quot;)
+                print(f&quot;  协议版本: {ssock.version()}&quot;)
+                print(f&quot;  加密套件: {ssock.cipher()[0]}&quot;)
+
+                # 获取服务器证书
+                cert = ssock.getpeercert()
+                print(f&quot;  服务器证书主体: {cert['subject']}&quot;)
+                print(f&quot;  证书颁发者: {cert['issuer']}&quot;)
+
+                # 发送测试数据
+                test_data = b&quot;GET / HTTP/1.1\r\nHost: iot-server.local\r\n\r\n&quot;
+                ssock.sendall(test_data)
+                print(f&quot;✓ 发送数据: {len(test_data)} 字节&quot;)
+
+                # 接收响应
+                response = ssock.recv(1024)
+                print(f&quot;✓ 接收响应: {len(response)} 字节&quot;)
+                print(f&quot;  响应内容: {response.decode('utf-8', errors='ignore')}&quot;)
+
+                return True
+
+    except ssl.SSLError as e:
+        print(f&quot;✗ SSL错误: {e}&quot;)
+        return False
+    except socket.timeout:
+        print(f&quot;✗ 连接超时&quot;)
+        return False
+    except Exception as e:
+        print(f&quot;✗ 连接失败: {e}&quot;)
+        return False
+
+def test_mutual_auth(host, port, ca_cert, client_cert, client_key):
+    &quot;&quot;&quot;测试双向认证&quot;&quot;&quot;
+
+    print(f&quot;\n=== 测试双向认证 ===&quot;)
+
+    # 测试1: 使用正确的客户端证书
+    print(&quot;测试1: 使用正确的客户端证书&quot;)
+    result1 = test_tls_connection(host, port, ca_cert, client_cert, client_key)
+
+    # 测试2: 不提供客户端证书（应该失败）
+    print(&quot;\n测试2: 不提供客户端证书（应该失败）&quot;)
+    try:
+        context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+        context.load_verify_locations(ca_cert)
+        context.check_hostname = False
+
+        with socket.create_connection((host, port), timeout=10) as sock:
+            with context.wrap_socket(sock, server_hostname=host) as ssock:
+                print(&quot;✗ 连接成功（不应该成功）&quot;)
+                result2 = False
+    except ssl.SSLError:
+        print(&quot;✓ 连接被拒绝（符合预期）&quot;)
+        result2 = True
+    except Exception as e:
+        print(f&quot;✗ 意外错误: {e}&quot;)
+        result2 = False
+
+    return result1 and result2
+
+def test_cipher_suites(host, port, ca_cert, client_cert, client_key):
+    &quot;&quot;&quot;测试不同的加密套件&quot;&quot;&quot;
+
+    print(f&quot;\n=== 测试加密套件 ===&quot;)
+
+    cipher_suites = [
+        'ECDHE-RSA-AES256-GCM-SHA384',
+        'ECDHE-RSA-AES128-GCM-SHA256',
+        'AES256-SHA256',
+        'AES128-SHA256',
+    ]
+
+    results = {}
+
+    for cipher in cipher_suites:
+        print(f&quot;\n测试加密套件: {cipher}&quot;)
+        try:
+            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            context.load_verify_locations(ca_cert)
+            context.load_cert_chain(client_cert, client_key)
+            context.set_ciphers(cipher)
+            context.check_hostname = False
+
+            with socket.create_connection((host, port), timeout=10) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as ssock:
+                    actual_cipher = ssock.cipher()[0]
+                    print(f&quot;✓ 协商成功: {actual_cipher}&quot;)
+                    results[cipher] = True
+        except Exception as e:
+            print(f&quot;✗ 协商失败: {e}&quot;)
+            results[cipher] = False
+
+    return results
+
+def test_performance(host, port, ca_cert, client_cert, client_key, iterations=100):
+    &quot;&quot;&quot;测试性能&quot;&quot;&quot;
+
+    print(f&quot;\n=== 性能测试 ===&quot;)
+    print(f&quot;测试次数: {iterations}&quot;)
+
+    # 测试连接建立时间
+    connect_times = []
+
+    for i in range(iterations):
+        start_time = time.time()
+
+        try:
+            context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH)
+            context.load_verify_locations(ca_cert)
+            context.load_cert_chain(client_cert, client_key)
+            context.check_hostname = False
+
+            with socket.create_connection((host, port), timeout=10) as sock:
+                with context.wrap_socket(sock, server_hostname=host) as ssock:
+                    elapsed = time.time() - start_time
+                    connect_times.append(elapsed)
+
+                    if (i + 1) % 10 == 0:
+                        print(f&quot;  完成 {i + 1}/{iterations} 次连接&quot;)
+        except Exception as e:
+            print(f&quot;✗ 连接失败: {e}&quot;)
+            continue
+
+    if connect_times:
+        avg_time = sum(connect_times) / len(connect_times)
+        min_time = min(connect_times)
+        max_time = max(connect_times)
+
+        print(f&quot;\n性能统计:&quot;)
+        print(f&quot;  平均连接时间: {avg_time*1000:.2f} ms&quot;)
+        print(f&quot;  最快连接时间: {min_time*1000:.2f} ms&quot;)
+        print(f&quot;  最慢连接时间: {max_time*1000:.2f} ms&quot;)
+        print(f&quot;  成功率: {len(connect_times)}/{iterations} ({len(connect_times)/iterations*100:.1f}%)&quot;)
+
+def main():
+    &quot;&quot;&quot;主函数&quot;&quot;&quot;
+
+    # 配置
+    HOST = '192.168.1.100'
+    PORT = 4433
+    CA_CERT = 'Certificates/ca/ca-chain.pem'
+    CLIENT_CERT = 'Certificates/client/client-cert.pem'
+    CLIENT_KEY = 'Certificates/client/client-key.pem'
+
+    print(&quot;=== TLS通信系统测试 ===\n&quot;)
+
+    # 基本连接测试
+    result1 = test_tls_connection(HOST, PORT, CA_CERT, CLIENT_CERT, CLIENT_KEY)
+
+    # 双向认证测试
+    result2 = test_mutual_auth(HOST, PORT, CA_CERT, CLIENT_CERT, CLIENT_KEY)
+
+    # 加密套件测试
+    cipher_results = test_cipher_suites(HOST, PORT, CA_CERT, CLIENT_CERT, CLIENT_KEY)
+
+    # 性能测试
+    test_performance(HOST, PORT, CA_CERT, CLIENT_CERT, CLIENT_KEY, iterations=50)
+
+    # 总结
+    print(&quot;\n=== 测试总结 ===&quot;)
+    print(f&quot;基本连接测试: {'✓ 通过' if result1 else '✗ 失败'}&quot;)
+    print(f&quot;双向认证测试: {'✓ 通过' if result2 else '✗ 失败'}&quot;)
+    print(f&quot;加密套件测试:&quot;)
+    for cipher, result in cipher_results.items():
+        print(f&quot;  {cipher}: {'✓ 支持' if result else '✗ 不支持'}&quot;)
+
+    # 返回退出码
+    all_passed = result1 and result2 and any(cipher_results.values())
+    sys.exit(0 if all_passed else 1)
+
+if __name__ == '__main__':
+    main()
+</code></pre>
+<h3 id="53">5.3 安全测试</h3>
+<p>创建 <code>Scripts/security_test.py</code> 安全测试脚本：</p>
+<pre><code class="language-python">#!/usr/bin/env python3
+&quot;&quot;&quot;
+安全测试脚本
+测试各种安全攻击场景
+&quot;&quot;&quot;
+
+import socket
+import ssl
+import time
+
+def test_expired_certificate(host, port):
+    &quot;&quot;&quot;测试过期证书&quot;&quot;&quot;
+    print(&quot;=== 测试过期证书 ===&quot;)
+    # 实现过期证书测试
+    pass
+
+def test_invalid_certificate(host, port):
+    &quot;&quot;&quot;测试无效证书&quot;&quot;&quot;
+    print(&quot;=== 测试无效证书 ===&quot;)
+    # 实现无效证书测试
+    pass
+
+def test_downgrade_attack(host, port):
+    &quot;&quot;&quot;测试降级攻击&quot;&quot;&quot;
+    print(&quot;=== 测试降级攻击 ===&quot;)
+    # 尝试强制使用弱加密套件
+    pass
+
+def test_replay_attack(host, port):
+    &quot;&quot;&quot;测试重放攻击&quot;&quot;&quot;
+    print(&quot;=== 测试重放攻击 ===&quot;)
+    # 实现重放攻击测试
+    pass
+
+def test_dos_attack(host, port):
+    &quot;&quot;&quot;测试拒绝服务攻击&quot;&quot;&quot;
+    print(&quot;=== 测试拒绝服务攻击 ===&quot;)
+    # 实现DOS攻击测试（仅用于测试，不要用于实际攻击）
+    pass
+
+if __name__ == '__main__':
+    HOST = '192.168.1.100'
+    PORT = 4433
+
+    print(&quot;=== 安全测试 ===\n&quot;)
+    print(&quot;警告: 这些测试仅用于验证系统安全性&quot;)
+    print(&quot;请勿用于非法目的\n&quot;)
+
+    test_expired_certificate(HOST, PORT)
+    test_invalid_certificate(HOST, PORT)
+    test_downgrade_attack(HOST, PORT)
+    test_replay_attack(HOST, PORT)
+    test_dos_attack(HOST, PORT)
+</code></pre>
+<h2 id="6">阶段6：性能优化与部署</h2>
+<h3 id="61">6.1 性能优化</h3>
+<p><strong>内存优化</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  优化mbedTLS内存使用
+ */
+void optimize_mbedtls_memory(void)
+{
+    /* 1. 使用自定义内存分配器 */
+    #define MBEDTLS_PLATFORM_MEMORY
+    mbedtls_platform_set_calloc_free(custom_calloc, custom_free);
+
+    /* 2. 减小缓冲区大小 */
+    #define MBEDTLS_SSL_MAX_CONTENT_LEN 4096  // 默认16KB
+
+    /* 3. 禁用不需要的功能 */
+    #undef MBEDTLS_SSL_PROTO_SSL3
+    #undef MBEDTLS_SSL_PROTO_TLS1
+    #undef MBEDTLS_SSL_PROTO_TLS1_1
+
+    /* 4. 使用硬件加速 */
+    #define MBEDTLS_AES_ALT
+    #define MBEDTLS_SHA256_ALT
+}
+</code></pre>
+<p><strong>性能优化</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  启用会话恢复
+ */
+void enable_session_resumption(mbedtls_ssl_config *conf)
+{
+    /* 启用会话缓存 */
+    static mbedtls_ssl_cache_context cache;
+    mbedtls_ssl_cache_init(&amp;cache);
+
+    /* 设置缓存参数 */
+    mbedtls_ssl_cache_set_timeout(&amp;cache, 3600);  // 1小时
+    mbedtls_ssl_cache_set_max_entries(&amp;cache, 50);
+
+    /* 配置会话缓存 */
+    mbedtls_ssl_conf_session_cache(conf, &amp;cache,
+                                   mbedtls_ssl_cache_get,
+                                   mbedtls_ssl_cache_set);
+
+    printf(&quot;✓ 会话恢复已启用\n&quot;);
+}
+
+/**
+ * @brief  使用硬件加速
+ */
+void enable_hardware_acceleration(void)
+{
+    /* 启用STM32硬件加密加速器 */
+    #ifdef STM32F4
+    __HAL_RCC_CRYP_CLK_ENABLE();
+    __HAL_RCC_HASH_CLK_ENABLE();
+    #endif
+
+    /* 配置mbedTLS使用硬件加速 */
+    #define MBEDTLS_AES_ALT
+    #define MBEDTLS_SHA256_ALT
+
+    printf(&quot;✓ 硬件加速已启用\n&quot;);
+}
+</code></pre>
+<h3 id="62">6.2 安全加固</h3>
+<p><strong>安全配置检查清单</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief  安全配置检查
+ */
+bool security_configuration_check(mbedtls_ssl_config *conf)
+{
+    bool all_passed = true;
+
+    printf(&quot;=== 安全配置检查 ===\n&quot;);
+
+    /* 1. 检查TLS版本 */
+    if (conf-&gt;min_minor_ver &lt; MBEDTLS_SSL_MINOR_VERSION_3) {
+        printf(&quot;✗ 警告: 允许TLS 1.2以下版本\n&quot;);
+        all_passed = false;
+    } else {
+        printf(&quot;✓ TLS版本: 1.2+\n&quot;);
+    }
+
+    /* 2. 检查证书验证 */
+    if (conf-&gt;authmode != MBEDTLS_SSL_VERIFY_REQUIRED) {
+        printf(&quot;✗ 警告: 未要求证书验证\n&quot;);
+        all_passed = false;
+    } else {
+        printf(&quot;✓ 证书验证: 必需\n&quot;);
+    }
+
+    /* 3. 检查加密套件 */
+    const int *ciphersuites = conf-&gt;ciphersuite_list[0];
+    bool has_weak_cipher = false;
+
+    for (int i = 0; ciphersuites[i] != 0; i++) {
+        const mbedtls_ssl_ciphersuite_t *suite = 
+            mbedtls_ssl_ciphersuite_from_id(ciphersuites[i]);
+
+        /* 检查是否包含弱加密套件 */
+        if (suite-&gt;min_minor_ver &lt; MBEDTLS_SSL_MINOR_VERSION_3) {
+            printf(&quot;✗ 警告: 包含弱加密套件: %s\n&quot;, suite-&gt;name);
+            has_weak_cipher = true;
+            all_passed = false;
+        }
+    }
+
+    if (!has_weak_cipher) {
+        printf(&quot;✓ 加密套件: 安全\n&quot;);
+    }
+
+    /* 4. 检查会话票据 */
+    if (conf-&gt;session_tickets == MBEDTLS_SSL_SESSION_TICKETS_ENABLED) {
+        printf(&quot;✓ 会话票据: 已启用\n&quot;);
+    } else {
+        printf(&quot;! 会话票据: 未启用（可选）\n&quot;);
+    }
+
+    /* 5. 检查重协商 */
+    if (conf-&gt;disable_renegotiation == MBEDTLS_SSL_RENEGOTIATION_DISABLED) {
+        printf(&quot;✓ 重协商: 已禁用\n&quot;);
+    } else {
+        printf(&quot;! 警告: 重协商已启用（可能存在安全风险）\n&quot;);
+    }
+
+    printf(&quot;\n&quot;);
+    return all_passed;
+}
+</code></pre>
+<h3 id="63">6.3 部署指南</h3>
+<p><strong>生产环境部署步骤</strong>：</p>
+<ol>
+<li><strong>证书准备</strong></li>
+</ol>
+<pre><code class="language-bash"># 生成生产环境证书
+./Scripts/generate_certs.sh
+
+# 验证证书
+openssl verify -CAfile Certificates/ca/ca-chain.pem \
+    Certificates/server/server-cert.pem
+
+# 转换为C数组
+./Scripts/convert_certs.sh
+</code></pre>
+<ol start="2">
+<li><strong>配置优化</strong></li>
+</ol>
+<pre><code class="language-c">/* 生产环境配置 */
+#define PRODUCTION_MODE 1
+
+#if PRODUCTION_MODE
+    /* 禁用调试输出 */
+    #undef MBEDTLS_DEBUG_C
+
+    /* 启用所有安全特性 */
+    #define MBEDTLS_SSL_RENEGOTIATION_DISABLED
+    #define MBEDTLS_SSL_VERIFY_REQUIRED
+
+    /* 优化性能 */
+    #define MBEDTLS_SSL_MAX_CONTENT_LEN 4096
+    #define MBEDTLS_AES_ALT
+    #define MBEDTLS_SHA256_ALT
+#endif
+</code></pre>
+<ol start="3">
+<li><strong>固件编译</strong></li>
+</ol>
+<pre><code class="language-bash"># 编译生产固件
+make clean
+make PRODUCTION=1
+
+# 验证固件
+arm-none-eabi-size build/firmware.elf
+
+# 生成加密固件
+./Scripts/encrypt_firmware.sh build/firmware.bin
+</code></pre>
+<ol start="4">
+<li><strong>部署验证</strong></li>
+</ol>
+<pre><code class="language-bash"># 运行测试套件
+python Scripts/test_connection.py
+
+# 运行安全测试
+python Scripts/security_test.py
+
+# 性能测试
+python Scripts/performance_test.py
+</code></pre>
+<h2 id="_12">完整代码</h2>
+<h3 id="_13">项目结构</h3>
+<pre><code>secure_communication/
+├── App/
+│   ├── client/
+│   │   ├── tls_client.c/h
+│   │   ├── client_app.c/h
+│   │   └── client_config.h
+│   ├── server/
+│   │   ├── tls_server.c/h
+│   │   ├── server_app.c/h
+│   │   └── server_config.h
+│   ├── common/
+│   │   ├── cert_manager.c/h
+│   │   ├── key_manager.c/h
+│   │   ├── session_manager.c/h
+│   │   └── security_log.c/h
+│   └── test/
+│       ├── test_tls.c
+│       └── test_cert.c
+├── Drivers/
+│   ├── atecc608/
+│   ├── ethernet/
+│   └── sdcard/
+├── Middlewares/
+│   ├── mbedTLS/
+│   ├── FreeRTOS/
+│   ├── lwIP/
+│   └── FatFs/
+├── Certificates/
+│   ├── ca/
+│   ├── server/
+│   └── client/
+├── Scripts/
+│   ├── generate_certs.sh
+│   ├── convert_certs.sh
+│   ├── test_connection.py
+│   ├── security_test.py
+│   └── performance_test.py
+├── Docs/
+│   ├── API.md
+│   ├── DEPLOYMENT.md
+│   └── SECURITY.md
+├── main.c
+├── Makefile
+└── README.md
+</code></pre>
+<h3 id="_14">主程序</h3>
+<p>创建 <code>main.c</code> 文件：</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;main.h&quot;
+#include &quot;tls_server.h&quot;
+#include &quot;tls_client.h&quot;
+#include &quot;cert_manager.h&quot;
+#include &quot;security_log.h&quot;
+
+/* 任务句柄 */
+TaskHandle_t server_task_handle;
+TaskHandle_t client_task_handle;
+
+/**
+ * @brief  系统初始化
+ */
+void System_Init(void)
+{
+    /* HAL初始化 */
+    HAL_Init();
+    SystemClock_Config();
+
+    /* 外设初始化 */
+    MX_GPIO_Init();
+    MX_USART1_UART_Init();
+    MX_ETH_Init();
+    MX_SPI1_Init();
+    MX_I2C1_Init();
+    MX_SDIO_SD_Init();
+
+    /* 网络初始化 */
+    lwip_init();
+
+    /* 文件系统初始化 */
+    FATFS_Init();
+
+    /* 证书管理器初始化 */
+    CertManager_Init();
+
+    /* 安全日志初始化 */
+    SecurityLog_Init();
+
+    printf(&quot;\n&quot;);
+    printf(&quot;=================================\n&quot;);
+    printf(&quot;  安全通信系统\n&quot;);
+    printf(&quot;  版本: 1.0.0\n&quot;);
+    printf(&quot;  构建时间: %s %s\n&quot;, __DATE__, __TIME__);
+    printf(&quot;=================================\n\n&quot;);
+}
+
+/**
+ * @brief  主函数
+ */
+int main(void)
+{
+    /* 系统初始化 */
+    System_Init();
+
+    /* 创建服务器任务 */
+    xTaskCreate(TLSServer_Task, &quot;TLS_Server&quot;, 4096, NULL, 3, &amp;server_task_handle);
+
+    /* 创建客户端任务（可选，用于测试） */
+    // xTaskCreate(TLSClient_Task, &quot;TLS_Client&quot;, 4096, NULL, 2, &amp;client_task_handle);
+
+    /* 创建监控任务 */
+    xTaskCreate(Monitor_Task, &quot;Monitor&quot;, 1024, NULL, 1, NULL);
+
+    /* 启动调度器 */
+    printf(&quot;启动FreeRTOS调度器...\n&quot;);
+    vTaskStartScheduler();
+
+    /* 不应该到达这里 */
+    while (1) {
+        HAL_Delay(1000);
+    }
+}
+
+/**
+ * @brief  监控任务
+ */
+void Monitor_Task(void *pvParameters)
+{
+    uint32_t last_time = 0;
+
+    while (1) {
+        uint32_t current_time = HAL_GetTick();
+
+        /* 每分钟输出一次状态 */
+        if (current_time - last_time &gt;= 60000) {
+            printf(&quot;\n=== 系统状态 ===\n&quot;);
+            printf(&quot;运行时间: %lu 秒\n&quot;, current_time / 1000);
+            printf(&quot;空闲堆: %u 字节\n&quot;, xPortGetFreeHeapSize());
+
+            /* 输出任务状态 */
+            char task_list[512];
+            vTaskList(task_list);
+            printf(&quot;任务列表:\n%s\n&quot;, task_list);
+
+            last_time = current_time;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+/**
+ * @brief  错误处理函数
+ */
+void Error_Handler(void)
+{
+    printf(&quot;错误: 系统进入错误处理\n&quot;);
+    SecurityLog_Message(LOG_LEVEL_CRITICAL, &quot;System entered error handler&quot;);
+
+    /* 禁用中断 */
+    __disable_irq();
+
+    while (1) {
+        /* 闪烁LED指示错误 */
+        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h3 id="_15">代码仓库</h3>
+<p>完整代码已上传到GitHub：[待添加仓库链接]</p>
+<h2 id="_16">故障排除</h2>
+<h3 id="_17">常见问题</h3>
+<h4 id="1tls">问题1：TLS握手失败</h4>
+<p><strong>症状</strong>：客户端无法与服务器建立TLS连接</p>
+<p><strong>可能原因</strong>：
+- 证书配置错误
+- 时间不同步
+- 加密套件不匹配
+- 网络连接问题</p>
+<p><strong>解决方法</strong>：
+1. 使用Wireshark抓包分析握手过程
+2. 检查证书有效期和证书链
+3. 验证服务器和客户端的加密套件配置
+4. 确保网络连接正常</p>
+<pre><code class="language-bash"># 使用OpenSSL测试服务器
+openssl s_client -connect 192.168.1.100:4433 \
+    -CAfile Certificates/ca/ca-chain.pem \
+    -cert Certificates/client/client-cert.pem \
+    -key Certificates/client/client-key.pem
+</code></pre>
+<h4 id="2">问题2：证书验证失败</h4>
+<p><strong>症状</strong>：证书验证返回错误</p>
+<p><strong>可能原因</strong>：
+- 证书链不完整
+- CA证书未正确加载
+- 证书已过期
+- 主机名不匹配</p>
+<p><strong>解决方法</strong>：
+1. 验证证书链完整性</p>
+<pre><code class="language-bash">openssl verify -CAfile Certificates/ca/ca-chain.pem \
+    Certificates/server/server-cert.pem
+</code></pre>
+<ol start="2">
+<li>检查证书有效期</li>
+</ol>
+<pre><code class="language-bash">openssl x509 -in Certificates/server/server-cert.pem -noout -dates
+</code></pre>
+<ol start="3">
+<li>查看证书详细信息</li>
+</ol>
+<pre><code class="language-bash">openssl x509 -in Certificates/server/server-cert.pem -noout -text
+</code></pre>
+<h4 id="3">问题3：内存不足</h4>
+<p><strong>症状</strong>：系统运行一段时间后崩溃或重启</p>
+<p><strong>可能原因</strong>：
+- mbedTLS缓冲区过大
+- 内存泄漏
+- 堆栈溢出</p>
+<p><strong>解决方法</strong>：
+1. 减小SSL缓冲区大小</p>
+<pre><code class="language-c">#define MBEDTLS_SSL_MAX_CONTENT_LEN 4096
+</code></pre>
+<ol start="2">
+<li>启用内存监控</li>
+</ol>
+<pre><code class="language-c">printf(&quot;空闲堆: %u 字节\n&quot;, xPortGetFreeHeapSize());
+</code></pre>
+<ol start="3">
+<li>使用内存分析工具检查泄漏</li>
+</ol>
+<h4 id="4_1">问题4：性能问题</h4>
+<p><strong>症状</strong>：TLS连接建立缓慢或数据传输慢</p>
+<p><strong>可能原因</strong>：
+- 未启用硬件加速
+- 加密算法选择不当
+- 网络延迟高</p>
+<p><strong>解决方法</strong>：
+1. 启用硬件加速
+2. 选择性能更好的加密套件
+3. 启用会话恢复机制
+4. 优化网络配置</p>
+<h2 id="_18">扩展思路</h2>
+<h3 id="_19">功能扩展</h3>
+<ol>
+<li>
+<p><strong>DTLS支持</strong>
+   - 实现基于UDP的DTLS协议
+   - 适用于实时通信场景
+   - 支持数据报重传和重排序</p>
+</li>
+<li>
+<p><strong>证书自动更新</strong>
+   - 实现ACME协议自动获取证书
+   - 支持证书到期自动续期
+   - 零停机时间证书更新</p>
+</li>
+<li>
+<p><strong>多租户支持</strong>
+   - 支持多个虚拟主机
+   - 基于SNI的证书选择
+   - 租户隔离和资源限制</p>
+</li>
+<li>
+<p><strong>安全审计增强</strong>
+   - 实时安全事件告警
+   - 异常行为检测
+   - 合规性报告生成</p>
+</li>
+</ol>
+<h3 id="_20">性能优化</h3>
+<ol>
+<li>
+<p><strong>连接池管理</strong>
+   - 实现连接复用
+   - 减少握手开销
+   - 提高并发处理能力</p>
+</li>
+<li>
+<p><strong>零拷贝优化</strong>
+   - 减少数据拷贝次数
+   - 使用DMA传输
+   - 优化内存使用</p>
+</li>
+<li>
+<p><strong>负载均衡</strong>
+   - 多服务器负载分担
+   - 健康检查机制
+   - 故障自动切换</p>
+</li>
+</ol>
+<h2 id="_21">项目总结</h2>
+<h3 id="_22">技术要点</h3>
+<p>本项目涉及的关键技术：</p>
+<ol>
+<li><strong>TLS/SSL协议</strong>：握手流程、加密套件、会话管理</li>
+<li><strong>X.509证书</strong>：证书结构、证书链、证书验证</li>
+<li><strong>密码学算法</strong>：AES、RSA、ECDSA、SHA-256</li>
+<li><strong>网络编程</strong>：TCP/IP、Socket编程、异步IO</li>
+<li><strong>嵌入式系统</strong>：RTOS、内存管理、硬件加速</li>
+</ol>
+<h3 id="_23">学习收获</h3>
+<p>通过本项目，你应该掌握：</p>
+<ul>
+<li>✅ 深入理解TLS/SSL协议的工作原理</li>
+<li>✅ 掌握证书管理和PKI体系</li>
+<li>✅ 实现完整的安全通信系统</li>
+<li>✅ 处理各种安全威胁和攻击</li>
+<li>✅ 优化安全通信的性能</li>
+<li>✅ 部署和维护生产环境系统</li>
+</ul>
+<h3 id="_24">安全最佳实践</h3>
+<ol>
+<li><strong>始终使用TLS 1.2或更高版本</strong></li>
+<li><strong>要求双向身份认证</strong></li>
+<li><strong>定期更新证书和密钥</strong></li>
+<li><strong>禁用弱加密套件</strong></li>
+<li><strong>启用安全审计日志</strong></li>
+<li><strong>定期进行安全测试</strong></li>
+<li><strong>及时更新安全补丁</strong></li>
+</ol>
+<h3 id="_25">改进建议</h3>
+<p>项目可以进一步改进的方向：</p>
+<ol>
+<li>添加更完善的错误恢复机制</li>
+<li>实现证书撤销列表(CRL)检查</li>
+<li>支持OCSP在线证书状态协议</li>
+<li>增加更多的性能监控指标</li>
+<li>实现自动化部署和更新</li>
+</ol>
+<h2 id="_26">相关资源</h2>
+<h3 id="_27">文档资料</h3>
+<ul>
+<li><a href="https://tools.ietf.org/html/rfc5246">RFC 5246 - TLS 1.2</a></li>
+<li><a href="https://tools.ietf.org/html/rfc8446">RFC 8446 - TLS 1.3</a></li>
+<li><a href="https://tls.mbed.org/kb">mbedTLS官方文档</a></li>
+<li><a href="https://tools.ietf.org/html/rfc5280">X.509证书标准</a></li>
+</ul>
+<h3 id="_28">视频教程</h3>
+<ul>
+<li><a href="link">TLS协议详解</a></li>
+<li><a href="link">证书管理实战</a></li>
+<li><a href="link">安全通信最佳实践</a></li>
+</ul>
+<h3 id="_29">开源项目</h3>
+<ul>
+<li><a href="https://github.com/ARMmbed/mbedtls">mbedTLS</a></li>
+<li><a href="https://github.com/wolfSSL/wolfssl">wolfSSL</a></li>
+<li><a href="https://www.bearssl.org/">BearSSL</a></li>
+</ul>
+<h3 id="_30">安全工具</h3>
+<ul>
+<li><a href="https://www.wireshark.org/">Wireshark</a> - 网络协议分析</li>
+<li><a href="https://www.openssl.org/">OpenSSL</a> - 证书管理工具</li>
+<li><a href="https://testssl.sh/">testssl.sh</a> - TLS/SSL测试工具</li>
+<li><a href="https://github.com/nabla-c0d3/sslyze">SSLyze</a> - SSL配置扫描</li>
+</ul>
+<h2 id="_31">下一步</h2>
+<p>完成本项目后，建议继续学习：</p>
+<ul>
+<li>安全启动与固件验证 - 保护固件安全</li>
+<li>密钥管理与安全存储 - 深入学习密钥管理</li>
+<li><a href="link">区块链与分布式账本</a> - 学习分布式安全</li>
+<li><a href="link">零信任网络架构</a> - 现代安全架构</li>
+</ul>
+<h2 id="_32">参考资料</h2>
+<ol>
+<li>RFC 5246: The Transport Layer Security (TLS) Protocol Version 1.2</li>
+<li>RFC 8446: The Transport Layer Security (TLS) Protocol Version 1.3</li>
+<li>RFC 5280: Internet X.509 Public Key Infrastructure Certificate</li>
+<li>NIST SP 800-52: Guidelines for the Selection and Use of TLS</li>
+<li>《密码学工程实践指南》- Niels Ferguson, Bruce Schneier</li>
+<li>《网络安全基础：应用与标准》- William Stallings</li>
+</ol>
+<hr />
+<p><strong>项目难度</strong>：⭐⭐⭐⭐⭐ (高级)<br />
+<strong>完成时间</strong>：约20-25小时<br />
+<strong>代码仓库</strong>：[GitHub链接]<br />
+<strong>演示视频</strong>：[YouTube链接]</p>
+<p><strong>反馈与讨论</strong>：欢迎在评论区分享你的项目成果和遇到的问题！</p>
+<p><strong>安全声明</strong>：本项目仅用于学习和研究目的。在生产环境中使用前，请进行充分的安全评估和测试。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

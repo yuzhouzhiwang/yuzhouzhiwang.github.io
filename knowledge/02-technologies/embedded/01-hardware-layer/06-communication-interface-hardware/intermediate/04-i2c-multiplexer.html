@@ -1,0 +1,2578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>I2C多路复用器应用 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/">06-communication-interface-hardware</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/06-communication-interface-hardware/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a></li>
+<li><a href="#_2">背景知识</a><ul>
+<li><a href="#i2c_1">I2C地址冲突问题</a></li>
+<li><a href="#_3">解决方案对比</a></li>
+<li><a href="#i2c_2">I2C多路复用器的优势</a></li>
+</ul>
+</li>
+<li><a href="#i2c_3">I2C多路复用器工作原理</a><ul>
+<li><a href="#_4">基本架构</a></li>
+<li><a href="#_5">工作模式</a></li>
+<li><a href="#_6">通道选择机制</a></li>
+</ul>
+</li>
+<li><a href="#tca9548a">TCA9548A详解</a><ul>
+<li><a href="#_7">芯片特性</a></li>
+<li><a href="#_8">引脚定义</a></li>
+<li><a href="#_9">地址配置</a></li>
+<li><a href="#_10">复位功能</a></li>
+<li><a href="#_11">电气特性</a></li>
+</ul>
+</li>
+<li><a href="#_12">硬件电路设计</a><ul>
+<li><a href="#_13">基本连接电路</a></li>
+<li><a href="#_14">上拉电阻配置</a></li>
+<li><a href="#_15">电平转换应用</a></li>
+<li><a href="#pcb">PCB布线建议</a></li>
+<li><a href="#esd">ESD保护</a></li>
+</ul>
+</li>
+<li><a href="#_16">软件驱动实现</a><ul>
+<li><a href="#_17">基础驱动函数</a></li>
+<li><a href="#_18">设备访问封装</a></li>
+<li><a href="#_19">设备枚举功能</a></li>
+<li><a href="#3eeprom">示例3：EEPROM阵列</a></li>
+<li><a href="#4">示例4：热插拔检测</a></li>
+</ul>
+</li>
+<li><a href="#_20">高级应用技巧</a><ul>
+<li><a href="#_21">通道缓存优化</a></li>
+<li><a href="#_22">并发访问管理</a></li>
+<li><a href="#_23">错误处理和恢复</a></li>
+<li><a href="#_24">性能优化</a></li>
+<li><a href="#_25">电源管理</a></li>
+</ul>
+</li>
+<li><a href="#_26">故障排查与调试</a><ul>
+<li><a href="#_27">常见问题诊断</a></li>
+<li><a href="#_28">调试工具函数</a></li>
+<li><a href="#_29">性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_30">其他多路复用器芯片</a><ul>
+<li><a href="#pca9546a4">PCA9546A（4通道）</a></li>
+<li><a href="#pca9548a8">PCA9548A（8通道，带中断）</a></li>
+<li><a href="#tca9545a4">TCA9545A（4通道，可配置）</a></li>
+</ul>
+</li>
+<li><a href="#_31">最佳实践</a><ul>
+<li><a href="#_32">设计建议</a></li>
+<li><a href="#_33">代码组织</a></li>
+<li><a href="#_34">文档和注释</a></li>
+</ul>
+</li>
+<li><a href="#_35">实际项目案例</a><ul>
+<li><a href="#1">案例1：环境监测站</a></li>
+<li><a href="#2">案例2：机器人多传感器系统</a></li>
+<li><a href="#3">案例3：数据记录系统</a></li>
+</ul>
+</li>
+<li><a href="#_36">总结</a><ul>
+<li><a href="#_37">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_38">实践建议</a><ul>
+<li><a href="#_39">初学者练习</a></li>
+<li><a href="#_40">进阶项目</a></li>
+</ul>
+</li>
+<li><a href="#_41">延伸阅读</a><ul>
+<li><a href="#_42">相关文章</a></li>
+<li><a href="#_43">相关协议</a></li>
+<li><a href="#_44">硬件设计</a></li>
+</ul>
+</li>
+<li><a href="#_45">参考资料</a><ul>
+<li><a href="#_46">数据手册</a></li>
+<li><a href="#_47">应用笔记</a></li>
+<li><a href="#_48">在线资源</a></li>
+<li><a href="#_49">开发工具</a></li>
+</ul>
+</li>
+<li><a href="#_50">常见应用场景</a><ul>
+<li><a href="#1_1">1. 传感器网络</a></li>
+<li><a href="#2_1">2. 显示系统</a></li>
+<li><a href="#3_1">3. 存储扩展</a></li>
+<li><a href="#4_1">4. 电源管理</a></li>
+<li><a href="#5">5. 测试系统</a></li>
+</ul>
+</li>
+<li><a href="#_51">附录</a><ul>
+<li><a href="#a-tca9548a">A. TCA9548A寄存器映射</a></li>
+<li><a href="#b-i2c">B. 常用I2C设备地址表</a></li>
+<li><a href="#c">C. 故障排查检查清单</a></li>
+<li><a href="#d">D. 性能参数</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="i2c">I2C多路复用器应用</h1>
+<h2 id="_1">概述</h2>
+<p>I2C多路复用器是解决I2C总线地址冲突和扩展总线容量的关键器件。在复杂的嵌入式系统中，经常会遇到多个相同地址的I2C设备需要连接到同一个主机的情况，或者需要连接超过总线负载能力的设备数量。I2C多路复用器通过将一条I2C总线扩展为多条独立的I2C通道，完美解决了这些问题。</p>
+<p>完成本教程学习后，你将能够：</p>
+<ul>
+<li>理解I2C多路复用器的工作原理和应用场景</li>
+<li>掌握TCA9548A等常用多路复用器芯片的使用方法</li>
+<li>学会解决I2C地址冲突问题</li>
+<li>实现多通道I2C设备的管理和控制</li>
+<li>掌握设备枚举和自动发现技术</li>
+<li>理解总线负载和信号完整性问题</li>
+<li>实现可靠的错误处理和恢复机制</li>
+</ul>
+<h2 id="_2">背景知识</h2>
+<h3 id="i2c_1">I2C地址冲突问题</h3>
+<p><strong>什么是地址冲突</strong>：</p>
+<p>I2C协议使用7位地址（或10位地址）来标识总线上的设备。当两个或多个设备具有相同的I2C地址时，就会发生地址冲突，导致无法正常通信。</p>
+<p><strong>常见冲突场景</strong>：</p>
+<ol>
+<li>
+<p><strong>相同型号的多个传感器</strong>：
+   - 例如：需要连接4个MPU6050陀螺仪
+   - MPU6050只有两个可选地址：0x68和0x69
+   - 最多只能连接2个，无法满足4个的需求</p>
+</li>
+<li>
+<p><strong>固定地址的设备</strong>：
+   - 某些设备地址完全固定，无法配置
+   - 例如：DS1307 RTC固定地址0x68
+   - 如果需要多个这样的设备，必然冲突</p>
+</li>
+<li>
+<p><strong>总线负载限制</strong>：
+   - I2C总线有电容负载限制（标准模式400pF）
+   - 每个设备增加约10pF电容
+   - 连接过多设备会超出负载能力</p>
+</li>
+<li>
+<p><strong>长距离布线</strong>：
+   - 需要在不同位置连接多组设备
+   - 长距离走线增加电容和电阻
+   - 影响信号质量和通信可靠性</p>
+</li>
+</ol>
+<h3 id="_3">解决方案对比</h3>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>硬件地址配置</td>
+<td>简单、成本低</td>
+<td>地址数量有限</td>
+<td>设备少、有可配置地址</td>
+</tr>
+<tr>
+<td>软件I2C（BitBang）</td>
+<td>灵活、无限扩展</td>
+<td>占用GPIO、软件复杂</td>
+<td>GPIO充足、速度要求不高</td>
+</tr>
+<tr>
+<td>I2C多路复用器</td>
+<td>硬件实现、可靠</td>
+<td>增加成本和复杂度</td>
+<td>专业应用、大量设备</td>
+</tr>
+<tr>
+<td>I2C缓冲器/中继器</td>
+<td>增强驱动能力</td>
+<td>不解决地址冲突</td>
+<td>长距离、大负载</td>
+</tr>
+</tbody>
+</table>
+<h3 id="i2c_2">I2C多路复用器的优势</h3>
+<p><strong>1. 完美解决地址冲突</strong>：
+- 每个通道独立，可连接相同地址设备
+- 支持8个通道（TCA9548A）
+- 理论上可连接8个相同地址的设备</p>
+<p><strong>2. 降低总线负载</strong>：
+- 每个通道独立，负载分散
+- 单通道负载 = 主总线负载 / 通道数
+- 提高信号质量和可靠性</p>
+<p><strong>3. 灵活的总线管理</strong>：
+- 可选择性地使能/禁用通道
+- 支持多通道同时使能
+- 便于设备隔离和故障排查</p>
+<p><strong>4. 提高系统可靠性</strong>：
+- 故障隔离：单个通道故障不影响其他通道
+- 热插拔支持：可动态连接/断开设备
+- 电源管理：可单独控制通道电源</p>
+<p><strong>5. 简化布线</strong>：
+- 主总线到多路复用器距离短
+- 各通道可就近连接设备
+- 减少长距离走线</p>
+<h2 id="i2c_3">I2C多路复用器工作原理</h2>
+<h3 id="_4">基本架构</h3>
+<p><strong>多路复用器结构图</strong>：</p>
+<pre><code>主机（MCU）
+    │
+    ├─ SCL ────────┐
+    ├─ SDA ────────┤
+    │              │
+    │         ┌────┴────┐
+    │         │ TCA9548A│
+    │         │  多路   │
+    │         │  复用器 │
+    │         └────┬────┘
+    │              │
+    ├──────────────┼─ 通道0 ─── 设备0 (0x50)
+    ├──────────────┼─ 通道1 ─── 设备1 (0x50)
+    ├──────────────┼─ 通道2 ─── 设备2 (0x50)
+    ├──────────────┼─ 通道3 ─── 设备3 (0x50)
+    ├──────────────┼─ 通道4 ─── 设备4 (0x50)
+    ├──────────────┼─ 通道5 ─── 设备5 (0x50)
+    ├──────────────┼─ 通道6 ─── 设备6 (0x50)
+    └──────────────┴─ 通道7 ─── 设备7 (0x50)
+
+特点：
+- 8个独立I2C通道
+- 每个通道可连接相同地址设备
+- 通过控制寄存器选择通道
+</code></pre>
+<h3 id="_5">工作模式</h3>
+<p><strong>1. 单通道模式（最常用）</strong>：</p>
+<pre><code>时刻1：选择通道0
+主机 → 多路复用器(0x70) → 写入0x01 → 使能通道0
+主机 → 通道0设备(0x50) → 读写数据
+
+时刻2：选择通道1
+主机 → 多路复用器(0x70) → 写入0x02 → 使能通道1
+主机 → 通道1设备(0x50) → 读写数据
+
+优点：
+- 通道完全隔离
+- 无干扰
+- 最可靠
+
+缺点：
+- 需要频繁切换通道
+- 效率相对较低
+</code></pre>
+<p><strong>2. 多通道同时使能模式</strong>：</p>
+<pre><code>主机 → 多路复用器(0x70) → 写入0x0F → 使能通道0-3
+
+此时通道0-3同时连接到主总线：
+- 可以访问不同地址的设备
+- 相同地址的设备会冲突
+- 适用于地址不同的设备组
+
+示例：
+通道0: 温度传感器 (0x48)
+通道1: 湿度传感器 (0x40)
+通道2: 光照传感器 (0x23)
+通道3: 压力传感器 (0x76)
+
+可以同时使能，因为地址不同
+</code></pre>
+<p><strong>3. 级联模式</strong>：</p>
+<pre><code>主机
+  │
+  └─ 多路复用器1 (0x70)
+       ├─ 通道0 ─── 设备
+       ├─ 通道1 ─── 设备
+       ├─ 通道2 ─── 多路复用器2 (0x71)
+       │              ├─ 通道0 ─── 设备
+       │              ├─ 通道1 ─── 设备
+       │              └─ 通道2 ─── 设备
+       └─ 通道3 ─── 设备
+
+优点：
+- 可扩展到64个通道（8×8）
+- 灵活的拓扑结构
+
+缺点：
+- 增加延迟
+- 管理复杂度高
+</code></pre>
+<h3 id="_6">通道选择机制</h3>
+<p><strong>控制寄存器格式</strong>：</p>
+<pre><code>TCA9548A控制寄存器（8位）：
+
+Bit:  7    6    5    4    3    2    1    0
+     CH7  CH6  CH5  CH4  CH3  CH2  CH1  CH0
+
+每个位对应一个通道：
+- 0 = 通道禁用
+- 1 = 通道使能
+
+示例：
+0x01 = 0b00000001 → 使能通道0
+0x02 = 0b00000010 → 使能通道1
+0x04 = 0b00000100 → 使能通道2
+0x08 = 0b00001000 → 使能通道3
+0x0F = 0b00001111 → 使能通道0-3
+0xFF = 0b11111111 → 使能所有通道
+0x00 = 0b00000000 → 禁用所有通道
+</code></pre>
+<p><strong>通道切换时序</strong>：</p>
+<pre><code>1. 写入多路复用器地址
+2. 写入通道选择字节
+3. 等待切换完成（通常&lt;1μs）
+4. 访问目标设备
+
+完整时序：
+START → MUX_ADDR(W) → ACK → CHANNEL_BYTE → ACK → STOP
+START → DEV_ADDR(W/R) → ACK → DATA → ACK → STOP
+
+注意：
+- 通道切换后立即生效
+- 无需额外延时
+- 可以连续访问同一通道的多个设备
+</code></pre>
+<h2 id="tca9548a">TCA9548A详解</h2>
+<h3 id="_7">芯片特性</h3>
+<p><strong>TCA9548A主要参数</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>值</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>1.65V - 5.5V</td>
+<td>宽电压范围</td>
+</tr>
+<tr>
+<td>I2C速度</td>
+<td>最高400kHz</td>
+<td>支持标准和快速模式</td>
+</tr>
+<tr>
+<td>通道数量</td>
+<td>8个</td>
+<td>独立可控</td>
+</tr>
+<tr>
+<td>地址范围</td>
+<td>0x70 - 0x77</td>
+<td>8个可选地址</td>
+</tr>
+<tr>
+<td>通道电容</td>
+<td>400pF</td>
+<td>每通道最大负载</td>
+</tr>
+<tr>
+<td>上电状态</td>
+<td>所有通道禁用</td>
+<td>安全默认状态</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>TSSOP-24, QFN-24</td>
+<td>小型封装</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">引脚定义</h3>
+<p><strong>TCA9548A引脚图（TSSOP-24）</strong>：</p>
+<pre><code>        TCA9548A
+     ┌──────────┐
+A0  ─┤1      24├─ VCC
+A1  ─┤2      23├─ SDA (主总线)
+A2  ─┤3      22├─ SCL (主总线)
+~RST─┤4      21├─ SD0 (通道0 SDA)
+SD7 ─┤5      20├─ SC0 (通道0 SCL)
+SC7 ─┤6      19├─ SD1 (通道1 SDA)
+SD6 ─┤7      18├─ SC1 (通道1 SCL)
+SC6 ─┤8      17├─ SD2 (通道2 SDA)
+SD5 ─┤9      16├─ SC2 (通道2 SCL)
+SC5 ─┤10     15├─ SD3 (通道3 SDA)
+SD4 ─┤11     14├─ SC3 (通道3 SCL)
+GND ─┤12     13├─ SC4 (通道4 SCL)
+     └──────────┘
+
+引脚功能：
+- A0, A1, A2: 地址选择引脚
+- ~RST: 复位引脚（低电平有效）
+- SDA, SCL: 主I2C总线
+- SD0-SD7: 通道0-7的SDA
+- SC0-SC7: 通道0-7的SCL
+- VCC: 电源（1.65V-5.5V）
+- GND: 地
+</code></pre>
+<h3 id="_9">地址配置</h3>
+<p><strong>地址选择</strong>：</p>
+<pre><code>A2  A1  A0  |  I2C地址
+----|-------|----------
+0   0   0   |  0x70
+0   0   1   |  0x71
+0   1   0   |  0x72
+0   1   1   |  0x73
+1   0   0   |  0x74
+1   0   1   |  0x75
+1   1   0   |  0x76
+1   1   1   |  0x77
+
+硬件连接：
+- 接GND = 0
+- 接VCC = 1
+- 悬空 = 不确定（不推荐）
+
+示例：
+A2=GND, A1=GND, A0=VCC → 地址0x71
+</code></pre>
+<p><strong>多个多路复用器级联</strong>：</p>
+<pre><code>主机
+  │
+  ├─ TCA9548A #1 (0x70) ─┬─ 通道0-7
+  │                      │
+  └─ TCA9548A #2 (0x71) ─┴─ 通道0-7
+
+优点：
+- 16个独立通道
+- 地址不冲突
+- 并行访问
+
+注意：
+- 两个多路复用器在同一主总线上
+- 需要不同的地址
+- 可以同时使能不同多路复用器的通道
+</code></pre>
+<h3 id="_10">复位功能</h3>
+<p><strong>硬件复位</strong>：</p>
+<pre><code>~RST引脚功能：
+- 低电平：复位，所有通道禁用
+- 高电平：正常工作
+- 上电时应先复位
+
+复位时序：
+~RST ────┐     ┌──────────
+         └─────┘
+         &gt;100ns
+
+复位后状态：
+- 控制寄存器 = 0x00
+- 所有通道禁用
+- I2C接口正常
+</code></pre>
+<p><strong>软件复位</strong>：</p>
+<pre><code class="language-c">// 通过写入0x00禁用所有通道
+void TCA9548A_SoftReset(uint8_t mux_addr) {
+    I2C_Start();
+    I2C_SendAddress(mux_addr, I2C_WRITE);
+    I2C_SendByte(0x00);  // 禁用所有通道
+    I2C_Stop();
+}
+</code></pre>
+<h3 id="_11">电气特性</h3>
+<p><strong>电源要求</strong>：</p>
+<pre><code>VCC范围：1.65V - 5.5V
+
+推荐配置：
+- 3.3V系统：VCC = 3.3V
+- 5V系统：VCC = 5V
+- 混合系统：VCC = 较低电压
+
+电流消耗：
+- 静态电流：&lt;5μA
+- 工作电流：&lt;50μA
+- 总线电流：取决于负载
+</code></pre>
+<p><strong>电平兼容性</strong>：</p>
+<pre><code>输入高电平（VIH）：0.7×VCC
+输入低电平（VIL）：0.3×VCC
+
+3.3V系统：
+- VIH ≥ 2.31V
+- VIL ≤ 0.99V
+
+5V系统：
+- VIH ≥ 3.5V
+- VIL ≤ 1.5V
+
+注意：
+- TCA9548A支持电平转换
+- 主总线和通道可以是不同电压
+- 通过VCC设置参考电压
+</code></pre>
+<h2 id="_12">硬件电路设计</h2>
+<h3 id="_13">基本连接电路</h3>
+<p><strong>标准应用电路</strong>：</p>
+<pre><code>MCU (3.3V)              TCA9548A              设备
+
+3.3V ─┬─ 4.7kΩ ─┬─ SDA ──┤23                 
+      └─ 4.7kΩ ─┴─ SCL ──┤22                 
+                          │                   
+PA11 ─────────────── SDA ─┤23                 
+PA12 ─────────────── SCL ─┤22                 
+                          │                   
+3.3V ──────────────── VCC ┤24                 
+GND ───────────────── GND ┤12                 
+                          │                   
+GND ──────────────────A0 ─┤1  (地址0x70)     
+GND ──────────────────A1 ─┤2                  
+GND ──────────────────A2 ─┤3                  
+                          │                   
+3.3V ─────────────── ~RST ┤4                  
+                          │                   
+                      SD0 ┤21 ─┬─ 4.7kΩ ─ 3.3V
+                      SC0 ┤20 ─┴─ 4.7kΩ ─ 3.3V
+                          │      │
+                          │      └─ 设备0 (0x50)
+                          │
+                      SD1 ┤19 ─┬─ 4.7kΩ ─ 3.3V
+                      SC1 ┤18 ─┴─ 4.7kΩ ─ 3.3V
+                          │      │
+                          │      └─ 设备1 (0x50)
+                          │
+                      ... (其他通道类似)
+
+关键要点：
+- 主总线需要上拉电阻
+- 每个通道也需要上拉电阻
+- 上拉电阻连接到VCC
+- 所有设备共地
+</code></pre>
+<h3 id="_14">上拉电阻配置</h3>
+<p><strong>电阻值计算</strong>：</p>
+<pre><code>主总线上拉电阻：
+- 考虑所有通道的并联效果
+- 通常使用较小的值（2.2kΩ - 4.7kΩ）
+
+通道上拉电阻：
+- 每个通道独立
+- 根据通道设备数量选择
+- 通常使用4.7kΩ - 10kΩ
+
+示例计算：
+主总线：
+- 速度：400kHz
+- 设备：TCA9548A + MCU
+- 推荐：2.2kΩ
+
+通道（每个通道2个设备）：
+- 速度：400kHz
+- 设备：2个传感器
+- 推荐：4.7kΩ
+</code></pre>
+<p><strong>多种配置方案</strong>：</p>
+<p><strong>方案1：每个通道独立上拉（推荐）</strong>：</p>
+<pre><code>优点：
+- 通道完全独立
+- 故障隔离好
+- 灵活性高
+
+缺点：
+- 需要更多电阻
+- PCB空间占用大
+
+适用：
+- 专业产品
+- 高可靠性要求
+</code></pre>
+<p><strong>方案2：共享上拉电阻</strong>：</p>
+<pre><code>主总线 ─┬─ 2.2kΩ ─ VCC
+        │
+     TCA9548A
+        │
+所有通道共享主总线上拉
+
+优点：
+- 节省元件
+- 简化设计
+
+缺点：
+- 负载大
+- 可靠性降低
+
+适用：
+- 原型开发
+- 成本敏感应用
+</code></pre>
+<h3 id="_15">电平转换应用</h3>
+<p><strong>3.3V主机 + 5V设备</strong>：</p>
+<pre><code>MCU (3.3V)          TCA9548A          设备 (5V)
+
+3.3V ─┬─ 4.7kΩ ─┬─ SDA              
+      └─ 4.7kΩ ─┴─ SCL              
+                  │                  
+3.3V ────── VCC ──┤ (参考3.3V)      
+                  │                  
+              SD0 ┤─┬─ 10kΩ ─ 5V    
+              SC0 ┤─┴─ 10kΩ ─ 5V    
+                  │    │             
+                  │    └─ 5V设备    
+
+工作原理：
+- TCA9548A的VCC设置为3.3V
+- 主总线电平为3.3V
+- 通道上拉到5V
+- TCA9548A的输出为开漏
+- 5V设备可以正常工作
+
+注意：
+- 确保5V设备的输入容忍3.3V
+- 或使用专用电平转换芯片
+</code></pre>
+<h3 id="pcb">PCB布线建议</h3>
+<p><strong>布局原则</strong>：</p>
+<pre><code>1. 多路复用器位置：
+   - 靠近主机
+   - 居中放置
+   - 便于走线
+
+2. 主总线走线：
+   - 短而直
+   - 差分对布线
+   - 远离干扰源
+
+3. 通道走线：
+   - 各通道独立
+   - 避免交叉
+   - 长度尽量相等
+
+4. 去耦电容：
+   - VCC引脚附近
+   - 0.1μF + 10μF
+   - 尽量靠近芯片
+</code></pre>
+<p><strong>推荐布局</strong>：</p>
+<pre><code>        主机
+         │
+    ┌────┴────┐
+    │ TCA9548A│
+    └────┬────┘
+         │
+    ┌────┼────┬────┬────┬────┬────┬────┬────┐
+    │    │    │    │    │    │    │    │    │
+   CH0  CH1  CH2  CH3  CH4  CH5  CH6  CH7
+    │    │    │    │    │    │    │    │
+  设备  设备  设备  设备  设备  设备  设备  设备
+
+特点：
+- 对称布局
+- 走线长度相近
+- 便于维护
+</code></pre>
+<h3 id="esd">ESD保护</h3>
+<p><strong>保护电路</strong>：</p>
+<pre><code>外部接口保护：
+
+SD0 ──┬─────────→ 接口
+      │
+      ├─ TVS ─┬─ GND
+      │       │
+SC0 ──┴───────┘
+
+推荐器件：
+- PESD3V3L2BT（双通道，3.3V）
+- PESD5V0L2BT（双通道，5V）
+- TPD2E001（双通道，通用）
+
+放置位置：
+- 外部接口处
+- 尽量靠近连接器
+- 每个通道独立保护
+</code></pre>
+<h2 id="_16">软件驱动实现</h2>
+<h3 id="_17">基础驱动函数</h3>
+<p><strong>TCA9548A驱动结构</strong>：</p>
+<pre><code class="language-c">// TCA9548A驱动结构体
+typedef struct {
+    uint8_t address;        // 多路复用器I2C地址
+    uint8_t current_channel; // 当前使能的通道
+    bool initialized;       // 初始化标志
+} TCA9548A_t;
+
+// 全局实例
+TCA9548A_t mux = {
+    .address = 0x70,
+    .current_channel = 0xFF,  // 无效值表示未选择
+    .initialized = false
+};
+</code></pre>
+<p><strong>初始化函数</strong>：</p>
+<pre><code class="language-c">// 初始化TCA9548A
+bool TCA9548A_Init(uint8_t address) {
+    mux.address = address;
+
+    // 检查设备是否存在
+    if (!I2C_CheckDevice(address)) {
+        printf(&quot;TCA9548A not found at 0x%02X\n&quot;, address);
+        return false;
+    }
+
+    // 禁用所有通道
+    if (!TCA9548A_DisableAllChannels()) {
+        printf(&quot;Failed to disable channels\n&quot;);
+        return false;
+    }
+
+    mux.initialized = true;
+    printf(&quot;TCA9548A initialized at 0x%02X\n&quot;, address);
+    return true;
+}
+
+// 检查设备是否存在
+bool I2C_CheckDevice(uint8_t addr) {
+    I2C_Start();
+    bool ack = I2C_SendAddress(addr, I2C_WRITE);
+    I2C_Stop();
+    return ack;
+}
+</code></pre>
+<p><strong>通道选择函数</strong>：</p>
+<pre><code class="language-c">// 选择单个通道
+bool TCA9548A_SelectChannel(uint8_t channel) {
+    if (channel &gt; 7) {
+        printf(&quot;Invalid channel: %d\n&quot;, channel);
+        return false;
+    }
+
+    if (!mux.initialized) {
+        printf(&quot;TCA9548A not initialized\n&quot;);
+        return false;
+    }
+
+    // 计算通道掩码
+    uint8_t channel_mask = (1 &lt;&lt; channel);
+
+    // 写入多路复用器
+    I2C_Start();
+    if (!I2C_SendAddress(mux.address, I2C_WRITE)) {
+        I2C_Stop();
+        return false;
+    }
+
+    if (!I2C_SendByte(channel_mask)) {
+        I2C_Stop();
+        return false;
+    }
+
+    I2C_Stop();
+
+    // 更新当前通道
+    mux.current_channel = channel;
+
+    return true;
+}
+
+// 选择多个通道
+bool TCA9548A_SelectChannels(uint8_t channel_mask) {
+    if (!mux.initialized) {
+        return false;
+    }
+
+    I2C_Start();
+    if (!I2C_SendAddress(mux.address, I2C_WRITE)) {
+        I2C_Stop();
+        return false;
+    }
+
+    if (!I2C_SendByte(channel_mask)) {
+        I2C_Stop();
+        return false;
+    }
+
+    I2C_Stop();
+    return true;
+}
+
+// 禁用所有通道
+bool TCA9548A_DisableAllChannels(void) {
+    return TCA9548A_SelectChannels(0x00);
+}
+</code></pre>
+<p><strong>读取当前状态</strong>：</p>
+<pre><code class="language-c">// 读取当前通道状态
+uint8_t TCA9548A_ReadChannels(void) {
+    if (!mux.initialized) {
+        return 0xFF;  // 错误值
+    }
+
+    uint8_t status;
+
+    I2C_Start();
+    if (!I2C_SendAddress(mux.address, I2C_READ)) {
+        I2C_Stop();
+        return 0xFF;
+    }
+
+    status = I2C_ReceiveByte(false);  // NACK
+    I2C_Stop();
+
+    return status;
+}
+
+// 检查特定通道是否使能
+bool TCA9548A_IsChannelEnabled(uint8_t channel) {
+    if (channel &gt; 7) {
+        return false;
+    }
+
+    uint8_t status = TCA9548A_ReadChannels();
+    return (status &amp; (1 &lt;&lt; channel)) != 0;
+}
+
+// 获取使能的通道数量
+uint8_t TCA9548A_GetEnabledChannelCount(void) {
+    uint8_t status = TCA9548A_ReadChannels();
+    uint8_t count = 0;
+
+    for (int i = 0; i &lt; 8; i++) {
+        if (status &amp; (1 &lt;&lt; i)) {
+            count++;
+        }
+    }
+
+    return count;
+}
+</code></pre>
+<h3 id="_18">设备访问封装</h3>
+<p><strong>通道设备访问函数</strong>：</p>
+<pre><code class="language-c">// 在指定通道上读取设备
+bool TCA9548A_ReadDevice(uint8_t channel, uint8_t dev_addr, 
+                         uint8_t reg, uint8_t *data, uint16_t len) {
+    // 选择通道
+    if (!TCA9548A_SelectChannel(channel)) {
+        return false;
+    }
+
+    // 延时确保通道切换完成（可选）
+    // HAL_Delay(1);
+
+    // 读取设备
+    bool result = I2C_ReadRegister(dev_addr, reg, data, len);
+
+    // 可选：读取后禁用通道
+    // TCA9548A_DisableAllChannels();
+
+    return result;
+}
+
+// 在指定通道上写入设备
+bool TCA9548A_WriteDevice(uint8_t channel, uint8_t dev_addr,
+                          uint8_t reg, uint8_t *data, uint16_t len) {
+    // 选择通道
+    if (!TCA9548A_SelectChannel(channel)) {
+        return false;
+    }
+
+    // 写入设备
+    bool result = I2C_WriteRegister(dev_addr, reg, data, len);
+
+    return result;
+}
+</code></pre>
+<p><strong>批量操作函数</strong>：</p>
+<pre><code class="language-c">// 在所有通道上执行相同操作
+bool TCA9548A_BroadcastWrite(uint8_t dev_addr, uint8_t reg, uint8_t data) {
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        if (!TCA9548A_SelectChannel(ch)) {
+            continue;
+        }
+
+        // 检查设备是否存在
+        if (!I2C_CheckDevice(dev_addr)) {
+            continue;
+        }
+
+        // 写入数据
+        I2C_WriteRegister(dev_addr, reg, &amp;data, 1);
+    }
+
+    return true;
+}
+
+// 从所有通道读取数据
+bool TCA9548A_ReadAllChannels(uint8_t dev_addr, uint8_t reg, 
+                               uint8_t data[8]) {
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        if (!TCA9548A_SelectChannel(ch)) {
+            data[ch] = 0xFF;  // 错误标记
+            continue;
+        }
+
+        // 读取数据
+        if (!I2C_ReadRegister(dev_addr, reg, &amp;data[ch], 1)) {
+            data[ch] = 0xFF;  // 错误标记
+        }
+    }
+
+    return true;
+}
+</code></pre>
+<h3 id="_19">设备枚举功能</h3>
+<p><strong>扫描所有通道的设备</strong>：</p>
+<pre><code class="language-c">// 设备信息结构
+typedef struct {
+    uint8_t channel;
+    uint8_t address;
+    bool present;
+} I2C_Device_t;
+
+// 扫描单个通道
+uint8_t TCA9548A_ScanChannel(uint8_t channel, uint8_t *devices, uint8_t max_devices) {
+    uint8_t count = 0;
+
+    // 选择通道
+    if (!TCA9548A_SelectChannel(channel)) {
+        return 0;
+    }
+
+    // 扫描所有可能的地址
+    for (uint8_t addr = 0x08; addr &lt;= 0x77; addr++) {
+        // 跳过多路复用器自己的地址
+        if (addr == mux.address) {
+            continue;
+        }
+
+        // 检查设备是否存在
+        if (I2C_CheckDevice(addr)) {
+            if (count &lt; max_devices) {
+                devices[count++] = addr;
+            }
+        }
+    }
+
+    return count;
+}
+</code></pre>
+<p>// 扫描所有通道
+void TCA9548A_ScanAllChannels(void) {
+    printf("\n=== TCA9548A Device Scan ===\n");
+    printf("Multiplexer Address: 0x%02X\n\n", mux.address);</p>
+<pre><code>for (uint8_t ch = 0; ch &lt; 8; ch++) {
+    printf("Channel %d: ", ch);
+
+    uint8_t devices[16];
+    uint8_t count = TCA9548A_ScanChannel(ch, devices, 16);
+
+    if (count == 0) {
+        printf("No devices found\n");
+    } else {
+        printf("Found %d device(s): ", count);
+        for (uint8_t i = 0; i &lt; count; i++) {
+            printf("0x%02X ", devices[i]);
+        }
+        printf("\n");
+    }
+}
+
+printf("\n");
+</code></pre>
+<p>}</p>
+<p>// 构建设备映射表
+typedef struct {
+    uint8_t total_devices;
+    I2C_Device_t devices[64];  // 最多8通道×8设备
+} DeviceMap_t;</p>
+<p>DeviceMap_t TCA9548A_BuildDeviceMap(void) {
+    DeviceMap_t map;
+    map.total_devices = 0;</p>
+<pre><code>for (uint8_t ch = 0; ch &lt; 8; ch++) {
+    uint8_t devices[16];
+    uint8_t count = TCA9548A_ScanChannel(ch, devices, 16);
+
+    for (uint8_t i = 0; i &lt; count; i++) {
+        if (map.total_devices &lt; 64) {
+            map.devices[map.total_devices].channel = ch;
+            map.devices[map.total_devices].address = devices[i];
+            map.devices[map.total_devices].present = true;
+            map.total_devices++;
+        }
+    }
+}
+
+return map;
+</code></pre>
+<p>}</p>
+<pre><code>
+## 实践应用示例
+
+### 示例1：多个相同传感器
+
+**场景**：连接8个MPU6050陀螺仪
+
+```c
+// MPU6050配置
+#define MPU6050_ADDR    0x68
+#define MPU6050_PWR_MGMT_1  0x6B
+#define MPU6050_ACCEL_XOUT_H 0x3B
+
+// 初始化所有MPU6050
+void InitAllMPU6050(void) {
+    printf(&quot;Initializing 8 MPU6050 sensors...\n&quot;);
+
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        // 选择通道
+        TCA9548A_SelectChannel(ch);
+
+        // 唤醒MPU6050
+        uint8_t data = 0x00;
+        I2C_WriteRegister(MPU6050_ADDR, MPU6050_PWR_MGMT_1, &amp;data, 1);
+
+        HAL_Delay(100);
+
+        printf(&quot;MPU6050 on channel %d initialized\n&quot;, ch);
+    }
+}
+</code></pre>
+<p>// 读取所有MPU6050数据
+typedef struct {
+    int16_t ax, ay, az;  // 加速度
+    int16_t gx, gy, gz;  // 陀螺仪
+} MPU6050_Data_t;</p>
+<p>void ReadAllMPU6050(MPU6050_Data_t data[8]) {
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        // 选择通道
+        TCA9548A_SelectChannel(ch);</p>
+<pre><code>    // 读取14字节数据
+    uint8_t buffer[14];
+    I2C_ReadRegister(MPU6050_ADDR, MPU6050_ACCEL_XOUT_H, buffer, 14);
+
+    // 解析数据
+    data[ch].ax = (buffer[0] &lt;&lt; 8) | buffer[1];
+    data[ch].ay = (buffer[2] &lt;&lt; 8) | buffer[3];
+    data[ch].az = (buffer[4] &lt;&lt; 8) | buffer[5];
+    // 跳过温度数据 buffer[6-7]
+    data[ch].gx = (buffer[8] &lt;&lt; 8) | buffer[9];
+    data[ch].gy = (buffer[10] &lt;&lt; 8) | buffer[11];
+    data[ch].gz = (buffer[12] &lt;&lt; 8) | buffer[13];
+}
+</code></pre>
+<p>}</p>
+<p>// 主循环
+void MPU6050_Example(void) {
+    MPU6050_Data_t sensors[8];</p>
+<pre><code>while (1) {
+    ReadAllMPU6050(sensors);
+
+    // 打印数据
+    for (uint8_t i = 0; i &lt; 8; i++) {
+        printf("Sensor %d: AX=%d AY=%d AZ=%d GX=%d GY=%d GZ=%d\n",
+               i, sensors[i].ax, sensors[i].ay, sensors[i].az,
+               sensors[i].gx, sensors[i].gy, sensors[i].gz);
+    }
+
+    HAL_Delay(100);
+}
+</code></pre>
+<p>}</p>
+<pre><code>
+### 示例2：混合设备系统
+
+**场景**：不同类型的传感器
+
+```c
+// 设备定义
+#define TEMP_SENSOR_ADDR    0x48  // 温度传感器
+#define HUMID_SENSOR_ADDR   0x40  // 湿度传感器
+#define LIGHT_SENSOR_ADDR   0x23  // 光照传感器
+#define PRESSURE_SENSOR_ADDR 0x76 // 压力传感器
+
+// 传感器数据结构
+typedef struct {
+    float temperature;  // 温度 (°C)
+    float humidity;     // 湿度 (%)
+    float light;        // 光照 (lux)
+    float pressure;     // 压力 (Pa)
+} SensorData_t;
+
+// 读取所有传感器
+void ReadAllSensors(SensorData_t *data) {
+    uint8_t buffer[4];
+
+    // 通道0: 温度传感器
+    TCA9548A_SelectChannel(0);
+    I2C_ReadRegister(TEMP_SENSOR_ADDR, 0x00, buffer, 2);
+    data-&gt;temperature = ((buffer[0] &lt;&lt; 8) | buffer[1]) * 0.0625;
+
+    // 通道1: 湿度传感器
+    TCA9548A_SelectChannel(1);
+    I2C_ReadRegister(HUMID_SENSOR_ADDR, 0x00, buffer, 2);
+    data-&gt;humidity = ((buffer[0] &lt;&lt; 8) | buffer[1]) / 65536.0 * 100.0;
+
+    // 通道2: 光照传感器
+    TCA9548A_SelectChannel(2);
+    I2C_ReadRegister(LIGHT_SENSOR_ADDR, 0x00, buffer, 2);
+    data-&gt;light = ((buffer[0] &lt;&lt; 8) | buffer[1]) / 1.2;
+
+    // 通道3: 压力传感器
+    TCA9548A_SelectChannel(3);
+    I2C_ReadRegister(PRESSURE_SENSOR_ADDR, 0xF7, buffer, 3);
+    data-&gt;pressure = ((buffer[0] &lt;&lt; 16) | (buffer[1] &lt;&lt; 8) | buffer[2]) / 256.0;
+}
+</code></pre>
+<h3 id="3eeprom">示例3：EEPROM阵列</h3>
+<p><strong>场景</strong>：8个EEPROM组成大容量存储</p>
+<pre><code class="language-c">// EEPROM配置
+#define EEPROM_ADDR     0x50
+#define EEPROM_SIZE     32768  // 32KB per EEPROM
+#define TOTAL_SIZE      (EEPROM_SIZE * 8)  // 256KB total
+
+// 写入数据到EEPROM阵列
+bool WriteEEPROMArray(uint32_t address, uint8_t *data, uint16_t len) {
+    while (len &gt; 0) {
+        // 计算通道和偏移
+        uint8_t channel = address / EEPROM_SIZE;
+        uint16_t offset = address % EEPROM_SIZE;
+
+        // 计算本次写入长度
+        uint16_t write_len = EEPROM_SIZE - offset;
+        if (write_len &gt; len) {
+            write_len = len;
+        }
+
+        // 选择通道
+        TCA9548A_SelectChannel(channel);
+
+        // 写入EEPROM
+        I2C_Start();
+        I2C_SendAddress(EEPROM_ADDR, I2C_WRITE);
+        I2C_SendByte(offset &gt;&gt; 8);    // 地址高字节
+        I2C_SendByte(offset &amp; 0xFF);  // 地址低字节
+
+        for (uint16_t i = 0; i &lt; write_len; i++) {
+            I2C_SendByte(data[i]);
+        }
+
+        I2C_Stop();
+        HAL_Delay(5);  // 等待写入完成
+
+        // 更新指针
+        address += write_len;
+        data += write_len;
+        len -= write_len;
+    }
+
+    return true;
+}
+
+// 从EEPROM阵列读取数据
+bool ReadEEPROMArray(uint32_t address, uint8_t *buffer, uint16_t len) {
+    while (len &gt; 0) {
+        // 计算通道和偏移
+        uint8_t channel = address / EEPROM_SIZE;
+        uint16_t offset = address % EEPROM_SIZE;
+
+        // 计算本次读取长度
+        uint16_t read_len = EEPROM_SIZE - offset;
+        if (read_len &gt; len) {
+            read_len = len;
+        }
+
+        // 选择通道
+        TCA9548A_SelectChannel(channel);
+
+        // 写入地址
+        I2C_Start();
+        I2C_SendAddress(EEPROM_ADDR, I2C_WRITE);
+        I2C_SendByte(offset &gt;&gt; 8);
+        I2C_SendByte(offset &amp; 0xFF);
+
+        // 重新起始，读取数据
+        I2C_Start();
+        I2C_SendAddress(EEPROM_ADDR, I2C_READ);
+
+        for (uint16_t i = 0; i &lt; read_len; i++) {
+            buffer[i] = I2C_ReceiveByte(i &lt; read_len - 1);
+        }
+
+        I2C_Stop();
+
+        // 更新指针
+        address += read_len;
+        buffer += read_len;
+        len -= read_len;
+    }
+
+    return true;
+}
+</code></pre>
+<h3 id="4">示例4：热插拔检测</h3>
+<p><strong>场景</strong>：动态检测设备连接状态</p>
+<pre><code class="language-c">// 设备状态跟踪
+typedef struct {
+    uint8_t channel;
+    uint8_t address;
+    bool connected;
+    uint32_t last_seen;
+} DeviceStatus_t;
+
+DeviceStatus_t device_status[64];
+uint8_t device_count = 0;
+
+// 初始化设备状态
+void InitDeviceStatus(void) {
+    DeviceMap_t map = TCA9548A_BuildDeviceMap();
+
+    device_count = map.total_devices;
+    for (uint8_t i = 0; i &lt; device_count; i++) {
+        device_status[i].channel = map.devices[i].channel;
+        device_status[i].address = map.devices[i].address;
+        device_status[i].connected = true;
+        device_status[i].last_seen = HAL_GetTick();
+    }
+}
+
+// 检查设备连接状态
+void CheckDeviceStatus(void) {
+    uint32_t current_time = HAL_GetTick();
+
+    for (uint8_t i = 0; i &lt; device_count; i++) {
+        // 选择通道
+        TCA9548A_SelectChannel(device_status[i].channel);
+
+        // 检查设备是否存在
+        bool present = I2C_CheckDevice(device_status[i].address);
+
+        if (present) {
+            // 设备存在
+            if (!device_status[i].connected) {
+                // 设备重新连接
+                printf(&quot;Device 0x%02X on channel %d reconnected\n&quot;,
+                       device_status[i].address, device_status[i].channel);
+                device_status[i].connected = true;
+            }
+            device_status[i].last_seen = current_time;
+        } else {
+            // 设备不存在
+            if (device_status[i].connected) {
+                // 设备断开
+                printf(&quot;Device 0x%02X on channel %d disconnected\n&quot;,
+                       device_status[i].address, device_status[i].channel);
+                device_status[i].connected = false;
+            }
+        }
+    }
+}
+
+// 定期检查任务
+void DeviceMonitorTask(void) {
+    static uint32_t last_check = 0;
+    uint32_t current_time = HAL_GetTick();
+
+    // 每秒检查一次
+    if (current_time - last_check &gt;= 1000) {
+        CheckDeviceStatus();
+        last_check = current_time;
+    }
+}
+</code></pre>
+<h2 id="_20">高级应用技巧</h2>
+<h3 id="_21">通道缓存优化</h3>
+<p><strong>避免不必要的通道切换</strong>：</p>
+<pre><code class="language-c">// 带缓存的通道选择
+static uint8_t cached_channel = 0xFF;
+
+bool TCA9548A_SelectChannelCached(uint8_t channel) {
+    // 如果已经是目标通道，跳过切换
+    if (cached_channel == channel) {
+        return true;
+    }
+
+    // 切换通道
+    if (TCA9548A_SelectChannel(channel)) {
+        cached_channel = channel;
+        return true;
+    }
+
+    return false;
+}
+
+// 使用示例
+void OptimizedRead(void) {
+    // 连续读取同一通道的多个设备
+    TCA9548A_SelectChannelCached(0);
+    ReadDevice1();
+    ReadDevice2();
+    ReadDevice3();
+    // 只切换一次通道
+}
+</code></pre>
+<h3 id="_22">并发访问管理</h3>
+<p><strong>多任务环境下的互斥保护</strong>：</p>
+<pre><code class="language-c">// 使用互斥锁保护
+#include &quot;cmsis_os.h&quot;
+
+osMutexId_t mux_mutex;
+
+// 初始化互斥锁
+void TCA9548A_InitMutex(void) {
+    mux_mutex = osMutexNew(NULL);
+}
+
+// 安全的设备访问
+bool TCA9548A_SafeReadDevice(uint8_t channel, uint8_t dev_addr,
+                              uint8_t reg, uint8_t *data, uint16_t len) {
+    // 获取互斥锁
+    if (osMutexAcquire(mux_mutex, osWaitForever) != osOK) {
+        return false;
+    }
+
+    // 访问设备
+    bool result = TCA9548A_ReadDevice(channel, dev_addr, reg, data, len);
+
+    // 释放互斥锁
+    osMutexRelease(mux_mutex);
+
+    return result;
+}
+</code></pre>
+<h3 id="_23">错误处理和恢复</h3>
+<p><strong>完善的错误处理机制</strong>：</p>
+<pre><code class="language-c">// 错误类型
+typedef enum {
+    MUX_ERROR_NONE = 0,
+    MUX_ERROR_NOT_FOUND,
+    MUX_ERROR_CHANNEL_SWITCH,
+    MUX_ERROR_DEVICE_ACCESS,
+    MUX_ERROR_TIMEOUT
+} MuxError_t;
+
+// 错误计数器
+typedef struct {
+    uint32_t channel_switch_errors;
+    uint32_t device_access_errors;
+    uint32_t timeout_errors;
+} ErrorCounters_t;
+
+ErrorCounters_t error_counters = {0};
+
+// 带重试的通道选择
+bool TCA9548A_SelectChannelWithRetry(uint8_t channel, uint8_t retries) {
+    for (uint8_t i = 0; i &lt; retries; i++) {
+        if (TCA9548A_SelectChannel(channel)) {
+            return true;
+        }
+
+        error_counters.channel_switch_errors++;
+        HAL_Delay(10);  // 延时后重试
+    }
+
+    return false;
+}
+
+// 带重试的设备访问
+bool TCA9548A_ReadDeviceWithRetry(uint8_t channel, uint8_t dev_addr,
+                                   uint8_t reg, uint8_t *data, 
+                                   uint16_t len, uint8_t retries) {
+    for (uint8_t i = 0; i &lt; retries; i++) {
+        // 选择通道
+        if (!TCA9548A_SelectChannelWithRetry(channel, 3)) {
+            continue;
+        }
+
+        // 读取设备
+        if (I2C_ReadRegister(dev_addr, reg, data, len)) {
+            return true;
+        }
+
+        error_counters.device_access_errors++;
+        HAL_Delay(10);
+    }
+
+    return false;
+}
+
+// 错误统计报告
+void PrintErrorStatistics(void) {
+    printf(&quot;\n=== Error Statistics ===\n&quot;);
+    printf(&quot;Channel switch errors: %lu\n&quot;, error_counters.channel_switch_errors);
+    printf(&quot;Device access errors: %lu\n&quot;, error_counters.device_access_errors);
+    printf(&quot;Timeout errors: %lu\n&quot;, error_counters.timeout_errors);
+}
+</code></pre>
+<h3 id="_24">性能优化</h3>
+<p><strong>批量读取优化</strong>：</p>
+<pre><code class="language-c">// 批量读取多个通道的相同寄存器
+void TCA9548A_BatchRead(uint8_t dev_addr, uint8_t reg, 
+                        uint8_t data[8], uint8_t channels) {
+    for (uint8_t ch = 0; ch &lt; channels; ch++) {
+        TCA9548A_SelectChannelCached(ch);
+        I2C_ReadRegister(dev_addr, reg, &amp;data[ch], 1);
+    }
+}
+
+// DMA优化（如果硬件支持）
+void TCA9548A_DMARead(uint8_t channel, uint8_t dev_addr,
+                      uint8_t reg, uint8_t *buffer, uint16_t len) {
+    // 选择通道
+    TCA9548A_SelectChannel(channel);
+
+    // 使用DMA读取
+    I2C_DMA_ReadRegister(dev_addr, reg, buffer, len);
+
+    // 等待DMA完成
+    while (I2C_DMA_IsBusy());
+}
+</code></pre>
+<h3 id="_25">电源管理</h3>
+<p><strong>通道电源控制</strong>：</p>
+<pre><code class="language-c">// 如果硬件支持通道电源控制
+typedef struct {
+    GPIO_TypeDef *port;
+    uint16_t pin;
+} ChannelPower_t;
+
+ChannelPower_t channel_power[8] = {
+    {GPIOA, GPIO_PIN_0},
+    {GPIOA, GPIO_PIN_1},
+    // ... 其他通道
+};
+
+// 使能通道电源
+void TCA9548A_EnableChannelPower(uint8_t channel) {
+    if (channel &lt; 8) {
+        HAL_GPIO_WritePin(channel_power[channel].port,
+                         channel_power[channel].pin, GPIO_PIN_SET);
+        HAL_Delay(10);  // 等待电源稳定
+    }
+}
+
+// 禁用通道电源
+void TCA9548A_DisableChannelPower(uint8_t channel) {
+    if (channel &lt; 8) {
+        HAL_GPIO_WritePin(channel_power[channel].port,
+                         channel_power[channel].pin, GPIO_PIN_RESET);
+    }
+}
+
+// 低功耗模式
+void TCA9548A_EnterLowPower(void) {
+    // 禁用所有通道
+    TCA9548A_DisableAllChannels();
+
+    // 关闭所有通道电源
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        TCA9548A_DisableChannelPower(ch);
+    }
+}
+
+// 从低功耗模式唤醒
+void TCA9548A_WakeUp(void) {
+    // 使能需要的通道电源
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        TCA9548A_EnableChannelPower(ch);
+    }
+
+    HAL_Delay(10);
+
+    // 重新初始化
+    TCA9548A_Init(mux.address);
+}
+</code></pre>
+<h2 id="_26">故障排查与调试</h2>
+<h3 id="_27">常见问题诊断</h3>
+<p><strong>问题1：多路复用器无响应</strong></p>
+<pre><code class="language-c">// 诊断函数
+void DiagnoseMuxNotResponding(void) {
+    printf(&quot;\n=== Diagnosing TCA9548A ===\n&quot;);
+
+    // 1. 检查电源
+    printf(&quot;1. Check VCC voltage (should be 1.65V-5.5V)\n&quot;);
+
+    // 2. 检查复位引脚
+    printf(&quot;2. Check ~RST pin (should be HIGH)\n&quot;);
+
+    // 3. 检查I2C总线
+    printf(&quot;3. Checking I2C bus...\n&quot;);
+    if (!I2C_CheckBus()) {
+        printf(&quot;   ERROR: I2C bus stuck!\n&quot;);
+        I2C_BusRecovery();
+    } else {
+        printf(&quot;   OK: I2C bus is free\n&quot;);
+    }
+
+    // 4. 扫描I2C总线
+    printf(&quot;4. Scanning I2C bus...\n&quot;);
+    for (uint8_t addr = 0x70; addr &lt;= 0x77; addr++) {
+        if (I2C_CheckDevice(addr)) {
+            printf(&quot;   Found device at 0x%02X\n&quot;, addr);
+        }
+    }
+
+    // 5. 尝试读取状态
+    printf(&quot;5. Reading multiplexer status...\n&quot;);
+    uint8_t status = TCA9548A_ReadChannels();
+    printf(&quot;   Status: 0x%02X\n&quot;, status);
+}
+</code></pre>
+<p><strong>问题2：通道切换失败</strong></p>
+<pre><code class="language-c">// 通道切换诊断
+void DiagnoseChannelSwitch(uint8_t channel) {
+    printf(&quot;\n=== Diagnosing Channel %d ===\n&quot;, channel);
+
+    // 1. 尝试切换通道
+    printf(&quot;1. Attempting to switch to channel %d...\n&quot;, channel);
+    if (TCA9548A_SelectChannel(channel)) {
+        printf(&quot;   OK: Channel switched\n&quot;);
+    } else {
+        printf(&quot;   ERROR: Channel switch failed\n&quot;);
+        return;
+    }
+
+    // 2. 验证通道状态
+    printf(&quot;2. Verifying channel status...\n&quot;);
+    uint8_t status = TCA9548A_ReadChannels();
+    if (status &amp; (1 &lt;&lt; channel)) {
+        printf(&quot;   OK: Channel %d is enabled\n&quot;, channel);
+    } else {
+        printf(&quot;   ERROR: Channel %d is not enabled\n&quot;, channel);
+    }
+
+    // 3. 检查通道上的设备
+    printf(&quot;3. Scanning channel %d...\n&quot;, channel);
+    uint8_t devices[16];
+    uint8_t count = TCA9548A_ScanChannel(channel, devices, 16);
+    printf(&quot;   Found %d device(s)\n&quot;, count);
+
+    // 4. 检查上拉电阻
+    printf(&quot;4. Check pull-up resistors on channel %d\n&quot;, channel);
+    printf(&quot;   SDA and SCL should be HIGH when idle\n&quot;);
+}
+</code></pre>
+<p><strong>问题3：设备通信错误</strong></p>
+<pre><code class="language-c">// 设备通信诊断
+void DiagnoseDeviceCommunication(uint8_t channel, uint8_t dev_addr) {
+    printf(&quot;\n=== Diagnosing Device 0x%02X on Channel %d ===\n&quot;, 
+           dev_addr, channel);
+
+    // 1. 选择通道
+    printf(&quot;1. Selecting channel %d...\n&quot;, channel);
+    if (!TCA9548A_SelectChannel(channel)) {
+        printf(&quot;   ERROR: Failed to select channel\n&quot;);
+        return;
+    }
+
+    // 2. 检查设备是否存在
+    printf(&quot;2. Checking device presence...\n&quot;);
+    if (!I2C_CheckDevice(dev_addr)) {
+        printf(&quot;   ERROR: Device not found\n&quot;);
+        printf(&quot;   - Check device power\n&quot;);
+        printf(&quot;   - Check device address\n&quot;);
+        printf(&quot;   - Check connections\n&quot;);
+        return;
+    }
+    printf(&quot;   OK: Device found\n&quot;);
+
+    // 3. 尝试读取设备
+    printf(&quot;3. Attempting to read device...\n&quot;);
+    uint8_t data;
+    if (I2C_ReadRegister(dev_addr, 0x00, &amp;data, 1)) {
+        printf(&quot;   OK: Read successful, data=0x%02X\n&quot;, data);
+    } else {
+        printf(&quot;   ERROR: Read failed\n&quot;);
+        printf(&quot;   - Check device register map\n&quot;);
+        printf(&quot;   - Check I2C timing\n&quot;);
+    }
+
+    // 4. 测试写入
+    printf(&quot;4. Attempting to write device...\n&quot;);
+    uint8_t test_data = 0xAA;
+    if (I2C_WriteRegister(dev_addr, 0x00, &amp;test_data, 1)) {
+        printf(&quot;   OK: Write successful\n&quot;);
+    } else {
+        printf(&quot;   ERROR: Write failed\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="_28">调试工具函数</h3>
+<p><strong>详细的日志输出</strong>：</p>
+<pre><code class="language-c">// 使能调试日志
+#define MUX_DEBUG 1
+
+#if MUX_DEBUG
+#define MUX_LOG(fmt, ...) printf(&quot;[MUX] &quot; fmt &quot;\n&quot;, ##__VA_ARGS__)
+#else
+#define MUX_LOG(fmt, ...)
+#endif
+
+// 带日志的通道选择
+bool TCA9548A_SelectChannelDebug(uint8_t channel) {
+    MUX_LOG(&quot;Selecting channel %d&quot;, channel);
+
+    if (channel &gt; 7) {
+        MUX_LOG(&quot;ERROR: Invalid channel %d&quot;, channel);
+        return false;
+    }
+
+    uint8_t mask = (1 &lt;&lt; channel);
+    MUX_LOG(&quot;Channel mask: 0x%02X&quot;, mask);
+
+    if (!TCA9548A_SelectChannels(mask)) {
+        MUX_LOG(&quot;ERROR: Failed to select channel&quot;);
+        return false;
+    }
+
+    // 验证
+    uint8_t status = TCA9548A_ReadChannels();
+    MUX_LOG(&quot;Current status: 0x%02X&quot;, status);
+
+    if (status != mask) {
+        MUX_LOG(&quot;WARNING: Status mismatch (expected 0x%02X, got 0x%02X)&quot;,
+                mask, status);
+    }
+
+    return true;
+}
+</code></pre>
+<p><strong>波形分析</strong>：</p>
+<pre><code class="language-c">// 示波器测试点建议
+void PrintOscilloscopeTestPoints(void) {
+    printf(&quot;\n=== Oscilloscope Test Points ===\n&quot;);
+    printf(&quot;1. Main Bus:\n&quot;);
+    printf(&quot;   - CH1: Main SDA\n&quot;);
+    printf(&quot;   - CH2: Main SCL\n&quot;);
+    printf(&quot;   - Trigger: SCL falling edge\n&quot;);
+    printf(&quot;   - Check: Address 0x70, channel select byte\n\n&quot;);
+
+    printf(&quot;2. Channel 0:\n&quot;);
+    printf(&quot;   - CH1: Channel 0 SDA\n&quot;);
+    printf(&quot;   - CH2: Channel 0 SCL\n&quot;);
+    printf(&quot;   - Trigger: SCL falling edge\n&quot;);
+    printf(&quot;   - Check: Device address, data bytes\n\n&quot;);
+
+    printf(&quot;3. Timing:\n&quot;);
+    printf(&quot;   - Channel switch time: &lt;1us\n&quot;);
+    printf(&quot;   - SCL frequency: 100kHz or 400kHz\n&quot;);
+    printf(&quot;   - SDA setup time: &gt;100ns\n&quot;);
+    printf(&quot;   - SDA hold time: &gt;0ns\n&quot;);
+}
+</code></pre>
+<h3 id="_29">性能测试</h3>
+<p><strong>吞吐量测试</strong>：</p>
+<pre><code class="language-c">// 测试通道切换速度
+void TestChannelSwitchSpeed(void) {
+    uint32_t start_time, end_time;
+    uint32_t iterations = 1000;
+
+    printf(&quot;\n=== Channel Switch Speed Test ===\n&quot;);
+
+    start_time = HAL_GetTick();
+
+    for (uint32_t i = 0; i &lt; iterations; i++) {
+        TCA9548A_SelectChannel(i % 8);
+    }
+
+    end_time = HAL_GetTick();
+
+    float time_per_switch = (float)(end_time - start_time) / iterations;
+    printf(&quot;Average switch time: %.3f ms\n&quot;, time_per_switch);
+    printf(&quot;Switches per second: %.0f\n&quot;, 1000.0 / time_per_switch);
+}
+
+// 测试数据吞吐量
+void TestDataThroughput(void) {
+    uint32_t start_time, end_time;
+    uint32_t bytes_transferred = 0;
+    uint8_t buffer[256];
+
+    printf(&quot;\n=== Data Throughput Test ===\n&quot;);
+
+    start_time = HAL_GetTick();
+
+    // 测试1秒钟的数据传输
+    while (HAL_GetTick() - start_time &lt; 1000) {
+        for (uint8_t ch = 0; ch &lt; 8; ch++) {
+            TCA9548A_SelectChannel(ch);
+            I2C_ReadRegister(0x50, 0x00, buffer, 32);
+            bytes_transferred += 32;
+        }
+    }
+
+    end_time = HAL_GetTick();
+
+    float throughput = (float)bytes_transferred / (end_time - start_time) * 1000;
+    printf(&quot;Throughput: %.2f bytes/sec\n&quot;, throughput);
+    printf(&quot;Throughput: %.2f kbps\n&quot;, throughput * 8 / 1000);
+}
+</code></pre>
+<h2 id="_30">其他多路复用器芯片</h2>
+<h3 id="pca9546a4">PCA9546A（4通道）</h3>
+<p><strong>特性对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>TCA9548A</th>
+<th>PCA9546A</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>通道数</td>
+<td>8</td>
+<td>4</td>
+</tr>
+<tr>
+<td>地址范围</td>
+<td>0x70-0x77</td>
+<td>0x70-0x77</td>
+</tr>
+<tr>
+<td>中断功能</td>
+<td>无</td>
+<td>有</td>
+</tr>
+<tr>
+<td>复位功能</td>
+<td>有</td>
+<td>有</td>
+</tr>
+<tr>
+<td>封装</td>
+<td>TSSOP-24</td>
+<td>TSSOP-16</td>
+</tr>
+</tbody>
+</table>
+<p><strong>中断功能</strong>：</p>
+<pre><code class="language-c">// PCA9546A支持中断聚合
+// 每个通道的中断信号聚合到主中断引脚
+
+// 读取中断状态
+uint8_t PCA9546A_ReadInterruptStatus(void) {
+    uint8_t status;
+
+    I2C_Start();
+    I2C_SendAddress(0x70, I2C_READ);
+    status = I2C_ReceiveByte(false);
+    I2C_Stop();
+
+    // 高4位是中断状态
+    return (status &gt;&gt; 4) &amp; 0x0F;
+}
+</code></pre>
+<h3 id="pca9548a8">PCA9548A（8通道，带中断）</h3>
+<p><strong>与TCA9548A的区别</strong>：</p>
+<pre><code>PCA9548A = TCA9548A + 中断功能
+
+额外引脚：
+- INT0-INT7: 各通道中断输入
+- INT: 聚合中断输出
+
+应用场景：
+- 需要中断响应的传感器
+- 事件驱动的系统
+- 降低CPU轮询负担
+</code></pre>
+<p><strong>中断处理示例</strong>：</p>
+<pre><code class="language-c">// 中断服务函数
+void MUX_INT_Handler(void) {
+    // 读取中断状态
+    uint8_t int_status = PCA9548A_ReadInterruptStatus();
+
+    // 处理各通道中断
+    for (uint8_t ch = 0; ch &lt; 8; ch++) {
+        if (int_status &amp; (1 &lt;&lt; ch)) {
+            // 选择通道
+            PCA9548A_SelectChannel(ch);
+
+            // 处理该通道的中断
+            HandleChannelInterrupt(ch);
+        }
+    }
+}
+</code></pre>
+<h3 id="tca9545a4">TCA9545A（4通道，可配置）</h3>
+<p><strong>特殊功能</strong>：</p>
+<pre><code>- 4个独立通道
+- 每个通道可配置为上游或下游
+- 支持双向通信
+- 适用于复杂拓扑
+
+应用：
+- 多主机系统
+- 双向通信
+- 复杂总线结构
+</code></pre>
+<h2 id="_31">最佳实践</h2>
+<h3 id="_32">设计建议</h3>
+<p><strong>1. 通道分配策略</strong>：</p>
+<pre><code>原则：
+- 相同类型设备分配到不同通道
+- 高速设备和低速设备分开
+- 关键设备使用独立通道
+- 预留通道用于扩展
+
+示例分配：
+通道0: 温度传感器（关键）
+通道1: 湿度传感器（关键）
+通道2: 光照传感器
+通道3: 压力传感器
+通道4: EEPROM（低速）
+通道5: RTC（低速）
+通道6: 扩展接口
+通道7: 调试/测试
+</code></pre>
+<p><strong>2. 上拉电阻选择</strong>：</p>
+<pre><code>主总线：
+- 2.2kΩ（400kHz，短距离）
+- 4.7kΩ（100kHz，标准）
+
+通道：
+- 4.7kΩ（1-2个设备）
+- 2.2kΩ（3-5个设备）
+- 1kΩ（6+个设备，不推荐）
+
+注意：
+- 避免过小（功耗高）
+- 避免过大（速度慢）
+- 考虑总线电容
+</code></pre>
+<p><strong>3. 错误处理策略</strong>：</p>
+<pre><code class="language-c">// 分层错误处理
+typedef enum {
+    ERROR_LEVEL_INFO,     // 信息
+    ERROR_LEVEL_WARNING,  // 警告
+    ERROR_LEVEL_ERROR,    // 错误
+    ERROR_LEVEL_CRITICAL  // 严重错误
+} ErrorLevel_t;
+
+void HandleMuxError(ErrorLevel_t level, const char *message) {
+    switch (level) {
+        case ERROR_LEVEL_INFO:
+            // 记录日志
+            LogInfo(message);
+            break;
+
+        case ERROR_LEVEL_WARNING:
+            // 记录警告，继续运行
+            LogWarning(message);
+            break;
+
+        case ERROR_LEVEL_ERROR:
+            // 尝试恢复
+            LogError(message);
+            AttemptRecovery();
+            break;
+
+        case ERROR_LEVEL_CRITICAL:
+            // 系统复位
+            LogCritical(message);
+            SystemReset();
+            break;
+    }
+}
+</code></pre>
+<h3 id="_33">代码组织</h3>
+<p><strong>模块化设计</strong>：</p>
+<pre><code class="language-c">// tca9548a.h - 头文件
+#ifndef TCA9548A_H
+#define TCA9548A_H
+
+#include &lt;stdint.h&gt;
+#include &lt;stdbool.h&gt;
+
+// 配置
+#define TCA9548A_MAX_CHANNELS  8
+#define TCA9548A_DEFAULT_ADDR  0x70
+
+// 初始化
+bool TCA9548A_Init(uint8_t address);
+void TCA9548A_DeInit(void);
+
+// 通道控制
+bool TCA9548A_SelectChannel(uint8_t channel);
+bool TCA9548A_SelectChannels(uint8_t mask);
+bool TCA9548A_DisableAllChannels(void);
+
+// 状态查询
+uint8_t TCA9548A_ReadChannels(void);
+bool TCA9548A_IsChannelEnabled(uint8_t channel);
+
+// 设备访问
+bool TCA9548A_ReadDevice(uint8_t channel, uint8_t dev_addr,
+                         uint8_t reg, uint8_t *data, uint16_t len);
+bool TCA9548A_WriteDevice(uint8_t channel, uint8_t dev_addr,
+                          uint8_t reg, uint8_t *data, uint16_t len);
+
+// 设备枚举
+uint8_t TCA9548A_ScanChannel(uint8_t channel, uint8_t *devices, 
+                              uint8_t max_devices);
+void TCA9548A_ScanAllChannels(void);
+
+#endif // TCA9548A_H
+</code></pre>
+<p><strong>配置文件</strong>：</p>
+<pre><code class="language-c">// tca9548a_config.h - 配置文件
+#ifndef TCA9548A_CONFIG_H
+#define TCA9548A_CONFIG_H
+
+// 多路复用器地址
+#define MUX_ADDRESS         0x70
+
+// 使能的通道
+#define MUX_CHANNEL_0_EN    1
+#define MUX_CHANNEL_1_EN    1
+#define MUX_CHANNEL_2_EN    1
+#define MUX_CHANNEL_3_EN    1
+#define MUX_CHANNEL_4_EN    0
+#define MUX_CHANNEL_5_EN    0
+#define MUX_CHANNEL_6_EN    0
+#define MUX_CHANNEL_7_EN    0
+
+// 通道描述
+#define MUX_CH0_DESC        &quot;Temperature Sensor&quot;
+#define MUX_CH1_DESC        &quot;Humidity Sensor&quot;
+#define MUX_CH2_DESC        &quot;Light Sensor&quot;
+#define MUX_CH3_DESC        &quot;Pressure Sensor&quot;
+
+// 调试选项
+#define MUX_DEBUG_ENABLE    1
+#define MUX_ERROR_RETRY     3
+
+// 性能选项
+#define MUX_CACHE_CHANNEL   1
+#define MUX_USE_MUTEX       1
+
+#endif // TCA9548A_CONFIG_H
+</code></pre>
+<h3 id="_34">文档和注释</h3>
+<p><strong>完善的文档</strong>：</p>
+<pre><code class="language-c">/**
+ * @brief 选择I2C多路复用器的通道
+ * 
+ * 此函数通过向TCA9548A写入通道掩码来选择一个或多个I2C通道。
+ * 选择通道后，主I2C总线将连接到选定的通道，可以访问该通道上的设备。
+ * 
+ * @param channel 要选择的通道号（0-7）
+ * 
+ * @return true  通道选择成功
+ * @return false 通道选择失败（无效通道号或I2C通信错误）
+ * 
+ * @note 此函数会禁用其他所有通道
+ * @note 通道切换时间小于1微秒
+ * @note 如果已经选择了目标通道，函数会立即返回（使用缓存）
+ * 
+ * @warning 在多任务环境中使用时，需要外部互斥保护
+ * 
+ * @example
+ * // 选择通道0
+ * if (TCA9548A_SelectChannel(0)) {
+ *     // 现在可以访问通道0上的设备
+ *     ReadSensor(0x48);
+ * }
+ */
+bool TCA9548A_SelectChannel(uint8_t channel);
+</code></pre>
+<h2 id="_35">实际项目案例</h2>
+<h3 id="1">案例1：环境监测站</h3>
+<p><strong>需求</strong>：
+- 8个位置的温湿度监测
+- 每个位置：温度传感器 + 湿度传感器
+- 所有传感器地址相同</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 传感器配置
+#define TEMP_ADDR   0x48
+#define HUMID_ADDR  0x40
+
+typedef struct {
+    float temperature;
+    float humidity;
+    uint32_t timestamp;
+    bool valid;
+} LocationData_t;
+
+LocationData_t locations[8];
+
+// 读取所有位置数据
+void ReadAllLocations(void) {
+    for (uint8_t loc = 0; loc &lt; 8; loc++) {
+        // 选择通道
+        if (!TCA9548A_SelectChannel(loc)) {
+            locations[loc].valid = false;
+            continue;
+        }
+
+        // 读取温度
+        uint8_t temp_data[2];
+        if (I2C_ReadRegister(TEMP_ADDR, 0x00, temp_data, 2)) {
+            int16_t raw = (temp_data[0] &lt;&lt; 8) | temp_data[1];
+            locations[loc].temperature = raw * 0.0625;
+        }
+
+        // 读取湿度
+        uint8_t humid_data[2];
+        if (I2C_ReadRegister(HUMID_ADDR, 0x00, humid_data, 2)) {
+            uint16_t raw = (humid_data[0] &lt;&lt; 8) | humid_data[1];
+            locations[loc].humidity = raw / 65536.0 * 100.0;
+        }
+
+        locations[loc].timestamp = HAL_GetTick();
+        locations[loc].valid = true;
+    }
+}
+
+// 显示数据
+void DisplayLocationData(void) {
+    printf(&quot;\n=== Environmental Monitoring ===\n&quot;);
+    for (uint8_t i = 0; i &lt; 8; i++) {
+        if (locations[i].valid) {
+            printf(&quot;Location %d: %.2f°C, %.1f%% RH\n&quot;,
+                   i, locations[i].temperature, locations[i].humidity);
+        } else {
+            printf(&quot;Location %d: ERROR\n&quot;, i);
+        }
+    }
+}
+</code></pre>
+<h3 id="2">案例2：机器人多传感器系统</h3>
+<p><strong>需求</strong>：
+- 8个MPU6050陀螺仪（机械臂关节）
+- 实时读取姿态数据
+- 高刷新率（100Hz）</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// MPU6050数据结构
+typedef struct {
+    int16_t accel_x, accel_y, accel_z;
+    int16_t gyro_x, gyro_y, gyro_z;
+    int16_t temperature;
+} MPU6050_RawData_t;
+
+typedef struct {
+    float roll, pitch, yaw;
+    uint32_t timestamp;
+} JointAngle_t;
+
+JointAngle_t joints[8];
+
+// 快速读取所有关节数据
+void ReadAllJoints(void) {
+    uint32_t start_time = HAL_GetTick();
+
+    for (uint8_t joint = 0; joint &lt; 8; joint++) {
+        // 选择通道（使用缓存优化）
+        TCA9548A_SelectChannelCached(joint);
+
+        // 读取14字节原始数据
+        uint8_t buffer[14];
+        I2C_ReadRegister(MPU6050_ADDR, 0x3B, buffer, 14);
+
+        // 解析数据
+        MPU6050_RawData_t raw;
+        raw.accel_x = (buffer[0] &lt;&lt; 8) | buffer[1];
+        raw.accel_y = (buffer[2] &lt;&lt; 8) | buffer[3];
+        raw.accel_z = (buffer[4] &lt;&lt; 8) | buffer[5];
+        raw.temperature = (buffer[6] &lt;&lt; 8) | buffer[7];
+        raw.gyro_x = (buffer[8] &lt;&lt; 8) | buffer[9];
+        raw.gyro_y = (buffer[10] &lt;&lt; 8) | buffer[11];
+        raw.gyro_z = (buffer[12] &lt;&lt; 8) | buffer[13];
+
+        // 计算姿态角
+        CalculateAngles(&amp;raw, &amp;joints[joint]);
+        joints[joint].timestamp = HAL_GetTick();
+    }
+
+    uint32_t elapsed = HAL_GetTick() - start_time;
+    printf(&quot;Read all joints in %lu ms\n&quot;, elapsed);
+}
+
+// 姿态角计算（简化版）
+void CalculateAngles(MPU6050_RawData_t *raw, JointAngle_t *angle) {
+    // 加速度计数据转换为角度
+    float ax = raw-&gt;accel_x / 16384.0;
+    float ay = raw-&gt;accel_y / 16384.0;
+    float az = raw-&gt;accel_z / 16384.0;
+
+    angle-&gt;roll = atan2(ay, az) * 180.0 / M_PI;
+    angle-&gt;pitch = atan2(-ax, sqrt(ay*ay + az*az)) * 180.0 / M_PI;
+
+    // 陀螺仪积分（需要互补滤波或卡尔曼滤波）
+    // 这里简化处理
+}
+
+// 实时任务（100Hz）
+void JointMonitorTask(void) {
+    static uint32_t last_update = 0;
+    uint32_t current_time = HAL_GetTick();
+
+    if (current_time - last_update &gt;= 10) {  // 10ms = 100Hz
+        ReadAllJoints();
+        last_update = current_time;
+    }
+}
+</code></pre>
+<h3 id="3">案例3：数据记录系统</h3>
+<p><strong>需求</strong>：
+- 8个EEPROM组成256KB存储
+- 循环记录传感器数据
+- 掉电保护</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 数据记录配置
+#define RECORD_SIZE     64      // 每条记录64字节
+#define RECORDS_PER_EEPROM  512 // 每个EEPROM 512条记录
+#define TOTAL_RECORDS   (RECORDS_PER_EEPROM * 8)
+
+// 记录结构
+typedef struct {
+    uint32_t timestamp;
+    float temperature;
+    float humidity;
+    float pressure;
+    uint16_t light;
+    uint8_t status;
+    uint8_t checksum;
+    uint8_t reserved[48];
+} DataRecord_t;
+
+// 当前写入位置
+uint32_t current_record = 0;
+
+// 写入记录
+bool WriteRecord(DataRecord_t *record) {
+    // 计算校验和
+    record-&gt;checksum = CalculateChecksum((uint8_t*)record, 
+                                         sizeof(DataRecord_t) - 1);
+
+    // 计算EEPROM通道和地址
+    uint8_t channel = current_record / RECORDS_PER_EEPROM;
+    uint16_t addr = (current_record % RECORDS_PER_EEPROM) * RECORD_SIZE;
+
+    // 选择通道
+    if (!TCA9548A_SelectChannel(channel)) {
+        return false;
+    }
+
+    // 写入EEPROM
+    bool result = WriteEEPROM(EEPROM_ADDR, addr, 
+                              (uint8_t*)record, sizeof(DataRecord_t));
+
+    if (result) {
+        // 更新写入位置（循环）
+        current_record = (current_record + 1) % TOTAL_RECORDS;
+    }
+
+    return result;
+}
+
+// 读取记录
+bool ReadRecord(uint32_t record_num, DataRecord_t *record) {
+    if (record_num &gt;= TOTAL_RECORDS) {
+        return false;
+    }
+
+    // 计算EEPROM通道和地址
+    uint8_t channel = record_num / RECORDS_PER_EEPROM;
+    uint16_t addr = (record_num % RECORDS_PER_EEPROM) * RECORD_SIZE;
+
+    // 选择通道
+    if (!TCA9548A_SelectChannel(channel)) {
+        return false;
+    }
+
+    // 读取EEPROM
+    if (!ReadEEPROM(EEPROM_ADDR, addr, 
+                    (uint8_t*)record, sizeof(DataRecord_t))) {
+        return false;
+    }
+
+    // 验证校验和
+    uint8_t checksum = CalculateChecksum((uint8_t*)record, 
+                                         sizeof(DataRecord_t) - 1);
+    return (checksum == record-&gt;checksum);
+}
+
+// 导出所有数据
+void ExportAllRecords(void) {
+    printf(&quot;\n=== Exporting All Records ===\n&quot;);
+
+    DataRecord_t record;
+    uint32_t valid_records = 0;
+
+    for (uint32_t i = 0; i &lt; TOTAL_RECORDS; i++) {
+        if (ReadRecord(i, &amp;record)) {
+            printf(&quot;%lu,%lu,%.2f,%.1f,%.1f,%u\n&quot;,
+                   i, record.timestamp, record.temperature,
+                   record.humidity, record.pressure, record.light);
+            valid_records++;
+        }
+    }
+
+    printf(&quot;Total valid records: %lu\n&quot;, valid_records);
+}
+</code></pre>
+<h2 id="_36">总结</h2>
+<p>通过本文学习，你已经掌握了：</p>
+<ul>
+<li>✅ <strong>I2C多路复用器原理</strong>：工作机制、通道选择、地址配置</li>
+<li>✅ <strong>TCA9548A应用</strong>：硬件连接、软件驱动、设备访问</li>
+<li>✅ <strong>地址冲突解决</strong>：多路复用器方案、设备枚举、通道管理</li>
+<li>✅ <strong>高级功能</strong>：错误处理、性能优化、电源管理</li>
+<li>✅ <strong>实际应用</strong>：多传感器系统、数据记录、环境监测</li>
+<li>✅ <strong>故障排查</strong>：诊断方法、调试工具、问题解决</li>
+</ul>
+<h3 id="_37">关键要点</h3>
+<ol>
+<li>
+<p><strong>多路复用器优势</strong>：
+   - 完美解决地址冲突
+   - 降低总线负载
+   - 提高系统可靠性
+   - 灵活的总线管理</p>
+</li>
+<li>
+<p><strong>硬件设计要点</strong>：
+   - 主总线和通道都需要上拉电阻
+   - 合理选择电阻值（2.2kΩ-10kΩ）
+   - 注意电平兼容性
+   - 添加ESD保护</p>
+</li>
+<li>
+<p><strong>软件实现要点</strong>：
+   - 模块化驱动设计
+   - 通道缓存优化
+   - 完善的错误处理
+   - 互斥保护（多任务）</p>
+</li>
+<li>
+<p><strong>性能优化</strong>：
+   - 减少不必要的通道切换
+   - 批量操作
+   - 使用DMA（如果支持）
+   - 合理的任务调度</p>
+</li>
+</ol>
+<h2 id="_38">实践建议</h2>
+<h3 id="_39">初学者练习</h3>
+<ol>
+<li>
+<p><strong>基础实验</strong>：
+   - 连接TCA9548A和2个相同地址的设备
+   - 实现通道选择和设备访问
+   - 测试设备枚举功能</p>
+</li>
+<li>
+<p><strong>进阶实验</strong>：
+   - 连接8个相同传感器
+   - 实现数据采集和显示
+   - 添加错误处理</p>
+</li>
+<li>
+<p><strong>综合项目</strong>：
+   - 设计多传感器监测系统
+   - 实现数据记录功能
+   - 添加远程通信</p>
+</li>
+</ol>
+<h3 id="_40">进阶项目</h3>
+<ol>
+<li>
+<p><strong>智能家居系统</strong>：
+   - 多房间环境监测
+   - 设备自动发现
+   - 数据可视化</p>
+</li>
+<li>
+<p><strong>工业监控系统</strong>：
+   - 多点温度监测
+   - 实时数据采集
+   - 报警和记录</p>
+</li>
+<li>
+<p><strong>机器人系统</strong>：
+   - 多关节姿态监测
+   - 实时控制
+   - 数据融合</p>
+</li>
+</ol>
+<h2 id="_41">延伸阅读</h2>
+<h3 id="_42">相关文章</h3>
+<ul>
+<li><a href="../beginner/03-i2c-hardware.html">I2C硬件接口实战</a> - I2C基础知识</li>
+<li><a href="05-smbus-protocol.html">SMBus协议详解</a> - SMBus协议应用</li>
+<li><a href="../advanced/01-pmbus-power-management.html">PMBus电源管理</a> - 电源管理总线</li>
+</ul>
+<h3 id="_43">相关协议</h3>
+<ul>
+<li>I2C规范（NXP UM10204）</li>
+<li>SMBus规范</li>
+<li>PMBus规范</li>
+</ul>
+<h3 id="_44">硬件设计</h3>
+<ul>
+<li>信号完整性分析</li>
+<li>EMC设计实战</li>
+<li>PCB布线规范</li>
+</ul>
+<h2 id="_45">参考资料</h2>
+<h3 id="_46">数据手册</h3>
+<ol>
+<li><a href="https://www.ti.com/lit/ds/symlink/tca9548a.pdf">TCA9548A Datasheet</a> - TI 8通道多路复用器</li>
+<li><a href="https://www.nxp.com/docs/en/data-sheet/PCA9548A.pdf">PCA9548A Datasheet</a> - NXP 8通道多路复用器</li>
+<li><a href="https://www.nxp.com/docs/en/data-sheet/PCA9546A.pdf">PCA9546A Datasheet</a> - NXP 4通道多路复用器</li>
+</ol>
+<h3 id="_47">应用笔记</h3>
+<ol>
+<li><strong>AN-10441</strong>: Level shifting techniques in I2C-bus design</li>
+<li><strong>AN-11084</strong>: Using the PCA9548A I2C multiplexer</li>
+<li><strong>SLVA704</strong>: TCA9548A Design Guide</li>
+</ol>
+<h3 id="_48">在线资源</h3>
+<ol>
+<li><a href="https://www.nxp.com/docs/en/user-guide/UM10204.pdf">I2C Bus Specification</a> - I2C总线规范</li>
+<li><a href="https://i2c.wiki.kernel.org/index.php/I2C_Tools">I2C Tools</a> - Linux I2C工具</li>
+<li><a href="https://github.com/adafruit/Adafruit_TCA9548A">Adafruit TCA9548A Library</a> - Arduino库</li>
+</ol>
+<h3 id="_49">开发工具</h3>
+<ol>
+<li><strong>Logic Analyzer</strong>: 分析I2C通信</li>
+<li><strong>Oscilloscope</strong>: 测量信号质量</li>
+<li><strong>I2C Scanner</strong>: 设备扫描工具</li>
+<li><strong>Bus Pirate</strong>: 通用总线工具</li>
+</ol>
+<h2 id="_50">常见应用场景</h2>
+<h3 id="1_1">1. 传感器网络</h3>
+<p><strong>应用</strong>：
+- 环境监测
+- 工业控制
+- 智能农业</p>
+<p><strong>配置</strong>：多个相同传感器，独立通道</p>
+<h3 id="2_1">2. 显示系统</h3>
+<p><strong>应用</strong>：
+- 多屏显示
+- LED矩阵
+- OLED阵列</p>
+<p><strong>配置</strong>：多个显示控制器，相同地址</p>
+<h3 id="3_1">3. 存储扩展</h3>
+<p><strong>应用</strong>：
+- 大容量EEPROM
+- 配置存储
+- 数据记录</p>
+<p><strong>配置</strong>：多个EEPROM，组成阵列</p>
+<h3 id="4_1">4. 电源管理</h3>
+<p><strong>应用</strong>：
+- 多路电源监控
+- 电池管理
+- PMBus系统</p>
+<p><strong>配置</strong>：多个电源管理芯片</p>
+<h3 id="5">5. 测试系统</h3>
+<p><strong>应用</strong>：
+- 自动化测试
+- 设备编程
+- 质量检测</p>
+<p><strong>配置</strong>：多个测试点，独立控制</p>
+<h2 id="_51">附录</h2>
+<h3 id="a-tca9548a">A. TCA9548A寄存器映射</h3>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>地址</th>
+<th>位</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Control</td>
+<td>0x00</td>
+<td>7:0</td>
+<td>通道使能控制</td>
+</tr>
+</tbody>
+</table>
+<p><strong>控制寄存器位定义</strong>：</p>
+<pre><code>Bit 7: 通道7使能
+Bit 6: 通道6使能
+Bit 5: 通道5使能
+Bit 4: 通道4使能
+Bit 3: 通道3使能
+Bit 2: 通道2使能
+Bit 1: 通道1使能
+Bit 0: 通道0使能
+
+0 = 通道禁用
+1 = 通道使能
+</code></pre>
+<h3 id="b-i2c">B. 常用I2C设备地址表</h3>
+<table>
+<thead>
+<tr>
+<th>设备类型</th>
+<th>地址范围</th>
+<th>可配置位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EEPROM (24C)</td>
+<td>0x50-0x57</td>
+<td>A2,A1,A0</td>
+</tr>
+<tr>
+<td>RTC (DS1307)</td>
+<td>0x68</td>
+<td>固定</td>
+</tr>
+<tr>
+<td>RTC (PCF8563)</td>
+<td>0x51</td>
+<td>固定</td>
+</tr>
+<tr>
+<td>温度 (LM75)</td>
+<td>0x48-0x4F</td>
+<td>A2,A1,A0</td>
+</tr>
+<tr>
+<td>湿度 (SHT3x)</td>
+<td>0x44-0x45</td>
+<td>ADDR</td>
+</tr>
+<tr>
+<td>陀螺仪 (MPU6050)</td>
+<td>0x68-0x69</td>
+<td>AD0</td>
+</tr>
+<tr>
+<td>加速度 (ADXL345)</td>
+<td>0x53,0x1D</td>
+<td>SDO</td>
+</tr>
+<tr>
+<td>磁力计 (HMC5883L)</td>
+<td>0x1E</td>
+<td>固定</td>
+</tr>
+<tr>
+<td>气压 (BMP280)</td>
+<td>0x76-0x77</td>
+<td>SDO</td>
+</tr>
+<tr>
+<td>光照 (BH1750)</td>
+<td>0x23,0x5C</td>
+<td>ADDR</td>
+</tr>
+</tbody>
+</table>
+<h3 id="c">C. 故障排查检查清单</h3>
+<p><strong>硬件检查</strong>：
+- [ ] VCC电压正常（1.65V-5.5V）
+- [ ] ~RST引脚为高电平
+- [ ] 主总线有上拉电阻
+- [ ] 各通道有上拉电阻
+- [ ] 所有设备共地
+- [ ] 地址配置正确（A0,A1,A2）</p>
+<p><strong>软件检查</strong>：
+- [ ] I2C初始化正确
+- [ ] 多路复用器地址正确
+- [ ] 通道选择成功
+- [ ] 设备地址正确
+- [ ] 时序配置正确</p>
+<p><strong>通信检查</strong>：
+- [ ] 主总线通信正常
+- [ ] 通道切换成功
+- [ ] 设备响应ACK
+- [ ] 数据读写正确
+- [ ] 无总线冲突</p>
+<h3 id="d">D. 性能参数</h3>
+<p><strong>TCA9548A性能指标</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>最小值</th>
+<th>典型值</th>
+<th>最大值</th>
+<th>单位</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>工作电压</td>
+<td>1.65</td>
+<td>-</td>
+<td>5.5</td>
+<td>V</td>
+</tr>
+<tr>
+<td>工作电流</td>
+<td>-</td>
+<td>10</td>
+<td>50</td>
+<td>μA</td>
+</tr>
+<tr>
+<td>I2C频率</td>
+<td>-</td>
+<td>-</td>
+<td>400</td>
+<td>kHz</td>
+</tr>
+<tr>
+<td>通道电容</td>
+<td>-</td>
+<td>-</td>
+<td>400</td>
+<td>pF</td>
+</tr>
+<tr>
+<td>通道电阻</td>
+<td>-</td>
+<td>5</td>
+<td>-</td>
+<td>Ω</td>
+</tr>
+<tr>
+<td>切换时间</td>
+<td>-</td>
+<td>-</td>
+<td>1</td>
+<td>μs</td>
+</tr>
+<tr>
+<td>工作温度</td>
+<td>-40</td>
+<td>-</td>
+<td>85</td>
+<td>°C</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><strong>版权声明</strong>：本文档为嵌入式知识平台原创内容，遵循CC BY-SA 4.0协议。</p>
+<p><strong>更新日志</strong>：
+- 2024-01-15: 初始版本发布</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

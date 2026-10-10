@@ -1,0 +1,1651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>EEPROM数据存储应用：掉电保护与参数配置实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/">04-middleware-layer</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/02-storage-technology/">02-storage-technology</a> / <a href="/knowledge/02-technologies/embedded/04-middleware-layer/02-storage-technology/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a></li>
+</ul>
+</li>
+<li><a href="#_7">背景知识</a><ul>
+<li><a href="#eeprom_1">什么是EEPROM</a></li>
+<li><a href="#eeprom_2">EEPROM工作原理</a></li>
+<li><a href="#eeprom_3">EEPROM类型</a></li>
+</ul>
+</li>
+<li><a href="#_8">电路连接</a><ul>
+<li><a href="#i2c-eeprom">I2C EEPROM连接</a></li>
+<li><a href="#_9">设备地址配置</a></li>
+</ul>
+</li>
+<li><a href="#1i2c">步骤1：I2C接口初始化</a><ul>
+<li><a href="#11-stm32-hal">1.1 STM32 HAL库初始化</a></li>
+<li><a href="#12-arduino-wire">1.2 Arduino Wire库初始化</a></li>
+</ul>
+</li>
+<li><a href="#2eeprom">步骤2：EEPROM基本读写</a><ul>
+<li><a href="#21">2.1 字节写入</a></li>
+<li><a href="#22">2.2 字节读取</a></li>
+<li><a href="#23-arduino">2.3 Arduino实现</a></li>
+<li><a href="#24">2.4 测试读写功能</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：页写入优化</a><ul>
+<li><a href="#31">3.1 页写入原理</a></li>
+<li><a href="#32">3.2 页写入实现</a></li>
+<li><a href="#33">3.3 多字节写入（自动分页）</a></li>
+<li><a href="#34">3.4 多字节读取</a></li>
+<li><a href="#35">3.5 测试页写入</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：数据保护与校验</a><ul>
+<li><a href="#41-crc">4.1 CRC校验</a></li>
+<li><a href="#42">4.2 数据结构设计</a></li>
+<li><a href="#43">4.3 默认值处理</a></li>
+</ul>
+</li>
+<li><a href="#5">步骤5：磨损均衡</a><ul>
+<li><a href="#51">5.1 简单的磨损均衡策略</a></li>
+<li><a href="#52">5.2 读取最新数据</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：实际应用示例</a><ul>
+<li><a href="#61">6.1 系统参数管理</a></li>
+<li><a href="#62">6.2 运行时间记录</a></li>
+<li><a href="#63">6.3 完整示例程序</a></li>
+</ul>
+</li>
+<li><a href="#_10">测试验证</a><ul>
+<li><a href="#1">测试1：基本读写测试</a></li>
+<li><a href="#2crc">测试2：CRC校验测试</a></li>
+<li><a href="#3_1">测试3：掉电保护测试</a></li>
+</ul>
+</li>
+<li><a href="#_11">故障排除</a><ul>
+<li><a href="#1eeprom">问题1：无法检测到EEPROM</a></li>
+<li><a href="#2">问题2：写入失败或数据错误</a></li>
+<li><a href="#3_2">问题3：数据丢失或损坏</a></li>
+<li><a href="#4i2c">问题4：I2C通信速度慢</a></li>
+</ul>
+</li>
+<li><a href="#_12">最佳实践</a><ul>
+<li><a href="#1_1">1. 减少写入次数</a></li>
+<li><a href="#2_1">2. 使用缓存机制</a></li>
+<li><a href="#3_3">3. 数据版本管理</a></li>
+<li><a href="#4_1">4. 错误处理和重试</a></li>
+<li><a href="#5_1">5. 日志记录</a></li>
+</ul>
+</li>
+<li><a href="#_13">总结</a></li>
+<li><a href="#_14">进阶挑战</a></li>
+<li><a href="#_15">完整代码</a></li>
+<li><a href="#_16">下一步</a></li>
+<li><a href="#_17">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="eeprom">EEPROM数据存储应用：掉电保护与参数配置实战</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解EEPROM的工作原理和特点</li>
+<li>[ ] 掌握I2C和SPI接口EEPROM的使用方法</li>
+<li>[ ] 学会实现EEPROM的读写操作</li>
+<li>[ ] 掌握数据保护和校验技术</li>
+<li>[ ] 了解EEPROM的磨损均衡策略</li>
+<li>[ ] 能够设计可靠的参数存储方案</li>
+<li>[ ] 实现掉电保护的配置数据管理</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解C语言基础编程
+- 熟悉基本的数字电路知识
+- 掌握I2C或SPI通信协议基础
+- 了解MCU的基本使用</p>
+<p><strong>技能要求</strong>：
+- 能够使用开发环境编写和调试代码
+- 会使用示波器或逻辑分析仪（可选）
+- 能够阅读芯片数据手册</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考型号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>开发板</td>
+<td>1</td>
+<td>STM32或Arduino</td>
+<td>STM32F103/Arduino Uno</td>
+</tr>
+<tr>
+<td>I2C EEPROM</td>
+<td>1</td>
+<td>容量2KB-64KB</td>
+<td>AT24C02/AT24C256</td>
+</tr>
+<tr>
+<td>上拉电阻</td>
+<td>2</td>
+<td>4.7kΩ</td>
+<td>用于I2C总线</td>
+</tr>
+<tr>
+<td>面包板</td>
+<td>1</td>
+<td>-</td>
+<td>-</td>
+</tr>
+<tr>
+<td>杜邦线</td>
+<td>若干</td>
+<td>-</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：STM32CubeIDE / Arduino IDE</li>
+<li><strong>驱动库</strong>：HAL库 / Wire库</li>
+<li><strong>辅助工具</strong>：串口调试助手</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<ol>
+<li>安装开发环境</li>
+<li>配置I2C或SPI外设</li>
+<li>准备测试代码框架</li>
+</ol>
+<h2 id="_7">背景知识</h2>
+<h3 id="eeprom_1">什么是EEPROM</h3>
+<p>EEPROM（Electrically Erasable Programmable Read-Only Memory，电可擦除可编程只读存储器）是一种非易失性存储器，具有以下特点：</p>
+<p><strong>核心特性</strong>：
+- <strong>非易失性</strong>：断电后数据不丢失
+- <strong>字节可擦写</strong>：可以按字节单独擦写
+- <strong>有限寿命</strong>：典型擦写次数100万次
+- <strong>低功耗</strong>：待机电流通常&lt;1μA
+- <strong>慢速写入</strong>：写入时间3-10ms</p>
+<p><strong>与Flash的区别</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>EEPROM</th>
+<th>Flash</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>擦除单位</td>
+<td>字节</td>
+<td>块（4KB-64KB）</td>
+</tr>
+<tr>
+<td>擦写次数</td>
+<td>100万次</td>
+<td>10万次</td>
+</tr>
+<tr>
+<td>写入速度</td>
+<td>3-10ms/字节</td>
+<td>快（页编程）</td>
+</tr>
+<tr>
+<td>容量</td>
+<td>几KB-几MB</td>
+<td>几MB-几GB</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>较高</td>
+<td>较低</td>
+</tr>
+<tr>
+<td>应用</td>
+<td>配置参数</td>
+<td>程序代码、大数据</td>
+</tr>
+</tbody>
+</table>
+<h3 id="eeprom_2">EEPROM工作原理</h3>
+<p>EEPROM基于浮栅晶体管技术，但与Flash不同的是：</p>
+<p><strong>存储单元结构</strong>：</p>
+<pre><code>        控制栅极
+              |
+    ┌─────────┴─────────┐
+    │    氧化层          │
+    ├───────────────────┤
+    │  浮栅（存储电荷）  │
+    ├───────────────────┤
+    │    隧道氧化层      │  ← 更薄，便于擦写
+    └─────────┬─────────┘
+              |
+         源极 ─┴─ 漏极
+</code></pre>
+<p><strong>读写原理</strong>：
+1. <strong>写入</strong>：通过隧道效应将电子注入浮栅（约5-10ms）
+2. <strong>擦除</strong>：通过隧道效应将电子从浮栅移除（约5-10ms）
+3. <strong>读取</strong>：检测晶体管导通状态（快速，&lt;1μs）</p>
+<h3 id="eeprom_3">EEPROM类型</h3>
+<p><strong>按接口分类</strong>：</p>
+<ol>
+<li>
+<p><strong>并行EEPROM</strong>
+   - 地址和数据总线并行
+   - 速度快，引脚多
+   - 适合嵌入MCU内部</p>
+</li>
+<li>
+<p><strong>I2C EEPROM</strong>
+   - 2线串行接口（SDA、SCL）
+   - 引脚少，易于使用
+   - 最常用的外部EEPROM</p>
+</li>
+<li>
+<p><strong>SPI EEPROM</strong>
+   - 4线串行接口
+   - 速度比I2C快
+   - 容量通常较大</p>
+</li>
+<li>
+<p><strong>Microwire EEPROM</strong>
+   - 3线串行接口
+   - 较少使用</p>
+</li>
+</ol>
+<p><strong>常见型号</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>型号</th>
+<th>接口</th>
+<th>容量</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AT24C02</td>
+<td>I2C</td>
+<td>2Kbit (256B)</td>
+<td>小容量，常用</td>
+</tr>
+<tr>
+<td>AT24C256</td>
+<td>I2C</td>
+<td>256Kbit (32KB)</td>
+<td>中等容量</td>
+</tr>
+<tr>
+<td>25LC256</td>
+<td>SPI</td>
+<td>256Kbit (32KB)</td>
+<td>SPI接口</td>
+</tr>
+<tr>
+<td>93C46</td>
+<td>Microwire</td>
+<td>1Kbit (128B)</td>
+<td>简单应用</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_8">电路连接</h2>
+<h3 id="i2c-eeprom">I2C EEPROM连接</h3>
+<p>以AT24C256为例：</p>
+<pre><code>STM32/Arduino          AT24C256 (I2C EEPROM)
+                       ┌─────────┐
+  3.3V/5V ────────────┤1 A0   VCC├──── 3.3V/5V
+  GND ────────────────┤2 A1   WP ├──── GND (写保护禁用)
+  GND ────────────────┤3 A2   SCL├◄─── SCL (I2C时钟)
+  GND ────────────────┤4 GND  SDA├◄──► SDA (I2C数据)
+                       └─────────┘
+                           │   │
+                         4.7kΩ 4.7kΩ (上拉电阻)
+                           │   │
+                          VCC VCC
+</code></pre>
+<p><strong>引脚说明</strong>：
+- <strong>A0-A2</strong>：设备地址选择（接地或VCC）
+- <strong>WP</strong>：写保护引脚（接地禁用写保护）
+- <strong>SCL/SDA</strong>：I2C总线，需要上拉电阻
+- <strong>VCC/GND</strong>：电源（3.3V或5V）</p>
+<h3 id="_9">设备地址配置</h3>
+<p>I2C EEPROM的7位地址格式：</p>
+<pre><code>1 0 1 0 A2 A1 A0
+│ │ │ │  │  │  │
+│ │ │ │  └──┴──┴─ 可配置位（通过A0-A2引脚）
+│ │ │ └─────────── 固定位
+└─┴─┴───────────── 器件类型（1010 = EEPROM）
+
+示例：
+A2=0, A1=0, A0=0 → 地址 = 0x50 (1010000)
+A2=0, A1=0, A0=1 → 地址 = 0x51 (1010001)
+A2=1, A1=1, A1=1 → 地址 = 0x57 (1010111)
+</code></pre>
+<p><strong>注意事项</strong>：
+- 确保上拉电阻正确连接（4.7kΩ）
+- 检查电源电压与EEPROM兼容
+- WP引脚接地以允许写入
+- 同一总线上的设备地址不能冲突</p>
+<h2 id="1i2c">步骤1：I2C接口初始化</h2>
+<h3 id="11-stm32-hal">1.1 STM32 HAL库初始化</h3>
+<pre><code class="language-c">// I2C配置
+#include &quot;stm32f1xx_hal.h&quot;
+
+I2C_HandleTypeDef hi2c1;
+
+void I2C_Init(void) {
+    // 使能I2C时钟
+    __HAL_RCC_I2C1_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+
+    // 配置GPIO（PB6=SCL, PB7=SDA）
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_OD;  // 开漏输出
+    GPIO_InitStruct.Pull = GPIO_PULLUP;      // 上拉
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOB, &amp;GPIO_InitStruct);
+
+    // 配置I2C参数
+    hi2c1.Instance = I2C1;
+    hi2c1.Init.ClockSpeed = 100000;          // 100kHz
+    hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+    hi2c1.Init.OwnAddress1 = 0;
+    hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+    hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+    hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+    hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+
+    // 初始化I2C
+    if (HAL_I2C_Init(&amp;hi2c1) != HAL_OK) {
+        Error_Handler();
+    }
+}
+</code></pre>
+<h3 id="12-arduino-wire">1.2 Arduino Wire库初始化</h3>
+<pre><code class="language-cpp">#include &lt;Wire.h&gt;
+
+void setup() {
+    // 初始化I2C
+    Wire.begin();
+
+    // 设置I2C时钟频率（可选）
+    Wire.setClock(100000);  // 100kHz
+
+    // 初始化串口用于调试
+    Serial.begin(9600);
+    Serial.println(&quot;EEPROM Test Started&quot;);
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- I2C时钟频率通常设置为100kHz（标准模式）
+- GPIO配置为开漏输出模式，需要外部上拉
+- Arduino的Wire库自动处理大部分底层细节</p>
+<h2 id="2eeprom">步骤2：EEPROM基本读写</h2>
+<h3 id="21">2.1 字节写入</h3>
+<pre><code class="language-c">// EEPROM配置
+#define EEPROM_ADDR 0x50  // 7位地址（A2=A1=A0=0）
+#define EEPROM_I2C_ADDR (EEPROM_ADDR &lt;&lt; 1)  // 8位地址
+
+/**
+ * @brief  写入单个字节到EEPROM
+ * @param  mem_addr: EEPROM内存地址（0-32767）
+ * @param  data: 要写入的数据
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_WriteByte(uint16_t mem_addr, uint8_t data) {
+    uint8_t buffer[3];
+
+    // AT24C256使用16位地址
+    buffer[0] = (mem_addr &gt;&gt; 8) &amp; 0xFF;  // 高字节
+    buffer[1] = mem_addr &amp; 0xFF;         // 低字节
+    buffer[2] = data;                    // 数据
+
+    // 发送数据
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        buffer,
+        3,
+        HAL_MAX_DELAY
+    );
+
+    // 等待写入完成（约5ms）
+    HAL_Delay(5);
+
+    return (status == HAL_OK) ? 0 : 1;
+}
+</code></pre>
+<h3 id="22">2.2 字节读取</h3>
+<pre><code class="language-c">/**
+ * @brief  从EEPROM读取单个字节
+ * @param  mem_addr: EEPROM内存地址
+ * @param  data: 读取数据的指针
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_ReadByte(uint16_t mem_addr, uint8_t *data) {
+    uint8_t addr_buffer[2];
+
+    // 发送内存地址
+    addr_buffer[0] = (mem_addr &gt;&gt; 8) &amp; 0xFF;
+    addr_buffer[1] = mem_addr &amp; 0xFF;
+
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        addr_buffer,
+        2,
+        HAL_MAX_DELAY
+    );
+
+    if (status != HAL_OK) return 1;
+
+    // 读取数据
+    status = HAL_I2C_Master_Receive(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        data,
+        1,
+        HAL_MAX_DELAY
+    );
+
+    return (status == HAL_OK) ? 0 : 1;
+}
+</code></pre>
+<h3 id="23-arduino">2.3 Arduino实现</h3>
+<pre><code class="language-cpp">// 写入字节
+void EEPROM_WriteByte(uint16_t address, uint8_t data) {
+    Wire.beginTransmission(EEPROM_ADDR);
+    Wire.write((uint8_t)(address &gt;&gt; 8));   // 高字节
+    Wire.write((uint8_t)(address &amp; 0xFF)); // 低字节
+    Wire.write(data);                      // 数据
+    Wire.endTransmission();
+
+    delay(5);  // 等待写入完成
+}
+
+// 读取字节
+uint8_t EEPROM_ReadByte(uint16_t address) {
+    // 发送地址
+    Wire.beginTransmission(EEPROM_ADDR);
+    Wire.write((uint8_t)(address &gt;&gt; 8));
+    Wire.write((uint8_t)(address &amp; 0xFF));
+    Wire.endTransmission();
+
+    // 读取数据
+    Wire.requestFrom(EEPROM_ADDR, 1);
+    if (Wire.available()) {
+        return Wire.read();
+    }
+    return 0xFF;  // 读取失败
+}
+</code></pre>
+<h3 id="24">2.4 测试读写功能</h3>
+<pre><code class="language-c">void Test_BasicReadWrite(void) {
+    uint8_t write_data = 0xA5;
+    uint8_t read_data = 0;
+    uint16_t test_addr = 0x0100;
+
+    printf(&quot;Testing EEPROM Read/Write...\n&quot;);
+
+    // 写入数据
+    printf(&quot;Writing 0x%02X to address 0x%04X\n&quot;, write_data, test_addr);
+    if (EEPROM_WriteByte(test_addr, write_data) == 0) {
+        printf(&quot;Write successful\n&quot;);
+    } else {
+        printf(&quot;Write failed\n&quot;);
+        return;
+    }
+
+    // 读取数据
+    if (EEPROM_ReadByte(test_addr, &amp;read_data) == 0) {
+        printf(&quot;Read data: 0x%02X\n&quot;, read_data);
+
+        // 验证数据
+        if (read_data == write_data) {
+            printf(&quot;Test PASSED!\n&quot;);
+        } else {
+            printf(&quot;Test FAILED! Data mismatch\n&quot;);
+        }
+    } else {
+        printf(&quot;Read failed\n&quot;);
+    }
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 写入成功，无错误
+- 读取的数据与写入的数据一致
+- 串口输出显示"Test PASSED!"</p>
+<h2 id="3">步骤3：页写入优化</h2>
+<h3 id="31">3.1 页写入原理</h3>
+<p>EEPROM支持页写入模式，可以一次写入多个字节（通常16-64字节），提高写入效率。</p>
+<p><strong>AT24C256页写入特性</strong>：
+- 页大小：64字节
+- 页边界：地址必须对齐到64字节边界
+- 跨页写入：会回卷到页首，导致数据覆盖</p>
+<pre><code>页0: 0x0000 - 0x003F (64字节)
+页1: 0x0040 - 0x007F (64字节)
+页2: 0x0080 - 0x00BF (64字节)
+...
+</code></pre>
+<h3 id="32">3.2 页写入实现</h3>
+<pre><code class="language-c">#define EEPROM_PAGE_SIZE 64
+
+/**
+ * @brief  页写入（不跨页）
+ * @param  mem_addr: 起始地址
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度（不超过页大小）
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_PageWrite(uint16_t mem_addr, uint8_t *data, uint16_t length) {
+    // 检查是否跨页
+    uint16_t page_offset = mem_addr % EEPROM_PAGE_SIZE;
+    if (page_offset + length &gt; EEPROM_PAGE_SIZE) {
+        return 1;  // 跨页错误
+    }
+
+    uint8_t buffer[EEPROM_PAGE_SIZE + 2];
+
+    // 准备地址和数据
+    buffer[0] = (mem_addr &gt;&gt; 8) &amp; 0xFF;
+    buffer[1] = mem_addr &amp; 0xFF;
+    memcpy(&amp;buffer[2], data, length);
+
+    // 发送数据
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        buffer,
+        length + 2,
+        HAL_MAX_DELAY
+    );
+
+    // 等待写入完成
+    HAL_Delay(5);
+
+    return (status == HAL_OK) ? 0 : 1;
+}
+</code></pre>
+<h3 id="33">3.3 多字节写入（自动分页）</h3>
+<pre><code class="language-c">/**
+ * @brief  写入多字节数据（自动处理分页）
+ * @param  mem_addr: 起始地址
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_WriteMultiBytes(uint16_t mem_addr, uint8_t *data, uint16_t length) {
+    uint16_t bytes_written = 0;
+
+    while (bytes_written &lt; length) {
+        // 计算当前页剩余空间
+        uint16_t current_addr = mem_addr + bytes_written;
+        uint16_t page_offset = current_addr % EEPROM_PAGE_SIZE;
+        uint16_t bytes_to_write = EEPROM_PAGE_SIZE - page_offset;
+
+        // 不超过剩余数据长度
+        if (bytes_to_write &gt; (length - bytes_written)) {
+            bytes_to_write = length - bytes_written;
+        }
+
+        // 写入当前页
+        if (EEPROM_PageWrite(current_addr, &amp;data[bytes_written], bytes_to_write) != 0) {
+            return 1;  // 写入失败
+        }
+
+        bytes_written += bytes_to_write;
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="34">3.4 多字节读取</h3>
+<pre><code class="language-c">/**
+ * @brief  读取多字节数据
+ * @param  mem_addr: 起始地址
+ * @param  data: 数据缓冲区
+ * @param  length: 读取长度
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_ReadMultiBytes(uint16_t mem_addr, uint8_t *data, uint16_t length) {
+    uint8_t addr_buffer[2];
+
+    // 发送起始地址
+    addr_buffer[0] = (mem_addr &gt;&gt; 8) &amp; 0xFF;
+    addr_buffer[1] = mem_addr &amp; 0xFF;
+
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        addr_buffer,
+        2,
+        HAL_MAX_DELAY
+    );
+
+    if (status != HAL_OK) return 1;
+
+    // 连续读取数据
+    status = HAL_I2C_Master_Receive(
+        &amp;hi2c1,
+        EEPROM_I2C_ADDR,
+        data,
+        length,
+        HAL_MAX_DELAY
+    );
+
+    return (status == HAL_OK) ? 0 : 1;
+}
+</code></pre>
+<h3 id="35">3.5 测试页写入</h3>
+<pre><code class="language-c">void Test_PageWrite(void) {
+    uint8_t write_buffer[64];
+    uint8_t read_buffer[64];
+    uint16_t test_addr = 0x0000;  // 页对齐地址
+
+    // 准备测试数据
+    for (int i = 0; i &lt; 64; i++) {
+        write_buffer[i] = i;
+    }
+
+    printf(&quot;Testing Page Write...\n&quot;);
+
+    // 页写入
+    if (EEPROM_PageWrite(test_addr, write_buffer, 64) == 0) {
+        printf(&quot;Page write successful\n&quot;);
+    } else {
+        printf(&quot;Page write failed\n&quot;);
+        return;
+    }
+
+    // 读取验证
+    if (EEPROM_ReadMultiBytes(test_addr, read_buffer, 64) == 0) {
+        // 比较数据
+        int errors = 0;
+        for (int i = 0; i &lt; 64; i++) {
+            if (read_buffer[i] != write_buffer[i]) {
+                errors++;
+                printf(&quot;Error at offset %d: wrote 0x%02X, read 0x%02X\n&quot;,
+                       i, write_buffer[i], read_buffer[i]);
+            }
+        }
+
+        if (errors == 0) {
+            printf(&quot;Page write test PASSED!\n&quot;);
+        } else {
+            printf(&quot;Page write test FAILED! %d errors\n&quot;, errors);
+        }
+    }
+}
+</code></pre>
+<h2 id="4">步骤4：数据保护与校验</h2>
+<h3 id="41-crc">4.1 CRC校验</h3>
+<p>为确保数据完整性，添加CRC校验：</p>
+<pre><code class="language-c">#include &lt;stdint.h&gt;
+
+/**
+ * @brief  计算CRC-8校验值
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval CRC-8校验值
+ */
+uint8_t Calculate_CRC8(uint8_t *data, uint16_t length) {
+    uint8_t crc = 0x00;
+
+    for (uint16_t i = 0; i &lt; length; i++) {
+        crc ^= data[i];
+        for (uint8_t j = 0; j &lt; 8; j++) {
+            if (crc &amp; 0x80) {
+                crc = (crc &lt;&lt; 1) ^ 0x07;  // CRC-8多项式
+            } else {
+                crc &lt;&lt;= 1;
+            }
+        }
+    }
+
+    return crc;
+}
+
+/**
+ * @brief  带CRC校验的数据写入
+ * @param  mem_addr: 起始地址
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_WriteWithCRC(uint16_t mem_addr, uint8_t *data, uint16_t length) {
+    // 计算CRC
+    uint8_t crc = Calculate_CRC8(data, length);
+
+    // 写入数据
+    if (EEPROM_WriteMultiBytes(mem_addr, data, length) != 0) {
+        return 1;
+    }
+
+    // 写入CRC（紧跟数据后）
+    if (EEPROM_WriteByte(mem_addr + length, crc) != 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+/**
+ * @brief  带CRC校验的数据读取
+ * @param  mem_addr: 起始地址
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval 0=成功且校验通过, 1=失败, 2=校验错误
+ */
+uint8_t EEPROM_ReadWithCRC(uint16_t mem_addr, uint8_t *data, uint16_t length) {
+    uint8_t stored_crc;
+
+    // 读取数据
+    if (EEPROM_ReadMultiBytes(mem_addr, data, length) != 0) {
+        return 1;
+    }
+
+    // 读取CRC
+    if (EEPROM_ReadByte(mem_addr + length, &amp;stored_crc) != 0) {
+        return 1;
+    }
+
+    // 验证CRC
+    uint8_t calculated_crc = Calculate_CRC8(data, length);
+    if (calculated_crc != stored_crc) {
+        return 2;  // CRC校验失败
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="42">4.2 数据结构设计</h3>
+<p>设计带版本和校验的数据结构：</p>
+<pre><code class="language-c">// 配置数据结构
+typedef struct {
+    uint32_t magic;          // 魔数，用于识别有效数据
+    uint16_t version;        // 数据版本
+    uint16_t length;         // 数据长度
+    uint8_t  data[56];       // 实际数据（56字节）
+    uint8_t  crc;            // CRC校验值
+    uint8_t  reserved[3];    // 保留字节（对齐到64字节）
+} Config_Data_t;
+
+#define CONFIG_MAGIC 0x12345678
+#define CONFIG_VERSION 1
+#define CONFIG_ADDR 0x0000
+
+/**
+ * @brief  保存配置数据
+ * @param  config: 配置数据指针
+ * @retval 0=成功, 1=失败
+ */
+uint8_t Config_Save(Config_Data_t *config) {
+    // 设置魔数和版本
+    config-&gt;magic = CONFIG_MAGIC;
+    config-&gt;version = CONFIG_VERSION;
+    config-&gt;length = sizeof(config-&gt;data);
+
+    // 计算CRC（不包括CRC字段本身）
+    config-&gt;crc = Calculate_CRC8((uint8_t*)config, 
+                                  sizeof(Config_Data_t) - 4);
+
+    // 写入EEPROM
+    return EEPROM_PageWrite(CONFIG_ADDR, (uint8_t*)config, 
+                            sizeof(Config_Data_t));
+}
+
+/**
+ * @brief  加载配置数据
+ * @param  config: 配置数据指针
+ * @retval 0=成功, 1=失败, 2=数据无效
+ */
+uint8_t Config_Load(Config_Data_t *config) {
+    // 从EEPROM读取
+    if (EEPROM_ReadMultiBytes(CONFIG_ADDR, (uint8_t*)config, 
+                              sizeof(Config_Data_t)) != 0) {
+        return 1;
+    }
+
+    // 验证魔数
+    if (config-&gt;magic != CONFIG_MAGIC) {
+        return 2;  // 数据无效
+    }
+
+    // 验证版本
+    if (config-&gt;version != CONFIG_VERSION) {
+        return 2;  // 版本不匹配
+    }
+
+    // 验证CRC
+    uint8_t calculated_crc = Calculate_CRC8((uint8_t*)config, 
+                                            sizeof(Config_Data_t) - 4);
+    if (calculated_crc != config-&gt;crc) {
+        return 2;  // CRC校验失败
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="43">4.3 默认值处理</h3>
+<pre><code class="language-c">/**
+ * @brief  初始化默认配置
+ * @param  config: 配置数据指针
+ */
+void Config_SetDefaults(Config_Data_t *config) {
+    memset(config, 0, sizeof(Config_Data_t));
+
+    // 设置默认值
+    config-&gt;data[0] = 100;  // 示例：默认亮度
+    config-&gt;data[1] = 50;   // 示例：默认音量
+    config-&gt;data[2] = 1;    // 示例：默认启用状态
+    // ... 其他默认值
+}
+
+/**
+ * @brief  配置系统初始化
+ * @param  config: 配置数据指针
+ */
+void Config_Init(Config_Data_t *config) {
+    uint8_t result = Config_Load(config);
+
+    if (result == 0) {
+        printf(&quot;Configuration loaded successfully\n&quot;);
+    } else {
+        printf(&quot;Failed to load configuration, using defaults\n&quot;);
+        Config_SetDefaults(config);
+        Config_Save(config);  // 保存默认配置
+    }
+}
+</code></pre>
+<h2 id="5">步骤5：磨损均衡</h2>
+<h3 id="51">5.1 简单的磨损均衡策略</h3>
+<p>EEPROM的擦写次数有限（约100万次），频繁写入同一地址会缩短寿命。</p>
+<p><strong>磨损均衡原理</strong>：
+- 将数据分散到多个位置
+- 轮流使用不同的存储区域
+- 记录写入次数，选择使用最少的区域</p>
+<pre><code class="language-c">#define WEAR_LEVEL_COPIES 4  // 保存4份副本
+#define WEAR_LEVEL_BASE_ADDR 0x0000
+#define WEAR_LEVEL_COPY_SIZE 64
+
+typedef struct {
+    uint32_t write_count;    // 写入次数
+    uint8_t  data[60];       // 实际数据
+} WearLevel_Data_t;
+
+/**
+ * @brief  磨损均衡写入
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval 0=成功, 1=失败
+ */
+uint8_t WearLevel_Write(uint8_t *data, uint16_t length) {
+    WearLevel_Data_t wl_data;
+    uint32_t min_count = 0xFFFFFFFF;
+    uint8_t min_index = 0;
+
+    // 查找写入次数最少的副本
+    for (uint8_t i = 0; i &lt; WEAR_LEVEL_COPIES; i++) {
+        uint16_t addr = WEAR_LEVEL_BASE_ADDR + (i * WEAR_LEVEL_COPY_SIZE);
+
+        // 读取写入次数
+        uint32_t count;
+        EEPROM_ReadMultiBytes(addr, (uint8_t*)&amp;count, sizeof(count));
+
+        if (count &lt; min_count) {
+            min_count = count;
+            min_index = i;
+        }
+    }
+
+    // 准备数据
+    wl_data.write_count = min_count + 1;
+    memcpy(wl_data.data, data, length);
+
+    // 写入到选定的副本
+    uint16_t addr = WEAR_LEVEL_BASE_ADDR + (min_index * WEAR_LEVEL_COPY_SIZE);
+    return EEPROM_PageWrite(addr, (uint8_t*)&amp;wl_data, sizeof(wl_data));
+}
+</code></pre>
+<h3 id="52">5.2 读取最新数据</h3>
+<pre><code class="language-c">/**
+ * @brief  磨损均衡读取（读取最新的副本）
+ * @param  data: 数据缓冲区
+ * @param  length: 数据长度
+ * @retval 0=成功, 1=失败
+ */
+uint8_t WearLevel_Read(uint8_t *data, uint16_t length) {
+    WearLevel_Data_t wl_data;
+    uint32_t max_count = 0;
+    uint8_t max_index = 0;
+
+    // 查找写入次数最多的副本（最新数据）
+    for (uint8_t i = 0; i &lt; WEAR_LEVEL_COPIES; i++) {
+        uint16_t addr = WEAR_LEVEL_BASE_ADDR + (i * WEAR_LEVEL_COPY_SIZE);
+
+        // 读取写入次数
+        uint32_t count;
+        EEPROM_ReadMultiBytes(addr, (uint8_t*)&amp;count, sizeof(count));
+
+        if (count &gt; max_count &amp;&amp; count != 0xFFFFFFFF) {
+            max_count = count;
+            max_index = i;
+        }
+    }
+
+    // 读取最新的副本
+    uint16_t addr = WEAR_LEVEL_BASE_ADDR + (max_index * WEAR_LEVEL_COPY_SIZE);
+    if (EEPROM_ReadMultiBytes(addr, (uint8_t*)&amp;wl_data, sizeof(wl_data)) != 0) {
+        return 1;
+    }
+
+    // 复制数据
+    memcpy(data, wl_data.data, length);
+    return 0;
+}
+</code></pre>
+<h2 id="6">步骤6：实际应用示例</h2>
+<h3 id="61">6.1 系统参数管理</h3>
+<pre><code class="language-c">// 系统参数结构
+typedef struct {
+    // 显示设置
+    uint8_t brightness;      // 亮度 (0-100)
+    uint8_t contrast;        // 对比度 (0-100)
+
+    // 音频设置
+    uint8_t volume;          // 音量 (0-100)
+    uint8_t mute;            // 静音 (0/1)
+
+    // 网络设置
+    uint8_t ip_addr[4];      // IP地址
+    uint16_t port;           // 端口号
+
+    // 用户设置
+    char username[16];       // 用户名
+    uint32_t user_id;        // 用户ID
+
+    // 运行统计
+    uint32_t run_time;       // 运行时间（秒）
+    uint32_t power_cycles;   // 开机次数
+} System_Params_t;
+
+System_Params_t g_system_params;
+
+/**
+ * @brief  系统参数初始化
+ */
+void SystemParams_Init(void) {
+    Config_Data_t config;
+
+    if (Config_Load(&amp;config) == 0) {
+        // 加载成功，解析参数
+        memcpy(&amp;g_system_params, config.data, sizeof(System_Params_t));
+        printf(&quot;System parameters loaded\n&quot;);
+
+        // 更新开机次数
+        g_system_params.power_cycles++;
+        SystemParams_Save();
+    } else {
+        // 加载失败，使用默认值
+        printf(&quot;Using default parameters\n&quot;);
+        SystemParams_SetDefaults();
+        SystemParams_Save();
+    }
+}
+
+/**
+ * @brief  设置默认参数
+ */
+void SystemParams_SetDefaults(void) {
+    memset(&amp;g_system_params, 0, sizeof(System_Params_t));
+
+    // 显示设置
+    g_system_params.brightness = 80;
+    g_system_params.contrast = 50;
+
+    // 音频设置
+    g_system_params.volume = 50;
+    g_system_params.mute = 0;
+
+    // 网络设置
+    g_system_params.ip_addr[0] = 192;
+    g_system_params.ip_addr[1] = 168;
+    g_system_params.ip_addr[2] = 1;
+    g_system_params.ip_addr[3] = 100;
+    g_system_params.port = 8080;
+
+    // 用户设置
+    strcpy(g_system_params.username, &quot;admin&quot;);
+    g_system_params.user_id = 1;
+
+    // 运行统计
+    g_system_params.run_time = 0;
+    g_system_params.power_cycles = 1;
+}
+
+/**
+ * @brief  保存系统参数
+ */
+void SystemParams_Save(void) {
+    Config_Data_t config;
+
+    // 复制参数到配置结构
+    memcpy(config.data, &amp;g_system_params, sizeof(System_Params_t));
+
+    // 保存到EEPROM
+    if (Config_Save(&amp;config) == 0) {
+        printf(&quot;System parameters saved\n&quot;);
+    } else {
+        printf(&quot;Failed to save parameters\n&quot;);
+    }
+}
+
+/**
+ * @brief  更新单个参数
+ */
+void SystemParams_SetBrightness(uint8_t value) {
+    if (value &lt;= 100) {
+        g_system_params.brightness = value;
+        SystemParams_Save();
+    }
+}
+
+void SystemParams_SetVolume(uint8_t value) {
+    if (value &lt;= 100) {
+        g_system_params.volume = value;
+        SystemParams_Save();
+    }
+}
+</code></pre>
+<h3 id="62">6.2 运行时间记录</h3>
+<pre><code class="language-c">/**
+ * @brief  定时更新运行时间（每秒调用一次）
+ */
+void SystemParams_UpdateRunTime(void) {
+    static uint32_t save_counter = 0;
+
+    g_system_params.run_time++;
+    save_counter++;
+
+    // 每60秒保存一次（减少EEPROM写入次数）
+    if (save_counter &gt;= 60) {
+        SystemParams_Save();
+        save_counter = 0;
+    }
+}
+</code></pre>
+<h3 id="63">6.3 完整示例程序</h3>
+<pre><code class="language-c">int main(void) {
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    I2C_Init();
+    UART_Init();
+
+    printf(&quot;\n=== EEPROM Storage System ===\n&quot;);
+
+    // 初始化系统参数
+    SystemParams_Init();
+
+    // 显示当前参数
+    printf(&quot;\nCurrent Parameters:\n&quot;);
+    printf(&quot;  Brightness: %d\n&quot;, g_system_params.brightness);
+    printf(&quot;  Volume: %d\n&quot;, g_system_params.volume);
+    printf(&quot;  IP: %d.%d.%d.%d:%d\n&quot;,
+           g_system_params.ip_addr[0],
+           g_system_params.ip_addr[1],
+           g_system_params.ip_addr[2],
+           g_system_params.ip_addr[3],
+           g_system_params.port);
+    printf(&quot;  Username: %s\n&quot;, g_system_params.username);
+    printf(&quot;  Run Time: %lu seconds\n&quot;, g_system_params.run_time);
+    printf(&quot;  Power Cycles: %lu\n&quot;, g_system_params.power_cycles);
+
+    // 主循环
+    while (1) {
+        // 每秒更新运行时间
+        HAL_Delay(1000);
+        SystemParams_UpdateRunTime();
+
+        // 处理用户输入或其他任务
+        // ...
+    }
+}
+</code></pre>
+<h2 id="_10">测试验证</h2>
+<h3 id="1">测试1：基本读写测试</h3>
+<pre><code class="language-c">void Test_Suite(void) {
+    printf(&quot;\n=== EEPROM Test Suite ===\n\n&quot;);
+
+    // 测试1：单字节读写
+    printf(&quot;Test 1: Single Byte Read/Write\n&quot;);
+    Test_BasicReadWrite();
+
+    // 测试2：页写入
+    printf(&quot;\nTest 2: Page Write\n&quot;);
+    Test_PageWrite();
+
+    // 测试3：CRC校验
+    printf(&quot;\nTest 3: CRC Verification\n&quot;);
+    Test_CRCVerification();
+
+    // 测试4：配置保存加载
+    printf(&quot;\nTest 4: Configuration Save/Load\n&quot;);
+    Test_ConfigSaveLoad();
+
+    printf(&quot;\n=== All Tests Complete ===\n&quot;);
+}
+</code></pre>
+<h3 id="2crc">测试2：CRC校验测试</h3>
+<pre><code class="language-c">void Test_CRCVerification(void) {
+    uint8_t test_data[32];
+    uint8_t read_data[32];
+    uint16_t test_addr = 0x0200;
+
+    // 准备测试数据
+    for (int i = 0; i &lt; 32; i++) {
+        test_data[i] = i * 2;
+    }
+
+    // 写入带CRC的数据
+    if (EEPROM_WriteWithCRC(test_addr, test_data, 32) == 0) {
+        printf(&quot;Write with CRC successful\n&quot;);
+    } else {
+        printf(&quot;Write with CRC failed\n&quot;);
+        return;
+    }
+
+    // 读取并验证
+    uint8_t result = EEPROM_ReadWithCRC(test_addr, read_data, 32);
+    if (result == 0) {
+        printf(&quot;Read with CRC successful, data valid\n&quot;);
+
+        // 验证数据
+        int match = 1;
+        for (int i = 0; i &lt; 32; i++) {
+            if (read_data[i] != test_data[i]) {
+                match = 0;
+                break;
+            }
+        }
+
+        if (match) {
+            printf(&quot;Test PASSED!\n&quot;);
+        } else {
+            printf(&quot;Test FAILED! Data mismatch\n&quot;);
+        }
+    } else if (result == 2) {
+        printf(&quot;CRC verification failed\n&quot;);
+    } else {
+        printf(&quot;Read failed\n&quot;);
+    }
+}
+</code></pre>
+<h3 id="3_1">测试3：掉电保护测试</h3>
+<pre><code class="language-c">void Test_PowerLossProtection(void) {
+    printf(&quot;Testing power loss protection...\n&quot;);
+
+    // 保存当前参数
+    uint8_t original_brightness = g_system_params.brightness;
+
+    // 修改参数
+    g_system_params.brightness = 75;
+    SystemParams_Save();
+    printf(&quot;Changed brightness to 75 and saved\n&quot;);
+
+    // 模拟掉电重启（重新加载）
+    printf(&quot;Simulating power loss...\n&quot;);
+    SystemParams_Init();
+
+    // 验证数据是否保持
+    if (g_system_params.brightness == 75) {
+        printf(&quot;Test PASSED! Data survived power loss\n&quot;);
+    } else {
+        printf(&quot;Test FAILED! Data lost: %d\n&quot;, g_system_params.brightness);
+    }
+
+    // 恢复原始值
+    g_system_params.brightness = original_brightness;
+    SystemParams_Save();
+}
+</code></pre>
+<p><strong>预期结果</strong>：
+- 所有测试通过
+- 数据读写正确
+- CRC校验有效
+- 掉电后数据保持</p>
+<h2 id="_11">故障排除</h2>
+<h3 id="1eeprom">问题1：无法检测到EEPROM</h3>
+<p><strong>现象</strong>：
+- I2C通信失败
+- 读写操作返回错误</p>
+<p><strong>可能原因</strong>：
+- 硬件连接错误
+- 上拉电阻缺失或值不对
+- 设备地址错误
+- 电源电压不匹配</p>
+<p><strong>解决方法</strong>：
+1. 检查硬件连接，确保SDA、SCL正确连接
+2. 确认上拉电阻已连接（4.7kΩ）
+3. 使用I2C扫描程序检测设备地址
+4. 检查电源电压（3.3V或5V）</p>
+<pre><code class="language-c">// I2C设备扫描
+void I2C_Scan(void) {
+    printf(&quot;Scanning I2C bus...\n&quot;);
+
+    for (uint8_t addr = 0x08; addr &lt; 0x78; addr++) {
+        if (HAL_I2C_IsDeviceReady(&amp;hi2c1, addr &lt;&lt; 1, 1, 10) == HAL_OK) {
+            printf(&quot;Found device at address 0x%02X\n&quot;, addr);
+        }
+    }
+
+    printf(&quot;Scan complete\n&quot;);
+}
+</code></pre>
+<h3 id="2">问题2：写入失败或数据错误</h3>
+<p><strong>现象</strong>：
+- 写入操作返回失败
+- 读取的数据与写入不一致
+- CRC校验失败</p>
+<p><strong>可能原因</strong>：
+- 写保护引脚(WP)未正确连接
+- 写入延时不足
+- 跨页写入导致数据回卷
+- 地址计算错误</p>
+<p><strong>解决方法</strong>：
+1. 确保WP引脚接地（禁用写保护）
+2. 写入后延时至少5ms
+3. 检查页边界，避免跨页写入
+4. 验证地址计算逻辑</p>
+<pre><code class="language-c">// 调试写入过程
+uint8_t EEPROM_WriteByte_Debug(uint16_t mem_addr, uint8_t data) {
+    printf(&quot;Writing 0x%02X to address 0x%04X\n&quot;, data, mem_addr);
+
+    uint8_t result = EEPROM_WriteByte(mem_addr, data);
+
+    if (result == 0) {
+        // 读回验证
+        uint8_t read_data;
+        EEPROM_ReadByte(mem_addr, &amp;read_data);
+
+        if (read_data == data) {
+            printf(&quot;Write verified OK\n&quot;);
+        } else {
+            printf(&quot;Write verification FAILED! Read 0x%02X\n&quot;, read_data);
+        }
+    } else {
+        printf(&quot;Write operation FAILED\n&quot;);
+    }
+
+    return result;
+}
+</code></pre>
+<h3 id="3_2">问题3：数据丢失或损坏</h3>
+<p><strong>现象</strong>：
+- 重启后数据丢失
+- 读取到全0xFF或全0x00
+- CRC校验经常失败</p>
+<p><strong>可能原因</strong>：
+- EEPROM寿命耗尽
+- 电源不稳定导致写入中断
+- 没有使用CRC校验
+- 频繁写入同一地址</p>
+<p><strong>解决方法</strong>：
+1. 实现磨损均衡，分散写入
+2. 添加CRC校验保护数据
+3. 使用多副本备份重要数据
+4. 减少不必要的写入操作
+5. 确保电源稳定</p>
+<pre><code class="language-c">// 健康检查
+void EEPROM_HealthCheck(void) {
+    uint8_t test_data = 0xA5;
+    uint8_t read_data;
+    uint16_t test_addr = 0x7F00;  // 使用末尾地址测试
+
+    printf(&quot;EEPROM Health Check...\n&quot;);
+
+    // 写入测试
+    if (EEPROM_WriteByte(test_addr, test_data) != 0) {
+        printf(&quot;WARNING: Write operation failed\n&quot;);
+        return;
+    }
+
+    // 读取测试
+    if (EEPROM_ReadByte(test_addr, &amp;read_data) != 0) {
+        printf(&quot;WARNING: Read operation failed\n&quot;);
+        return;
+    }
+
+    // 验证数据
+    if (read_data == test_data) {
+        printf(&quot;EEPROM health: OK\n&quot;);
+    } else {
+        printf(&quot;WARNING: Data corruption detected\n&quot;);
+        printf(&quot;  Wrote: 0x%02X, Read: 0x%02X\n&quot;, test_data, read_data);
+    }
+}
+</code></pre>
+<h3 id="4i2c">问题4：I2C通信速度慢</h3>
+<p><strong>现象</strong>：
+- 读写操作耗时过长
+- 系统响应缓慢</p>
+<p><strong>可能原因</strong>：
+- I2C时钟频率设置过低
+- 使用轮询方式等待
+- 没有使用页写入优化</p>
+<p><strong>解决方法</strong>：
+1. 提高I2C时钟频率（100kHz → 400kHz）
+2. 使用DMA或中断方式
+3. 使用页写入代替单字节写入
+4. 批量操作，减少通信次数</p>
+<pre><code class="language-c">// 性能测试
+void EEPROM_PerformanceTest(void) {
+    uint8_t buffer[64];
+    uint32_t start_time, end_time;
+
+    // 准备测试数据
+    for (int i = 0; i &lt; 64; i++) {
+        buffer[i] = i;
+    }
+
+    // 测试单字节写入
+    start_time = HAL_GetTick();
+    for (int i = 0; i &lt; 64; i++) {
+        EEPROM_WriteByte(0x0100 + i, buffer[i]);
+    }
+    end_time = HAL_GetTick();
+    printf(&quot;Single byte write (64 bytes): %lu ms\n&quot;, end_time - start_time);
+
+    // 测试页写入
+    start_time = HAL_GetTick();
+    EEPROM_PageWrite(0x0200, buffer, 64);
+    end_time = HAL_GetTick();
+    printf(&quot;Page write (64 bytes): %lu ms\n&quot;, end_time - start_time);
+}
+</code></pre>
+<h2 id="_12">最佳实践</h2>
+<h3 id="1_1">1. 减少写入次数</h3>
+<pre><code class="language-c">// 不好的做法：频繁写入
+void Bad_Practice(void) {
+    for (int i = 0; i &lt; 1000; i++) {
+        sensor_value = Read_Sensor();
+        EEPROM_WriteByte(0x0000, sensor_value);  // 每次都写入
+        HAL_Delay(100);
+    }
+}
+
+// 好的做法：批量写入或定时写入
+void Good_Practice(void) {
+    uint8_t buffer[100];
+    uint8_t index = 0;
+
+    for (int i = 0; i &lt; 1000; i++) {
+        sensor_value = Read_Sensor();
+        buffer[index++] = sensor_value;
+
+        // 缓冲区满时才写入
+        if (index &gt;= 100) {
+            EEPROM_WriteMultiBytes(0x0000, buffer, 100);
+            index = 0;
+        }
+
+        HAL_Delay(100);
+    }
+}
+</code></pre>
+<h3 id="2_1">2. 使用缓存机制</h3>
+<pre><code class="language-c">// 参数缓存
+typedef struct {
+    System_Params_t params;
+    uint8_t dirty;  // 脏标志
+} Params_Cache_t;
+
+Params_Cache_t g_params_cache;
+
+void Params_SetBrightness(uint8_t value) {
+    g_params_cache.params.brightness = value;
+    g_params_cache.dirty = 1;  // 标记为已修改
+}
+
+void Params_Flush(void) {
+    if (g_params_cache.dirty) {
+        SystemParams_Save();
+        g_params_cache.dirty = 0;
+    }
+}
+
+// 定时刷新（例如每分钟）
+void Timer_Callback(void) {
+    Params_Flush();
+}
+</code></pre>
+<h3 id="3_3">3. 数据版本管理</h3>
+<pre><code class="language-c">// 支持多版本数据迁移
+uint8_t Config_LoadWithMigration(Config_Data_t *config) {
+    if (EEPROM_ReadMultiBytes(CONFIG_ADDR, (uint8_t*)config, 
+                              sizeof(Config_Data_t)) != 0) {
+        return 1;
+    }
+
+    // 检查版本
+    if (config-&gt;version &lt; CONFIG_VERSION) {
+        printf(&quot;Migrating from v%d to v%d\n&quot;, 
+               config-&gt;version, CONFIG_VERSION);
+
+        // 执行数据迁移
+        Config_Migrate(config);
+
+        // 保存新版本
+        config-&gt;version = CONFIG_VERSION;
+        Config_Save(config);
+    }
+
+    return 0;
+}
+</code></pre>
+<h3 id="4_1">4. 错误处理和重试</h3>
+<pre><code class="language-c">/**
+ * @brief  带重试的EEPROM写入
+ * @param  mem_addr: 内存地址
+ * @param  data: 数据
+ * @param  max_retries: 最大重试次数
+ * @retval 0=成功, 1=失败
+ */
+uint8_t EEPROM_WriteByte_WithRetry(uint16_t mem_addr, uint8_t data, 
+                                   uint8_t max_retries) {
+    for (uint8_t retry = 0; retry &lt; max_retries; retry++) {
+        if (EEPROM_WriteByte(mem_addr, data) == 0) {
+            // 写入成功，验证数据
+            uint8_t read_data;
+            if (EEPROM_ReadByte(mem_addr, &amp;read_data) == 0) {
+                if (read_data == data) {
+                    return 0;  // 成功
+                }
+            }
+        }
+
+        // 失败，延时后重试
+        HAL_Delay(10);
+    }
+
+    return 1;  // 所有重试都失败
+}
+</code></pre>
+<h3 id="5_1">5. 日志记录</h3>
+<pre><code class="language-c">// 写入日志
+typedef struct {
+    uint32_t timestamp;
+    uint8_t  event_type;
+    uint8_t  data[3];
+} Log_Entry_t;
+
+#define LOG_BASE_ADDR 0x1000
+#define LOG_MAX_ENTRIES 100
+
+uint16_t g_log_index = 0;
+
+void Log_Write(uint8_t event_type, uint8_t *data) {
+    Log_Entry_t entry;
+
+    entry.timestamp = HAL_GetTick();
+    entry.event_type = event_type;
+    memcpy(entry.data, data, 3);
+
+    // 计算地址（循环缓冲区）
+    uint16_t addr = LOG_BASE_ADDR + 
+                    ((g_log_index % LOG_MAX_ENTRIES) * sizeof(Log_Entry_t));
+
+    // 写入日志
+    EEPROM_WriteMultiBytes(addr, (uint8_t*)&amp;entry, sizeof(Log_Entry_t));
+
+    g_log_index++;
+}
+</code></pre>
+<h2 id="_13">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ EEPROM的工作原理和特点</li>
+<li>✅ I2C接口EEPROM的硬件连接</li>
+<li>✅ 基本的读写操作实现</li>
+<li>✅ 页写入优化技术</li>
+<li>✅ CRC校验和数据保护</li>
+<li>✅ 磨损均衡策略</li>
+<li>✅ 系统参数管理的完整方案</li>
+<li>✅ 故障排除和最佳实践</li>
+</ul>
+<p><strong>关键要点</strong>：</p>
+<ol>
+<li>
+<p><strong>数据保护</strong>
+   - 使用CRC校验确保数据完整性
+   - 添加魔数和版本号识别有效数据
+   - 实现多副本备份重要数据</p>
+</li>
+<li>
+<p><strong>寿命管理</strong>
+   - 减少不必要的写入操作
+   - 使用磨损均衡分散写入
+   - 批量写入代替频繁单字节写入</p>
+</li>
+<li>
+<p><strong>可靠性设计</strong>
+   - 实现写入验证和重试机制
+   - 提供默认值和数据迁移
+   - 定期进行健康检查</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 使用页写入提高效率
+   - 实现缓存机制减少访问
+   - 合理设置I2C时钟频率</p>
+</li>
+</ol>
+<h2 id="_14">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现一个环形缓冲区日志系统，支持自动覆盖旧数据</li>
+<li><strong>挑战2</strong>：添加数据压缩功能，提高存储容量利用率</li>
+<li><strong>挑战3</strong>：实现SPI接口EEPROM驱动，对比I2C和SPI的性能</li>
+<li><strong>挑战4</strong>：设计一个文件系统，支持多个文件的存储和管理</li>
+<li><strong>挑战5</strong>：实现加密存储，保护敏感配置数据</li>
+</ol>
+<h2 id="_15">完整代码</h2>
+<p>完整的项目代码可以在这里下载：
+- <a href="https://github.com/embedded-platform/eeprom-storage-tutorial">GitHub仓库</a>
+- 包含STM32和Arduino两个版本
+- 包含所有示例和测试代码</p>
+<h2 id="_16">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li><a href="./01-flash-technology.html">Flash存储器技术详解</a> - 了解Flash与EEPROM的区别</li>
+<li><a href="../intermediate/01-wear-leveling.html">Flash磨损均衡算法</a> - 深入学习磨损均衡</li>
+<li><a href="../intermediate/02-data-persistence.html">数据持久化与掉电保护</a> - 高级数据保护技术</li>
+<li><a href="../../01-file-systems/beginner/02-littlefs.html">LittleFS轻量级文件系统</a> - 在Flash上实现文件系统</li>
+</ul>
+<h2 id="_17">参考资料</h2>
+<ol>
+<li>
+<p><strong>芯片数据手册</strong>
+   - Microchip AT24C256 Datasheet
+   - STMicroelectronics M24C64 Datasheet</p>
+</li>
+<li>
+<p><strong>应用笔记</strong>
+   - AN2578: EEPROM Emulation in STM32
+   - AN1028: Software Techniques for Improving System Reliability</p>
+</li>
+<li>
+<p><strong>标准和协议</strong>
+   - I2C-bus Specification (NXP)
+   - SPI Protocol Specification</p>
+</li>
+<li>
+<p><strong>在线资源</strong>
+   - <a href="https://www.i2c-bus.org/">I2C总线协议详解</a>
+   - <a href="https://www.microchip.com/eeprom">EEPROM应用指南</a></p>
+</li>
+</ol>
+<hr />
+<p><strong>练习题</strong>：</p>
+<ol>
+<li>解释EEPROM和Flash存储器的主要区别，并说明各自的应用场景</li>
+<li>编写一个函数，实现EEPROM的批量擦除功能（写入0xFF）</li>
+<li>设计一个数据结构，支持存储10个用户的配置信息</li>
+<li>计算：如果每天写入100次，EEPROM（100万次擦写）能使用多少年？</li>
+<li>实现一个简单的文件系统，支持创建、读取、删除文件</li>
+</ol>
+<p><strong>思考题</strong>：</p>
+<ol>
+<li>为什么EEPROM写入需要延时？如何确定合适的延时时间？</li>
+<li>在什么情况下应该使用EEPROM而不是Flash？</li>
+<li>如何设计一个既节省EEPROM寿命又能快速响应的参数保存方案？</li>
+<li>如果EEPROM容量不足，有哪些优化策略？</li>
+</ol>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题或有改进建议，欢迎在评论区留言或提交Issue！</p>
+<p><strong>版权声明</strong>：本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

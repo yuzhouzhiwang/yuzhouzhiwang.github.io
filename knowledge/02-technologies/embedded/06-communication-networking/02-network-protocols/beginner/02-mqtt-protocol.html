@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>MQTT协议应用开发实战 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/">06-communication-networking</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/">02-network-protocols</a> / <a href="/knowledge/02-technologies/embedded/06-communication-networking/02-network-protocols/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">硬件准备</a></li>
+<li><a href="#_5">软件准备</a></li>
+<li><a href="#_6">环境配置</a><ul>
+<li><a href="#1-arduino-ideesp32">1. 安装Arduino IDE和ESP32支持</a></li>
+<li><a href="#2-mqtt">2. 安装MQTT库</a></li>
+<li><a href="#3-wifi">3. 测试WiFi连接</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#mqtt_1">MQTT协议基础</a><ul>
+<li><a href="#mqtt_2">什么是MQTT？</a></li>
+<li><a href="#mqtt_3">MQTT架构</a></li>
+<li><a href="#topic">主题（Topic）</a></li>
+<li><a href="#qos">QoS质量等级</a></li>
+</ul>
+</li>
+<li><a href="#1mqtt">步骤1：搭建MQTT测试环境</a><ul>
+<li><a href="#11-mqtt">1.1 使用公共MQTT服务器</a></li>
+<li><a href="#12-mqtt">1.2 安装MQTT测试工具</a></li>
+<li><a href="#13">1.3 测试连接</a></li>
+</ul>
+</li>
+<li><a href="#2esp32mqtt">步骤2：ESP32基础MQTT客户端</a><ul>
+<li><a href="#21-arduino">2.1 创建Arduino项目</a></li>
+<li><a href="#22-wifimqtt">2.2 WiFi和MQTT配置</a></li>
+<li><a href="#23-wifi">2.3 WiFi连接函数</a></li>
+<li><a href="#24-mqtt">2.4 MQTT回调函数</a></li>
+<li><a href="#25-mqtt">2.5 MQTT连接和重连</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3：完整的主程序</a><ul>
+<li><a href="#31-setup">3.1 setup()函数</a></li>
+<li><a href="#32-loop">3.2 loop()函数</a></li>
+</ul>
+</li>
+<li><a href="#4">步骤4：编译和测试</a><ul>
+<li><a href="#41">4.1 编译上传</a></li>
+<li><a href="#42-mqttx">4.2 使用MQTTX测试</a><ul>
+<li><a href="#_7">测试数据接收：</a></li>
+<li><a href="#_8">测试远程控制：</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#5qos">步骤5：添加QoS和遗嘱消息</a><ul>
+<li><a href="#51-qos">5.1 使用不同的QoS级别</a></li>
+<li><a href="#52-last-will">5.2 配置遗嘱消息（Last Will）</a></li>
+</ul>
+</li>
+<li><a href="#6">步骤6：实际传感器集成</a><ul>
+<li><a href="#61-dht11">6.1 添加DHT11温湿度传感器</a></li>
+<li><a href="#62">6.2 电路连接</a></li>
+</ul>
+</li>
+<li><a href="#7">步骤7：连接云平台</a><ul>
+<li><a href="#71-iot">7.1 使用阿里云IoT平台</a><ul>
+<li><a href="#_9">创建产品和设备：</a></li>
+<li><a href="#_10">修改连接参数：</a></li>
+</ul>
+</li>
+<li><a href="#72-emqx-cloud">7.2 使用EMQX Cloud</a></li>
+</ul>
+</li>
+<li><a href="#_11">故障排除</a><ul>
+<li><a href="#1mqtt_1">问题1：无法连接到MQTT服务器</a></li>
+<li><a href="#2">问题2：消息发布失败</a></li>
+<li><a href="#3_1">问题3：无法接收订阅消息</a></li>
+<li><a href="#4_1">问题4：频繁断线重连</a></li>
+</ul>
+</li>
+<li><a href="#_12">总结</a></li>
+<li><a href="#_13">进阶挑战</a></li>
+<li><a href="#_14">完整代码</a></li>
+<li><a href="#_15">下一步</a></li>
+<li><a href="#_16">参考资料</a></li>
+<li><a href="#mqtt_4">常见MQTT术语</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="mqtt">MQTT协议应用开发实战</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解MQTT协议的工作原理和核心概念</li>
+<li>[ ] 掌握发布/订阅模式的设计思想</li>
+<li>[ ] 了解MQTT的三种QoS级别及其应用场景</li>
+<li>[ ] 使用ESP32实现MQTT客户端功能</li>
+<li>[ ] 将设备连接到MQTT云平台进行数据通信</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>：
+- 了解TCP/IP协议基础知识
+- 熟悉C语言编程
+- 理解客户端-服务器架构</p>
+<p><strong>技能要求</strong>：
+- 能够使用Arduino IDE或ESP-IDF开发ESP32
+- 会配置WiFi网络连接
+- 了解基本的JSON数据格式</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">硬件准备</h3>
+<table>
+<thead>
+<tr>
+<th>名称</th>
+<th>数量</th>
+<th>说明</th>
+<th>参考链接</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ESP32开发板</td>
+<td>1</td>
+<td>ESP32-DevKitC或类似型号</td>
+<td>-</td>
+</tr>
+<tr>
+<td>DHT11温湿度传感器</td>
+<td>1</td>
+<td>可选，用于数据采集</td>
+<td>-</td>
+</tr>
+<tr>
+<td>LED灯</td>
+<td>1</td>
+<td>用于演示远程控制</td>
+<td>-</td>
+</tr>
+<tr>
+<td>电阻</td>
+<td>1</td>
+<td>220Ω，LED限流电阻</td>
+<td>-</td>
+</tr>
+<tr>
+<td>Micro USB数据线</td>
+<td>1</td>
+<td>用于供电和程序下载</td>
+<td>-</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_5">软件准备</h3>
+<ul>
+<li><strong>开发环境</strong>：Arduino IDE 2.0+ 或 ESP-IDF v4.4+</li>
+<li><strong>MQTT库</strong>：PubSubClient (Arduino) 或 ESP-MQTT (ESP-IDF)</li>
+<li><strong>MQTT测试工具</strong>：MQTT.fx 或 MQTTX</li>
+<li><strong>MQTT服务器</strong>：可使用公共测试服务器 <code>broker.emqx.io</code> 或自建Mosquitto</li>
+</ul>
+<h3 id="_6">环境配置</h3>
+<h4 id="1-arduino-ideesp32">1. 安装Arduino IDE和ESP32支持</h4>
+<p>在Arduino IDE中添加ESP32开发板支持：
+- 打开 文件 -&gt; 首选项 -&gt; 附加开发板管理器网址
+- 添加URL: <code>https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json</code></p>
+<h4 id="2-mqtt">2. 安装MQTT库</h4>
+<p>在Arduino IDE中：
+- 打开 工具 -&gt; 管理库
+- 搜索 "PubSubClient"
+- 点击安装</p>
+<p>或使用ESP-IDF（已内置ESP-MQTT组件）</p>
+<h4 id="3-wifi">3. 测试WiFi连接</h4>
+<p>确保ESP32能够连接到WiFi网络。</p>
+<h2 id="mqtt_1">MQTT协议基础</h2>
+<h3 id="mqtt_2">什么是MQTT？</h3>
+<p>MQTT (Message Queuing Telemetry Transport) 是一种轻量级的发布/订阅消息传输协议，专为物联网设备设计。</p>
+<p><strong>核心特点</strong>：
+- <strong>轻量级</strong>：协议开销小，适合低带宽网络
+- <strong>发布/订阅模式</strong>：解耦消息发送者和接收者
+- <strong>QoS保证</strong>：提供三种消息质量等级
+- <strong>持久会话</strong>：支持断线重连和消息缓存
+- <strong>遗嘱消息</strong>：设备异常断开时自动发送通知</p>
+<h3 id="mqtt_3">MQTT架构</h3>
+<p>MQTT采用发布/订阅模式，通过中央Broker进行消息路由：</p>
+<ul>
+<li><strong>Broker（代理）</strong>：消息中转服务器，负责接收、过滤和分发消息</li>
+<li><strong>Publisher（发布者）</strong>：发布消息到特定主题的客户端</li>
+<li><strong>Subscriber（订阅者）</strong>：订阅主题并接收消息的客户端</li>
+<li><strong>Client（客户端）</strong>：可同时是发布者和订阅者</li>
+</ul>
+<h3 id="topic">主题（Topic）</h3>
+<p>主题是MQTT消息路由的核心，采用层级结构：</p>
+<pre><code class="language-text">home/livingroom/temperature
+home/bedroom/humidity
+device/sensor/001/data
+</code></pre>
+<p><strong>通配符</strong>：
+- <code>+</code>：单层通配符，例如 <code>home/+/temperature</code> 匹配所有房间的温度
+- <code>#</code>：多层通配符，例如 <code>home/#</code> 匹配home下的所有主题</p>
+<h3 id="qos">QoS质量等级</h3>
+<table>
+<thead>
+<tr>
+<th>QoS级别</th>
+<th>名称</th>
+<th>保证</th>
+<th>应用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>QoS 0</td>
+<td>至多一次</td>
+<td>消息可能丢失</td>
+<td>环境监测、实时数据流</td>
+</tr>
+<tr>
+<td>QoS 1</td>
+<td>至少一次</td>
+<td>消息至少送达一次，可能重复</td>
+<td>日志记录、一般数据上报</td>
+</tr>
+<tr>
+<td>QoS 2</td>
+<td>恰好一次</td>
+<td>消息恰好送达一次</td>
+<td>计费系统、关键控制指令</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1mqtt">步骤1：搭建MQTT测试环境</h2>
+<h3 id="11-mqtt">1.1 使用公共MQTT服务器</h3>
+<p>我们使用EMQX提供的免费公共服务器进行测试：</p>
+<pre><code class="language-text">服务器地址: broker.emqx.io
+端口: 1883 (TCP)
+WebSocket端口: 8083
+SSL端口: 8883
+</code></pre>
+<h3 id="12-mqtt">1.2 安装MQTT测试工具</h3>
+<p>下载并安装MQTTX客户端工具：
+- 访问 https://mqttx.app/
+- 下载适合你操作系统的版本
+- 安装并启动</p>
+<h3 id="13">1.3 测试连接</h3>
+<ol>
+<li>打开MQTTX</li>
+<li>创建新连接：
+   - Name: <code>Test Connection</code>
+   - Host: <code>broker.emqx.io</code>
+   - Port: <code>1883</code>
+   - Client ID: 自动生成</li>
+<li>点击"Connect"</li>
+<li>订阅测试主题：<code>test/topic</code></li>
+<li>发布测试消息</li>
+</ol>
+<p><strong>预期结果</strong>：
+- 连接状态显示为"Connected"
+- 能够成功发布和接收消息</p>
+<h2 id="2esp32mqtt">步骤2：ESP32基础MQTT客户端</h2>
+<h3 id="21-arduino">2.1 创建Arduino项目</h3>
+<p>创建新的Arduino项目：<code>ESP32_MQTT_Basic</code></p>
+<h3 id="22-wifimqtt">2.2 WiFi和MQTT配置</h3>
+<pre><code class="language-c">#include &lt;WiFi.h&gt;
+#include &lt;PubSubClient.h&gt;
+
+// WiFi配置
+const char* ssid = &quot;你的WiFi名称&quot;;
+const char* password = &quot;你的WiFi密码&quot;;
+
+// MQTT配置
+const char* mqtt_server = &quot;broker.emqx.io&quot;;
+const int mqtt_port = 1883;
+const char* mqtt_client_id = &quot;ESP32_Client_001&quot;;  // 客户端ID，需唯一
+
+// 主题定义
+const char* topic_pub = &quot;esp32/sensor/data&quot;;      // 发布主题
+const char* topic_sub = &quot;esp32/control/led&quot;;      // 订阅主题
+
+// 创建对象
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// LED引脚
+const int LED_PIN = 2;  // ESP32内置LED
+</code></pre>
+<p><strong>配置说明</strong>：
+- <code>ssid</code> 和 <code>password</code>：替换为你的WiFi信息
+- <code>mqtt_client_id</code>：每个设备需要唯一的客户端ID
+- <code>topic_pub</code>：设备发布数据的主题
+- <code>topic_sub</code>：设备订阅控制命令的主题</p>
+<h3 id="23-wifi">2.3 WiFi连接函数</h3>
+<pre><code class="language-c">void setup_wifi() {
+    delay(10);
+    Serial.println();
+    Serial.print(&quot;连接到WiFi: &quot;);
+    Serial.println(ssid);
+
+    WiFi.mode(WIFI_STA);  // 设置为Station模式
+    WiFi.begin(ssid, password);
+
+    // 等待连接
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(&quot;.&quot;);
+    }
+
+    Serial.println(&quot;&quot;);
+    Serial.println(&quot;WiFi连接成功&quot;);
+    Serial.print(&quot;IP地址: &quot;);
+    Serial.println(WiFi.localIP());
+}
+</code></pre>
+<p><strong>代码说明</strong>：
+- <code>WiFi.mode(WIFI_STA)</code>：设置为Station（客户端）模式
+- <code>WiFi.begin()</code>：开始连接WiFi
+- 循环等待直到连接成功
+- 打印IP地址用于调试</p>
+<h3 id="24-mqtt">2.4 MQTT回调函数</h3>
+<pre><code class="language-c">// MQTT消息接收回调函数
+void callback(char* topic, byte* payload, unsigned int length) {
+    Serial.print(&quot;收到消息 [&quot;);
+    Serial.print(topic);
+    Serial.print(&quot;]: &quot;);
+
+    // 将payload转换为字符串
+    String message = &quot;&quot;;
+    for (int i = 0; i &lt; length; i++) {
+        message += (char)payload[i];
+    }
+    Serial.println(message);
+
+    // 处理LED控制命令
+    if (String(topic) == topic_sub) {
+        if (message == &quot;ON&quot;) {
+            digitalWrite(LED_PIN, HIGH);
+            Serial.println(&quot;LED已打开&quot;);
+        } else if (message == &quot;OFF&quot;) {
+            digitalWrite(LED_PIN, LOW);
+            Serial.println(&quot;LED已关闭&quot;);
+        }
+    }
+}
+</code></pre>
+<p><strong>回调函数说明</strong>：
+- 当收到订阅主题的消息时自动调用
+- <code>topic</code>：消息的主题
+- <code>payload</code>：消息内容（字节数组）
+- <code>length</code>：消息长度
+- 根据消息内容控制LED开关</p>
+<h3 id="25-mqtt">2.5 MQTT连接和重连</h3>
+<pre><code class="language-c">void reconnect() {
+    // 循环直到重新连接
+    while (!client.connected()) {
+        Serial.print(&quot;尝试MQTT连接...&quot;);
+
+        // 尝试连接
+        if (client.connect(mqtt_client_id)) {
+            Serial.println(&quot;已连接&quot;);
+
+            // 连接成功后订阅主题
+            client.subscribe(topic_sub);
+            Serial.print(&quot;已订阅主题: &quot;);
+            Serial.println(topic_sub);
+
+            // 发布上线消息
+            client.publish(topic_pub, &quot;ESP32 Online&quot;);
+        } else {
+            Serial.print(&quot;连接失败, rc=&quot;);
+            Serial.print(client.state());
+            Serial.println(&quot; 5秒后重试&quot;);
+            delay(5000);
+        }
+    }
+}
+</code></pre>
+<p><strong>连接逻辑</strong>：
+- 检查连接状态，断开则重连
+- <code>client.connect()</code>：连接到MQTT服务器
+- 连接成功后订阅控制主题
+- 发布上线消息通知服务器
+- 连接失败则等待5秒后重试</p>
+<h2 id="3">步骤3：完整的主程序</h2>
+<h3 id="31-setup">3.1 setup()函数</h3>
+<pre><code class="language-c">void setup() {
+    // 初始化串口
+    Serial.begin(115200);
+    delay(1000);
+
+    // 初始化LED引脚
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
+
+    // 连接WiFi
+    setup_wifi();
+
+    // 配置MQTT服务器
+    client.setServer(mqtt_server, mqtt_port);
+    client.setCallback(callback);
+
+    Serial.println(&quot;初始化完成&quot;);
+}
+</code></pre>
+<h3 id="32-loop">3.2 loop()函数</h3>
+<pre><code class="language-c">void loop() {
+    // 确保MQTT连接
+    if (!client.connected()) {
+        reconnect();
+    }
+    client.loop();  // 处理MQTT消息
+
+    // 每5秒发布一次传感器数据
+    static unsigned long lastMsg = 0;
+    unsigned long now = millis();
+
+    if (now - lastMsg &gt; 5000) {
+        lastMsg = now;
+
+        // 模拟传感器数据
+        float temperature = 20.0 + random(0, 100) / 10.0;  // 20.0-30.0°C
+        float humidity = 50.0 + random(0, 300) / 10.0;     // 50.0-80.0%
+
+        // 构建JSON消息
+        String payload = &quot;{&quot;;
+        payload += &quot;\&quot;temperature\&quot;:&quot;;
+        payload += String(temperature, 1);
+        payload += &quot;,\&quot;humidity\&quot;:&quot;;
+        payload += String(humidity, 1);
+        payload += &quot;,\&quot;device\&quot;:\&quot;ESP32_001\&quot;&quot;;
+        payload += &quot;}&quot;;
+
+        // 发布消息
+        Serial.print(&quot;发布消息: &quot;);
+        Serial.println(payload);
+        client.publish(topic_pub, payload.c_str());
+    }
+}
+</code></pre>
+<p><strong>主循环说明</strong>：
+- <code>client.loop()</code>：必须定期调用，处理接收消息和保持连接
+- 每5秒发布一次模拟的传感器数据
+- 使用JSON格式组织数据
+- <code>client.publish()</code>：发布消息到指定主题</p>
+<h2 id="4">步骤4：编译和测试</h2>
+<h3 id="41">4.1 编译上传</h3>
+<ol>
+<li>修改WiFi配置为你的网络信息</li>
+<li>选择开发板：工具 -&gt; 开发板 -&gt; ESP32 Dev Module</li>
+<li>选择端口：工具 -&gt; 端口</li>
+<li>点击上传按钮</li>
+<li>打开串口监视器（波特率115200）</li>
+</ol>
+<p><strong>预期输出</strong>：</p>
+<pre><code>连接到WiFi: YourWiFi
+....
+WiFi连接成功
+IP地址: 192.168.1.100
+尝试MQTT连接...已连接
+已订阅主题: esp32/control/led
+初始化完成
+发布消息: {&quot;temperature&quot;:25.3,&quot;humidity&quot;:65.2,&quot;device&quot;:&quot;ESP32_001&quot;}
+</code></pre>
+<h3 id="42-mqttx">4.2 使用MQTTX测试</h3>
+<h4 id="_7">测试数据接收：</h4>
+<ol>
+<li>在MQTTX中订阅主题：<code>esp32/sensor/data</code></li>
+<li>观察ESP32发送的数据</li>
+<li>应该每5秒收到一条JSON格式的消息</li>
+</ol>
+<h4 id="_8">测试远程控制：</h4>
+<ol>
+<li>在MQTTX中发布消息到主题：<code>esp32/control/led</code></li>
+<li>消息内容：<code>ON</code></li>
+<li>观察ESP32的LED是否点亮</li>
+<li>发送消息：<code>OFF</code></li>
+<li>观察LED是否熄灭</li>
+</ol>
+<h2 id="5qos">步骤5：添加QoS和遗嘱消息</h2>
+<h3 id="51-qos">5.1 使用不同的QoS级别</h3>
+<pre><code class="language-c">// 修改发布函数，添加QoS参数
+void publishWithQoS(const char* topic, const char* payload, int qos) {
+    bool retained = false;  // 是否保留消息
+    client.publish(topic, payload, retained, qos);
+}
+
+// 在loop()中使用
+publishWithQoS(topic_pub, payload.c_str(), 1);  // 使用QoS 1
+</code></pre>
+<p><strong>QoS选择建议</strong>：
+- 环境数据（温湿度）：QoS 0（允许偶尔丢失）
+- 状态上报：QoS 1（确保送达）
+- 控制命令：QoS 1或2（确保执行）</p>
+<h3 id="52-last-will">5.2 配置遗嘱消息（Last Will）</h3>
+<pre><code class="language-c">void reconnect() {
+    while (!client.connected()) {
+        Serial.print(&quot;尝试MQTT连接...&quot;);
+
+        // 配置遗嘱消息
+        const char* willTopic = &quot;esp32/status&quot;;
+        const char* willMessage = &quot;ESP32 Offline&quot;;
+        int willQoS = 1;
+        bool willRetain = true;
+
+        // 带遗嘱消息的连接
+        if (client.connect(mqtt_client_id, willTopic, willQoS, willRetain, willMessage)) {
+            Serial.println(&quot;已连接&quot;);
+
+            // 发布在线状态
+            client.publish(&quot;esp32/status&quot;, &quot;ESP32 Online&quot;, true);
+
+            // 订阅控制主题
+            client.subscribe(topic_sub, 1);  // QoS 1
+        } else {
+            Serial.print(&quot;连接失败, rc=&quot;);
+            Serial.print(client.state());
+            Serial.println(&quot; 5秒后重试&quot;);
+            delay(5000);
+        }
+    }
+}
+</code></pre>
+<p><strong>遗嘱消息说明</strong>：
+- 当设备异常断开时，Broker自动发布遗嘱消息
+- <code>willRetain = true</code>：保留消息，新订阅者也能收到
+- 用于监控设备在线状态</p>
+<h2 id="6">步骤6：实际传感器集成</h2>
+<h3 id="61-dht11">6.1 添加DHT11温湿度传感器</h3>
+<pre><code class="language-c">#include &lt;DHT.h&gt;
+
+// DHT11配置
+#define DHTPIN 4        // DHT11数据引脚连接到GPIO4
+#define DHTTYPE DHT11   // 传感器类型
+DHT dht(DHTPIN, DHTTYPE);
+
+void setup() {
+    // ... 其他初始化代码 ...
+
+    // 初始化DHT传感器
+    dht.begin();
+}
+
+void loop() {
+    // ... MQTT连接检查 ...
+
+    if (now - lastMsg &gt; 5000) {
+        lastMsg = now;
+
+        // 读取真实传感器数据
+        float temperature = dht.readTemperature();
+        float humidity = dht.readHumidity();
+
+        // 检查读取是否成功
+        if (isnan(temperature) || isnan(humidity)) {
+            Serial.println(&quot;读取DHT传感器失败!&quot;);
+            return;
+        }
+
+        // 构建并发布消息
+        String payload = &quot;{&quot;;
+        payload += &quot;\&quot;temperature\&quot;:&quot;;
+        payload += String(temperature, 1);
+        payload += &quot;,\&quot;humidity\&quot;:&quot;;
+        payload += String(humidity, 1);
+        payload += &quot;,\&quot;device\&quot;:\&quot;ESP32_001\&quot;&quot;;
+        payload += &quot;,\&quot;timestamp\&quot;:&quot;;
+        payload += String(millis());
+        payload += &quot;}&quot;;
+
+        Serial.print(&quot;发布消息: &quot;);
+        Serial.println(payload);
+        client.publish(topic_pub, payload.c_str(), true);  // retained = true
+    }
+}
+</code></pre>
+<h3 id="62">6.2 电路连接</h3>
+<table>
+<thead>
+<tr>
+<th>DHT11引脚</th>
+<th>ESP32引脚</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>VCC</td>
+<td>3.3V</td>
+<td>电源正极</td>
+</tr>
+<tr>
+<td>DATA</td>
+<td>GPIO4</td>
+<td>数据引脚</td>
+</tr>
+<tr>
+<td>GND</td>
+<td>GND</td>
+<td>电源负极</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意</strong>：DHT11的DATA引脚需要一个4.7kΩ-10kΩ的上拉电阻连接到VCC。</p>
+<h2 id="7">步骤7：连接云平台</h2>
+<h3 id="71-iot">7.1 使用阿里云IoT平台</h3>
+<h4 id="_9">创建产品和设备：</h4>
+<ol>
+<li>登录阿里云IoT平台控制台</li>
+<li>创建产品：选择"直连设备"</li>
+<li>创建设备：记录设备证书信息
+   - ProductKey
+   - DeviceName
+   - DeviceSecret</li>
+</ol>
+<h4 id="_10">修改连接参数：</h4>
+<pre><code class="language-c">// 阿里云IoT平台MQTT配置
+const char* mqtt_server = &quot;iot-as-mqtt.cn-shanghai.aliyuncs.com&quot;;
+const int mqtt_port = 1883;
+
+// 设备证书信息（从控制台获取）
+const char* productKey = &quot;a1AbCdEfGhI&quot;;
+const char* deviceName = &quot;device001&quot;;
+const char* deviceSecret = &quot;1234567890abcdef&quot;;
+
+// 计算客户端ID和用户名密码
+String clientId = String(deviceName) + &quot;|securemode=3,signmethod=hmacsha1|&quot;;
+String username = String(deviceName) + &quot;&amp;&quot; + String(productKey);
+String password = calculatePassword();  // 需要实现HMAC-SHA1签名
+
+// 主题格式
+String topic_pub = &quot;/&quot; + String(productKey) + &quot;/&quot; + String(deviceName) + &quot;/user/update&quot;;
+String topic_sub = &quot;/&quot; + String(productKey) + &quot;/&quot; + String(deviceName) + &quot;/user/get&quot;;
+</code></pre>
+<h3 id="72-emqx-cloud">7.2 使用EMQX Cloud</h3>
+<p>EMQX Cloud提供免费的MQTT云服务：</p>
+<ol>
+<li>注册EMQX Cloud账号</li>
+<li>创建免费部署</li>
+<li>获取连接地址和端口</li>
+<li>创建认证信息（用户名/密码）</li>
+</ol>
+<pre><code class="language-c">// EMQX Cloud配置
+const char* mqtt_server = &quot;your-deployment.emqxsl.com&quot;;
+const int mqtt_port = 1883;
+const char* mqtt_user = &quot;your_username&quot;;
+const char* mqtt_password = &quot;your_password&quot;;
+
+// 带认证的连接
+if (client.connect(mqtt_client_id, mqtt_user, mqtt_password)) {
+    // 连接成功
+}
+</code></pre>
+<h2 id="_11">故障排除</h2>
+<h3 id="1mqtt_1">问题1：无法连接到MQTT服务器</h3>
+<p><strong>可能原因</strong>：
+- WiFi未连接成功
+- MQTT服务器地址或端口错误
+- 客户端ID冲突
+- 防火墙阻止连接</p>
+<p><strong>解决方法</strong>：
+1. 检查WiFi连接状态
+2. 使用MQTTX测试服务器是否可达
+3. 确保客户端ID唯一
+4. 检查网络防火墙设置</p>
+<h3 id="2">问题2：消息发布失败</h3>
+<p><strong>可能原因</strong>：
+- 未连接到服务器
+- 主题格式错误
+- 消息过大
+- QoS级别不支持</p>
+<p><strong>解决方法</strong>：
+1. 检查<code>client.connected()</code>状态
+2. 验证主题格式（不能包含空格）
+3. 减小消息大小或增加缓冲区
+4. 使用QoS 0或1</p>
+<h3 id="3_1">问题3：无法接收订阅消息</h3>
+<p><strong>可能原因</strong>：
+- 未正确订阅主题
+- 回调函数未设置
+- 主题通配符使用错误
+- <code>client.loop()</code>未调用</p>
+<p><strong>解决方法</strong>：
+1. 确认订阅成功（检查返回值）
+2. 确保调用了<code>client.setCallback()</code>
+3. 检查主题匹配规则
+4. 在loop()中定期调用<code>client.loop()</code></p>
+<h3 id="4_1">问题4：频繁断线重连</h3>
+<p><strong>可能原因</strong>：
+- WiFi信号不稳定
+- Keep-Alive时间过短
+- 服务器负载过高
+- 客户端ID冲突</p>
+<p><strong>解决方法</strong>：
+1. 改善WiFi信号质量
+2. 增加Keep-Alive时间：<code>client.setKeepAlive(60)</code>
+3. 更换MQTT服务器
+4. 使用唯一的客户端ID</p>
+<h2 id="_12">总结</h2>
+<p>通过本教程，你学习了：</p>
+<ul>
+<li>✅ MQTT协议的核心概念和工作原理</li>
+<li>✅ 发布/订阅模式的实现方法</li>
+<li>✅ 三种QoS级别的区别和应用</li>
+<li>✅ ESP32 MQTT客户端的完整开发流程</li>
+<li>✅ 传感器数据采集和远程控制</li>
+<li>✅ 云平台对接的基本方法</li>
+</ul>
+<p><strong>关键要点</strong>：
+- MQTT是物联网设备通信的首选协议
+- 发布/订阅模式实现了设备间的解耦
+- QoS级别根据应用场景选择
+- 遗嘱消息用于设备状态监控
+- 定期调用<code>client.loop()</code>保持连接</p>
+<h2 id="_13">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习：</p>
+<ol>
+<li><strong>挑战1</strong>：实现SSL/TLS加密连接（使用8883端口）</li>
+<li><strong>挑战2</strong>：添加断线重连时的消息缓存机制</li>
+<li><strong>挑战3</strong>：实现多个传感器数据的批量上报</li>
+<li><strong>挑战4</strong>：使用retained消息实现设备配置持久化</li>
+<li><strong>挑战5</strong>：开发一个简单的Web控制面板</li>
+</ol>
+<h2 id="_14">完整代码</h2>
+<p>完整的项目代码可以在GitHub上找到：</p>
+<pre><code class="language-text">GitHub仓库: https://github.com/embedded-knowledge/mqtt-esp32-tutorial
+</code></pre>
+<p>项目包含：
+- 基础MQTT客户端代码
+- DHT11传感器集成示例
+- 云平台对接示例
+- Web控制面板示例</p>
+<h2 id="_15">下一步</h2>
+<p>建议继续学习：</p>
+<ul>
+<li>CoAP轻量级协议 - 学习另一种物联网协议</li>
+<li>HTTP/HTTPS协议应用 - 学习Web通信</li>
+<li>WebSocket实时通信 - 学习双向实时通信</li>
+<li>AWS IoT平台接入 - 学习云平台集成</li>
+</ul>
+<h2 id="_16">参考资料</h2>
+<ol>
+<li>MQTT 3.1.1协议规范 - http://docs.oasis-open.org/mqtt/mqtt/v3.1.1/mqtt-v3.1.1.html</li>
+<li>MQTT 5.0协议规范 - https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html</li>
+<li>PubSubClient库文档 - https://pubsubclient.knolleary.net/</li>
+<li>ESP-MQTT组件文档 - https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/protocols/mqtt.html</li>
+<li>EMQX MQTT Broker - https://www.emqx.io/</li>
+<li>Mosquitto MQTT Broker - https://mosquitto.org/</li>
+</ol>
+<h2 id="mqtt_4">常见MQTT术语</h2>
+<ul>
+<li><strong>Broker</strong>：MQTT消息代理服务器</li>
+<li><strong>Client</strong>：MQTT客户端（发布者或订阅者）</li>
+<li><strong>Topic</strong>：消息主题，用于消息路由</li>
+<li><strong>Payload</strong>：消息内容</li>
+<li><strong>QoS</strong>：服务质量等级</li>
+<li><strong>Retain</strong>：保留消息标志</li>
+<li><strong>Clean Session</strong>：清除会话标志</li>
+<li><strong>Keep Alive</strong>：心跳间隔</li>
+<li><strong>Last Will</strong>：遗嘱消息</li>
+</ul>
+<hr />
+<p><strong>反馈</strong>：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

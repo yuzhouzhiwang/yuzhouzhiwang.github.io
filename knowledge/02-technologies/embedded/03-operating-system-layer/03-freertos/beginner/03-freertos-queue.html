@@ -1,0 +1,1987 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>FreeRTOS队列通信实战：掌握任务间数据传递的核心技术 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/">03-freertos</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/03-freertos/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#_3">准备工作</a><ul>
+<li><a href="#_4">环境配置</a></li>
+<li><a href="#freertos_1">FreeRTOS配置</a></li>
+<li><a href="#_5">创建基础项目</a></li>
+</ul>
+</li>
+<li><a href="#_6">核心内容</a><ul>
+<li><a href="#_7">队列的基本概念</a></li>
+</ul>
+</li>
+<li><a href="#1">步骤1: 创建和使用队列</a><ul>
+<li><a href="#11-api">1.1 队列创建API</a></li>
+<li><a href="#12">1.2 发送消息到队列</a></li>
+<li><a href="#13">1.3 从队列接收消息</a></li>
+<li><a href="#14">1.4 完整示例:基本队列通信</a></li>
+</ul>
+</li>
+<li><a href="#2">步骤2: 传递复杂数据结构</a><ul>
+<li><a href="#21">2.1 传递结构体</a></li>
+<li><a href="#22">2.2 传递指针的注意事项</a></li>
+</ul>
+</li>
+<li><a href="#3">步骤3: 队列管理和查询</a><ul>
+<li><a href="#31">3.1 查询队列状态</a></li>
+<li><a href="#32">3.2 重置和删除队列</a></li>
+</ul>
+</li>
+<li><a href="#4-queue-sets">步骤4: 队列集(Queue Sets)</a><ul>
+<li><a href="#41">4.1 创建和使用队列集</a></li>
+<li><a href="#42">4.2 队列集的应用场景</a></li>
+</ul>
+</li>
+<li><a href="#5-mailbox">步骤5: 邮箱(Mailbox)</a><ul>
+<li><a href="#51">5.1 邮箱的概念</a></li>
+<li><a href="#52">5.2 使用队列实现邮箱</a></li>
+</ul>
+</li>
+<li><a href="#_8">实践示例</a><ul>
+<li><a href="#1_1">示例1: 中断与任务通信</a></li>
+<li><a href="#2-">示例2: 生产者-消费者模式</a></li>
+</ul>
+</li>
+<li><a href="#_9">验证</a><ul>
+<li><a href="#_10">验证方法</a></li>
+<li><a href="#_11">预期结果</a></li>
+<li><a href="#_12">测试要点</a></li>
+</ul>
+</li>
+<li><a href="#_13">故障排除</a><ul>
+<li><a href="#1_2">问题1: 队列创建失败</a></li>
+<li><a href="#2_1">问题2: 数据接收不正确</a></li>
+<li><a href="#3_1">问题3: 任务永久阻塞</a></li>
+<li><a href="#4">问题4: 数据丢失</a></li>
+<li><a href="#5-api">问题5: 中断中使用错误的API</a></li>
+</ul>
+</li>
+<li><a href="#_14">总结</a><ul>
+<li><a href="#_15">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_16">进阶挑战</a><ul>
+<li><a href="#1_3">挑战1: 多级数据处理流水线</a></li>
+<li><a href="#2_2">挑战2: 优先级队列</a></li>
+<li><a href="#3_2">挑战3: 环形缓冲区队列</a></li>
+</ul>
+</li>
+<li><a href="#_17">完整代码示例</a><ul>
+<li><a href="#_18">综合示例: 数据采集系统</a></li>
+<li><a href="#_19">测试环境</a></li>
+</ul>
+</li>
+<li><a href="#_20">下一步学习</a><ul>
+<li><a href="#1_4">1. 同步机制</a></li>
+<li><a href="#2_3">2. 高级通信</a></li>
+<li><a href="#3_3">3. 内存管理</a></li>
+<li><a href="#4_1">4. 系统设计</a></li>
+</ul>
+</li>
+<li><a href="#_21">参考资料</a><ul>
+<li><a href="#_22">官方文档</a></li>
+<li><a href="#_23">推荐书籍</a></li>
+<li><a href="#_24">在线资源</a></li>
+</ul>
+</li>
+<li><a href="#_25">常见问题解答</a><ul>
+<li><a href="#q1">Q1: 队列和信号量有什么区别?</a></li>
+<li><a href="#q2">Q2: 如何选择合适的队列大小?</a></li>
+<li><a href="#q3">Q3: 队列满了怎么办?</a></li>
+<li><a href="#q4">Q4: 如何在中断中使用队列?</a></li>
+<li><a href="#q5">Q5: 队列和任务通知有什么区别?</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="freertos">FreeRTOS队列通信实战：掌握任务间数据传递的核心技术</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解FreeRTOS队列的工作原理和应用场景</li>
+<li>[ ] 掌握队列创建和配置的方法</li>
+<li>[ ] 熟练使用队列发送和接收API</li>
+<li>[ ] 理解队列的阻塞机制和超时处理</li>
+<li>[ ] 掌握队列集的使用方法</li>
+<li>[ ] 学会使用邮箱进行数据传递</li>
+<li>[ ] 能够在实际项目中应用队列通信</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始本教程之前，你需要：</p>
+<p><strong>知识要求</strong>:
+- 完成FreeRTOS快速入门和任务管理教程
+- 理解RTOS任务调度和状态转换
+- 了解消息队列的基本概念
+- 熟悉C语言指针和结构体</p>
+<p><strong>技能要求</strong>:
+- 能够创建和管理FreeRTOS任务
+- 会使用STM32CubeIDE或Keil MDK
+- 了解如何编译和调试程序</p>
+<p><strong>硬件准备</strong>:
+- STM32开发板(如STM32F4 Discovery)
+- ST-Link调试器
+- USB数据线
+- LED灯(用于演示,可选)</p>
+<h2 id="_3">准备工作</h2>
+<h3 id="_4">环境配置</h3>
+<p>本教程基于以下环境:</p>
+<p><strong>软件环境</strong>:
+- STM32CubeIDE v1.10+
+- FreeRTOS V10.3.1+
+- HAL库 v1.27+</p>
+<p><strong>硬件环境</strong>:
+- STM32F407VGT6开发板
+- 板载LED(用于演示)
+- 串口调试工具</p>
+<h3 id="freertos_1">FreeRTOS配置</h3>
+<p>确保在<code>FreeRTOSConfig.h</code>中启用队列相关配置:</p>
+<pre><code class="language-c">// 启用队列功能
+#define configUSE_QUEUE_SETS                1
+#define configQUEUE_REGISTRY_SIZE           10
+
+// 基本配置
+#define configUSE_PREEMPTION                1
+#define configTICK_RATE_HZ                  1000
+#define configMAX_PRIORITIES                5
+#define configTOTAL_HEAP_SIZE               15360
+</code></pre>
+<h3 id="_5">创建基础项目</h3>
+<p>如果你已经完成了前面的教程,可以直接使用之前的项目。否则:</p>
+<ol>
+<li>打开STM32CubeIDE,创建新的STM32项目</li>
+<li>在CubeMX中启用FreeRTOS(CMSIS_V1接口)</li>
+<li>配置系统时钟和串口(用于调试输出)</li>
+<li>生成代码并打开项目</li>
+</ol>
+<h2 id="_6">核心内容</h2>
+<h3 id="_7">队列的基本概念</h3>
+<p><strong>什么是队列?</strong></p>
+<p>队列(Queue)是FreeRTOS中用于任务间数据传递的核心机制。它是一个先进先出(FIFO)的数据结构,允许任务之间安全地传递数据。</p>
+<p><strong>队列的特点</strong>:
+- <strong>FIFO顺序</strong>: 先发送的消息先被接收
+- <strong>数据复制</strong>: 队列复制数据,不是传递指针
+- <strong>阻塞机制</strong>: 支持发送和接收阻塞
+- <strong>多任务安全</strong>: 自动处理并发访问
+- <strong>固定大小</strong>: 创建时确定队列长度和消息大小</p>
+<p><strong>队列结构示意</strong>:</p>
+<pre><code>队列头 → [消息1] [消息2] [消息3] [空] [空] ← 队列尾
+         ↑                              ↑
+       读取位置                      写入位置
+
+队列长度: 5
+消息大小: 4字节
+已用: 3个消息
+可用: 2个空位
+</code></pre>
+<p><strong>生活中的类比</strong>:</p>
+<p>想象一个邮局的邮箱:
+- 发件人投递信件(发送消息)
+- 信件按顺序排列(FIFO队列)
+- 收件人取出信件(接收消息)
+- 邮箱有容量限制(队列长度)
+- 邮箱满时需要等待(阻塞发送)
+- 邮箱空时需要等待(阻塞接收)</p>
+<h2 id="1">步骤1: 创建和使用队列</h2>
+<h3 id="11-api">1.1 队列创建API</h3>
+<p>FreeRTOS提供了两种队列创建方法:动态创建和静态创建。</p>
+<p><strong>动态创建队列 - xQueueCreate()</strong></p>
+<pre><code class="language-c">QueueHandle_t xQueueCreate(
+    UBaseType_t uxQueueLength,    // 队列长度(消息数量)
+    UBaseType_t uxItemSize        // 每个消息的大小(字节)
+);
+</code></pre>
+<p><strong>返回值</strong>:
+- 成功: 返回队列句柄
+- 失败: 返回NULL(内存不足)</p>
+<p><strong>完整示例</strong>:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 声明队列句柄
+QueueHandle_t xDataQueue;
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建队列
+    // 参数1: 队列长度 - 可以存储10个消息
+    // 参数2: 消息大小 - 每个消息4字节(uint32_t)
+    xDataQueue = xQueueCreate(10, sizeof(uint32_t));
+
+    if(xDataQueue != NULL)
+    {
+        printf(&quot;Queue created successfully\n&quot;);
+        printf(&quot;Queue length: 10\n&quot;);
+        printf(&quot;Item size: %d bytes\n&quot;, sizeof(uint32_t));
+
+        // 创建任务...
+        xTaskCreate(SenderTask, &quot;Sender&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(ReceiverTask, &quot;Receiver&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Failed to create queue - insufficient memory\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>代码说明</strong>:
+- <code>xQueueCreate()</code>从堆中分配内存
+- 队列长度决定可以缓存多少个消息
+- 消息大小必须是实际数据类型的大小
+- 创建失败通常是因为堆内存不足</p>
+<p><strong>内存计算</strong>:</p>
+<pre><code class="language-c">// 队列所需内存 ≈ 队列长度 × 消息大小 + 队列控制块大小
+// 示例: 10个uint32_t消息
+// 内存需求 ≈ 10 × 4 + sizeof(Queue_t) ≈ 40 + 80 = 120字节
+</code></pre>
+<h3 id="12">1.2 发送消息到队列</h3>
+<p>FreeRTOS提供了多个发送API,适用于不同场景。</p>
+<p><strong>发送到队列尾部 - xQueueSend()</strong></p>
+<pre><code class="language-c">BaseType_t xQueueSend(
+    QueueHandle_t xQueue,           // 队列句柄
+    const void *pvItemToQueue,      // 要发送的数据指针
+    TickType_t xTicksToWait         // 等待时间(时钟节拍)
+);
+</code></pre>
+<p><strong>返回值</strong>:
+- <code>pdTRUE</code>: 发送成功
+- <code>pdFALSE</code>: 发送失败(队列满且超时)</p>
+<p><strong>基本示例</strong>:</p>
+<pre><code class="language-c">void SenderTask(void *pvParameters)
+{
+    uint32_t ulValueToSend = 100;
+    BaseType_t xStatus;
+
+    while(1)
+    {
+        // 发送数据到队列
+        xStatus = xQueueSend(xDataQueue, &amp;ulValueToSend, pdMS_TO_TICKS(1000));
+
+        if(xStatus == pdTRUE)
+        {
+            printf(&quot;Data sent: %lu\n&quot;, ulValueToSend);
+            ulValueToSend++;
+        }
+        else
+        {
+            printf(&quot;Failed to send data - queue full\n&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+</code></pre>
+<p><strong>等待时间参数</strong>:</p>
+<pre><code class="language-c">// 不等待,立即返回
+xQueueSend(xQueue, &amp;data, 0);
+
+// 等待1秒
+xQueueSend(xQueue, &amp;data, pdMS_TO_TICKS(1000));
+
+// 永久等待
+xQueueSend(xQueue, &amp;data, portMAX_DELAY);
+</code></pre>
+<p><strong>发送到队列头部 - xQueueSendToFront()</strong></p>
+<pre><code class="language-c">// 发送消息到队列头部(插队)
+BaseType_t xQueueSendToFront(
+    QueueHandle_t xQueue,
+    const void *pvItemToQueue,
+    TickType_t xTicksToWait
+);
+
+// 用于紧急消息
+uint32_t ulUrgentData = 999;
+xQueueSendToFront(xDataQueue, &amp;ulUrgentData, 0);
+printf(&quot;Urgent message sent to front\n&quot;);
+</code></pre>
+<p><strong>在中断中发送 - xQueueSendFromISR()</strong></p>
+<pre><code class="language-c">// 中断安全的发送函数
+BaseType_t xQueueSendFromISR(
+    QueueHandle_t xQueue,
+    const void *pvItemToQueue,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+
+// 中断服务函数示例
+void EXTI0_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    if(__HAL_GPIO_EXTI_GET_IT(GPIO_PIN_0) != RESET)
+    {
+        __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+        uint32_t ulData = 888;
+
+        // 在中断中发送到队列
+        xQueueSendFromISR(xDataQueue, &amp;ulData, &amp;xHigherPriorityTaskWoken);
+
+        // 如果有更高优先级任务被唤醒,触发任务切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<p><strong>重要提示</strong>:
+- 在中断中必须使用<code>FromISR</code>版本的API
+- 不能在中断中使用阻塞等待(xTicksToWait必须为0)
+- 需要处理<code>pxHigherPriorityTaskWoken</code>参数</p>
+<h3 id="13">1.3 从队列接收消息</h3>
+<p><strong>接收消息 - xQueueReceive()</strong></p>
+<pre><code class="language-c">BaseType_t xQueueReceive(
+    QueueHandle_t xQueue,           // 队列句柄
+    void *pvBuffer,                 // 接收缓冲区指针
+    TickType_t xTicksToWait         // 等待时间
+);
+</code></pre>
+<p><strong>返回值</strong>:
+- <code>pdTRUE</code>: 接收成功
+- <code>pdFALSE</code>: 接收失败(队列空且超时)</p>
+<p><strong>基本示例</strong>:</p>
+<pre><code class="language-c">void ReceiverTask(void *pvParameters)
+{
+    uint32_t ulReceivedValue;
+    BaseType_t xStatus;
+
+    while(1)
+    {
+        // 从队列接收数据
+        xStatus = xQueueReceive(xDataQueue, &amp;ulReceivedValue, portMAX_DELAY);
+
+        if(xStatus == pdTRUE)
+        {
+            printf(&quot;Received data: %lu\n&quot;, ulReceivedValue);
+
+            // 处理接收到的数据
+            ProcessData(ulReceivedValue);
+        }
+        else
+        {
+            printf(&quot;Failed to receive data\n&quot;);
+        }
+    }
+}
+</code></pre>
+<p><strong>窥视队列 - xQueuePeek()</strong></p>
+<pre><code class="language-c">// 查看队列头部的消息,但不移除
+BaseType_t xQueuePeek(
+    QueueHandle_t xQueue,
+    void *pvBuffer,
+    TickType_t xTicksToWait
+);
+
+// 示例:查看但不取出消息
+uint32_t ulPeekedValue;
+if(xQueuePeek(xDataQueue, &amp;ulPeekedValue, 0) == pdTRUE)
+{
+    printf(&quot;Next message: %lu (not removed)\n&quot;, ulPeekedValue);
+}
+</code></pre>
+<p><strong>在中断中接收 - xQueueReceiveFromISR()</strong></p>
+<pre><code class="language-c">void UART_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uint8_t ucReceivedByte;
+
+    if(__HAL_UART_GET_FLAG(&amp;huart1, UART_FLAG_RXNE))
+    {
+        // 在中断中从队列接收
+        if(xQueueReceiveFromISR(xRxQueue, &amp;ucReceivedByte, &amp;xHigherPriorityTaskWoken) == pdTRUE)
+        {
+            // 处理接收到的数据
+        }
+
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+</code></pre>
+<h3 id="14">1.4 完整示例:基本队列通信</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+#include &lt;stdio.h&gt;
+
+// 队列句柄
+QueueHandle_t xDataQueue;
+
+// 发送任务
+void vSenderTask(void *pvParameters)
+{
+    uint32_t ulCounter = 0;
+    BaseType_t xStatus;
+
+    printf(&quot;[Sender] Task started\n&quot;);
+
+    while(1)
+    {
+        ulCounter++;
+
+        printf(&quot;[Sender] Sending: %lu\n&quot;, ulCounter);
+
+        // 发送数据到队列,等待最多1秒
+        xStatus = xQueueSend(xDataQueue, &amp;ulCounter, pdMS_TO_TICKS(1000));
+
+        if(xStatus == pdTRUE)
+        {
+            printf(&quot;[Sender] Sent successfully\n&quot;);
+        }
+        else
+        {
+            printf(&quot;[Sender] Queue full, send failed\n&quot;);
+        }
+
+        // 每500ms发送一次
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+// 接收任务
+void vReceiverTask(void *pvParameters)
+{
+    uint32_t ulReceivedValue;
+    BaseType_t xStatus;
+
+    printf(&quot;[Receiver] Task started\n&quot;);
+
+    while(1)
+    {
+        // 等待接收数据
+        xStatus = xQueueReceive(xDataQueue, &amp;ulReceivedValue, portMAX_DELAY);
+
+        if(xStatus == pdTRUE)
+        {
+            printf(&quot;[Receiver] Received: %lu\n&quot;, ulReceivedValue);
+
+            // 模拟数据处理(1秒)
+            vTaskDelay(pdMS_TO_TICKS(1000));
+
+            printf(&quot;[Receiver] Processing complete\n\n&quot;);
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_USART2_UART_Init();
+
+    printf(&quot;\n=== FreeRTOS Queue Example ===\n\n&quot;);
+
+    // 创建队列(长度10,每个消息4字节)
+    xDataQueue = xQueueCreate(10, sizeof(uint32_t));
+
+    if(xDataQueue != NULL)
+    {
+        printf(&quot;Queue created: length=10, item_size=4 bytes\n\n&quot;);
+
+        // 创建任务
+        xTaskCreate(vSenderTask, &quot;Sender&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(vReceiverTask, &quot;Receiver&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        printf(&quot;Starting scheduler...\n\n&quot;);
+        vTaskStartScheduler();
+    }
+    else
+    {
+        printf(&quot;Failed to create queue\n&quot;);
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>=== FreeRTOS Queue Example ===
+
+Queue created: length=10, item_size=4 bytes
+
+Starting scheduler...
+
+[Sender] Task started
+[Receiver] Task started
+[Sender] Sending: 1
+[Sender] Sent successfully
+[Receiver] Received: 1
+[Sender] Sending: 2
+[Sender] Sent successfully
+[Sender] Sending: 3
+[Sender] Sent successfully
+[Receiver] Processing complete
+
+[Receiver] Received: 2
+[Sender] Sending: 4
+[Sender] Sent successfully
+</code></pre>
+<p><strong>代码说明</strong>:
+- 发送任务每500ms发送一个数据
+- 接收任务每1000ms处理一个数据
+- 队列自动缓存未处理的数据
+- 当队列满时,发送任务会阻塞等待</p>
+<h2 id="2">步骤2: 传递复杂数据结构</h2>
+<h3 id="21">2.1 传递结构体</h3>
+<p>队列可以传递任意类型的数据,包括结构体:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 定义传感器数据结构
+typedef struct
+{
+    float fTemperature;
+    float fHumidity;
+    uint32_t ulTimestamp;
+    uint8_t ucSensorID;
+} SensorData_t;
+
+// 队列句柄
+QueueHandle_t xSensorQueue;
+
+// 传感器任务
+void vSensorTask(void *pvParameters)
+{
+    uint8_t ucSensorID = (uint8_t)(uint32_t)pvParameters;
+    SensorData_t xData;
+
+    while(1)
+    {
+        // 读取传感器数据
+        xData.fTemperature = 25.5f + (ucSensorID * 0.5f);
+        xData.fHumidity = 60.0f + (ucSensorID * 2.0f);
+        xData.ulTimestamp = xTaskGetTickCount();
+        xData.ucSensorID = ucSensorID;
+
+        printf(&quot;[Sensor %d] Temp=%.1f°C, Humidity=%.1f%%\n&quot;,
+               ucSensorID, xData.fTemperature, xData.fHumidity);
+
+        // 发送结构体到队列
+        if(xQueueSend(xSensorQueue, &amp;xData, pdMS_TO_TICKS(100)) == pdTRUE)
+        {
+            printf(&quot;[Sensor %d] Data sent to queue\n&quot;, ucSensorID);
+        }
+        else
+        {
+            printf(&quot;[Sensor %d] Queue full!\n&quot;, ucSensorID);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+// 数据处理任务
+void vProcessTask(void *pvParameters)
+{
+    SensorData_t xReceivedData;
+
+    while(1)
+    {
+        // 接收数据
+        if(xQueueReceive(xSensorQueue, &amp;xReceivedData, portMAX_DELAY) == pdTRUE)
+        {
+            printf(&quot;\n[Process] Received from Sensor %d:\n&quot;, xReceivedData.ucSensorID);
+            printf(&quot;          Temperature: %.1f°C\n&quot;, xReceivedData.fTemperature);
+            printf(&quot;          Humidity: %.1f%%\n&quot;, xReceivedData.fHumidity);
+            printf(&quot;          Timestamp: %lu ms\n\n&quot;, xReceivedData.ulTimestamp);
+
+            // 处理数据
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建队列(传递结构体)
+    xSensorQueue = xQueueCreate(5, sizeof(SensorData_t));
+
+    if(xSensorQueue != NULL)
+    {
+        // 创建多个传感器任务
+        xTaskCreate(vSensorTask, &quot;Sensor1&quot;, 256, (void *)1, 2, NULL);
+        xTaskCreate(vSensorTask, &quot;Sensor2&quot;, 256, (void *)2, 2, NULL);
+        xTaskCreate(vSensorTask, &quot;Sensor3&quot;, 256, (void *)3, 2, NULL);
+
+        // 创建处理任务
+        xTaskCreate(vProcessTask, &quot;Process&quot;, 256, NULL, 2, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>[Sensor 1] Temp=26.0°C, Humidity=62.0%
+[Sensor 1] Data sent to queue
+
+[Process] Received from Sensor 1:
+          Temperature: 26.0°C
+          Humidity: 62.0%
+          Timestamp: 1000 ms
+
+[Sensor 2] Temp=26.5°C, Humidity=64.0%
+[Sensor 2] Data sent to queue
+[Sensor 3] Temp=27.0°C, Humidity=66.0%
+[Sensor 3] Data sent to queue
+
+[Process] Received from Sensor 2:
+          Temperature: 26.5°C
+          Humidity: 64.0%
+          Timestamp: 1000 ms
+</code></pre>
+<p><strong>代码说明</strong>:
+- 定义传感器数据结构体
+- 多个传感器任务发送数据到同一个队列
+- 处理任务按顺序接收和处理数据
+- 队列自动管理数据的存储和顺序</p>
+<h3 id="22">2.2 传递指针的注意事项</h3>
+<p>⚠️ <strong>重要提示</strong>: 传递指针时要特别小心!</p>
+<p><strong>错误示例</strong>:</p>
+<pre><code class="language-c">// ❌ 错误:传递局部变量的指针
+void vBadSenderTask(void *pvParameters)
+{
+    while(1)
+    {
+        uint32_t ulData = 100;  // 局部变量
+        uint32_t *pxData = &amp;ulData;
+
+        // 危险!ulData在函数返回后失效
+        xQueueSend(xPtrQueue, &amp;pxData, 0);
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<p><strong>正确示例1: 传递动态分配的内存</strong></p>
+<pre><code class="language-c">// ✅ 正确:传递动态分配的内存指针
+void vGoodSenderTask(void *pvParameters)
+{
+    while(1)
+    {
+        // 动态分配内存
+        uint32_t *pulData = (uint32_t *)pvPortMalloc(sizeof(uint32_t));
+
+        if(pulData != NULL)
+        {
+            *pulData = 100;
+
+            // 发送指针
+            xQueueSend(xPtrQueue, &amp;pulData, 0);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void vReceiverTask(void *pvParameters)
+{
+    uint32_t *pulReceivedPtr;
+
+    while(1)
+    {
+        if(xQueueReceive(xPtrQueue, &amp;pulReceivedPtr, portMAX_DELAY) == pdTRUE)
+        {
+            // 使用数据
+            printf(&quot;Received: %lu\n&quot;, *pulReceivedPtr);
+
+            // 释放内存
+            vPortFree(pulReceivedPtr);
+        }
+    }
+}
+</code></pre>
+<p><strong>正确示例2: 传递静态缓冲区的指针</strong></p>
+<pre><code class="language-c">// ✅ 正确:传递静态缓冲区的指针
+#define BUFFER_COUNT 5
+static uint8_t ucBuffers[BUFFER_COUNT][256];
+
+void vSenderTask(void *pvParameters)
+{
+    static uint8_t ucBufferIndex = 0;
+
+    while(1)
+    {
+        // 使用静态缓冲区
+        uint8_t *pucBuffer = ucBuffers[ucBufferIndex];
+        ucBufferIndex = (ucBufferIndex + 1) % BUFFER_COUNT;
+
+        // 填充数据
+        sprintf((char *)pucBuffer, &quot;Message %d&quot;, ucBufferIndex);
+
+        // 发送指针
+        xQueueSend(xPtrQueue, &amp;pucBuffer, 0);
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<h2 id="3">步骤3: 队列管理和查询</h2>
+<h3 id="31">3.1 查询队列状态</h3>
+<pre><code class="language-c">// 获取队列中等待的消息数量
+UBaseType_t uxQueueMessagesWaiting(QueueHandle_t xQueue);
+
+// 获取队列中可用空间数量
+UBaseType_t uxQueueSpacesAvailable(QueueHandle_t xQueue);
+
+// 检查队列是否为空(中断安全)
+BaseType_t xQueueIsQueueEmptyFromISR(QueueHandle_t xQueue);
+
+// 检查队列是否已满(中断安全)
+BaseType_t xQueueIsQueueFullFromISR(QueueHandle_t xQueue);
+</code></pre>
+<p><strong>监控任务示例</strong>:</p>
+<pre><code class="language-c">void vMonitorTask(void *pvParameters)
+{
+    UBaseType_t uxWaiting, uxAvailable;
+
+    while(1)
+    {
+        uxWaiting = uxQueueMessagesWaiting(xDataQueue);
+        uxAvailable = uxQueueSpacesAvailable(xDataQueue);
+
+        printf(&quot;\n[Monitor] Queue status:\n&quot;);
+        printf(&quot;          Messages waiting: %u\n&quot;, uxWaiting);
+        printf(&quot;          Spaces available: %u\n&quot;, uxAvailable);
+        printf(&quot;          Usage: %u%%\n\n&quot;, (uxWaiting * 100) / (uxWaiting + uxAvailable));
+
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
+</code></pre>
+<h3 id="32">3.2 重置和删除队列</h3>
+<pre><code class="language-c">// 清空队列中的所有消息
+BaseType_t xQueueReset(QueueHandle_t xQueue);
+
+// 删除队列,释放内存
+void vQueueDelete(QueueHandle_t xQueue);
+
+// 示例
+void vCleanupTask(void *pvParameters)
+{
+    // 使用队列...
+
+    // 清空队列
+    xQueueReset(xDataQueue);
+    printf(&quot;Queue cleared\n&quot;);
+
+    // 不再需要时删除
+    vQueueDelete(xDataQueue);
+    printf(&quot;Queue deleted\n&quot;);
+
+    vTaskDelete(NULL);
+}
+</code></pre>
+<h2 id="4-queue-sets">步骤4: 队列集(Queue Sets)</h2>
+<p>队列集允许任务同时等待多个队列,当任何一个队列有数据时被唤醒。</p>
+<h3 id="41">4.1 创建和使用队列集</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 队列句柄
+QueueHandle_t xQueue1, xQueue2, xQueue3;
+QueueSetHandle_t xQueueSet;
+
+void vSetupQueues(void)
+{
+    // 创建3个队列
+    xQueue1 = xQueueCreate(5, sizeof(uint32_t));
+    xQueue2 = xQueueCreate(5, sizeof(uint32_t));
+    xQueue3 = xQueueCreate(5, sizeof(uint32_t));
+
+    // 创建队列集(总容量 = 所有队列长度之和)
+    xQueueSet = xQueueCreateSet(5 + 5 + 5);
+
+    // 将队列添加到队列集
+    xQueueAddToSet(xQueue1, xQueueSet);
+    xQueueAddToSet(xQueue2, xQueueSet);
+    xQueueAddToSet(xQueue3, xQueueSet);
+}
+
+// 发送任务1
+void vSender1Task(void *pvParameters)
+{
+    uint32_t ulValue = 100;
+
+    while(1)
+    {
+        xQueueSend(xQueue1, &amp;ulValue, portMAX_DELAY);
+        printf(&quot;[Sender1] Sent: %lu\n&quot;, ulValue);
+        ulValue++;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 发送任务2
+void vSender2Task(void *pvParameters)
+{
+    uint32_t ulValue = 200;
+
+    while(1)
+    {
+        xQueueSend(xQueue2, &amp;ulValue, portMAX_DELAY);
+        printf(&quot;[Sender2] Sent: %lu\n&quot;, ulValue);
+        ulValue++;
+        vTaskDelay(pdMS_TO_TICKS(1500));
+    }
+}
+
+// 发送任务3
+void vSender3Task(void *pvParameters)
+{
+    uint32_t ulValue = 300;
+
+    while(1)
+    {
+        xQueueSend(xQueue3, &amp;ulValue, portMAX_DELAY);
+        printf(&quot;[Sender3] Sent: %lu\n&quot;, ulValue);
+        ulValue++;
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
+// 接收任务(使用队列集)
+void vReceiverTask(void *pvParameters)
+{
+    QueueSetMemberHandle_t xActivatedMember;
+    uint32_t ulReceivedValue;
+
+    while(1)
+    {
+        // 等待队列集中的任何队列有数据
+        xActivatedMember = xQueueSelectFromSet(xQueueSet, portMAX_DELAY);
+
+        // 确定是哪个队列有数据
+        if(xActivatedMember == xQueue1)
+        {
+            xQueueReceive(xQueue1, &amp;ulReceivedValue, 0);
+            printf(&quot;[Receiver] From Queue1: %lu\n\n&quot;, ulReceivedValue);
+        }
+        else if(xActivatedMember == xQueue2)
+        {
+            xQueueReceive(xQueue2, &amp;ulReceivedValue, 0);
+            printf(&quot;[Receiver] From Queue2: %lu\n\n&quot;, ulReceivedValue);
+        }
+        else if(xActivatedMember == xQueue3)
+        {
+            xQueueReceive(xQueue3, &amp;ulReceivedValue, 0);
+            printf(&quot;[Receiver] From Queue3: %lu\n\n&quot;, ulReceivedValue);
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 设置队列和队列集
+    vSetupQueues();
+
+    // 创建任务
+    xTaskCreate(vSender1Task, &quot;Sender1&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(vSender2Task, &quot;Sender2&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(vSender3Task, &quot;Sender3&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(vReceiverTask, &quot;Receiver&quot;, 256, NULL, 3, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>运行结果</strong>:</p>
+<pre><code>[Sender1] Sent: 100
+[Receiver] From Queue1: 100
+
+[Sender2] Sent: 200
+[Receiver] From Queue2: 200
+
+[Sender1] Sent: 101
+[Receiver] From Queue1: 101
+
+[Sender3] Sent: 300
+[Receiver] From Queue3: 300
+
+[Sender2] Sent: 201
+[Receiver] From Queue2: 201
+</code></pre>
+<p><strong>代码说明</strong>:
+- 创建3个独立的队列
+- 创建队列集并添加所有队列
+- 接收任务使用<code>xQueueSelectFromSet()</code>等待任何队列
+- 根据返回的句柄确定是哪个队列有数据</p>
+<h3 id="42">4.2 队列集的应用场景</h3>
+<p><strong>场景1: 多源数据采集</strong></p>
+<pre><code class="language-c">// 同时监听多个传感器的数据
+QueueHandle_t xTempQueue, xHumidityQueue, xPressureQueue;
+QueueSetHandle_t xSensorSet;
+
+// 统一的数据处理任务
+void vDataProcessTask(void *pvParameters)
+{
+    QueueSetMemberHandle_t xActivatedQueue;
+
+    while(1)
+    {
+        xActivatedQueue = xQueueSelectFromSet(xSensorSet, portMAX_DELAY);
+
+        if(xActivatedQueue == xTempQueue)
+        {
+            // 处理温度数据
+        }
+        else if(xActivatedQueue == xHumidityQueue)
+        {
+            // 处理湿度数据
+        }
+        else if(xActivatedQueue == xPressureQueue)
+        {
+            // 处理压力数据
+        }
+    }
+}
+</code></pre>
+<p><strong>场景2: 多通道通信</strong></p>
+<pre><code class="language-c">// 同时监听多个通信通道
+QueueHandle_t xUartQueue, xSpiQueue, xI2cQueue;
+QueueSetHandle_t xCommSet;
+
+// 统一的通信处理任务
+void vCommHandlerTask(void *pvParameters)
+{
+    QueueSetMemberHandle_t xActivatedQueue;
+
+    while(1)
+    {
+        xActivatedQueue = xQueueSelectFromSet(xCommSet, portMAX_DELAY);
+
+        // 处理来自不同通道的数据
+    }
+}
+</code></pre>
+<h2 id="5-mailbox">步骤5: 邮箱(Mailbox)</h2>
+<p>邮箱是一种特殊的队列,长度为1,用于传递单个数据项。</p>
+<h3 id="51">5.1 邮箱的概念</h3>
+<p><strong>邮箱 vs 队列</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>邮箱</th>
+<th>队列</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>长度</td>
+<td>1</td>
+<td>可配置</td>
+</tr>
+<tr>
+<td>覆盖</td>
+<td>可以覆盖旧数据</td>
+<td>不能覆盖</td>
+</tr>
+<tr>
+<td>用途</td>
+<td>保存最新状态</td>
+<td>缓存多个消息</td>
+</tr>
+<tr>
+<td>典型场景</td>
+<td>状态更新</td>
+<td>事件序列</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52">5.2 使用队列实现邮箱</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 系统状态结构
+typedef struct
+{
+    uint32_t ulCpuUsage;
+    uint32_t ulMemoryUsage;
+    uint32_t ulTemperature;
+    uint32_t ulTimestamp;
+} SystemStatus_t;
+
+// 邮箱(长度为1的队列)
+QueueHandle_t xStatusMailbox;
+
+// 状态更新任务
+void vStatusUpdateTask(void *pvParameters)
+{
+    SystemStatus_t xStatus;
+
+    while(1)
+    {
+        // 读取系统状态
+        xStatus.ulCpuUsage = GetCpuUsage();
+        xStatus.ulMemoryUsage = GetMemoryUsage();
+        xStatus.ulTemperature = GetTemperature();
+        xStatus.ulTimestamp = xTaskGetTickCount();
+
+        // 覆盖式发送(如果邮箱满,覆盖旧数据)
+        xQueueOverwrite(xStatusMailbox, &amp;xStatus);
+
+        printf(&quot;[Update] Status updated: CPU=%lu%%, Mem=%lu%%, Temp=%lu°C\n&quot;,
+               xStatus.ulCpuUsage, xStatus.ulMemoryUsage, xStatus.ulTemperature);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 状态显示任务
+void vStatusDisplayTask(void *pvParameters)
+{
+    SystemStatus_t xStatus;
+
+    while(1)
+    {
+        // 读取最新状态(不移除)
+        if(xQueuePeek(xStatusMailbox, &amp;xStatus, portMAX_DELAY) == pdTRUE)
+        {
+            printf(&quot;\n[Display] Current Status:\n&quot;);
+            printf(&quot;          CPU Usage: %lu%%\n&quot;, xStatus.ulCpuUsage);
+            printf(&quot;          Memory Usage: %lu%%\n&quot;, xStatus.ulMemoryUsage);
+            printf(&quot;          Temperature: %lu°C\n&quot;, xStatus.ulTemperature);
+            printf(&quot;          Timestamp: %lu ms\n\n&quot;, xStatus.ulTimestamp);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(3000));
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建邮箱(长度为1的队列)
+    xStatusMailbox = xQueueCreate(1, sizeof(SystemStatus_t));
+
+    if(xStatusMailbox != NULL)
+    {
+        // 创建任务
+        xTaskCreate(vStatusUpdateTask, &quot;Update&quot;, 256, NULL, 2, NULL);
+        xTaskCreate(vStatusDisplayTask, &quot;Display&quot;, 256, NULL, 1, NULL);
+
+        // 启动调度器
+        vTaskStartScheduler();
+    }
+
+    while(1);
+}
+</code></pre>
+<p><strong>邮箱专用API</strong>:</p>
+<pre><code class="language-c">// 覆盖式发送(如果邮箱满,覆盖旧数据)
+BaseType_t xQueueOverwrite(
+    QueueHandle_t xQueue,
+    const void *pvItemToQueue
+);
+
+// 在中断中覆盖式发送
+BaseType_t xQueueOverwriteFromISR(
+    QueueHandle_t xQueue,
+    const void *pvItemToQueue,
+    BaseType_t *pxHigherPriorityTaskWoken
+);
+</code></pre>
+<p><strong>代码说明</strong>:
+- 邮箱始终保存最新的状态
+- 使用<code>xQueueOverwrite()</code>覆盖旧数据
+- 使用<code>xQueuePeek()</code>读取但不移除数据
+- 适合状态监控和数据共享场景</p>
+<h2 id="_8">实践示例</h2>
+<h3 id="1_1">示例1: 中断与任务通信</h3>
+<p>使用队列实现UART中断与任务之间的数据传递:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 队列句柄
+QueueHandle_t xUartRxQueue;
+
+// UART中断服务函数
+void USART2_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 检查接收中断
+    if(__HAL_UART_GET_FLAG(&amp;huart2, UART_FLAG_RXNE))
+    {
+        // 读取数据
+        uint8_t ucData = (uint8_t)(huart2.Instance-&gt;DR &amp; 0xFF);
+
+        // 发送到队列
+        xQueueSendFromISR(xUartRxQueue, &amp;ucData, &amp;xHigherPriorityTaskWoken);
+
+        // 触发任务切换
+        portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+    }
+}
+
+// UART处理任务
+void vUartProcessTask(void *pvParameters)
+{
+    uint8_t ucReceivedByte;
+    uint8_t ucBuffer[256];
+    uint8_t ucIndex = 0;
+
+    while(1)
+    {
+        // 接收数据
+        if(xQueueReceive(xUartRxQueue, &amp;ucReceivedByte, portMAX_DELAY) == pdTRUE)
+        {
+            // 处理接收到的字节
+            if(ucReceivedByte == '\n' || ucReceivedByte == '\r')
+            {
+                // 收到换行符,处理完整命令
+                ucBuffer[ucIndex] = '\0';
+                printf(&quot;[UART] Received command: %s\n&quot;, ucBuffer);
+
+                // 处理命令
+                ProcessCommand((char *)ucBuffer);
+
+                // 重置缓冲区
+                ucIndex = 0;
+            }
+            else if(ucIndex &lt; sizeof(ucBuffer) - 1)
+            {
+                // 添加到缓冲区
+                ucBuffer[ucIndex++] = ucReceivedByte;
+            }
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+    MX_USART2_UART_Init();
+
+    // 创建队列(缓存64个字节)
+    xUartRxQueue = xQueueCreate(64, sizeof(uint8_t));
+
+    // 创建处理任务
+    xTaskCreate(vUartProcessTask, &quot;UART&quot;, 512, NULL, 3, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>代码说明</strong>:
+- 中断服务函数快速将数据放入队列
+- 任务从队列中取出数据进行处理
+- 避免在中断中进行复杂处理
+- 提高系统响应性和可靠性</p>
+<h3 id="2-">示例2: 生产者-消费者模式</h3>
+<p>实现经典的生产者-消费者模式:</p>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+
+// 数据结构
+typedef struct
+{
+    uint32_t ulID;
+    uint32_t ulValue;
+    uint32_t ulTimestamp;
+} DataItem_t;
+
+// 队列句柄
+QueueHandle_t xProductionQueue;
+
+// 生产者任务
+void vProducerTask(void *pvParameters)
+{
+    uint32_t ulProducerID = (uint32_t)pvParameters;
+    uint32_t ulItemCount = 0;
+    DataItem_t xItem;
+
+    while(1)
+    {
+        // 生产数据
+        xItem.ulID = ulProducerID;
+        xItem.ulValue = ulItemCount++;
+        xItem.ulTimestamp = xTaskGetTickCount();
+
+        printf(&quot;[Producer %lu] Producing item %lu\n&quot;, ulProducerID, xItem.ulValue);
+
+        // 发送到队列
+        if(xQueueSend(xProductionQueue, &amp;xItem, pdMS_TO_TICKS(1000)) == pdTRUE)
+        {
+            printf(&quot;[Producer %lu] Item %lu sent\n&quot;, ulProducerID, xItem.ulValue);
+        }
+        else
+        {
+            printf(&quot;[Producer %lu] Queue full, item %lu discarded\n&quot;, 
+                   ulProducerID, xItem.ulValue);
+        }
+
+        // 生产速度
+        vTaskDelay(pdMS_TO_TICKS(300 + (ulProducerID * 100)));
+    }
+}
+
+// 消费者任务
+void vConsumerTask(void *pvParameters)
+{
+    uint32_t ulConsumerID = (uint32_t)pvParameters;
+    DataItem_t xItem;
+
+    while(1)
+    {
+        // 从队列获取数据
+        if(xQueueReceive(xProductionQueue, &amp;xItem, portMAX_DELAY) == pdTRUE)
+        {
+            printf(&quot;[Consumer %lu] Consuming from Producer %lu: value=%lu, time=%lu\n&quot;,
+                   ulConsumerID, xItem.ulID, xItem.ulValue, xItem.ulTimestamp);
+
+            // 模拟消费处理
+            vTaskDelay(pdMS_TO_TICKS(500));
+
+            printf(&quot;[Consumer %lu] Item processed\n\n&quot;, ulConsumerID);
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建队列
+    xProductionQueue = xQueueCreate(10, sizeof(DataItem_t));
+
+    // 创建3个生产者任务
+    xTaskCreate(vProducerTask, &quot;Producer1&quot;, 256, (void *)1, 2, NULL);
+    xTaskCreate(vProducerTask, &quot;Producer2&quot;, 256, (void *)2, 2, NULL);
+    xTaskCreate(vProducerTask, &quot;Producer3&quot;, 256, (void *)3, 2, NULL);
+
+    // 创建2个消费者任务
+    xTaskCreate(vConsumerTask, &quot;Consumer1&quot;, 256, (void *)1, 2, NULL);
+    xTaskCreate(vConsumerTask, &quot;Consumer2&quot;, 256, (void *)2, 2, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<p><strong>代码说明</strong>:
+- 多个生产者任务生产数据
+- 多个消费者任务消费数据
+- 队列自动管理数据的缓冲和同步
+- 实现了解耦和负载均衡</p>
+<h2 id="_9">验证</h2>
+<h3 id="_10">验证方法</h3>
+<ol>
+<li><strong>编译项目</strong>
+   ```bash
+   # 在STM32CubeIDE中
+   Project → Build Project</li>
+</ol>
+<p># 检查编译输出
+   Build Finished. 0 errors, 0 warnings.
+   ```</p>
+<ol start="2">
+<li>
+<p><strong>下载到开发板</strong>
+   - 连接开发板到电脑
+   - 点击"Debug"或"Run"按钮
+   - 程序自动下载并运行</p>
+</li>
+<li>
+<p><strong>查看串口输出</strong>
+   - 打开串口调试工具
+   - 配置: 115200, 8N1
+   - 观察任务执行和队列操作的输出</p>
+</li>
+</ol>
+<h3 id="_11">预期结果</h3>
+<p><strong>基本队列通信</strong>:
+- ✅ 发送任务成功发送数据
+- ✅ 接收任务按顺序接收数据
+- ✅ 队列自动缓存数据
+- ✅ 队列满时发送任务阻塞</p>
+<p><strong>结构体传递</strong>:
+- ✅ 多个传感器任务发送数据
+- ✅ 处理任务正确接收完整结构体
+- ✅ 数据内容完整无误
+- ✅ 按FIFO顺序处理</p>
+<p><strong>队列集</strong>:
+- ✅ 接收任务能够监听多个队列
+- ✅ 正确识别数据来源
+- ✅ 按到达顺序处理数据</p>
+<p><strong>中断通信</strong>:
+- ✅ 中断快速将数据放入队列
+- ✅ 任务从队列取出数据处理
+- ✅ 系统响应及时
+- ✅ 无数据丢失</p>
+<h3 id="_12">测试要点</h3>
+<ol>
+<li>
+<p><strong>功能测试</strong>
+   - [ ] 队列创建成功
+   - [ ] 发送和接收工作正常
+   - [ ] 数据传递正确
+   - [ ] 阻塞机制工作正常
+   - [ ] 队列集功能正常</p>
+</li>
+<li>
+<p><strong>边界测试</strong>
+   - [ ] 队列满时发送阻塞
+   - [ ] 队列空时接收阻塞
+   - [ ] 超时机制工作正常
+   - [ ] 队列重置正确</p>
+</li>
+<li>
+<p><strong>性能测试</strong>
+   - [ ] 数据传递及时
+   - [ ] 无数据丢失
+   - [ ] 系统响应流畅
+   - [ ] 内存使用合理</p>
+</li>
+</ol>
+<h2 id="_13">故障排除</h2>
+<h3 id="1_2">问题1: 队列创建失败</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">xDataQueue = xQueueCreate(10, sizeof(uint32_t));
+if(xDataQueue == NULL) {
+    printf(&quot;Failed to create queue\n&quot;);
+}
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 堆内存不足
+2. 队列长度或消息大小过大
+3. FreeRTOS配置错误</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 增加堆大小(FreeRTOSConfig.h)
+#define configTOTAL_HEAP_SIZE  ((size_t)(20 * 1024))  // 增加到20KB
+
+// 2. 减小队列大小
+xDataQueue = xQueueCreate(5, sizeof(uint32_t));  // 减小长度
+
+// 3. 检查剩余堆空间
+size_t xFreeHeap = xPortGetFreeHeapSize();
+printf(&quot;Free heap: %u bytes\n&quot;, xFreeHeap);
+
+// 4. 计算队列所需内存
+size_t xQueueSize = 10 * sizeof(uint32_t) + sizeof(StaticQueue_t);
+printf(&quot;Queue needs: %u bytes\n&quot;, xQueueSize);
+</code></pre>
+<h3 id="2_1">问题2: 数据接收不正确</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 发送的数据和接收的数据不一致
+uint32_t ulSent = 100;
+xQueueSend(xQueue, &amp;ulSent, 0);
+
+uint32_t ulReceived;
+xQueueReceive(xQueue, &amp;ulReceived, 0);
+printf(&quot;Received: %lu\n&quot;, ulReceived);  // 输出错误的值
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 队列消息大小设置错误
+2. 数据类型不匹配
+3. 指针使用错误</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 确保消息大小正确
+// ❌ 错误
+xQueue = xQueueCreate(10, sizeof(uint32_t *));  // 指针大小
+// ✅ 正确
+xQueue = xQueueCreate(10, sizeof(uint32_t));    // 数据大小
+
+// 2. 确保数据类型匹配
+typedef struct {
+    uint32_t ulValue;
+    float fData;
+} MyData_t;
+
+MyData_t xSendData = {100, 25.5f};
+MyData_t xRecvData;
+
+xQueueSend(xQueue, &amp;xSendData, 0);
+xQueueReceive(xQueue, &amp;xRecvData, 0);
+
+// 3. 正确使用指针
+// ❌ 错误: 传递局部变量指针
+void BadFunction(void) {
+    uint32_t ulData = 100;
+    xQueueSend(xQueue, &amp;ulData, 0);  // ulData在函数返回后失效
+}
+
+// ✅ 正确: 传递数据本身
+void GoodFunction(void) {
+    uint32_t ulData = 100;
+    xQueueSend(xQueue, &amp;ulData, 0);  // 队列复制数据
+}
+</code></pre>
+<h3 id="3_1">问题3: 任务永久阻塞</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 任务一直等待,永不返回
+xQueueReceive(xQueue, &amp;xData, portMAX_DELAY);
+printf(&quot;This never prints\n&quot;);
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 没有任务发送数据
+2. 队列句柄错误
+3. 死锁情况</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 使用超时等待
+if(xQueueReceive(xQueue, &amp;xData, pdMS_TO_TICKS(5000)) == pdTRUE) {
+    printf(&quot;Received: %lu\n&quot;, xData);
+} else {
+    printf(&quot;Timeout waiting for data\n&quot;);
+    // 错误处理
+}
+
+// 2. 检查队列句柄
+if(xQueue == NULL) {
+    printf(&quot;Queue handle is NULL!\n&quot;);
+    return;
+}
+
+// 3. 添加调试输出
+printf(&quot;Waiting for data...\n&quot;);
+xQueueReceive(xQueue, &amp;xData, portMAX_DELAY);
+printf(&quot;Data received\n&quot;);
+
+// 4. 检查队列状态
+UBaseType_t uxWaiting = uxQueueMessagesWaiting(xQueue);
+printf(&quot;Messages in queue: %u\n&quot;, uxWaiting);
+</code></pre>
+<h3 id="4">问题4: 数据丢失</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 发送了10个数据,但只接收到5个
+for(int i = 0; i &lt; 10; i++) {
+    xQueueSend(xQueue, &amp;i, 0);  // 部分发送失败
+}
+</code></pre>
+<p><strong>可能原因</strong>:
+1. 队列容量不足
+2. 发送超时时间为0
+3. 接收速度慢于发送速度</p>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 1. 增加队列容量
+xQueue = xQueueCreate(20, sizeof(uint32_t));  // 增加容量
+
+// 2. 使用超时等待
+for(int i = 0; i &lt; 10; i++) {
+    if(xQueueSend(xQueue, &amp;i, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        printf(&quot;Failed to send data %d\n&quot;, i);
+    }
+}
+
+// 3. 检查发送结果
+BaseType_t xResult = xQueueSend(xQueue, &amp;xData, 0);
+if(xResult != pdTRUE) {
+    printf(&quot;Queue full, data lost\n&quot;);
+    // 记录丢失的数据
+}
+
+// 4. 监控队列状态
+UBaseType_t uxAvailable = uxQueueSpacesAvailable(xQueue);
+if(uxAvailable == 0) {
+    printf(&quot;Warning: Queue is full!\n&quot;);
+}
+</code></pre>
+<h3 id="5-api">问题5: 中断中使用错误的API</h3>
+<p><strong>现象</strong>:</p>
+<pre><code class="language-c">// 在中断中使用普通API(错误)
+void USART2_IRQHandler(void) {
+    uint8_t ucData = UART_ReceiveData();
+    xQueueSend(xQueue, &amp;ucData, 0);  // ❌ 错误!
+}
+</code></pre>
+<p><strong>解决方法</strong>:</p>
+<pre><code class="language-c">// 在中断中必须使用FromISR版本的API
+void USART2_IRQHandler(void) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uint8_t ucData = UART_ReceiveData();
+
+    // ✅ 正确: 使用FromISR版本
+    xQueueSendFromISR(xQueue, &amp;ucData, &amp;xHigherPriorityTaskWoken);
+
+    // 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<h2 id="_14">总结</h2>
+<p>通过本教程,你学习了:</p>
+<ul>
+<li>✅ FreeRTOS队列的工作原理和应用场景</li>
+<li>✅ 队列创建和配置的方法</li>
+<li>✅ 队列发送和接收API的使用</li>
+<li>✅ 队列的阻塞机制和超时处理</li>
+<li>✅ 队列集的使用方法</li>
+<li>✅ 邮箱的概念和应用</li>
+<li>✅ 实际项目中的队列通信模式</li>
+</ul>
+<h3 id="_15">关键要点</h3>
+<ol>
+<li>
+<p><strong>队列是任务间数据传递的核心机制</strong>
+   - FIFO顺序保证数据按序处理
+   - 数据复制保证数据安全
+   - 阻塞机制实现任务同步</p>
+</li>
+<li>
+<p><strong>选择合适的队列大小</strong>
+   - 队列长度 = 预期缓存的消息数量
+   - 消息大小 = 实际数据类型的大小
+   - 考虑内存限制和性能需求</p>
+</li>
+<li>
+<p><strong>正确使用阻塞和超时</strong>
+   - 0: 不等待,立即返回
+   - portMAX_DELAY: 永久等待
+   - pdMS_TO_TICKS(ms): 等待指定时间</p>
+</li>
+<li>
+<p><strong>中断中使用FromISR版本API</strong>
+   - xQueueSendFromISR()
+   - xQueueReceiveFromISR()
+   - 处理pxHigherPriorityTaskWoken参数</p>
+</li>
+<li>
+<p><strong>队列集用于监听多个队列</strong>
+   - 创建队列集
+   - 添加队列到队列集
+   - 使用xQueueSelectFromSet()等待</p>
+</li>
+</ol>
+<h2 id="_16">进阶挑战</h2>
+<p>尝试以下挑战来巩固学习:</p>
+<h3 id="1_3">挑战1: 多级数据处理流水线</h3>
+<p>创建一个3级数据处理流水线:
+- 级别1: 数据采集(传感器读取)
+- 级别2: 数据预处理(滤波、校准)
+- 级别3: 数据分析(算法处理)</p>
+<p><strong>要求</strong>:
+- 使用队列连接各级
+- 每级独立运行
+- 支持并行处理</p>
+<p><strong>提示</strong>: 每级之间使用独立的队列</p>
+<h3 id="2_2">挑战2: 优先级队列</h3>
+<p>实现一个支持优先级的消息队列:
+- 高优先级消息优先处理
+- 相同优先级按FIFO顺序
+- 支持紧急消息插队</p>
+<p><strong>提示</strong>: 使用多个队列和队列集</p>
+<h3 id="3_2">挑战3: 环形缓冲区队列</h3>
+<p>使用队列实现一个环形缓冲区:
+- 固定大小的缓冲区
+- 支持覆盖最旧的数据
+- 提供统计信息(丢失数据数量)</p>
+<p><strong>提示</strong>: 使用xQueueOverwrite()</p>
+<h2 id="_17">完整代码示例</h2>
+<h3 id="_18">综合示例: 数据采集系统</h3>
+<pre><code class="language-c">#include &quot;FreeRTOS.h&quot;
+#include &quot;task.h&quot;
+#include &quot;queue.h&quot;
+#include &lt;stdio.h&gt;
+
+// 传感器数据结构
+typedef struct
+{
+    uint8_t ucSensorID;
+    float fValue;
+    uint32_t ulTimestamp;
+} SensorData_t;
+
+// 队列句柄
+QueueHandle_t xRawDataQueue;
+QueueHandle_t xProcessedDataQueue;
+
+// 传感器任务
+void vSensorTask(void *pvParameters)
+{
+    uint8_t ucSensorID = (uint8_t)(uint32_t)pvParameters;
+    SensorData_t xData;
+
+    while(1)
+    {
+        // 读取传感器
+        xData.ucSensorID = ucSensorID;
+        xData.fValue = ReadSensor(ucSensorID);
+        xData.ulTimestamp = xTaskGetTickCount();
+
+        // 发送原始数据
+        xQueueSend(xRawDataQueue, &amp;xData, portMAX_DELAY);
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 数据处理任务
+void vProcessTask(void *pvParameters)
+{
+    SensorData_t xRawData, xProcessedData;
+
+    while(1)
+    {
+        // 接收原始数据
+        if(xQueueReceive(xRawDataQueue, &amp;xRawData, portMAX_DELAY) == pdTRUE)
+        {
+            // 数据处理(滤波、校准等)
+            xProcessedData = xRawData;
+            xProcessedData.fValue = ProcessData(xRawData.fValue);
+
+            // 发送处理后的数据
+            xQueueSend(xProcessedDataQueue, &amp;xProcessedData, portMAX_DELAY);
+        }
+    }
+}
+
+// 数据存储任务
+void vStorageTask(void *pvParameters)
+{
+    SensorData_t xData;
+
+    while(1)
+    {
+        // 接收处理后的数据
+        if(xQueueReceive(xProcessedDataQueue, &amp;xData, portMAX_DELAY) == pdTRUE)
+        {
+            // 存储数据
+            printf(&quot;[Storage] Sensor %d: %.2f at %lu ms\n&quot;,
+                   xData.ucSensorID, xData.fValue, xData.ulTimestamp);
+
+            SaveToStorage(&amp;xData);
+        }
+    }
+}
+
+int main(void)
+{
+    // 系统初始化
+    HAL_Init();
+    SystemClock_Config();
+
+    // 创建队列
+    xRawDataQueue = xQueueCreate(10, sizeof(SensorData_t));
+    xProcessedDataQueue = xQueueCreate(10, sizeof(SensorData_t));
+
+    // 创建传感器任务
+    xTaskCreate(vSensorTask, &quot;Sensor1&quot;, 256, (void *)1, 2, NULL);
+    xTaskCreate(vSensorTask, &quot;Sensor2&quot;, 256, (void *)2, 2, NULL);
+    xTaskCreate(vSensorTask, &quot;Sensor3&quot;, 256, (void *)3, 2, NULL);
+
+    // 创建处理任务
+    xTaskCreate(vProcessTask, &quot;Process&quot;, 256, NULL, 2, NULL);
+
+    // 创建存储任务
+    xTaskCreate(vStorageTask, &quot;Storage&quot;, 256, NULL, 1, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+</code></pre>
+<h3 id="_19">测试环境</h3>
+<p><strong>硬件环境</strong>:
+- 开发板: STM32F407 Discovery
+- 调试器: ST-Link V2
+- 传感器: 模拟传感器(可选)</p>
+<p><strong>软件环境</strong>:
+- IDE: STM32CubeIDE v1.10.1
+- HAL库版本: v1.27.1
+- FreeRTOS版本: V10.3.1
+- 编译器: GCC ARM 10.3</p>
+<h2 id="_20">下一步学习</h2>
+<p>建议按以下顺序继续学习:</p>
+<h3 id="1_4">1. 同步机制</h3>
+<ul>
+<li><a href="04-freertos-semaphore.html">FreeRTOS信号量应用</a></li>
+<li>学习二值信号量和计数信号量</li>
+<li>理解互斥量和临界区保护</li>
+</ul>
+<h3 id="2_3">2. 高级通信</h3>
+<ul>
+<li><a href="../intermediate/01-freertos-timer.html">FreeRTOS软件定时器</a></li>
+<li><a href="../intermediate/02-freertos-event-group.html">FreeRTOS事件标志组</a></li>
+<li><a href="../intermediate/03-freertos-notification.html">FreeRTOS任务通知</a></li>
+</ul>
+<h3 id="3_3">3. 内存管理</h3>
+<ul>
+<li><a href="../intermediate/04-freertos-memory.html">FreeRTOS内存管理方案</a></li>
+<li>学习heap_1到heap_5方案</li>
+<li>理解内存分配策略</li>
+</ul>
+<h3 id="4_1">4. 系统设计</h3>
+<ul>
+<li><a href="../advanced/01-freertos-system-design.html">基于FreeRTOS的多任务系统设计</a></li>
+<li>学习系统架构设计</li>
+<li>掌握任务划分和通信机制</li>
+</ul>
+<h2 id="_21">参考资料</h2>
+<h3 id="_22">官方文档</h3>
+<ol>
+<li>
+<p><strong>FreeRTOS官方网站</strong>
+   - https://www.freertos.org/
+   - 包含完整的API文档和教程</p>
+</li>
+<li>
+<p><strong>FreeRTOS队列API参考</strong>
+   - https://www.freertos.org/a00018.html
+   - 详细的队列API说明</p>
+</li>
+<li>
+<p><strong>FreeRTOS队列集文档</strong>
+   - https://www.freertos.org/RTOS-queue-sets.html
+   - 队列集的使用指南</p>
+</li>
+</ol>
+<h3 id="_23">推荐书籍</h3>
+<ol>
+<li>
+<p><strong>《Mastering the FreeRTOS Real Time Kernel》</strong>
+   - FreeRTOS作者编写
+   - 免费下载: https://www.freertos.org/Documentation/RTOS_book.html</p>
+</li>
+<li>
+<p><strong>《嵌入式实时操作系统FreeRTOS原理与实践》</strong>
+   - 中文书籍,适合入门
+   - 包含大量实例</p>
+</li>
+</ol>
+<h3 id="_24">在线资源</h3>
+<ol>
+<li>
+<p><strong>FreeRTOS论坛</strong>
+   - https://forums.freertos.org/
+   - 活跃的社区支持</p>
+</li>
+<li>
+<p><strong>STM32社区</strong>
+   - https://community.st.com/
+   - ST官方技术支持</p>
+</li>
+<li>
+<p><strong>GitHub示例代码</strong>
+   - https://github.com/FreeRTOS/FreeRTOS
+   - 官方示例和Demo</p>
+</li>
+</ol>
+<h2 id="_25">常见问题解答</h2>
+<h3 id="q1">Q1: 队列和信号量有什么区别?</h3>
+<p><strong>A</strong>: 主要区别在于数据传递:</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>消息队列</th>
+<th>信号量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>数据传递</strong></td>
+<td>传递数据</td>
+<td>不传递数据</td>
+</tr>
+<tr>
+<td><strong>用途</strong></td>
+<td>任务间通信</td>
+<td>任务同步</td>
+</tr>
+<tr>
+<td><strong>容量</strong></td>
+<td>可存储多个消息</td>
+<td>只有计数值</td>
+</tr>
+<tr>
+<td><strong>FIFO</strong></td>
+<td>先进先出</td>
+<td>无顺序概念</td>
+</tr>
+<tr>
+<td><strong>开销</strong></td>
+<td>较大(需要复制数据)</td>
+<td>小</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>:
+- 需要传递数据 → 使用消息队列
+- 只需要通知事件 → 使用信号量</p>
+<h3 id="q2">Q2: 如何选择合适的队列大小?</h3>
+<p><strong>A</strong>: 考虑以下因素:</p>
+<p><strong>队列长度</strong>:
+- 生产速度 vs 消费速度
+- 可接受的延迟
+- 内存限制</p>
+<p><strong>计算方法</strong>:</p>
+<pre><code>队列长度 = (生产速率 - 消费速率) × 最大延迟时间
+</code></pre>
+<p><strong>示例</strong>:
+- 生产: 10个/秒
+- 消费: 8个/秒
+- 最大延迟: 5秒
+- 队列长度 = (10 - 8) × 5 = 10个</p>
+<h3 id="q3">Q3: 队列满了怎么办?</h3>
+<p><strong>A</strong>: 有几种处理策略:</p>
+<ol>
+<li><strong>阻塞等待</strong></li>
+</ol>
+<pre><code class="language-c">xQueueSend(xQueue, &amp;data, portMAX_DELAY);  // 永久等待
+</code></pre>
+<ol start="2">
+<li><strong>超时等待</strong></li>
+</ol>
+<pre><code class="language-c">if(xQueueSend(xQueue, &amp;data, pdMS_TO_TICKS(1000)) != pdTRUE) {
+    // 超时处理
+}
+</code></pre>
+<ol start="3">
+<li><strong>丢弃数据</strong></li>
+</ol>
+<pre><code class="language-c">if(xQueueSend(xQueue, &amp;data, 0) != pdTRUE) {
+    // 记录丢失
+    lostCount++;
+}
+</code></pre>
+<ol start="4">
+<li><strong>覆盖最旧数据</strong>(邮箱)</li>
+</ol>
+<pre><code class="language-c">xQueueOverwrite(xMailbox, &amp;data);
+</code></pre>
+<h3 id="q4">Q4: 如何在中断中使用队列?</h3>
+<p><strong>A</strong>: 必须使用FromISR版本的API:</p>
+<pre><code class="language-c">void EXTI0_IRQHandler(void)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // 清除中断标志
+    __HAL_GPIO_EXTI_CLEAR_IT(GPIO_PIN_0);
+
+    uint32_t ulData = 100;
+
+    // 使用FromISR版本
+    xQueueSendFromISR(xQueue, &amp;ulData, &amp;xHigherPriorityTaskWoken);
+
+    // 触发任务切换
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
+</code></pre>
+<p><strong>注意事项</strong>:
+- 不能使用阻塞等待
+- 必须处理pxHigherPriorityTaskWoken
+- 中断处理要快速</p>
+<h3 id="q5">Q5: 队列和任务通知有什么区别?</h3>
+<p><strong>A</strong>: 任务通知是轻量级的通信机制:</p>
+<table>
+<thead>
+<tr>
+<th>特性</th>
+<th>队列</th>
+<th>任务通知</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>数据量</strong></td>
+<td>可传递任意大小</td>
+<td>只能传递32位值</td>
+</tr>
+<tr>
+<td><strong>缓冲</strong></td>
+<td>可缓存多个消息</td>
+<td>只能缓存1个</td>
+</tr>
+<tr>
+<td><strong>开销</strong></td>
+<td>较大</td>
+<td>很小</td>
+</tr>
+<tr>
+<td><strong>灵活性</strong></td>
+<td>高</td>
+<td>低</td>
+</tr>
+<tr>
+<td><strong>适用场景</strong></td>
+<td>复杂数据传递</td>
+<td>简单事件通知</td>
+</tr>
+</tbody>
+</table>
+<p><strong>选择建议</strong>:
+- 需要传递复杂数据 → 使用队列
+- 只需要简单通知 → 使用任务通知</p>
+<hr />
+<p><strong>反馈与支持</strong>:</p>
+<p>如果你在学习过程中遇到问题:
+- 💬 在评论区留言讨论
+- 📧 发送邮件到: support@embedded-platform.com
+- 🐛 报告问题: <a href="https://github.com/your-repo/issues">GitHub Issues</a></p>
+<p><strong>贡献代码</strong>:
+欢迎提交改进建议和示例代码!</p>
+<hr />
+<p><strong>版权声明</strong>: 本教程采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+<p><strong>最后更新</strong>: 2024-01-15<br />
+<strong>文档版本</strong>: 1.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

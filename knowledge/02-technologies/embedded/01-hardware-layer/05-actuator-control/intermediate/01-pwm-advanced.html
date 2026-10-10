@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>PWM技术深入解析 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a><ul>
+<li><a href="#pwm_1">为什么需要深入理解PWM？</a></li>
+<li><a href="#_2">学习目标</a></li>
+</ul>
+</li>
+<li><a href="#pwm_2">PWM基础原理回顾</a><ul>
+<li><a href="#pwm_3">什么是PWM？</a></li>
+<li><a href="#_3">关键参数</a></li>
+</ul>
+</li>
+<li><a href="#pwm_4">PWM工作原理深入分析</a><ul>
+<li><a href="#_4">数学模型</a></li>
+<li><a href="#_5">平均电压与有效值</a></li>
+<li><a href="#_6">能量传递机制</a></li>
+</ul>
+</li>
+<li><a href="#pwm_5">PWM频率选择</a><ul>
+<li><a href="#_7">频率选择原则</a></li>
+<li><a href="#_8">不同应用的频率推荐</a></li>
+<li><a href="#_9">频率与分辨率的关系</a></li>
+<li><a href="#_10">频率对系统的影响</a></li>
+</ul>
+</li>
+<li><a href="#dead-time">死区时间（Dead Time）</a><ul>
+<li><a href="#_11">什么是死区时间？</a></li>
+<li><a href="#_12">死区时间的作用</a></li>
+<li><a href="#_13">死区时间计算</a></li>
+<li><a href="#_14">死区时间的影响</a></li>
+<li><a href="#stm32">STM32死区时间配置</a></li>
+<li><a href="#arduino">Arduino死区时间实现</a></li>
+</ul>
+</li>
+<li><a href="#pwmcomplementary-pwm">互补PWM（Complementary PWM）</a><ul>
+<li><a href="#pwm_6">什么是互补PWM？</a></li>
+<li><a href="#pwm_7">互补PWM的应用</a></li>
+<li><a href="#stm32pwm">STM32互补PWM配置</a></li>
+</ul>
+</li>
+<li><a href="#pwm_8">PWM高级应用</a><ul>
+<li><a href="#1-pwm">1. 多相PWM控制</a></li>
+<li><a href="#2-pwm">2. PWM输入捕获</a></li>
+<li><a href="#3-pwm">3. 软件PWM实现</a></li>
+<li><a href="#4-pwm-dac">4. PWM DAC（数模转换）</a></li>
+</ul>
+</li>
+<li><a href="#pwm_9">PWM性能优化</a><ul>
+<li><a href="#1">1. 减少开关损耗</a></li>
+<li><a href="#2-emi">2. 降低EMI</a></li>
+<li><a href="#3">3. 提高效率</a></li>
+<li><a href="#4">4. 精度优化</a></li>
+</ul>
+</li>
+<li><a href="#_15">常见问题与解决方案</a><ul>
+<li><a href="#1pwm">问题1：PWM输出不稳定</a></li>
+<li><a href="#2">问题2：电机低速抖动</a></li>
+<li><a href="#3_1">问题3：高频噪声</a></li>
+<li><a href="#4_1">问题4：功率器件过热</a></li>
+</ul>
+</li>
+<li><a href="#_16">实际应用案例</a><ul>
+<li><a href="#1led">案例1：LED调光系统</a></li>
+<li><a href="#2_1">案例2：开关电源控制</a></li>
+<li><a href="#3_2">案例3：伺服电机控制</a></li>
+</ul>
+</li>
+<li><a href="#_17">测试与调试</a><ul>
+<li><a href="#pwm_10">PWM信号测试</a></li>
+<li><a href="#_18">性能测试</a></li>
+</ul>
+</li>
+<li><a href="#_19">最佳实践</a><ul>
+<li><a href="#1-pwm_1">1. PWM参数选择指南</a></li>
+<li><a href="#2_2">2. 代码组织建议</a></li>
+<li><a href="#3_3">3. 安全考虑</a></li>
+<li><a href="#4_2">4. 性能监控</a></li>
+</ul>
+</li>
+<li><a href="#_20">总结</a><ul>
+<li><a href="#_21">关键要点</a></li>
+<li><a href="#_22">学习检查清单</a></li>
+<li><a href="#_23">进阶学习方向</a></li>
+</ul>
+</li>
+<li><a href="#_24">参考资料</a><ul>
+<li><a href="#_25">技术文档</a></li>
+<li><a href="#_26">推荐书籍</a></li>
+<li><a href="#_27">在线资源</a></li>
+<li><a href="#_28">相关教程</a></li>
+</ul>
+</li>
+<li><a href="#_29">练习与项目</a><ul>
+<li><a href="#1pwm_1">练习1：PWM参数计算 ⭐</a></li>
+<li><a href="#2_3">练习2：死区时间设计 ⭐⭐</a></li>
+<li><a href="#3pwm">练习3：软件PWM实现 ⭐⭐⭐</a></li>
+<li><a href="#led">项目：智能LED调光系统 ⭐⭐⭐⭐</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="pwm">PWM技术深入解析</h1>
+<h2 id="_1">概述</h2>
+<p>PWM（Pulse Width Modulation，脉宽调制）是嵌入式系统中最常用的控制技术之一。通过改变脉冲信号的占空比，可以实现对电机速度、LED亮度、电源电压等的精确控制。本文将深入探讨PWM的工作原理、关键参数、高级应用技术。</p>
+<h3 id="pwm_1">为什么需要深入理解PWM？</h3>
+<ul>
+<li><strong>电机控制</strong>：无刷电机、步进电机需要精确的PWM控制</li>
+<li><strong>功率调节</strong>：开关电源、DC-DC转换器依赖PWM技术</li>
+<li><strong>信号生成</strong>：伺服控制、通信协议需要特定的PWM波形</li>
+<li><strong>性能优化</strong>：合理的PWM参数可以提高效率、降低噪声</li>
+<li><strong>故障排查</strong>：理解PWM原理有助于快速定位问题</li>
+</ul>
+<h3 id="_2">学习目标</h3>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>[ ] 深入理解PWM的工作原理和数学模型</li>
+<li>[ ] 掌握PWM频率选择的原则和影响因素</li>
+<li>[ ] 理解死区时间的作用和配置方法</li>
+<li>[ ] 实现互补PWM信号生成</li>
+<li>[ ] 应用PWM技术解决实际工程问题</li>
+<li>[ ] 优化PWM参数以提高系统性能</li>
+</ul>
+<h2 id="pwm_2">PWM基础原理回顾</h2>
+<h3 id="pwm_3">什么是PWM？</h3>
+<p>PWM是一种通过改变脉冲宽度来调节输出功率的技术。信号在高电平和低电平之间快速切换，通过控制高电平持续时间的比例（占空比）来实现模拟输出效果。</p>
+<p><strong>核心概念</strong>：</p>
+<pre><code>     ┌─────┐     ┌─────┐     ┌─────┐
+     │     │     │     │     │     │
+─────┘     └─────┘     └─────┘     └─────
+|&lt;─ T_on ─&gt;|&lt;─ T_off ─&gt;|
+|&lt;────── T (周期) ─────&gt;|
+
+占空比 D = T_on / T × 100%
+频率 f = 1 / T
+平均电压 V_avg = V_cc × D
+</code></pre>
+<h3 id="_3">关键参数</h3>
+<ol>
+<li>
+<p><strong>占空比（Duty Cycle）</strong>
+   - 定义：高电平时间占整个周期的百分比
+   - 范围：0% ~ 100%
+   - 计算：D = (T_on / T) × 100%
+   - 影响：直接决定输出功率</p>
+</li>
+<li>
+<p><strong>频率（Frequency）</strong>
+   - 定义：每秒钟脉冲的次数
+   - 单位：Hz（赫兹）
+   - 计算：f = 1 / T
+   - 影响：决定响应速度和效率</p>
+</li>
+<li>
+<p><strong>分辨率（Resolution）</strong>
+   - 定义：占空比可调节的最小步进
+   - 表示：通常用位数表示（如8位、10位、16位）
+   - 计算：步进 = 100% / (2^n)
+   - 影响：控制精度</p>
+</li>
+</ol>
+<h2 id="pwm_4">PWM工作原理深入分析</h2>
+<h3 id="_4">数学模型</h3>
+<p>PWM信号可以用傅里叶级数表示：</p>
+<pre><code>V(t) = V_avg + Σ [A_n × sin(2πnft + φ_n)]
+       n=1,∞
+
+其中：
+V_avg = V_cc × D  (直流分量)
+A_n = 谐波幅度
+f = 基频
+φ_n = 相位
+</code></pre>
+<p><strong>关键理解</strong>：
+- PWM信号包含直流分量和高频谐波分量
+- 直流分量等于平均电压，由占空比决定
+- 谐波分量可通过滤波器去除
+- 频率越高，滤波越容易</p>
+<h3 id="_5">平均电压与有效值</h3>
+<p><strong>平均电压</strong>（用于电机速度控制）：</p>
+<pre><code>V_avg = V_cc × D
+
+示例：
+- V_cc = 12V, D = 50% → V_avg = 6V
+- V_cc = 12V, D = 75% → V_avg = 9V
+</code></pre>
+<p><strong>有效值</strong>（用于功率计算）：</p>
+<pre><code>V_rms = V_cc × √D
+
+示例：
+- V_cc = 12V, D = 50% → V_rms = 8.49V
+- V_cc = 12V, D = 75% → V_rms = 10.39V
+</code></pre>
+<h3 id="_6">能量传递机制</h3>
+<p>PWM通过快速开关实现能量传递：</p>
+<ol>
+<li>
+<p><strong>导通期间（T_on）</strong>：
+   - 能量从电源传递到负载
+   - 电流上升（感性负载）
+   - 磁场能量增加</p>
+</li>
+<li>
+<p><strong>关断期间（T_off）</strong>：
+   - 续流二极管提供电流路径
+   - 电流下降
+   - 磁场能量释放</p>
+</li>
+<li>
+<p><strong>平均效果</strong>：
+   - 负载获得的平均功率 = V_avg × I_avg
+   - 开关损耗远小于线性调节</p>
+</li>
+</ol>
+<h2 id="pwm_5">PWM频率选择</h2>
+<h3 id="_7">频率选择原则</h3>
+<p>选择合适的PWM频率需要权衡多个因素：</p>
+<table>
+<thead>
+<tr>
+<th>频率范围</th>
+<th>优点</th>
+<th>缺点</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>100Hz-1kHz</td>
+<td>开关损耗低</td>
+<td>噪声大、纹波大</td>
+<td>大功率应用</td>
+</tr>
+<tr>
+<td>1kHz-20kHz</td>
+<td>平衡性能</td>
+<td>适中</td>
+<td>电机控制、LED调光</td>
+</tr>
+<tr>
+<td>20kHz-100kHz</td>
+<td>噪声小、纹波小</td>
+<td>开关损耗高、EMI</td>
+<td>音频应用、精密控制</td>
+</tr>
+<tr>
+<td>&gt;100kHz</td>
+<td>超静音、易滤波</td>
+<td>损耗很高、驱动困难</td>
+<td>开关电源</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">不同应用的频率推荐</h3>
+<p><strong>1. 直流电机控制</strong>
+- 推荐频率：1kHz - 20kHz
+- 原因：
+  - 低于1kHz：电机产生明显啸叫
+  - 高于20kHz：开关损耗增加，效率降低
+  - 最佳：4kHz - 16kHz</p>
+<p><strong>2. 无刷电机（BLDC）</strong>
+- 推荐频率：8kHz - 32kHz
+- 原因：
+  - 需要更高的控制精度
+  - 减少转矩脉动
+  - 降低电磁噪声</p>
+<p><strong>3. LED调光</strong>
+- 推荐频率：100Hz - 10kHz
+- 原因：
+  - 高于100Hz：避免闪烁
+  - 低于10kHz：降低功耗
+  - 最佳：200Hz - 1kHz</p>
+<p><strong>4. 舵机控制</strong>
+- 固定频率：50Hz（周期20ms）
+- 原因：
+  - 舵机协议标准
+  - 脉宽1-2ms对应角度0-180°</p>
+<p><strong>5. 开关电源</strong>
+- 推荐频率：50kHz - 500kHz
+- 原因：
+  - 减小磁性元件体积
+  - 提高功率密度
+  - 改善动态响应</p>
+<h3 id="_9">频率与分辨率的关系</h3>
+<p>定时器时钟频率固定时，PWM频率和分辨率存在制约关系：</p>
+<pre><code>PWM频率 = 定时器时钟频率 / (预分频器 × 自动重装载值)
+分辨率 = 自动重装载值
+
+示例（STM32，定时器时钟72MHz）：
+- 要求：10位分辨率（1024级）
+- ARR = 1024
+- 预分频器 = 1
+- PWM频率 = 72MHz / (1 × 1024) = 70.3kHz
+
+- 要求：16位分辨率（65536级）
+- ARR = 65536
+- 预分频器 = 1
+- PWM频率 = 72MHz / (1 × 65536) = 1.1kHz
+</code></pre>
+<p><strong>权衡策略</strong>：
+- 高频率 → 低分辨率
+- 高分辨率 → 低频率
+- 实际应用中，10-12位分辨率通常足够</p>
+<h3 id="_10">频率对系统的影响</h3>
+<p><strong>1. 对电机的影响</strong></p>
+<pre><code>频率过低（&lt;1kHz）：
+- 电流纹波大
+- 转矩脉动明显
+- 产生可听噪声
+- 效率降低
+
+频率适中（1-20kHz）：
+- 电流纹波适中
+- 运行平稳
+- 效率最优
+
+频率过高（&gt;50kHz）：
+- 开关损耗增加
+- 驱动电路复杂
+- EMI问题严重
+</code></pre>
+<p><strong>2. 对开关器件的影响</strong></p>
+<pre><code>开关损耗 = (开通损耗 + 关断损耗) × 频率
+
+示例：
+- 单次开关损耗：1mJ
+- 频率1kHz：损耗 = 1mJ × 1000 = 1W
+- 频率10kHz：损耗 = 1mJ × 10000 = 10W
+- 频率100kHz：损耗 = 1mJ × 100000 = 100W
+</code></pre>
+<p><strong>3. 对滤波的影响</strong></p>
+<pre><code>截止频率 fc = 1 / (2π × R × C)
+
+PWM频率越高：
+- 所需滤波电容越小
+- 纹波电压越小
+- 响应速度越快
+</code></pre>
+<h2 id="dead-time">死区时间（Dead Time）</h2>
+<h3 id="_11">什么是死区时间？</h3>
+<p>在H桥或半桥电路中，上下桥臂不能同时导通，否则会造成电源短路（直通）。死区时间是在一个开关关断和另一个开关开通之间插入的延迟时间。</p>
+<pre><code>上桥臂PWM:  ┌────┐        ┌────┐
+            │    │        │    │
+         ───┘    └────────┘    └───
+                 |&lt;-死区-&gt;|
+
+下桥臂PWM:       ┌────────┐
+                 │        │
+         ────────┘        └────────
+</code></pre>
+<h3 id="_12">死区时间的作用</h3>
+<p><strong>1. 防止直通</strong>
+- 上桥臂关断需要时间（关断延迟）
+- 下桥臂开通也需要时间（开通延迟）
+- 死区时间 &gt; 关断延迟 + 开通延迟</p>
+<p><strong>2. 保护功率器件</strong>
+- MOSFET/IGBT的开关速度有限
+- 寄生电容需要充放电时间
+- 死区时间提供安全裕量</p>
+<h3 id="_13">死区时间计算</h3>
+<p><strong>基本公式</strong>：</p>
+<pre><code>T_deadtime ≥ T_fall + T_rise + T_margin
+
+其中：
+T_fall = 关断时间（器件数据手册）
+T_rise = 开通时间（器件数据手册）
+T_margin = 安全裕量（通常20-50%）
+
+示例（IRF540 MOSFET）：
+T_fall = 50ns
+T_rise = 30ns
+T_margin = 30ns
+T_deadtime ≥ 110ns，实际设置150ns
+</code></pre>
+<h3 id="_14">死区时间的影响</h3>
+<p><strong>死区时间过短</strong>：
+- 可能发生直通
+- 器件损坏风险
+- 效率降低</p>
+<p><strong>死区时间过长</strong>：
+- 输出波形失真
+- 有效占空比减小
+- 低速时影响明显</p>
+<p><strong>占空比补偿</strong>：</p>
+<pre><code>实际占空比 = 设定占空比 + (T_deadtime / T_period)
+
+示例：
+- 设定占空比：50%
+- 死区时间：2μs
+- PWM周期：100μs（10kHz）
+- 实际占空比 = 50% + (2/100) = 52%
+</code></pre>
+<h3 id="stm32">STM32死区时间配置</h3>
+<pre><code class="language-c">// STM32 HAL库配置死区时间
+TIM_HandleTypeDef htim1;
+TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+void PWM_DeadTime_Init(void) {
+    // 基本定时器配置
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 0;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 1000;  // ARR
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    HAL_TIM_PWM_Init(&amp;htim1);
+
+    // 死区时间配置
+    sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+    sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+    sBreakDeadTimeConfig.DeadTime = 100;  // 死区时间值
+    sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+    sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+    sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+
+    HAL_TIMEx_ConfigBreakDeadTime(&amp;htim1, &amp;sBreakDeadTimeConfig);
+}
+
+// 死区时间计算
+// T_deadtime = (DeadTime × T_dtg)
+// T_dtg取决于时钟频率和DeadTime值的范围
+// 详见参考手册
+</code></pre>
+<h3 id="arduino">Arduino死区时间实现</h3>
+<p>Arduino标准库不直接支持死区时间，需要手动实现：</p>
+<pre><code class="language-cpp">// 软件实现死区时间
+const int PWM_HIGH = 9;
+const int PWM_LOW = 10;
+const int DEAD_TIME_US = 2;  // 2微秒死区
+
+void setPWMWithDeadTime(int duty) {
+    // 上桥臂PWM
+    if (duty &gt; 0) {
+        digitalWrite(PWM_HIGH, HIGH);
+        delayMicroseconds(duty * 10);
+        digitalWrite(PWM_HIGH, LOW);
+
+        // 死区时间
+        delayMicroseconds(DEAD_TIME_US);
+
+        // 下桥臂PWM
+        digitalWrite(PWM_LOW, HIGH);
+        delayMicroseconds((100 - duty) * 10);
+        digitalWrite(PWM_LOW, LOW);
+
+        // 死区时间
+        delayMicroseconds(DEAD_TIME_US);
+    }
+}
+
+// 注意：这种方法占用CPU，不适合高频PWM
+// 建议使用硬件定时器或专用PWM芯片
+</code></pre>
+<h2 id="pwmcomplementary-pwm">互补PWM（Complementary PWM）</h2>
+<h3 id="pwm_6">什么是互补PWM？</h3>
+<p>互补PWM是指两路PWM信号互为反相，且之间插入死区时间。主要用于H桥、半桥等推挽式驱动电路。</p>
+<pre><code>PWM1:  ┌─────┐   DT   ┌─────┐   DT
+       │     │        │     │
+    ───┘     └────────┘     └──────
+
+PWM2:        ┌────────┐
+             │        │
+    ─────────┘        └────────────
+
+DT = 死区时间
+</code></pre>
+<h3 id="pwm_7">互补PWM的应用</h3>
+<p><strong>1. 无刷电机驱动</strong>
+- 三相六路互补PWM
+- 每相上下桥臂互补
+- 精确的死区控制</p>
+<p><strong>2. 开关电源</strong>
+- 全桥/半桥拓扑
+- 提高效率
+- 减小纹波</p>
+<p><strong>3. 逆变器</strong>
+- DC-AC转换
+- 正弦波生成
+- 功率控制</p>
+<h3 id="stm32pwm">STM32互补PWM配置</h3>
+<pre><code class="language-c">// 配置互补PWM输出
+void Complementary_PWM_Init(void) {
+    TIM_HandleTypeDef htim1;
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+
+    // 定时器基本配置
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 0;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 1000;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    HAL_TIM_PWM_Init(&amp;htim1);
+
+    // PWM通道配置
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 500;  // 50%占空比
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;  // 互补输出极性
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+
+    HAL_TIM_PWM_ConfigChannel(&amp;htim1, &amp;sConfigOC, TIM_CHANNEL_1);
+
+    // 死区时间配置
+    sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+    sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+    sBreakDeadTimeConfig.DeadTime = 100;  // 死区时间
+    sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+    sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+    sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+
+    HAL_TIMEx_ConfigBreakDeadTime(&amp;htim1, &amp;sBreakDeadTimeConfig);
+
+    // 启动PWM和互补PWM
+    HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_1);  // 互补输出
+}
+
+// 动态调整占空比
+void Set_Complementary_PWM_Duty(uint16_t duty) {
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, duty);
+}
+</code></pre>
+<h2 id="pwm_8">PWM高级应用</h2>
+<h3 id="1-pwm">1. 多相PWM控制</h3>
+<p>用于三相无刷电机（BLDC）控制：</p>
+<pre><code class="language-c">// 三相PWM配置（120度相位差）
+void Three_Phase_PWM_Init(void) {
+    // 通道1：0度相位
+    HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_1);
+
+    // 通道2：120度相位
+    HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_2);
+    HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_2);
+
+    // 通道3：240度相位
+    HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_3);
+    HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_3);
+}
+
+// SVPWM（空间矢量PWM）算法
+void SVPWM_Calculate(float Vd, float Vq, float theta, 
+                     uint16_t* duty_a, uint16_t* duty_b, uint16_t* duty_c) {
+    // 计算三相占空比
+    float Va = Vd * cos(theta) - Vq * sin(theta);
+    float Vb = Vd * cos(theta - 2*PI/3) - Vq * sin(theta - 2*PI/3);
+    float Vc = Vd * cos(theta + 2*PI/3) - Vq * sin(theta + 2*PI/3);
+
+    // 归一化到PWM范围
+    *duty_a = (uint16_t)((Va + 1.0) * ARR / 2);
+    *duty_b = (uint16_t)((Vb + 1.0) * ARR / 2);
+    *duty_c = (uint16_t)((Vc + 1.0) * ARR / 2);
+}
+</code></pre>
+<h3 id="2-pwm">2. PWM输入捕获</h3>
+<p>测量外部PWM信号的频率和占空比：</p>
+<pre><code class="language-c">// PWM输入模式配置
+TIM_HandleTypeDef htim2;
+TIM_IC_InitTypeDef sConfigIC = {0};
+
+void PWM_Input_Init(void) {
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 72-1;  // 1MHz计数频率
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 0xFFFF;
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_IC_Init(&amp;htim2);
+
+    // 配置输入捕获
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+    sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+    sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+    sConfigIC.ICFilter = 0;
+    HAL_TIM_IC_ConfigChannel(&amp;htim2, &amp;sConfigIC, TIM_CHANNEL_1);
+
+    // 配置间接通道（测量占空比）
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+    sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;
+    HAL_TIM_IC_ConfigChannel(&amp;htim2, &amp;sConfigIC, TIM_CHANNEL_2);
+
+    // 启动输入捕获
+    HAL_TIM_IC_Start_IT(&amp;htim2, TIM_CHANNEL_1);
+    HAL_TIM_IC_Start_IT(&amp;htim2, TIM_CHANNEL_2);
+}
+
+// 中断回调函数
+uint32_t period = 0;
+uint32_t pulse_width = 0;
+float frequency = 0;
+float duty_cycle = 0;
+
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim) {
+    if (htim-&gt;Channel == HAL_TIM_ACTIVE_CHANNEL_1) {
+        // 捕获周期
+        period = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+
+        // 捕获脉宽
+        pulse_width = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+
+        // 计算频率和占空比
+        if (period != 0) {
+            frequency = 1000000.0 / period;  // Hz
+            duty_cycle = (float)pulse_width / period * 100.0;  // %
+        }
+    }
+}
+</code></pre>
+<h3 id="3-pwm">3. 软件PWM实现</h3>
+<p>当硬件PWM通道不足时，可以使用定时器中断实现软件PWM：</p>
+<pre><code class="language-cpp">// Arduino软件PWM实现
+const int NUM_CHANNELS = 8;
+int pwm_pins[NUM_CHANNELS] = {2, 3, 4, 5, 6, 7, 8, 9};
+int pwm_duty[NUM_CHANNELS] = {0};  // 0-255
+int pwm_counter = 0;
+
+void setup() {
+    // 配置引脚
+    for (int i = 0; i &lt; NUM_CHANNELS; i++) {
+        pinMode(pwm_pins[i], OUTPUT);
+    }
+
+    // 配置定时器中断（1kHz，每1ms触发）
+    Timer1.initialize(1000);  // 1000微秒 = 1ms
+    Timer1.attachInterrupt(softwarePWM);
+}
+
+void softwarePWM() {
+    pwm_counter++;
+    if (pwm_counter &gt;= 256) {
+        pwm_counter = 0;
+    }
+
+    // 更新所有通道
+    for (int i = 0; i &lt; NUM_CHANNELS; i++) {
+        if (pwm_counter &lt; pwm_duty[i]) {
+            digitalWrite(pwm_pins[i], HIGH);
+        } else {
+            digitalWrite(pwm_pins[i], LOW);
+        }
+    }
+}
+
+// 设置占空比
+void setPWM(int channel, int duty) {
+    if (channel &gt;= 0 &amp;&amp; channel &lt; NUM_CHANNELS) {
+        pwm_duty[channel] = constrain(duty, 0, 255);
+    }
+}
+</code></pre>
+<p><strong>软件PWM的限制</strong>：
+- 占用CPU资源
+- 频率受限（通常&lt;10kHz）
+- 精度较低
+- 通道间可能有抖动</p>
+<h3 id="4-pwm-dac">4. PWM DAC（数模转换）</h3>
+<p>使用PWM和RC滤波器实现简单的DAC：</p>
+<pre><code class="language-cpp">// PWM DAC实现
+const int PWM_PIN = 9;
+const int PWM_FREQ = 31250;  // Hz
+const int PWM_RESOLUTION = 8;  // 8位
+
+void setup() {
+    pinMode(PWM_PIN, OUTPUT);
+
+    // 设置PWM频率（Arduino Uno）
+    TCCR1B = TCCR1B &amp; 0b11111000 | 0x01;  // 31.25kHz
+}
+
+// 输出模拟电压
+void analogOutput(float voltage) {
+    // 假设参考电压5V
+    int duty = (int)(voltage / 5.0 * 255);
+    duty = constrain(duty, 0, 255);
+    analogWrite(PWM_PIN, duty);
+}
+
+// 生成正弦波
+void generateSineWave(float frequency) {
+    float phase = 0;
+    float phase_increment = 2 * PI * frequency / 1000;  // 假设1kHz采样率
+
+    while (true) {
+        float voltage = 2.5 + 2.5 * sin(phase);  // 0-5V正弦波
+        analogOutput(voltage);
+
+        phase += phase_increment;
+        if (phase &gt;= 2 * PI) {
+            phase -= 2 * PI;
+        }
+
+        delay(1);  // 1ms延迟
+    }
+}
+</code></pre>
+<p><strong>RC滤波器设计</strong>：</p>
+<pre><code>PWM输出 ──┬── R ──┬── 模拟输出
+          │       │
+          └─ C ───┴── GND
+
+截止频率：fc = 1 / (2π × R × C)
+
+推荐：fc = PWM频率 / 10
+
+示例（31.25kHz PWM）：
+fc = 3.125kHz
+选择 R = 1kΩ, C = 47nF
+实际 fc = 3.39kHz
+</code></pre>
+<h2 id="pwm_9">PWM性能优化</h2>
+<h3 id="1">1. 减少开关损耗</h3>
+<p><strong>软开关技术</strong>：
+- 零电压开关（ZVS）
+- 零电流开关（ZCS）
+- 谐振转换</p>
+<p><strong>优化策略</strong>：</p>
+<pre><code class="language-c">// 自适应死区时间
+void adaptive_deadtime(float load_current) {
+    uint16_t deadtime;
+
+    if (load_current &lt; 1.0) {
+        deadtime = 50;   // 轻载：短死区
+    } else if (load_current &lt; 5.0) {
+        deadtime = 100;  // 中载：标准死区
+    } else {
+        deadtime = 150;  // 重载：长死区
+    }
+
+    // 更新死区时间配置
+    sBreakDeadTimeConfig.DeadTime = deadtime;
+    HAL_TIMEx_ConfigBreakDeadTime(&amp;htim1, &amp;sBreakDeadTimeConfig);
+}
+</code></pre>
+<h3 id="2-emi">2. 降低EMI</h3>
+<p><strong>频率抖动（Spread Spectrum）</strong>：</p>
+<pre><code class="language-c">// 频率抖动减少EMI
+void frequency_dithering(void) {
+    static uint16_t base_period = 1000;
+    static int8_t dither = 0;
+    static int8_t direction = 1;
+
+    // 在±5%范围内抖动
+    dither += direction;
+    if (dither &gt;= 50 || dither &lt;= -50) {
+        direction = -direction;
+    }
+
+    uint16_t new_period = base_period + dither;
+    __HAL_TIM_SET_AUTORELOAD(&amp;htim1, new_period);
+}
+</code></pre>
+<p><strong>滤波优化</strong>：
+- 输出端添加LC滤波器
+- 电源端添加共模扼流圈
+- PCB布局优化（减小环路面积）</p>
+<h3 id="3">3. 提高效率</h3>
+<p><strong>同步整流</strong>：</p>
+<pre><code class="language-c">// 同步整流控制
+void synchronous_rectification(int direction) {
+    if (direction &gt; 0) {
+        // 正向：上桥臂PWM，下桥臂同步整流
+        HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_1);
+        HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_1);
+    } else {
+        // 反向：下桥臂PWM，上桥臂同步整流
+        HAL_TIMEx_PWMN_Start(&amp;htim1, TIM_CHANNEL_1);
+        HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_1);
+    }
+}
+</code></pre>
+<p><strong>功率因数校正</strong>：
+- 对于AC-DC应用
+- 提高输入功率因数
+- 减少谐波污染</p>
+<h3 id="4">4. 精度优化</h3>
+<p><strong>占空比线性化</strong>：</p>
+<pre><code class="language-c">// 补偿死区时间影响
+float compensate_duty(float desired_duty, float deadtime_us, float period_us) {
+    float deadtime_ratio = deadtime_us / period_us;
+    float compensated_duty = desired_duty + deadtime_ratio;
+
+    // 限制范围
+    if (compensated_duty &gt; 0.95) compensated_duty = 0.95;
+    if (compensated_duty &lt; 0.05) compensated_duty = 0.05;
+
+    return compensated_duty;
+}
+
+// 使用示例
+void set_motor_speed(float speed_percent) {
+    float period_us = 100;  // 10kHz
+    float deadtime_us = 2;
+
+    float duty = speed_percent / 100.0;
+    float compensated = compensate_duty(duty, deadtime_us, period_us);
+
+    uint16_t ccr = (uint16_t)(compensated * ARR);
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, ccr);
+}
+</code></pre>
+<p><strong>温度补偿</strong>：</p>
+<pre><code class="language-c">// 根据温度调整PWM参数
+void temperature_compensation(float temperature) {
+    // MOSFET导通电阻随温度增加
+    // 需要增加占空比补偿
+
+    float temp_coefficient = 0.001;  // 每度0.1%
+    float compensation = (temperature - 25.0) * temp_coefficient;
+
+    // 应用补偿
+    current_duty += compensation;
+}
+</code></pre>
+<h2 id="_15">常见问题与解决方案</h2>
+<h3 id="1pwm">问题1：PWM输出不稳定</h3>
+<p><strong>症状</strong>：
+- 占空比波动
+- 频率不稳定
+- 输出有毛刺</p>
+<p><strong>可能原因</strong>：
+1. 电源噪声干扰
+2. 定时器时钟不稳定
+3. 中断优先级冲突
+4. 负载变化影响</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 使用DMA更新PWM，避免中断延迟
+void PWM_DMA_Init(void) {
+    // 配置DMA传输PWM占空比
+    HAL_TIM_PWM_Start_DMA(&amp;htim1, TIM_CHANNEL_1, 
+                          (uint32_t*)pwm_buffer, BUFFER_SIZE);
+}
+
+// 2. 提高定时器中断优先级
+HAL_NVIC_SetPriority(TIM1_UP_TIM10_IRQn, 0, 0);
+
+// 3. 添加软件滤波
+uint16_t filter_pwm_duty(uint16_t new_duty) {
+    static uint16_t filtered = 0;
+    const float alpha = 0.1;  // 滤波系数
+
+    filtered = (uint16_t)(alpha * new_duty + (1 - alpha) * filtered);
+    return filtered;
+}
+</code></pre>
+<h3 id="2">问题2：电机低速抖动</h3>
+<p><strong>症状</strong>：
+- 低速时电机不平稳
+- 有明显的顿挫感
+- 噪声增大</p>
+<p><strong>原因分析</strong>：
+- PWM分辨率不足
+- 死区时间影响大
+- 电流纹波大</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 提高PWM分辨率
+// 降低频率以获得更高分辨率
+htim1.Init.Period = 4000;  // 从1000提高到4000
+
+// 2. 低速时使用更高频率
+void adaptive_pwm_frequency(float speed) {
+    if (speed &lt; 0.2) {
+        // 低速：高频率，低分辨率
+        htim1.Init.Period = 500;
+        htim1.Init.Prescaler = 0;
+    } else {
+        // 高速：低频率，高分辨率
+        htim1.Init.Period = 2000;
+        htim1.Init.Prescaler = 0;
+    }
+    HAL_TIM_PWM_Init(&amp;htim1);
+}
+
+// 3. 添加电流环控制
+void current_loop_control(float target_current) {
+    float measured_current = read_current();
+    float error = target_current - measured_current;
+
+    // PI控制器
+    static float integral = 0;
+    integral += error * 0.01;  // Ki = 0.01
+
+    float output = 2.0 * error + integral;  // Kp = 2.0
+
+    // 转换为PWM占空比
+    uint16_t duty = (uint16_t)(output * ARR);
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, duty);
+}
+</code></pre>
+<h3 id="3_1">问题3：高频噪声</h3>
+<p><strong>症状</strong>：
+- 电机或电路产生高频啸叫
+- EMI测试不通过
+- 干扰其他电路</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 调整PWM频率到超声波范围
+htim1.Init.Prescaler = 0;
+htim1.Init.Period = 3600;  // 20kHz @ 72MHz
+
+// 2. 添加软启动斜坡
+void soft_start_ramp(uint16_t target_duty) {
+    static uint16_t current_duty = 0;
+    const uint16_t ramp_step = 10;
+
+    if (current_duty &lt; target_duty) {
+        current_duty += ramp_step;
+        if (current_duty &gt; target_duty) {
+            current_duty = target_duty;
+        }
+    } else if (current_duty &gt; target_duty) {
+        current_duty -= ramp_step;
+        if (current_duty &lt; target_duty) {
+            current_duty = target_duty;
+        }
+    }
+
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, current_duty);
+}
+
+// 3. 硬件滤波
+// 在电机端添加RC滤波器
+// R = 10Ω, C = 100nF
+</code></pre>
+<h3 id="4_1">问题4：功率器件过热</h3>
+<p><strong>症状</strong>：
+- MOSFET/IGBT温度过高
+- 驱动芯片发烫
+- 系统效率低</p>
+<p><strong>原因分析</strong>：
+- 开关损耗过大
+- 导通损耗过大
+- 死区时间不当
+- 散热不良</p>
+<p><strong>解决方案</strong>：</p>
+<pre><code class="language-c">// 1. 优化开关频率
+// 降低频率减少开关损耗
+htim1.Init.Period = 7200;  // 10kHz @ 72MHz
+
+// 2. 选择合适的MOSFET
+// 低Rds(on)：减少导通损耗
+// 低Qg：减少开关损耗
+
+// 3. 动态调整死区时间
+void optimize_deadtime_for_efficiency(float load_current) {
+    // 轻载时可以使用较短死区
+    // 重载时需要较长死区保证安全
+    uint16_t deadtime = 50 + (uint16_t)(load_current * 10);
+
+    sBreakDeadTimeConfig.DeadTime = deadtime;
+    HAL_TIMEx_ConfigBreakDeadTime(&amp;htim1, &amp;sBreakDeadTimeConfig);
+}
+
+// 4. 添加过温保护
+void thermal_protection(void) {
+    float temperature = read_temperature();
+
+    if (temperature &gt; 85.0) {
+        // 降低功率
+        current_max_duty *= 0.8;
+    } else if (temperature &gt; 100.0) {
+        // 紧急停机
+        HAL_TIM_PWM_Stop(&amp;htim1, TIM_CHANNEL_1);
+        HAL_TIMEx_PWMN_Stop(&amp;htim1, TIM_CHANNEL_1);
+    }
+}
+</code></pre>
+<h2 id="_16">实际应用案例</h2>
+<h3 id="1led">案例1：LED调光系统</h3>
+<pre><code class="language-c">// 高质量LED调光（无闪烁）
+#define LED_PWM_FREQ 1000  // 1kHz，避免闪烁
+#define LED_CHANNELS 16
+
+typedef struct {
+    TIM_HandleTypeDef *htim;
+    uint32_t channel;
+    uint16_t current_brightness;
+    uint16_t target_brightness;
+} LED_Channel_t;
+
+LED_Channel_t led_channels[LED_CHANNELS];
+
+// 初始化LED PWM
+void LED_PWM_Init(void) {
+    // 配置定时器为1kHz
+    htim1.Init.Prescaler = 72-1;  // 1MHz
+    htim1.Init.Period = 1000-1;   // 1kHz
+    HAL_TIM_PWM_Init(&amp;htim1);
+
+    // 启动所有通道
+    for (int i = 0; i &lt; LED_CHANNELS; i++) {
+        HAL_TIM_PWM_Start(led_channels[i].htim, led_channels[i].channel);
+    }
+}
+
+// 设置LED亮度（带渐变）
+void LED_Set_Brightness(uint8_t channel, uint16_t brightness) {
+    if (channel &lt; LED_CHANNELS) {
+        led_channels[channel].target_brightness = brightness;
+    }
+}
+
+// 渐变更新（在定时器中断中调用）
+void LED_Update_Fade(void) {
+    for (int i = 0; i &lt; LED_CHANNELS; i++) {
+        uint16_t current = led_channels[i].current_brightness;
+        uint16_t target = led_channels[i].target_brightness;
+
+        if (current &lt; target) {
+            current += 5;  // 渐变速度
+            if (current &gt; target) current = target;
+        } else if (current &gt; target) {
+            current -= 5;
+            if (current &lt; target) current = target;
+        }
+
+        led_channels[i].current_brightness = current;
+
+        // 更新PWM
+        __HAL_TIM_SET_COMPARE(led_channels[i].htim, 
+                              led_channels[i].channel, 
+                              current);
+    }
+}
+
+// 伽马校正（人眼感知线性）
+uint16_t gamma_correction(uint8_t linear_value) {
+    // 使用查找表或公式
+    // PWM = (linear / 255)^2.2 × 1000
+    float normalized = linear_value / 255.0;
+    float gamma = pow(normalized, 2.2);
+    return (uint16_t)(gamma * 1000);
+}
+</code></pre>
+<h3 id="2_1">案例2：开关电源控制</h3>
+<pre><code class="language-c">// Buck转换器PWM控制
+#define BUCK_FREQ 100000  // 100kHz
+#define VOUT_TARGET 5.0   // 目标输出5V
+
+typedef struct {
+    float Kp;
+    float Ki;
+    float Kd;
+    float integral;
+    float last_error;
+    float output_min;
+    float output_max;
+} PID_Controller_t;
+
+PID_Controller_t voltage_pid = {
+    .Kp = 0.5,
+    .Ki = 10.0,
+    .Kd = 0.01,
+    .integral = 0,
+    .last_error = 0,
+    .output_min = 0.1,
+    .output_max = 0.9
+};
+
+// Buck转换器PWM初始化
+void Buck_PWM_Init(void) {
+    // 100kHz PWM
+    htim1.Init.Prescaler = 0;
+    htim1.Init.Period = 720;  // 100kHz @ 72MHz
+    HAL_TIM_PWM_Init(&amp;htim1);
+
+    // 启动PWM
+    HAL_TIM_PWM_Start(&amp;htim1, TIM_CHANNEL_1);
+}
+
+// 电压环PID控制
+float voltage_pid_control(float target, float measured) {
+    float error = target - measured;
+
+    // 积分项
+    voltage_pid.integral += error * 0.0001;  // 10kHz控制频率
+
+    // 抗积分饱和
+    if (voltage_pid.integral &gt; 0.5) voltage_pid.integral = 0.5;
+    if (voltage_pid.integral &lt; -0.5) voltage_pid.integral = -0.5;
+
+    // 微分项
+    float derivative = (error - voltage_pid.last_error) / 0.0001;
+    voltage_pid.last_error = error;
+
+    // PID输出
+    float output = voltage_pid.Kp * error + 
+                   voltage_pid.Ki * voltage_pid.integral + 
+                   voltage_pid.Kd * derivative;
+
+    // 限幅
+    if (output &gt; voltage_pid.output_max) output = voltage_pid.output_max;
+    if (output &lt; voltage_pid.output_min) output = voltage_pid.output_min;
+
+    return output;
+}
+
+// 主控制循环
+void Buck_Control_Loop(void) {
+    float vout = read_output_voltage();
+    float duty = voltage_pid_control(VOUT_TARGET, vout);
+
+    // 更新PWM占空比
+    uint16_t ccr = (uint16_t)(duty * 720);
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, ccr);
+}
+</code></pre>
+<h3 id="3_2">案例3：伺服电机控制</h3>
+<pre><code class="language-c">// 标准伺服PWM（50Hz，1-2ms脉宽）
+#define SERVO_FREQ 50      // 50Hz
+#define SERVO_PERIOD 20000 // 20ms
+#define SERVO_MIN 1000     // 1ms
+#define SERVO_MAX 2000     // 2ms
+
+// 伺服PWM初始化
+void Servo_PWM_Init(void) {
+    // 50Hz PWM
+    htim2.Init.Prescaler = 72-1;  // 1MHz
+    htim2.Init.Period = 20000-1;  // 50Hz
+    HAL_TIM_PWM_Init(&amp;htim2);
+
+    HAL_TIM_PWM_Start(&amp;htim2, TIM_CHANNEL_1);
+}
+
+// 设置伺服角度（0-180度）
+void Servo_Set_Angle(float angle) {
+    // 限制角度范围
+    if (angle &lt; 0) angle = 0;
+    if (angle &gt; 180) angle = 180;
+
+    // 转换为脉宽（1000-2000us）
+    uint16_t pulse_width = SERVO_MIN + (uint16_t)((angle / 180.0) * (SERVO_MAX - SERVO_MIN));
+
+    // 更新PWM
+    __HAL_TIM_SET_COMPARE(&amp;htim2, TIM_CHANNEL_1, pulse_width);
+}
+
+// 平滑移动到目标角度
+void Servo_Move_Smooth(float target_angle, float speed) {
+    static float current_angle = 90.0;
+
+    float diff = target_angle - current_angle;
+
+    if (fabs(diff) &gt; speed) {
+        if (diff &gt; 0) {
+            current_angle += speed;
+        } else {
+            current_angle -= speed;
+        }
+    } else {
+        current_angle = target_angle;
+    }
+
+    Servo_Set_Angle(current_angle);
+}
+</code></pre>
+<h2 id="_17">测试与调试</h2>
+<h3 id="pwm_10">PWM信号测试</h3>
+<p><strong>使用示波器</strong>：</p>
+<pre><code>测试项目：
+1. 频率测量
+   - 设置：时基适当，触发在上升沿
+   - 测量：周期T，计算f = 1/T
+
+2. 占空比测量
+   - 设置：光标测量
+   - 测量：T_on和T，计算D = T_on/T × 100%
+
+3. 上升/下降时间
+   - 设置：时基放大到ns级
+   - 测量：10%-90%上升时间
+
+4. 死区时间
+   - 同时观察互补PWM两路信号
+   - 测量两路信号之间的间隔
+</code></pre>
+<p><strong>使用逻辑分析仪</strong>：</p>
+<pre><code class="language-c">// 添加调试输出
+void PWM_Debug_Output(void) {
+    // 在关键点输出调试信号
+    HAL_GPIO_WritePin(DEBUG_GPIO_Port, DEBUG_Pin, GPIO_PIN_SET);
+
+    // PWM更新代码
+    __HAL_TIM_SET_COMPARE(&amp;htim1, TIM_CHANNEL_1, new_duty);
+
+    HAL_GPIO_WritePin(DEBUG_GPIO_Port, DEBUG_Pin, GPIO_PIN_RESET);
+}
+</code></pre>
+<h3 id="_18">性能测试</h3>
+<pre><code class="language-c">// 效率测试
+typedef struct {
+    float input_voltage;
+    float input_current;
+    float output_voltage;
+    float output_current;
+    float efficiency;
+} Power_Measurement_t;
+
+Power_Measurement_t measure_efficiency(void) {
+    Power_Measurement_t result;
+
+    result.input_voltage = read_vin();
+    result.input_current = read_iin();
+    result.output_voltage = read_vout();
+    result.output_current = read_iout();
+
+    float pin = result.input_voltage * result.input_current;
+    float pout = result.output_voltage * result.output_current;
+
+    result.efficiency = (pout / pin) * 100.0;
+
+    return result;
+}
+
+// 纹波测试
+float measure_ripple(void) {
+    const int SAMPLES = 1000;
+    float samples[SAMPLES];
+    float sum = 0;
+
+    // 采集数据
+    for (int i = 0; i &lt; SAMPLES; i++) {
+        samples[i] = read_output_voltage();
+        sum += samples[i];
+        delayMicroseconds(10);
+    }
+
+    float average = sum / SAMPLES;
+
+    // 计算峰峰值
+    float max_val = samples[0];
+    float min_val = samples[0];
+
+    for (int i = 1; i &lt; SAMPLES; i++) {
+        if (samples[i] &gt; max_val) max_val = samples[i];
+        if (samples[i] &lt; min_val) min_val = samples[i];
+    }
+
+    float ripple = max_val - min_val;
+    return ripple;
+}
+</code></pre>
+<h2 id="_19">最佳实践</h2>
+<h3 id="1-pwm_1">1. PWM参数选择指南</h3>
+<p><strong>频率选择决策树</strong>：</p>
+<pre><code>应用类型？
+├─ 电机控制
+│  ├─ 直流有刷电机：4-20kHz
+│  ├─ 无刷电机：8-32kHz
+│  └─ 步进电机：1-10kHz
+│
+├─ LED调光
+│  ├─ 单色LED：200Hz-1kHz
+│  ├─ RGB LED：1-5kHz
+│  └─ 高速摄像：&gt;10kHz
+│
+├─ 电源转换
+│  ├─ Buck/Boost：50-500kHz
+│  ├─ 充电器：20-100kHz
+│  └─ 逆变器：10-50kHz
+│
+└─ 伺服控制
+   └─ 标准伺服：50Hz（固定）
+</code></pre>
+<h3 id="2_2">2. 代码组织建议</h3>
+<pre><code class="language-c">// pwm_driver.h - PWM驱动接口
+#ifndef PWM_DRIVER_H
+#define PWM_DRIVER_H
+
+#include &quot;stm32f1xx_hal.h&quot;
+
+// PWM通道定义
+typedef enum {
+    PWM_CH1 = 0,
+    PWM_CH2,
+    PWM_CH3,
+    PWM_CH4,
+    PWM_CH_MAX
+} PWM_Channel_t;
+
+// PWM配置结构
+typedef struct {
+    uint32_t frequency;      // Hz
+    uint16_t resolution;     // 位数
+    uint16_t deadtime;       // 死区时间（定时器计数值）
+    bool complementary;      // 是否使用互补输出
+} PWM_Config_t;
+
+// API函数
+void PWM_Init(PWM_Channel_t channel, PWM_Config_t *config);
+void PWM_SetDuty(PWM_Channel_t channel, float duty_percent);
+void PWM_Start(PWM_Channel_t channel);
+void PWM_Stop(PWM_Channel_t channel);
+float PWM_GetDuty(PWM_Channel_t channel);
+uint32_t PWM_GetFrequency(PWM_Channel_t channel);
+
+#endif // PWM_DRIVER_H
+</code></pre>
+<pre><code class="language-c">// pwm_driver.c - PWM驱动实现
+#include &quot;pwm_driver.h&quot;
+
+// 内部状态
+static struct {
+    TIM_HandleTypeDef *htim;
+    uint32_t tim_channel;
+    uint16_t period;
+    uint16_t current_duty;
+    bool is_running;
+} pwm_channels[PWM_CH_MAX];
+
+void PWM_Init(PWM_Channel_t channel, PWM_Config_t *config) {
+    if (channel &gt;= PWM_CH_MAX) return;
+
+    // 计算定时器参数
+    uint32_t timer_clock = HAL_RCC_GetPCLK1Freq() * 2;
+    uint16_t prescaler = 0;
+    uint16_t period = timer_clock / config-&gt;frequency - 1;
+
+    // 如果period太大，使用预分频
+    while (period &gt; 65535) {
+        prescaler++;
+        period = timer_clock / (prescaler + 1) / config-&gt;frequency - 1;
+    }
+
+    // 配置定时器
+    TIM_HandleTypeDef *htim = pwm_channels[channel].htim;
+    htim-&gt;Init.Prescaler = prescaler;
+    htim-&gt;Init.Period = period;
+    htim-&gt;Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim-&gt;Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+
+    HAL_TIM_PWM_Init(htim);
+
+    // 保存配置
+    pwm_channels[channel].period = period;
+    pwm_channels[channel].current_duty = 0;
+    pwm_channels[channel].is_running = false;
+}
+
+void PWM_SetDuty(PWM_Channel_t channel, float duty_percent) {
+    if (channel &gt;= PWM_CH_MAX) return;
+
+    // 限制范围
+    if (duty_percent &lt; 0) duty_percent = 0;
+    if (duty_percent &gt; 100) duty_percent = 100;
+
+    // 计算CCR值
+    uint16_t ccr = (uint16_t)(duty_percent / 100.0 * pwm_channels[channel].period);
+
+    // 更新PWM
+    __HAL_TIM_SET_COMPARE(pwm_channels[channel].htim, 
+                          pwm_channels[channel].tim_channel, 
+                          ccr);
+
+    pwm_channels[channel].current_duty = ccr;
+}
+
+void PWM_Start(PWM_Channel_t channel) {
+    if (channel &gt;= PWM_CH_MAX) return;
+
+    HAL_TIM_PWM_Start(pwm_channels[channel].htim, 
+                      pwm_channels[channel].tim_channel);
+    pwm_channels[channel].is_running = true;
+}
+
+void PWM_Stop(PWM_Channel_t channel) {
+    if (channel &gt;= PWM_CH_MAX) return;
+
+    HAL_TIM_PWM_Stop(pwm_channels[channel].htim, 
+                     pwm_channels[channel].tim_channel);
+    pwm_channels[channel].is_running = false;
+}
+</code></pre>
+<h3 id="3_3">3. 安全考虑</h3>
+<pre><code class="language-c">// 安全PWM控制
+typedef struct {
+    float max_duty;          // 最大占空比限制
+    float min_duty;          // 最小占空比限制
+    uint32_t timeout_ms;     // 看门狗超时
+    bool enable_protection;  // 使能保护
+} PWM_Safety_t;
+
+PWM_Safety_t pwm_safety = {
+    .max_duty = 95.0,
+    .min_duty = 5.0,
+    .timeout_ms = 1000,
+    .enable_protection = true
+};
+
+// 安全的PWM设置
+bool PWM_SetDuty_Safe(PWM_Channel_t channel, float duty) {
+    // 检查范围
+    if (duty &gt; pwm_safety.max_duty) {
+        duty = pwm_safety.max_duty;
+        // 记录警告
+        log_warning(&quot;PWM duty limited to max&quot;);
+    }
+
+    if (duty &lt; pwm_safety.min_duty) {
+        duty = pwm_safety.min_duty;
+        log_warning(&quot;PWM duty limited to min&quot;);
+    }
+
+    // 更新看门狗
+    update_watchdog();
+
+    // 设置PWM
+    PWM_SetDuty(channel, duty);
+
+    return true;
+}
+
+// 紧急停止
+void PWM_Emergency_Stop(void) {
+    // 停止所有PWM通道
+    for (int i = 0; i &lt; PWM_CH_MAX; i++) {
+        PWM_Stop(i);
+        PWM_SetDuty(i, 0);
+    }
+
+    // 记录事件
+    log_error(&quot;Emergency stop triggered&quot;);
+}
+</code></pre>
+<h3 id="4_2">4. 性能监控</h3>
+<pre><code class="language-c">// PWM性能统计
+typedef struct {
+    uint32_t update_count;
+    uint32_t error_count;
+    float avg_duty;
+    float max_duty;
+    float min_duty;
+    uint32_t last_update_time;
+} PWM_Stats_t;
+
+PWM_Stats_t pwm_stats[PWM_CH_MAX];
+
+void PWM_Update_Stats(PWM_Channel_t channel, float duty) {
+    PWM_Stats_t *stats = &amp;pwm_stats[channel];
+
+    stats-&gt;update_count++;
+
+    // 更新平均值
+    stats-&gt;avg_duty = (stats-&gt;avg_duty * (stats-&gt;update_count - 1) + duty) 
+                      / stats-&gt;update_count;
+
+    // 更新最大最小值
+    if (duty &gt; stats-&gt;max_duty) stats-&gt;max_duty = duty;
+    if (duty &lt; stats-&gt;min_duty) stats-&gt;min_duty = duty;
+
+    stats-&gt;last_update_time = HAL_GetTick();
+}
+
+void PWM_Print_Stats(PWM_Channel_t channel) {
+    PWM_Stats_t *stats = &amp;pwm_stats[channel];
+
+    printf(&quot;PWM Channel %d Statistics:\n&quot;, channel);
+    printf(&quot;  Updates: %lu\n&quot;, stats-&gt;update_count);
+    printf(&quot;  Errors: %lu\n&quot;, stats-&gt;error_count);
+    printf(&quot;  Avg Duty: %.2f%%\n&quot;, stats-&gt;avg_duty);
+    printf(&quot;  Max Duty: %.2f%%\n&quot;, stats-&gt;max_duty);
+    printf(&quot;  Min Duty: %.2f%%\n&quot;, stats-&gt;min_duty);
+    printf(&quot;  Last Update: %lu ms ago\n&quot;, 
+           HAL_GetTick() - stats-&gt;last_update_time);
+}
+</code></pre>
+<h2 id="_20">总结</h2>
+<h3 id="_21">关键要点</h3>
+<ol>
+<li>
+<p><strong>PWM原理</strong>
+   - 通过占空比控制平均功率
+   - 频率选择需要权衡多个因素
+   - 分辨率与频率相互制约</p>
+</li>
+<li>
+<p><strong>频率选择</strong>
+   - 电机控制：1-20kHz
+   - LED调光：200Hz-1kHz
+   - 开关电源：50-500kHz
+   - 考虑噪声、效率、EMI</p>
+</li>
+<li>
+<p><strong>死区时间</strong>
+   - 防止桥臂直通
+   - 根据器件特性计算
+   - 需要占空比补偿</p>
+</li>
+<li>
+<p><strong>互补PWM</strong>
+   - 用于H桥、半桥电路
+   - 必须配置死区时间
+   - 适用于电机驱动、电源转换</p>
+</li>
+<li>
+<p><strong>性能优化</strong>
+   - 减少开关损耗
+   - 降低EMI
+   - 提高控制精度
+   - 添加保护机制</p>
+</li>
+</ol>
+<h3 id="_22">学习检查清单</h3>
+<p>完成本文学习后，你应该能够：</p>
+<ul>
+<li>[x] 理解PWM的数学模型和工作原理</li>
+<li>[x] 根据应用选择合适的PWM频率</li>
+<li>[x] 计算和配置死区时间</li>
+<li>[x] 实现互补PWM信号生成</li>
+<li>[x] 优化PWM参数提高系统性能</li>
+<li>[x] 解决常见的PWM相关问题</li>
+<li>[x] 实现安全可靠的PWM控制系统</li>
+</ul>
+<h3 id="_23">进阶学习方向</h3>
+<p><strong>深入主题</strong>：
+1. <strong>SVPWM（空间矢量PWM）</strong>
+   - 三相电机控制
+   - 提高电压利用率
+   - 减少谐波</p>
+<ol start="2">
+<li>
+<p><strong>自适应PWM</strong>
+   - 根据负载动态调整
+   - 效率优化
+   - 噪声最小化</p>
+</li>
+<li>
+<p><strong>数字电源控制</strong>
+   - 数字PID算法
+   - 状态空间控制
+   - 预测控制</p>
+</li>
+<li>
+<p><strong>高级调制技术</strong>
+   - 多电平PWM
+   - 随机PWM
+   - 混合调制</p>
+</li>
+</ol>
+<h2 id="_24">参考资料</h2>
+<h3 id="_25">技术文档</h3>
+<ol>
+<li>
+<p><strong>芯片数据手册</strong>
+   - STM32 Reference Manual - Timer章节
+   - TI Motor Control Application Notes
+   - Microchip PWM Application Notes</p>
+</li>
+<li>
+<p><strong>应用笔记</strong>
+   - AN4013: STM32 Timer Cookbook
+   - AN2820: Driving MOSFET and IGBT
+   - AN1160: Sensorless BLDC Control</p>
+</li>
+</ol>
+<h3 id="_26">推荐书籍</h3>
+<ol>
+<li>
+<p><strong>《电力电子技术》</strong> - Ned Mohan
+   - PWM原理详解
+   - 功率转换拓扑
+   - 控制策略</p>
+</li>
+<li>
+<p><strong>《嵌入式系统设计》</strong> - Frank Vahid
+   - 定时器应用
+   - PWM实现
+   - 实时控制</p>
+</li>
+<li>
+<p><strong>《电机控制系统》</strong> - R. Krishnan
+   - 电机驱动技术
+   - PWM调制策略
+   - 控制算法</p>
+</li>
+</ol>
+<h3 id="_27">在线资源</h3>
+<ol>
+<li>
+<p><strong>视频教程</strong>
+   - "Understanding PWM" - All About Circuits
+   - "Advanced Timer Features" - STM32 MOOCs
+   - "Motor Control with PWM" - TI Training</p>
+</li>
+<li>
+<p><strong>开源项目</strong>
+   - <a href="https://github.com/simplefoc/Arduino-FOC">SimpleFOC</a> - 电机控制库
+   - <a href="https://github.com/vedderb/bldc">VESC</a> - 开源电调
+   - <a href="https://github.com/odriverobotics/ODrive">ODrive</a> - 高性能电机控制器</p>
+</li>
+<li>
+<p><strong>论坛和社区</strong>
+   - STM32 Community Forum
+   - EEVblog Forum - Power Electronics
+   - Stack Exchange - Electrical Engineering</p>
+</li>
+</ol>
+<h3 id="_28">相关教程</h3>
+<ul>
+<li><a href="../beginner/01-dc-motor-control.html">直流电机驱动与控制</a> - PWM基础应用</li>
+<li><a href="../intermediate/02-bldc-motor-control.html">无刷电机控制入门</a> - 高级PWM应用</li>
+<li><a href="../intermediate/03-pid-control.html">PID控制算法实战</a> - 闭环控制</li>
+<li>开关电源设计 - PWM在电源中的应用</li>
+</ul>
+<h2 id="_29">练习与项目</h2>
+<h3 id="1pwm_1">练习1：PWM参数计算 ⭐</h3>
+<p><strong>任务</strong>：给定系统时钟72MHz，计算以下PWM配置的参数：</p>
+<ol>
+<li>频率10kHz，分辨率10位</li>
+<li>频率100kHz，最大分辨率</li>
+<li>分辨率16位，最大频率</li>
+</ol>
+<p><strong>提示</strong>：使用公式 <code>频率 = 时钟 / (预分频 × 周期)</code></p>
+<h3 id="2_3">练习2：死区时间设计 ⭐⭐</h3>
+<p><strong>任务</strong>：设计H桥驱动电路的死区时间</p>
+<p><strong>已知条件</strong>：
+- MOSFET型号：IRF540
+- 关断时间：50ns
+- 开通时间：30ns
+- 安全裕量：30%</p>
+<p><strong>要求</strong>：
+1. 计算最小死区时间
+2. 在STM32上配置死区时间
+3. 验证配置是否正确</p>
+<h3 id="3pwm">练习3：软件PWM实现 ⭐⭐⭐</h3>
+<p><strong>任务</strong>：使用定时器中断实现8通道软件PWM</p>
+<p><strong>要求</strong>：
+- 频率：1kHz
+- 分辨率：8位
+- 占用CPU时间&lt;10%
+- 支持动态调整占空比</p>
+<h3 id="led">项目：智能LED调光系统 ⭐⭐⭐⭐</h3>
+<p><strong>功能要求</strong>：
+1. 16路LED独立控制
+2. 支持渐变效果
+3. 伽马校正
+4. 预设场景模式
+5. 蓝牙/WiFi控制</p>
+<p><strong>技术要点</strong>：
+- 高频PWM（&gt;1kHz）
+- DMA传输减少CPU负载
+- 平滑渐变算法
+- 低功耗设计</p>
+<hr />
+<p><strong>版权声明</strong>：本文档采用 CC BY-SA 4.0 协议，欢迎分享和改编，但请注明出处。</p>
+<p><strong>反馈与改进</strong>：如发现文档错误或有改进建议，欢迎提交Issue或Pull Request。</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

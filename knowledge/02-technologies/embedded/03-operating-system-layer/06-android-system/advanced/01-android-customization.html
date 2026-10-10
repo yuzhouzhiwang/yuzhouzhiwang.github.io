@@ -1,0 +1,2150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>Android系统定制与移植：从AOSP到产品化 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/06-android-system/">06-android-system</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/06-android-system/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">学习目标</a></li>
+<li><a href="#_2">前置要求</a></li>
+<li><a href="#android">Android系统架构概述</a><ul>
+<li><a href="#aosp">AOSP项目结构</a></li>
+<li><a href="#android_1">Android启动流程</a></li>
+</ul>
+</li>
+<li><a href="#aosp_1">AOSP源码下载与编译</a><ul>
+<li><a href="#_3">环境准备</a></li>
+<li><a href="#aosp_2">下载AOSP源码</a></li>
+<li><a href="#aosp_3">编译AOSP</a></li>
+<li><a href="#_4">编译常见问题</a></li>
+</ul>
+</li>
+<li><a href="#android_2">Android系统定制</a><ul>
+<li><a href="#_5">创建设备配置</a></li>
+<li><a href="#_6">系统属性定制</a></li>
+<li><a href="#_7">初始化脚本定制</a></li>
+<li><a href="#_8">文件系统表配置</a></li>
+<li><a href="#_9">资源覆盖定制</a></li>
+</ul>
+</li>
+<li><a href="#bsp">BSP适配</a><ul>
+<li><a href="#_10">内核适配</a></li>
+<li><a href="#hal">HAL层适配</a></li>
+</ul>
+</li>
+<li><a href="#_11">系统优化</a><ul>
+<li><a href="#_12">启动优化</a></li>
+<li><a href="#_13">性能优化</a></li>
+<li><a href="#_14">电源管理优化</a></li>
+</ul>
+</li>
+<li><a href="#ota">OTA升级系统</a><ul>
+<li><a href="#ota_1">OTA包制作</a></li>
+<li><a href="#ota_2">OTA升级实现</a></li>
+</ul>
+</li>
+<li><a href="#_15">调试与测试</a><ul>
+<li><a href="#_16">系统调试</a></li>
+<li><a href="#ctsvts">CTS/VTS测试</a></li>
+</ul>
+</li>
+<li><a href="#_17">总结</a><ul>
+<li><a href="#_18">关键要点</a></li>
+</ul>
+</li>
+<li><a href="#_19">实践练习</a><ul>
+<li><a href="#1aosp">练习1：编译AOSP</a></li>
+<li><a href="#2">练习2：创建自定义设备</a></li>
+<li><a href="#3ota">练习3：实现OTA升级</a></li>
+</ul>
+</li>
+<li><a href="#_20">下一步学习</a><ul>
+<li><a href="#1">1. 深入学习</a></li>
+<li><a href="#2_1">2. 相关主题</a></li>
+<li><a href="#3">3. 实战项目</a></li>
+</ul>
+</li>
+<li><a href="#_21">参考资料</a><ul>
+<li><a href="#_22">官方文档</a></li>
+<li><a href="#_23">推荐书籍</a></li>
+<li><a href="#_24">在线资源</a></li>
+<li><a href="#_25">开发工具</a></li>
+</ul>
+</li>
+<li><a href="#_26">常见问题解答</a><ul>
+<li><a href="#q1-aosp">Q1: AOSP编译需要多长时间？</a></li>
+<li><a href="#q2">Q2: 如何解决编译错误？</a></li>
+<li><a href="#q3-ui">Q3: 如何定制系统UI？</a></li>
+<li><a href="#q4">Q4: 如何优化系统性能？</a></li>
+<li><a href="#q5">Q5: 如何保证系统安全？</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="androidaosp">Android系统定制与移植：从AOSP到产品化</h1>
+<h2 id="_1">学习目标</h2>
+<p>完成本教程后，你将能够：</p>
+<ul>
+<li>[ ] 理解Android系统架构和AOSP项目结构</li>
+<li>[ ] 掌握AOSP源码下载和编译流程</li>
+<li>[ ] 学会Android系统定制和功能裁剪</li>
+<li>[ ] 掌握BSP（Board Support Package）适配方法</li>
+<li>[ ] 理解Android启动流程和优化技术</li>
+<li>[ ] 掌握系统性能优化和调试方法</li>
+<li>[ ] 学会OTA升级系统的设计与实现</li>
+<li>[ ] 能够完成一个完整的Android产品定制项目</li>
+</ul>
+<h2 id="_2">前置要求</h2>
+<p>在开始学习之前，建议你具备：</p>
+<p><strong>知识要求</strong>：
+- 熟悉Linux系统和命令行操作
+- 了解Android系统架构
+- 掌握Android驱动开发
+- 理解Linux内核编译
+- 熟悉Git版本控制</p>
+<p><strong>技能要求</strong>：
+- 能够编译Linux内核
+- 会使用Android开发工具
+- 熟悉Shell脚本编程
+- 了解设备树配置
+- 能够阅读和修改Makefile</p>
+<p><strong>开发环境</strong>：
+- Ubuntu 20.04或更高版本（推荐）
+- 至少250GB可用磁盘空间
+- 至少16GB RAM（推荐32GB）
+- 高速网络连接
+- Git、Repo、Python等工具</p>
+<h2 id="android">Android系统架构概述</h2>
+<h3 id="aosp">AOSP项目结构</h3>
+<p>AOSP（Android Open Source Project）是Android的开源版本，包含了完整的Android系统源码。</p>
+<p><strong>Android系统层次架构</strong>：</p>
+<pre><code>┌─────────────────────────────────────────────────┐
+│    Applications (应用层)                         │
+│    System Apps, Third-party Apps                │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    Application Framework (应用框架层)            │
+│    Activity Manager, Window Manager, etc.       │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    Android Runtime &amp; Libraries                   │
+│    ART, Native Libraries, System Services        │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    Hardware Abstraction Layer (HAL)              │
+│    Camera HAL, Audio HAL, Sensor HAL, etc.       │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    Linux Kernel                                  │
+│    Drivers, Power Management, Security           │
+└─────────────────────────────────────────────────┘
+                        ↕
+┌─────────────────────────────────────────────────┐
+│    Hardware                                      │
+└─────────────────────────────────────────────────┘
+</code></pre>
+<p><strong>AOSP源码目录结构</strong>：</p>
+<pre><code>aosp/
+├── art/                    # Android Runtime
+├── bionic/                 # C库、数学库、动态链接器
+├── bootable/               # 启动相关（bootloader、recovery）
+├── build/                  # 编译系统
+├── cts/                    # 兼容性测试套件
+├── dalvik/                 # Dalvik虚拟机
+├── developers/             # 开发者资源
+├── development/            # 开发工具
+├── device/                 # 设备相关配置
+│   ├── generic/           # 通用设备配置
+│   └── vendor/            # 厂商设备配置
+├── external/               # 外部开源项目
+├── frameworks/             # 框架层
+│   ├── base/              # 核心框架
+│   ├── native/            # Native框架
+│   └── av/                # 音视频框架
+├── hardware/               # HAL层
+│   ├── interfaces/        # HAL接口定义
+│   └── libhardware/       # HAL库
+├── kernel/                 # Linux内核
+├── packages/               # 应用程序
+│   ├── apps/              # 系统应用
+│   └── services/          # 系统服务
+├── prebuilts/              # 预编译工具
+├── sdk/                    # SDK
+├── system/                 # 系统组件
+│   ├── core/              # 核心系统
+│   ├── sepolicy/          # SELinux策略
+│   └── vold/              # 卷管理守护进程
+├── tools/                  # 开发工具
+└── vendor/                 # 厂商专有代码
+</code></pre>
+<h3 id="android_1">Android启动流程</h3>
+<p><strong>完整启动流程</strong>：</p>
+<pre><code>1. Bootloader
+   ↓
+2. Linux Kernel
+   ↓
+3. Init进程
+   ↓
+4. Zygote进程
+   ↓
+5. System Server
+   ↓
+6. Home Launcher
+</code></pre>
+<p><strong>详细启动流程</strong>：</p>
+<ol>
+<li>
+<p><strong>Bootloader阶段</strong>
+   - 硬件初始化
+   - 加载内核到内存
+   - 传递启动参数
+   - 跳转到内核入口</p>
+</li>
+<li>
+<p><strong>Kernel阶段</strong>
+   - 内核初始化
+   - 驱动加载
+   - 挂载根文件系统
+   - 启动init进程</p>
+</li>
+<li>
+<p><strong>Init阶段</strong>
+   - 解析init.rc配置
+   - 挂载文件系统
+   - 启动系统服务
+   - 启动Zygote</p>
+</li>
+<li>
+<p><strong>Zygote阶段</strong>
+   - 创建虚拟机
+   - 预加载类和资源
+   - 启动System Server
+   - 监听应用启动请求</p>
+</li>
+<li>
+<p><strong>System Server阶段</strong>
+   - 启动系统服务
+   - 启动各种Manager
+   - 发送BOOT_COMPLETED广播</p>
+</li>
+<li>
+<p><strong>Home Launcher阶段</strong>
+   - 显示桌面
+   - 系统就绪</p>
+</li>
+</ol>
+<h2 id="aosp_1">AOSP源码下载与编译</h2>
+<h3 id="_3">环境准备</h3>
+<p><strong>1. 安装必要的软件包</strong></p>
+<pre><code class="language-bash"># 更新系统
+sudo apt-get update
+sudo apt-get upgrade
+
+# 安装编译依赖
+sudo apt-get install -y git-core gnupg flex bison build-essential \
+    zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+    libncurses5 lib32ncurses5-dev x11proto-core-dev libx11-dev \
+    lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc unzip \
+    fontconfig python3 python3-pip
+
+# 安装Repo工具
+mkdir -p ~/bin
+curl https://storage.googleapis.com/git-repo-downloads/repo &gt; ~/bin/repo
+chmod a+x ~/bin/repo
+export PATH=~/bin:$PATH
+
+# 配置Git
+git config --global user.name &quot;Your Name&quot;
+git config --global user.email &quot;your.email@example.com&quot;
+</code></pre>
+<p><strong>2. 配置编译环境</strong></p>
+<pre><code class="language-bash"># 创建工作目录
+mkdir -p ~/aosp
+cd ~/aosp
+
+# 设置环境变量
+echo 'export USE_CCACHE=1' &gt;&gt; ~/.bashrc
+echo 'export CCACHE_DIR=~/.ccache' &gt;&gt; ~/.bashrc
+source ~/.bashrc
+
+# 配置ccache（加速编译）
+ccache -M 50G
+</code></pre>
+<h3 id="aosp_2">下载AOSP源码</h3>
+<p><strong>1. 初始化Repo仓库</strong></p>
+<pre><code class="language-bash"># 进入工作目录
+cd ~/aosp
+
+# 初始化仓库（选择Android版本）
+repo init -u https://android.googlesource.com/platform/manifest -b android-13.0.0_r1
+
+# 或使用国内镜像（清华大学）
+repo init -u https://mirrors.tuna.tsinghua.edu.cn/git/AOSP/platform/manifest \
+    -b android-13.0.0_r1
+</code></pre>
+<p><strong>2. 同步源码</strong></p>
+<pre><code class="language-bash"># 开始同步（需要很长时间，取决于网络速度）
+repo sync -c -j8
+
+# 参数说明：
+# -c: 只下载当前分支
+# -j8: 使用8个并行任务
+</code></pre>
+<p><strong>常见Android版本代号</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>版本号</th>
+<th>代号</th>
+<th>API Level</th>
+<th>发布时间</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>13</td>
+<td>Tiramisu</td>
+<td>33</td>
+<td>2022</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Snow Cone</td>
+<td>31-32</td>
+<td>2021</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Red Velvet Cake</td>
+<td>30</td>
+<td>2020</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Quince Tart</td>
+<td>29</td>
+<td>2019</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Pie</td>
+<td>28</td>
+<td>2018</td>
+</tr>
+</tbody>
+</table>
+<h3 id="aosp_3">编译AOSP</h3>
+<p><strong>1. 设置编译环境</strong></p>
+<pre><code class="language-bash"># 进入源码目录
+cd ~/aosp
+
+# 初始化编译环境
+source build/envsetup.sh
+
+# 选择编译目标
+lunch aosp_arm64-eng
+
+# 编译目标格式：&lt;product_name&gt;-&lt;build_variant&gt;
+# product_name: aosp_arm64, aosp_x86_64等
+# build_variant: user, userdebug, eng
+</code></pre>
+<p><strong>编译变体说明</strong>：</p>
+<ul>
+<li><strong>user</strong>: 生产版本，权限受限，性能优化</li>
+<li><strong>userdebug</strong>: 开发版本，root权限，可调试</li>
+<li><strong>eng</strong>: 工程版本，所有调试功能，开发使用</li>
+</ul>
+<p><strong>2. 开始编译</strong></p>
+<pre><code class="language-bash"># 编译整个系统（使用所有CPU核心）
+make -j$(nproc)
+
+# 或指定核心数
+make -j16
+
+# 编译特定模块
+make framework
+make services
+make systemui
+</code></pre>
+<p><strong>3. 编译输出</strong></p>
+<p>编译完成后，输出文件位于：</p>
+<pre><code>out/target/product/&lt;device_name&gt;/
+├── system.img          # 系统分区镜像
+├── vendor.img          # 厂商分区镜像
+├── boot.img            # 启动镜像
+├── recovery.img        # 恢复镜像
+├── userdata.img        # 用户数据镜像
+├── cache.img           # 缓存镜像
+└── ramdisk.img         # 内存盘镜像
+</code></pre>
+<h3 id="_4">编译常见问题</h3>
+<p><strong>问题1：内存不足</strong></p>
+<pre><code class="language-bash"># 解决方法：减少并行任务数
+make -j4
+
+# 或增加swap空间
+sudo fallocate -l 16G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+</code></pre>
+<p><strong>问题2：磁盘空间不足</strong></p>
+<pre><code class="language-bash"># 清理编译输出
+make clean
+
+# 清理所有（包括配置）
+make clobber
+
+# 检查磁盘使用
+du -sh out/
+</code></pre>
+<p><strong>问题3：编译错误</strong></p>
+<pre><code class="language-bash"># 查看详细错误信息
+make showcommands
+
+# 单独编译失败的模块
+make &lt;module_name&gt;
+
+# 查看编译日志
+less out/verbose.log.gz
+</code></pre>
+<h2 id="android_2">Android系统定制</h2>
+<h3 id="_5">创建设备配置</h3>
+<p><strong>1. 设备目录结构</strong></p>
+<pre><code class="language-bash"># 创建设备配置目录
+mkdir -p device/vendor/product_name
+
+# 目录结构
+device/vendor/product_name/
+├── AndroidProducts.mk      # 产品定义
+├── BoardConfig.mk          # 板级配置
+├── device.mk               # 设备配置
+├── product_name.mk         # 产品配置
+├── system.prop             # 系统属性
+├── init.rc                 # 初始化脚本
+├── fstab.device            # 文件系统表
+├── ueventd.rc              # 设备节点配置
+├── sepolicy/               # SELinux策略
+├── overlay/                # 资源覆盖
+└── proprietary/            # 专有文件
+</code></pre>
+<p><strong>2. 产品定义文件</strong></p>
+<p><strong>文件：device/vendor/product_name/AndroidProducts.mk</strong></p>
+<pre><code class="language-makefile">#
+# Copyright (C) 2024 Vendor Inc.
+#
+
+PRODUCT_MAKEFILES := \
+    $(LOCAL_DIR)/product_name.mk
+
+COMMON_LUNCH_CHOICES := \
+    product_name-user \
+    product_name-userdebug \
+    product_name-eng
+</code></pre>
+<p><strong>3. 产品配置文件</strong></p>
+<p><strong>文件：device/vendor/product_name/product_name.mk</strong></p>
+<pre><code class="language-makefile">#
+# Product Configuration
+#
+
+# 继承基础配置
+$(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/product/full_base.mk)
+
+# 产品信息
+PRODUCT_NAME := product_name
+PRODUCT_DEVICE := product_name
+PRODUCT_BRAND := Vendor
+PRODUCT_MODEL := Product Name
+PRODUCT_MANUFACTURER := Vendor Inc.
+
+# 设备配置
+$(call inherit-product, device/vendor/product_name/device.mk)
+
+# 系统属性
+PRODUCT_PROPERTY_OVERRIDES += \
+    ro.product.name=product_name \
+    ro.product.device=product_name \
+    ro.product.brand=Vendor \
+    ro.product.model=Product_Name \
+    ro.product.manufacturer=Vendor
+
+# 包含的应用
+PRODUCT_PACKAGES += \
+    Settings \
+    SystemUI \
+    Launcher3 \
+    Camera2 \
+    Gallery2 \
+    Music \
+    Calculator \
+    Calendar \
+    Contacts \
+    Dialer \
+    Messaging
+
+# 权限配置
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/android.hardware.camera.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.camera.xml \
+    frameworks/native/data/etc/android.hardware.wifi.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.wifi.xml \
+    frameworks/native/data/etc/android.hardware.bluetooth.xml:$(TARGET_COPY_OUT_VENDOR)/etc/permissions/android.hardware.bluetooth.xml
+
+# 覆盖资源
+DEVICE_PACKAGE_OVERLAYS += device/vendor/product_name/overlay
+</code></pre>
+<p><strong>4. 设备配置文件</strong></p>
+<p><strong>文件：device/vendor/product_name/device.mk</strong></p>
+<pre><code class="language-makefile">#
+# Device Configuration
+#
+
+# 架构配置
+TARGET_ARCH := arm64
+TARGET_ARCH_VARIANT := armv8-a
+TARGET_CPU_ABI := arm64-v8a
+TARGET_CPU_VARIANT := generic
+
+TARGET_2ND_ARCH := arm
+TARGET_2ND_ARCH_VARIANT := armv7-a-neon
+TARGET_2ND_CPU_ABI := armeabi-v7a
+TARGET_2ND_CPU_VARIANT := generic
+
+# 内核配置
+BOARD_KERNEL_CMDLINE := console=ttyMSM0,115200n8 \
+    androidboot.console=ttyMSM0 \
+    androidboot.hardware=product_name \
+    user_debug=31 \
+    msm_rtb.filter=0x237 \
+    ehci-hcd.park=3 \
+    androidboot.bootdevice=7824900.sdhci \
+    androidboot.selinux=permissive
+
+BOARD_KERNEL_BASE := 0x80000000
+BOARD_KERNEL_PAGESIZE := 2048
+BOARD_MKBOOTIMG_ARGS := --ramdisk_offset 0x01000000 --tags_offset 0x00000100
+
+# 分区大小
+BOARD_BOOTIMAGE_PARTITION_SIZE := 67108864
+BOARD_RECOVERYIMAGE_PARTITION_SIZE := 67108864
+BOARD_SYSTEMIMAGE_PARTITION_SIZE := 3221225472
+BOARD_USERDATAIMAGE_PARTITION_SIZE := 10737418240
+BOARD_CACHEIMAGE_PARTITION_SIZE := 268435456
+BOARD_VENDORIMAGE_PARTITION_SIZE := 536870912
+
+# 文件系统类型
+BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE := ext4
+BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE := ext4
+BOARD_USERDATAIMAGE_FILE_SYSTEM_TYPE := ext4
+BOARD_CACHEIMAGE_FILE_SYSTEM_TYPE := ext4
+
+# HAL配置
+PRODUCT_PACKAGES += \
+    android.hardware.audio@6.0-impl \
+    android.hardware.camera.provider@2.4-impl \
+    android.hardware.graphics.composer@2.1-impl \
+    android.hardware.sensors@1.0-impl \
+    android.hardware.wifi@1.0-service
+
+# 媒体配置
+PRODUCT_COPY_FILES += \
+    device/vendor/product_name/media_codecs.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_codecs.xml \
+    device/vendor/product_name/media_profiles.xml:$(TARGET_COPY_OUT_VENDOR)/etc/media_profiles.xml
+
+# 音频配置
+PRODUCT_COPY_FILES += \
+    device/vendor/product_name/audio_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy.conf \
+    device/vendor/product_name/mixer_paths.xml:$(TARGET_COPY_OUT_VENDOR)/etc/mixer_paths.xml
+</code></pre>
+<p><strong>5. 板级配置文件</strong></p>
+<p><strong>文件：device/vendor/product_name/BoardConfig.mk</strong></p>
+<pre><code class="language-makefile">#
+# Board Configuration
+#
+
+# 平台配置
+TARGET_BOARD_PLATFORM := msm8953
+TARGET_BOOTLOADER_BOARD_NAME := product_name
+
+# 内核源码路径
+TARGET_KERNEL_SOURCE := kernel/vendor/msm8953
+TARGET_KERNEL_CONFIG := product_name_defconfig
+
+# 编译内核
+BOARD_KERNEL_IMAGE_NAME := Image.gz-dtb
+
+# Recovery配置
+TARGET_RECOVERY_FSTAB := device/vendor/product_name/fstab.device
+BOARD_HAS_NO_SELECT_BUTTON := true
+TARGET_USERIMAGES_USE_EXT4 := true
+TARGET_USERIMAGES_USE_F2FS := true
+
+# SELinux配置
+BOARD_SEPOLICY_DIRS += \
+    device/vendor/product_name/sepolicy
+
+# Treble支持
+PRODUCT_FULL_TREBLE_OVERRIDE := true
+BOARD_VNDK_VERSION := current
+
+# 加密支持
+BOARD_USES_METADATA_PARTITION := true
+</code></pre>
+<h3 id="_6">系统属性定制</h3>
+<p><strong>文件：device/vendor/product_name/system.prop</strong></p>
+<pre><code class="language-properties"># 系统属性配置
+
+# 性能优化
+ro.config.low_ram=false
+ro.config.max_starting_bg=8
+dalvik.vm.heapsize=512m
+dalvik.vm.heapstartsize=8m
+dalvik.vm.heapgrowthlimit=192m
+dalvik.vm.heaptargetutilization=0.75
+
+# 显示配置
+ro.sf.lcd_density=320
+debug.sf.hw=1
+debug.egl.hw=1
+debug.composition.type=c2d
+persist.hwc.mdpcomp.enable=true
+
+# 音频配置
+ro.audio.flinger_standbytime_ms=300
+persist.audio.fluence.speaker=true
+persist.audio.fluence.voicecall=true
+
+# 网络配置
+ro.telephony.default_network=9,9
+persist.radio.multisim.config=dsds
+persist.data.netmgrd.qos.enable=true
+
+# 电源管理
+pm.sleep_mode=1
+ro.ril.disable.power.collapse=0
+persist.sys.purgeable_assets=1
+
+# 调试配置
+persist.sys.usb.config=mtp,adb
+ro.adb.secure=0
+ro.debuggable=1
+
+# 定制属性
+ro.vendor.product.version=1.0
+ro.vendor.build.date=2024-01-15
+</code></pre>
+<h3 id="_7">初始化脚本定制</h3>
+<p><strong>文件：device/vendor/product_name/init.rc</strong></p>
+<pre><code># Android Init Script
+
+on early-init
+    # 设置SELinux
+    write /sys/fs/selinux/checkreqprot 0
+
+    # 挂载调试文件系统
+    mount debugfs /sys/kernel/debug /sys/kernel/debug mode=0755
+
+on init
+    # 创建目录
+    mkdir /mnt/vendor 0755 root system
+    mkdir /mnt/vendor/persist 0771 system system
+
+    # 设置权限
+    chmod 0664 /sys/class/leds/lcd-backlight/brightness
+    chown system system /sys/class/leds/lcd-backlight/brightness
+
+    # 启动服务
+    start vendor.hwcomposer-2-1
+
+on boot
+    # 设置CPU调度器
+    write /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor interactive
+
+    # 设置I/O调度器
+    write /sys/block/mmcblk0/queue/scheduler cfq
+
+    # 启动自定义服务
+    start custom_service
+
+# 自定义服务
+service custom_service /vendor/bin/custom_daemon
+    class main
+    user system
+    group system
+    disabled
+    oneshot
+
+# 硬件服务
+service vendor.hwcomposer-2-1 /vendor/bin/hw/android.hardware.graphics.composer@2.1-service
+    class hal animation
+    user system
+    group graphics drmrpc
+    capabilities SYS_NICE
+    onrestart restart surfaceflinger
+
+# 传感器服务
+service vendor.sensors-hal-1-0 /vendor/bin/hw/android.hardware.sensors@1.0-service
+    class hal
+    user system
+    group system input
+</code></pre>
+<h3 id="_8">文件系统表配置</h3>
+<p><strong>文件：device/vendor/product_name/fstab.device</strong></p>
+<pre><code># Android fstab file
+# &lt;src&gt;                                    &lt;mnt_point&gt;  &lt;type&gt;  &lt;mnt_flags and options&gt;  &lt;fs_mgr_flags&gt;
+
+/dev/block/bootdevice/by-name/system      /system      ext4    ro,barrier=1             wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+/dev/block/bootdevice/by-name/vendor      /vendor      ext4    ro,barrier=1             wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+/dev/block/bootdevice/by-name/product     /product     ext4    ro,barrier=1             wait,slotselect,avb=vbmeta_system,logical,first_stage_mount
+/dev/block/bootdevice/by-name/userdata    /data        ext4    noatime,nosuid,nodev,barrier=1,noauto_da_alloc  wait,check,fileencryption=ice,keydirectory=/metadata/vold/metadata_encryption,quota,reservedsize=128M
+/dev/block/bootdevice/by-name/cache       /cache       ext4    noatime,nosuid,nodev,barrier=1  wait,check
+/dev/block/bootdevice/by-name/persist     /mnt/vendor/persist  ext4    noatime,nosuid,nodev,barrier=1  wait
+/dev/block/bootdevice/by-name/boot        /boot        emmc    defaults                 defaults
+/dev/block/bootdevice/by-name/recovery    /recovery    emmc    defaults                 defaults
+/dev/block/bootdevice/by-name/misc        /misc        emmc    defaults                 defaults
+
+# SD卡
+/devices/platform/soc/7864900.sdhci/mmc_host*  auto  auto  defaults  voldmanaged=sdcard1:auto,encryptable=userdata
+
+# USB存储
+/devices/platform/soc/7000000.ssusb/7000000.dwc3/xhci-hcd.0.auto*  auto  auto  defaults  voldmanaged=usb:auto
+</code></pre>
+<h3 id="_9">资源覆盖定制</h3>
+<p><strong>目录结构</strong>：</p>
+<pre><code>device/vendor/product_name/overlay/
+├── frameworks/
+│   └── base/
+│       ├── core/
+│       │   └── res/
+│       │       └── res/
+│       │           ├── values/
+│       │           │   ├── config.xml
+│       │           │   └── strings.xml
+│       │           └── drawable/
+│       │               └── custom_icon.png
+│       └── packages/
+│           └── SystemUI/
+│               └── res/
+│                   └── values/
+│                       └── config.xml
+└── vendor/
+    └── custom/
+        └── res/
+            └── values/
+                └── config.xml
+</code></pre>
+<p><strong>文件：overlay/frameworks/base/core/res/res/values/config.xml</strong></p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;resources&gt;
+    &lt;!-- 状态栏高度 --&gt;
+    &lt;dimen name=&quot;status_bar_height&quot;&gt;24dp&lt;/dimen&gt;
+
+    &lt;!-- 导航栏高度 --&gt;
+    &lt;dimen name=&quot;navigation_bar_height&quot;&gt;48dp&lt;/dimen&gt;
+
+    &lt;!-- 屏幕亮度配置 --&gt;
+    &lt;integer-array name=&quot;config_autoBrightnessLevels&quot;&gt;
+        &lt;item&gt;10&lt;/item&gt;
+        &lt;item&gt;50&lt;/item&gt;
+        &lt;item&gt;100&lt;/item&gt;
+        &lt;item&gt;200&lt;/item&gt;
+        &lt;item&gt;400&lt;/item&gt;
+        &lt;item&gt;800&lt;/item&gt;
+        &lt;item&gt;1600&lt;/item&gt;
+    &lt;/integer-array&gt;
+
+    &lt;!-- 电池容量 --&gt;
+    &lt;integer name=&quot;config_batteryCapacity&quot;&gt;4000&lt;/integer&gt;
+
+    &lt;!-- 支持的网络类型 --&gt;
+    &lt;string-array name=&quot;networkAttributes&quot;&gt;
+        &lt;item&gt;wifi,1,1,1,-1,true&lt;/item&gt;
+        &lt;item&gt;mobile,0,0,0,-1,true&lt;/item&gt;
+        &lt;item&gt;mobile_mms,2,0,2,60000,true&lt;/item&gt;
+        &lt;item&gt;mobile_supl,3,0,2,60000,true&lt;/item&gt;
+        &lt;item&gt;mobile_dun,4,0,2,60000,true&lt;/item&gt;
+        &lt;item&gt;mobile_hipri,5,0,3,60000,true&lt;/item&gt;
+        &lt;item&gt;bluetooth,7,7,2,-1,true&lt;/item&gt;
+    &lt;/string-array&gt;
+
+    &lt;!-- 默认壁纸 --&gt;
+    &lt;string name=&quot;default_wallpaper_component&quot;&gt;com.android.wallpaper/.CustomWallpaper&lt;/string&gt;
+&lt;/resources&gt;
+</code></pre>
+<p><strong>文件：overlay/frameworks/base/core/res/res/values/strings.xml</strong></p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;resources&gt;
+    &lt;!-- 设备名称 --&gt;
+    &lt;string name=&quot;device_name&quot;&gt;Custom Device&lt;/string&gt;
+
+    &lt;!-- 系统版本 --&gt;
+    &lt;string name=&quot;build_version&quot;&gt;1.0.0&lt;/string&gt;
+
+    &lt;!-- 定制字符串 --&gt;
+    &lt;string name=&quot;custom_feature_title&quot;&gt;Custom Feature&lt;/string&gt;
+    &lt;string name=&quot;custom_feature_summary&quot;&gt;This is a custom feature&lt;/string&gt;
+&lt;/resources&gt;
+</code></pre>
+<h2 id="bsp">BSP适配</h2>
+<h3 id="_10">内核适配</h3>
+<p><strong>1. 内核配置</strong></p>
+<pre><code class="language-bash"># 进入内核目录
+cd kernel/vendor/msm8953
+
+# 创建设备配置
+cp arch/arm64/configs/msm8953_defconfig arch/arm64/configs/product_name_defconfig
+
+# 编辑配置
+vim arch/arm64/configs/product_name_defconfig
+</code></pre>
+<p><strong>添加必要的配置项</strong>：</p>
+<pre><code class="language-kconfig"># 基础配置
+CONFIG_LOCALVERSION=&quot;-product_name&quot;
+CONFIG_DEFAULT_HOSTNAME=&quot;product_name&quot;
+
+# 驱动配置
+CONFIG_CUSTOM_DRIVER=y
+CONFIG_CUSTOM_SENSOR=y
+CONFIG_CUSTOM_CAMERA=y
+
+# 文件系统
+CONFIG_EXT4_FS=y
+CONFIG_F2FS_FS=y
+CONFIG_FUSE_FS=y
+
+# 网络
+CONFIG_NETFILTER=y
+CONFIG_IP_NF_IPTABLES=y
+CONFIG_WIRELESS=y
+CONFIG_CFG80211=y
+
+# 安全
+CONFIG_SECURITY_SELINUX=y
+CONFIG_SECURITY_SELINUX_BOOTPARAM=y
+CONFIG_SECURITY_SELINUX_DEVELOP=y
+
+# 调试
+CONFIG_DEBUG_INFO=y
+CONFIG_MAGIC_SYSRQ=y
+CONFIG_DEBUG_KERNEL=y
+</code></pre>
+<p><strong>2. 设备树配置</strong></p>
+<p><strong>文件：arch/arm64/boot/dts/vendor/product_name.dts</strong></p>
+<pre><code class="language-dts">/dts-v1/;
+
+#include &quot;msm8953.dtsi&quot;
+#include &quot;msm8953-pinctrl.dtsi&quot;
+
+/ {
+    model = &quot;Vendor Product Name&quot;;
+    compatible = &quot;vendor,product-name&quot;, &quot;qcom,msm8953&quot;;
+    qcom,board-id = &lt;8 0&gt;;
+
+    aliases {
+        serial0 = &amp;blsp1_uart2;
+    };
+
+    chosen {
+        bootargs = &quot;console=ttyMSM0,115200n8&quot;;
+        stdout-path = &quot;serial0:115200n8&quot;;
+    };
+
+    memory@80000000 {
+        device_type = &quot;memory&quot;;
+        reg = &lt;0x0 0x80000000 0x0 0x80000000&gt;;
+    };
+
+    reserved-memory {
+        #address-cells = &lt;2&gt;;
+        #size-cells = &lt;2&gt;;
+        ranges;
+
+        modem_mem: modem@86800000 {
+            reg = &lt;0x0 0x86800000 0x0 0x6a00000&gt;;
+            no-map;
+        };
+
+        adsp_fw_mem: adsp_fw@8d200000 {
+            reg = &lt;0x0 0x8d200000 0x0 0x1100000&gt;;
+            no-map;
+        };
+    };
+
+    soc {
+        /* I2C配置 */
+        i2c@78b6000 {
+            status = &quot;okay&quot;;
+
+            touchscreen@38 {
+                compatible = &quot;vendor,touchscreen&quot;;
+                reg = &lt;0x38&gt;;
+                interrupt-parent = &lt;&amp;tlmm&gt;;
+                interrupts = &lt;65 IRQ_TYPE_EDGE_FALLING&gt;;
+                reset-gpios = &lt;&amp;tlmm 64 GPIO_ACTIVE_LOW&gt;;
+                vdd-supply = &lt;&amp;pm8953_l10&gt;;
+                vio-supply = &lt;&amp;pm8953_l5&gt;;
+            };
+
+            accelerometer@68 {
+                compatible = &quot;vendor,accelerometer&quot;;
+                reg = &lt;0x68&gt;;
+                interrupt-parent = &lt;&amp;tlmm&gt;;
+                interrupts = &lt;42 IRQ_TYPE_EDGE_RISING&gt;;
+                vdd-supply = &lt;&amp;pm8953_l10&gt;;
+            };
+        };
+
+        /* SPI配置 */
+        spi@78b7000 {
+            status = &quot;okay&quot;;
+
+            spidev@0 {
+                compatible = &quot;vendor,spidev&quot;;
+                reg = &lt;0&gt;;
+                spi-max-frequency = &lt;50000000&gt;;
+            };
+        };
+
+        /* GPIO配置 */
+        gpio-keys {
+            compatible = &quot;gpio-keys&quot;;
+
+            vol-up {
+                label = &quot;volume_up&quot;;
+                gpios = &lt;&amp;tlmm 85 GPIO_ACTIVE_LOW&gt;;
+                linux,code = &lt;KEY_VOLUMEUP&gt;;
+                debounce-interval = &lt;15&gt;;
+            };
+
+            vol-down {
+                label = &quot;volume_down&quot;;
+                gpios = &lt;&amp;tlmm 86 GPIO_ACTIVE_LOW&gt;;
+                linux,code = &lt;KEY_VOLUMEDOWN&gt;;
+                debounce-interval = &lt;15&gt;;
+            };
+        };
+
+        /* LED配置 */
+        leds {
+            compatible = &quot;gpio-leds&quot;;
+
+            led-red {
+                label = &quot;red&quot;;
+                gpios = &lt;&amp;tlmm 45 GPIO_ACTIVE_HIGH&gt;;
+                default-state = &quot;off&quot;;
+            };
+
+            led-green {
+                label = &quot;green&quot;;
+                gpios = &lt;&amp;tlmm 46 GPIO_ACTIVE_HIGH&gt;;
+                default-state = &quot;off&quot;;
+            };
+
+            led-blue {
+                label = &quot;blue&quot;;
+                gpios = &lt;&amp;tlmm 47 GPIO_ACTIVE_HIGH&gt;;
+                default-state = &quot;off&quot;;
+            };
+        };
+    };
+};
+
+/* 显示配置 */
+&amp;mdss_dsi0 {
+    qcom,dsi-pref-prim-pan = &lt;&amp;dsi_panel&gt;;
+    pinctrl-names = &quot;mdss_default&quot;, &quot;mdss_sleep&quot;;
+    pinctrl-0 = &lt;&amp;mdss_dsi_active &amp;mdss_te_active&gt;;
+    pinctrl-1 = &lt;&amp;mdss_dsi_suspend &amp;mdss_te_suspend&gt;;
+
+    qcom,platform-reset-gpio = &lt;&amp;tlmm 61 0&gt;;
+    qcom,platform-te-gpio = &lt;&amp;tlmm 24 0&gt;;
+};
+
+/* 触摸屏配置 */
+&amp;i2c_3 {
+    status = &quot;okay&quot;;
+
+    touchscreen@38 {
+        compatible = &quot;vendor,touchscreen&quot;;
+        reg = &lt;0x38&gt;;
+        interrupt-parent = &lt;&amp;tlmm&gt;;
+        interrupts = &lt;65 IRQ_TYPE_EDGE_FALLING&gt;;
+        vdd-supply = &lt;&amp;pm8953_l10&gt;;
+        vio-supply = &lt;&amp;pm8953_l5&gt;;
+
+        touchscreen-size-x = &lt;1080&gt;;
+        touchscreen-size-y = &lt;1920&gt;;
+        touchscreen-max-pressure = &lt;255&gt;;
+    };
+};
+
+/* 摄像头配置 */
+&amp;cci {
+    actuator0: qcom,actuator@0 {
+        cell-index = &lt;0&gt;;
+        reg = &lt;0x0&gt;;
+        compatible = &quot;qcom,actuator&quot;;
+        qcom,cci-master = &lt;0&gt;;
+    };
+
+    eeprom0: qcom,eeprom@0 {
+        cell-index = &lt;0&gt;;
+        reg = &lt;0x0&gt;;
+        compatible = &quot;qcom,eeprom&quot;;
+        qcom,cci-master = &lt;0&gt;;
+        qcom,eeprom-name = &quot;vendor_eeprom&quot;;
+        qcom,slave-addr = &lt;0xa0&gt;;
+    };
+
+    qcom,camera@0 {
+        cell-index = &lt;0&gt;;
+        compatible = &quot;qcom,camera&quot;;
+        reg = &lt;0x0&gt;;
+        qcom,csiphy-sd-index = &lt;0&gt;;
+        qcom,csid-sd-index = &lt;0&gt;;
+        qcom,mount-angle = &lt;90&gt;;
+        qcom,led-flash-src = &lt;&amp;led_flash0&gt;;
+        qcom,actuator-src = &lt;&amp;actuator0&gt;;
+        qcom,eeprom-src = &lt;&amp;eeprom0&gt;;
+        cam_vdig-supply = &lt;&amp;pm8953_l23&gt;;
+        cam_vio-supply = &lt;&amp;pm8953_l6&gt;;
+        cam_vana-supply = &lt;&amp;pm8953_l22&gt;;
+        qcom,cam-vreg-name = &quot;cam_vdig&quot;, &quot;cam_vio&quot;, &quot;cam_vana&quot;;
+        qcom,cam-vreg-min-voltage = &lt;1200000 0 2800000&gt;;
+        qcom,cam-vreg-max-voltage = &lt;1200000 0 2800000&gt;;
+        qcom,cam-vreg-op-mode = &lt;105000 0 80000&gt;;
+        pinctrl-names = &quot;cam_default&quot;, &quot;cam_suspend&quot;;
+        pinctrl-0 = &lt;&amp;cam_sensor_mclk0_default &amp;cam_sensor_rear_default&gt;;
+        pinctrl-1 = &lt;&amp;cam_sensor_mclk0_sleep &amp;cam_sensor_rear_sleep&gt;;
+        gpios = &lt;&amp;tlmm 26 0&gt;,
+                &lt;&amp;tlmm 36 0&gt;,
+                &lt;&amp;tlmm 35 0&gt;;
+        qcom,gpio-reset = &lt;1&gt;;
+        qcom,gpio-standby = &lt;2&gt;;
+        qcom,gpio-req-tbl-num = &lt;0 1 2&gt;;
+        qcom,gpio-req-tbl-flags = &lt;1 0 0&gt;;
+        qcom,gpio-req-tbl-label = &quot;CAMIF_MCLK0&quot;,
+                                  &quot;CAM_RESET0&quot;,
+                                  &quot;CAM_STANDBY0&quot;;
+        qcom,sensor-position = &lt;0&gt;;
+        qcom,sensor-mode = &lt;0&gt;;
+        qcom,cci-master = &lt;0&gt;;
+        status = &quot;ok&quot;;
+        clocks = &lt;&amp;clock_gcc clk_mclk0_clk_src&gt;,
+                 &lt;&amp;clock_gcc clk_gcc_camss_mclk0_clk&gt;;
+        clock-names = &quot;cam_src_clk&quot;, &quot;cam_clk&quot;;
+        qcom,clock-rates = &lt;24000000 0&gt;;
+    };
+};
+</code></pre>
+<h3 id="hal">HAL层适配</h3>
+<p><strong>1. Audio HAL适配</strong></p>
+<p><strong>文件：device/vendor/product_name/audio/audio_hw.c</strong></p>
+<pre><code class="language-c">#include &lt;errno.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;stdint.h&gt;
+#include &lt;sys/time.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;math.h&gt;
+
+#include &lt;cutils/log.h&gt;
+#include &lt;cutils/str_parms.h&gt;
+#include &lt;cutils/properties.h&gt;
+
+#include &lt;hardware/hardware.h&gt;
+#include &lt;system/audio.h&gt;
+#include &lt;hardware/audio.h&gt;
+
+#define LOG_TAG &quot;AudioHAL&quot;
+
+struct audio_device {
+    struct audio_hw_device hw_device;
+
+    pthread_mutex_t lock;
+    audio_devices_t out_device;
+    audio_devices_t in_device;
+    bool mic_mute;
+
+    struct audio_stream_out *active_output;
+    struct audio_stream_in *active_input;
+};
+
+struct audio_stream_out {
+    struct audio_stream_out stream;
+
+    pthread_mutex_t lock;
+    uint32_t sample_rate;
+    audio_channel_mask_t channel_mask;
+    audio_format_t format;
+    size_t frame_count;
+
+    struct audio_device *dev;
+};
+
+static uint32_t out_get_sample_rate(const struct audio_stream *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    return out-&gt;sample_rate;
+}
+
+static int out_set_sample_rate(struct audio_stream *stream, uint32_t rate)
+{
+    return -ENOSYS;
+}
+
+static size_t out_get_buffer_size(const struct audio_stream *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    size_t size = (out-&gt;frame_count * audio_stream_out_frame_size(stream));
+    return size;
+}
+
+static audio_channel_mask_t out_get_channels(const struct audio_stream *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    return out-&gt;channel_mask;
+}
+
+static audio_format_t out_get_format(const struct audio_stream *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    return out-&gt;format;
+}
+
+static int out_set_format(struct audio_stream *stream, audio_format_t format)
+{
+    return -ENOSYS;
+}
+
+static int out_standby(struct audio_stream *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    struct audio_device *adev = out-&gt;dev;
+
+    pthread_mutex_lock(&amp;out-&gt;lock);
+    pthread_mutex_lock(&amp;adev-&gt;lock);
+
+    // 实现standby逻辑
+
+    pthread_mutex_unlock(&amp;adev-&gt;lock);
+    pthread_mutex_unlock(&amp;out-&gt;lock);
+
+    return 0;
+}
+
+static ssize_t out_write(struct audio_stream_out *stream, const void* buffer,
+                        size_t bytes)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+    struct audio_device *adev = out-&gt;dev;
+
+    pthread_mutex_lock(&amp;out-&gt;lock);
+
+    // 实现音频输出逻辑
+    // 写入音频数据到硬件
+
+    pthread_mutex_unlock(&amp;out-&gt;lock);
+
+    return bytes;
+}
+
+static int out_get_render_position(const struct audio_stream_out *stream,
+                                   uint32_t *dsp_frames)
+{
+    return -EINVAL;
+}
+
+static int adev_open_output_stream(struct audio_hw_device *dev,
+                                   audio_io_handle_t handle,
+                                   audio_devices_t devices,
+                                   audio_output_flags_t flags,
+                                   struct audio_config *config,
+                                   struct audio_stream_out **stream_out,
+                                   const char *address)
+{
+    struct audio_device *adev = (struct audio_device *)dev;
+    struct audio_stream_out *out;
+    int ret;
+
+    out = (struct audio_stream_out *)calloc(1, sizeof(struct audio_stream_out));
+    if (!out)
+        return -ENOMEM;
+
+    out-&gt;stream.common.get_sample_rate = out_get_sample_rate;
+    out-&gt;stream.common.set_sample_rate = out_set_sample_rate;
+    out-&gt;stream.common.get_buffer_size = out_get_buffer_size;
+    out-&gt;stream.common.get_channels = out_get_channels;
+    out-&gt;stream.common.get_format = out_get_format;
+    out-&gt;stream.common.set_format = out_set_format;
+    out-&gt;stream.common.standby = out_standby;
+    out-&gt;stream.write = out_write;
+    out-&gt;stream.get_render_position = out_get_render_position;
+
+    out-&gt;dev = adev;
+    out-&gt;sample_rate = config-&gt;sample_rate;
+    out-&gt;channel_mask = config-&gt;channel_mask;
+    out-&gt;format = config-&gt;format;
+    out-&gt;frame_count = 1024;
+
+    pthread_mutex_init(&amp;out-&gt;lock, NULL);
+
+    *stream_out = &amp;out-&gt;stream;
+
+    return 0;
+}
+
+static void adev_close_output_stream(struct audio_hw_device *dev,
+                                    struct audio_stream_out *stream)
+{
+    struct audio_stream_out *out = (struct audio_stream_out *)stream;
+
+    pthread_mutex_destroy(&amp;out-&gt;lock);
+    free(stream);
+}
+
+static int adev_set_parameters(struct audio_hw_device *dev, const char *kvpairs)
+{
+    struct audio_device *adev = (struct audio_device *)dev;
+    struct str_parms *parms;
+    char *str;
+    char value[32];
+    int ret;
+
+    parms = str_parms_create_str(kvpairs);
+
+    // 处理参数
+
+    str_parms_destroy(parms);
+    return ret;
+}
+
+static char * adev_get_parameters(const struct audio_hw_device *dev,
+                                 const char *keys)
+{
+    return strdup(&quot;&quot;);
+}
+
+static int adev_init_check(const struct audio_hw_device *dev)
+{
+    return 0;
+}
+
+static int adev_set_voice_volume(struct audio_hw_device *dev, float volume)
+{
+    return -ENOSYS;
+}
+
+static int adev_set_master_volume(struct audio_hw_device *dev, float volume)
+{
+    return -ENOSYS;
+}
+
+static int adev_set_mode(struct audio_hw_device *dev, audio_mode_t mode)
+{
+    return 0;
+}
+
+static int adev_set_mic_mute(struct audio_hw_device *dev, bool state)
+{
+    struct audio_device *adev = (struct audio_device *)dev;
+
+    pthread_mutex_lock(&amp;adev-&gt;lock);
+    adev-&gt;mic_mute = state;
+    pthread_mutex_unlock(&amp;adev-&gt;lock);
+
+    return 0;
+}
+
+static int adev_get_mic_mute(const struct audio_hw_device *dev, bool *state)
+{
+    struct audio_device *adev = (struct audio_device *)dev;
+
+    *state = adev-&gt;mic_mute;
+
+    return 0;
+}
+
+static int adev_close(hw_device_t *device)
+{
+    struct audio_device *adev = (struct audio_device *)device;
+
+    pthread_mutex_destroy(&amp;adev-&gt;lock);
+    free(device);
+
+    return 0;
+}
+
+static int adev_open(const hw_module_t* module, const char* name,
+                    hw_device_t** device)
+{
+    struct audio_device *adev;
+
+    if (strcmp(name, AUDIO_HARDWARE_INTERFACE) != 0)
+        return -EINVAL;
+
+    adev = calloc(1, sizeof(struct audio_device));
+    if (!adev)
+        return -ENOMEM;
+
+    adev-&gt;hw_device.common.tag = HARDWARE_DEVICE_TAG;
+    adev-&gt;hw_device.common.version = AUDIO_DEVICE_API_VERSION_2_0;
+    adev-&gt;hw_device.common.module = (struct hw_module_t *) module;
+    adev-&gt;hw_device.common.close = adev_close;
+
+    adev-&gt;hw_device.init_check = adev_init_check;
+    adev-&gt;hw_device.set_voice_volume = adev_set_voice_volume;
+    adev-&gt;hw_device.set_master_volume = adev_set_master_volume;
+    adev-&gt;hw_device.set_mode = adev_set_mode;
+    adev-&gt;hw_device.set_mic_mute = adev_set_mic_mute;
+    adev-&gt;hw_device.get_mic_mute = adev_get_mic_mute;
+    adev-&gt;hw_device.set_parameters = adev_set_parameters;
+    adev-&gt;hw_device.get_parameters = adev_get_parameters;
+    adev-&gt;hw_device.open_output_stream = adev_open_output_stream;
+    adev-&gt;hw_device.close_output_stream = adev_close_output_stream;
+
+    pthread_mutex_init(&amp;adev-&gt;lock, NULL);
+
+    *device = &amp;adev-&gt;hw_device.common;
+
+    return 0;
+}
+
+static struct hw_module_methods_t hal_module_methods = {
+    .open = adev_open,
+};
+
+struct audio_module HAL_MODULE_INFO_SYM = {
+    .common = {
+        .tag = HARDWARE_MODULE_TAG,
+        .module_api_version = AUDIO_MODULE_API_VERSION_0_1,
+        .hal_api_version = HARDWARE_HAL_API_VERSION,
+        .id = AUDIO_HARDWARE_MODULE_ID,
+        .name = &quot;Custom Audio HW HAL&quot;,
+        .author = &quot;Vendor Inc.&quot;,
+        .methods = &amp;hal_module_methods,
+    },
+};
+</code></pre>
+<h2 id="_11">系统优化</h2>
+<h3 id="_12">启动优化</h3>
+<p><strong>1. 分析启动时间</strong></p>
+<pre><code class="language-bash"># 使用bootchart分析启动
+adb shell 'echo 1 &gt; /data/bootchart/enabled'
+adb reboot
+
+# 等待启动完成后获取数据
+adb pull /data/bootchart bootchart/
+bootchart bootchart/
+
+# 使用systrace分析
+systrace.py --time=10 -o trace.html sched freq idle am wm gfx view binder_driver hal dalvik camera input res
+</code></pre>
+<p><strong>2. 优化init.rc</strong></p>
+<pre><code># 并行启动服务
+service service1 /system/bin/service1
+    class early_hal
+    user system
+    group system
+
+service service2 /system/bin/service2
+    class early_hal
+    user system
+    group system
+
+# 延迟启动非关键服务
+service non_critical /system/bin/non_critical
+    class late_start
+    user system
+    group system
+    disabled
+
+on property:sys.boot_completed=1
+    start non_critical
+</code></pre>
+<p><strong>3. 预加载优化</strong></p>
+<p><strong>文件：frameworks/base/config/preloaded-classes</strong></p>
+<pre><code># 预加载常用类
+java.lang.String
+java.lang.Integer
+java.util.ArrayList
+java.util.HashMap
+android.app.Activity
+android.view.View
+android.widget.TextView
+</code></pre>
+<h3 id="_13">性能优化</h3>
+<p><strong>1. CPU调度优化</strong></p>
+<pre><code class="language-bash"># 设置CPU调度器
+echo &quot;interactive&quot; &gt; /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+
+# 设置CPU频率范围
+echo 300000 &gt; /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
+echo 2016000 &gt; /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
+
+# 设置interactive调度器参数
+echo 20000 &gt; /sys/devices/system/cpu/cpufreq/interactive/timer_rate
+echo 80 &gt; /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load
+echo 1401600 &gt; /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
+</code></pre>
+<p><strong>2. 内存优化</strong></p>
+<pre><code class="language-properties"># system.prop配置
+dalvik.vm.heapstartsize=8m
+dalvik.vm.heapgrowthlimit=192m
+dalvik.vm.heapsize=512m
+dalvik.vm.heaptargetutilization=0.75
+dalvik.vm.heapminfree=512k
+dalvik.vm.heapmaxfree=8m
+
+# Low Memory Killer配置
+ro.config.low_ram=false
+ro.lmk.critical=0
+ro.lmk.critical_upgrade=false
+ro.lmk.upgrade_pressure=100
+ro.lmk.downgrade_pressure=100
+ro.lmk.kill_heaviest_task=true
+</code></pre>
+<p><strong>3. I/O优化</strong></p>
+<pre><code class="language-bash"># 设置I/O调度器
+echo &quot;cfq&quot; &gt; /sys/block/mmcblk0/queue/scheduler
+
+# 设置读写缓存
+echo 2048 &gt; /sys/block/mmcblk0/queue/read_ahead_kb
+echo 128 &gt; /sys/block/mmcblk0/queue/nr_requests
+
+# 禁用I/O统计（提升性能）
+echo 0 &gt; /sys/block/mmcblk0/queue/iostats
+</code></pre>
+<h3 id="_14">电源管理优化</h3>
+<p><strong>1. 休眠策略</strong></p>
+<pre><code># init.rc配置
+on boot
+    # 设置休眠模式
+    write /sys/power/mem_sleep deep
+
+    # 配置wakelock超时
+    write /sys/power/wake_lock_timeout 5000
+
+    # 配置自动休眠延迟
+    write /sys/power/autosleep_delay 30000
+</code></pre>
+<p><strong>2. 动态电压频率调节（DVFS）</strong></p>
+<pre><code class="language-c">// 实现DVFS策略
+static void dvfs_update_policy(int load)
+{
+    if (load &gt; 80) {
+        // 高负载：提升频率
+        set_cpu_freq(MAX_FREQ);
+        set_gpu_freq(MAX_FREQ);
+    } else if (load &gt; 50) {
+        // 中等负载：中等频率
+        set_cpu_freq(MID_FREQ);
+        set_gpu_freq(MID_FREQ);
+    } else {
+        // 低负载：降低频率
+        set_cpu_freq(MIN_FREQ);
+        set_gpu_freq(MIN_FREQ);
+    }
+}
+</code></pre>
+<h2 id="ota">OTA升级系统</h2>
+<h3 id="ota_1">OTA包制作</h3>
+<p><strong>1. 生成OTA包</strong></p>
+<pre><code class="language-bash"># 编译目标版本
+cd ~/aosp
+source build/envsetup.sh
+lunch product_name-userdebug
+make -j$(nproc)
+
+# 生成完整OTA包
+make otapackage
+
+# 输出文件
+ls out/target/product/product_name/product_name-ota-*.zip
+</code></pre>
+<p><strong>2. 生成增量OTA包</strong></p>
+<pre><code class="language-bash"># 需要旧版本的target_files
+OLD_TARGET_FILES=out/target/product/product_name/obj/PACKAGING/target_files_intermediates/product_name-target_files-old.zip
+NEW_TARGET_FILES=out/target/product/product_name/obj/PACKAGING/target_files_intermediates/product_name-target_files-new.zip
+
+# 生成增量包
+./build/tools/releasetools/ota_from_target_files \
+    -i $OLD_TARGET_FILES \
+    $NEW_TARGET_FILES \
+    incremental_ota.zip
+</code></pre>
+<p><strong>3. OTA包签名</strong></p>
+<pre><code class="language-bash"># 生成密钥
+development/tools/make_key releasekey '/C=US/ST=California/L=Mountain View/O=Android/OU=Android/CN=Android/emailAddress=android@android.com'
+
+# 签名OTA包
+java -Xmx2048m -jar out/host/linux-x86/framework/signapk.jar \
+    -w build/target/product/security/testkey.x509.pem \
+    build/target/product/security/testkey.pk8 \
+    unsigned_ota.zip \
+    signed_ota.zip
+</code></pre>
+<h3 id="ota_2">OTA升级实现</h3>
+<p><strong>1. Recovery模式配置</strong></p>
+<p><strong>文件：bootable/recovery/recovery.cpp</strong></p>
+<pre><code class="language-cpp">#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;unistd.h&gt;
+
+#include &quot;recovery.h&quot;
+#include &quot;install.h&quot;
+#include &quot;roots.h&quot;
+#include &quot;ui.h&quot;
+
+static const char *COMMAND_FILE = &quot;/cache/recovery/command&quot;;
+static const char *LOG_FILE = &quot;/cache/recovery/log&quot;;
+static const char *LAST_INSTALL_FILE = &quot;/cache/recovery/last_install&quot;;
+
+int main(int argc, char **argv) {
+    // 初始化Recovery UI
+    RecoveryUI* ui = device_ui;
+    ui-&gt;Init();
+    ui-&gt;SetBackground(RecoveryUI::NONE);
+
+    // 加载volume表
+    load_volume_table();
+
+    // 确保/cache挂载
+    ensure_path_mounted(&quot;/cache&quot;);
+
+    // 读取命令
+    std::vector&lt;std::string&gt; args;
+    get_args(&amp;args);
+
+    // 处理命令
+    int status = INSTALL_SUCCESS;
+
+    if (args.size() &gt; 1 &amp;&amp; args[0] == &quot;--update_package&quot;) {
+        // OTA升级
+        status = install_package(args[1].c_str(), &amp;should_wipe_cache, 
+                                TEMPORARY_INSTALL_FILE, true, 0);
+
+        if (status == INSTALL_SUCCESS &amp;&amp; should_wipe_cache) {
+            wipe_cache(false, ui);
+        }
+
+        if (status != INSTALL_SUCCESS) {
+            ui-&gt;SetBackground(RecoveryUI::ERROR);
+            ui-&gt;Print(&quot;Installation aborted.\n&quot;);
+        } else if (!ui-&gt;IsTextVisible()) {
+            return 0;  // 重启到系统
+        } else {
+            ui-&gt;Print(&quot;\nInstall from %s complete.\n&quot;, args[1].c_str());
+        }
+    }
+
+    // 显示菜单
+    for (;;) {
+        finish_recovery(NULL);
+        ui-&gt;SetBackground(RecoveryUI::NO_COMMAND);
+
+        int chosen_item = get_menu_selection(headers, items, 0, 0, device);
+
+        switch (chosen_item) {
+            case ITEM_REBOOT:
+                return 0;
+
+            case ITEM_WIPE_DATA:
+                wipe_data(ui-&gt;IsTextVisible(), device);
+                if (!ui-&gt;IsTextVisible()) return 0;
+                break;
+
+            case ITEM_WIPE_CACHE:
+                wipe_cache(ui-&gt;IsTextVisible(), device);
+                if (!ui-&gt;IsTextVisible()) return 0;
+                break;
+
+            case ITEM_APPLY_UPDATE:
+                apply_from_sdcard(device, &amp;should_wipe_cache);
+                break;
+        }
+    }
+
+    return 0;
+}
+</code></pre>
+<p><strong>2. OTA升级脚本</strong></p>
+<p><strong>文件：device/vendor/product_name/ota/updater-script</strong></p>
+<pre><code># OTA升级脚本
+
+ui_print(&quot;========================================&quot;);
+ui_print(&quot;  Custom ROM OTA Update&quot;);
+ui_print(&quot;  Version: 1.0.0&quot;);
+ui_print(&quot;========================================&quot;);
+
+# 检查设备
+assert(getprop(&quot;ro.product.device&quot;) == &quot;product_name&quot; || 
+       getprop(&quot;ro.build.product&quot;) == &quot;product_name&quot;);
+
+ui_print(&quot;Mounting partitions...&quot;);
+mount(&quot;ext4&quot;, &quot;EMMC&quot;, &quot;/dev/block/bootdevice/by-name/system&quot;, &quot;/system&quot;);
+mount(&quot;ext4&quot;, &quot;EMMC&quot;, &quot;/dev/block/bootdevice/by-name/vendor&quot;, &quot;/vendor&quot;);
+
+ui_print(&quot;Extracting files...&quot;);
+package_extract_dir(&quot;system&quot;, &quot;/system&quot;);
+package_extract_dir(&quot;vendor&quot;, &quot;/vendor&quot;);
+
+ui_print(&quot;Setting permissions...&quot;);
+set_perm_recursive(0, 0, 0755, 0644, &quot;/system&quot;);
+set_perm_recursive(0, 2000, 0755, 0755, &quot;/system/bin&quot;);
+set_perm(0, 3003, 02750, &quot;/system/bin/netcfg&quot;);
+set_perm(0, 3004, 02755, &quot;/system/bin/ping&quot;);
+
+ui_print(&quot;Installing boot image...&quot;);
+package_extract_file(&quot;boot.img&quot;, &quot;/dev/block/bootdevice/by-name/boot&quot;);
+
+ui_print(&quot;Unmounting partitions...&quot;);
+unmount(&quot;/system&quot;);
+unmount(&quot;/vendor&quot;);
+
+ui_print(&quot;========================================&quot;);
+ui_print(&quot;  Update complete!&quot;);
+ui_print(&quot;========================================&quot;);
+</code></pre>
+<p><strong>3. 应用层OTA触发</strong></p>
+<p><strong>文件：packages/apps/Settings/src/com/android/settings/system/SystemUpdatePreferenceController.java</strong></p>
+<pre><code class="language-java">package com.android.settings.system;
+
+import android.content.Context;
+import android.content.Intent;
+import android.os.RecoverySystem;
+import android.os.UpdateEngine;
+import android.os.UpdateEngineCallback;
+
+import androidx.preference.Preference;
+
+public class SystemUpdatePreferenceController {
+    private Context mContext;
+    private UpdateEngine mUpdateEngine;
+
+    public SystemUpdatePreferenceController(Context context) {
+        mContext = context;
+        mUpdateEngine = new UpdateEngine();
+    }
+
+    public void checkForUpdates() {
+        // 检查更新
+        String updateUrl = &quot;https://update.example.com/check&quot;;
+        // 实现更新检查逻辑
+    }
+
+    public void downloadUpdate(String updateUrl) {
+        // 下载OTA包
+        // 实现下载逻辑
+    }
+
+    public void installUpdate(String otaPackagePath) {
+        try {
+            // 验证OTA包
+            RecoverySystem.verifyPackage(new File(otaPackagePath), 
+                                        null, null);
+
+            // 安装OTA包
+            RecoverySystem.installPackage(mContext, 
+                                         new File(otaPackagePath));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private class UpdateCallback extends UpdateEngineCallback {
+        @Override
+        public void onStatusUpdate(int status, float percent) {
+            // 更新进度回调
+        }
+
+        @Override
+        public void onPayloadApplicationComplete(int errorCode) {
+            // 更新完成回调
+            if (errorCode == UpdateEngine.ErrorCodeConstants.SUCCESS) {
+                // 重启到recovery
+                rebootToRecovery();
+            }
+        }
+    }
+
+    private void rebootToRecovery() {
+        try {
+            RecoverySystem.rebootWipeUserData(mContext);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+<h2 id="_15">调试与测试</h2>
+<h3 id="_16">系统调试</h3>
+<p><strong>1. Logcat日志分析</strong></p>
+<pre><code class="language-bash"># 查看所有日志
+adb logcat
+
+# 过滤特定标签
+adb logcat -s TAG_NAME
+
+# 保存日志到文件
+adb logcat &gt; logcat.txt
+
+# 清除日志缓冲区
+adb logcat -c
+
+# 查看特定级别日志
+adb logcat *:E  # 只显示Error级别
+
+# 查看特定进程日志
+adb logcat --pid=&lt;pid&gt;
+</code></pre>
+<p><strong>2. 系统跟踪</strong></p>
+<pre><code class="language-bash"># 使用systrace
+systrace.py --time=10 -o trace.html \
+    sched freq idle am wm gfx view binder_driver hal dalvik
+
+# 使用perfetto
+adb shell perfetto \
+    -c - --txt \
+    -o /data/misc/perfetto-traces/trace \
+    &lt; trace_config.pbtxt
+
+# 获取trace文件
+adb pull /data/misc/perfetto-traces/trace
+</code></pre>
+<p><strong>3. 性能分析</strong></p>
+<pre><code class="language-bash"># CPU性能分析
+adb shell top -m 10
+
+# 内存分析
+adb shell dumpsys meminfo &lt;package_name&gt;
+
+# 查看进程信息
+adb shell ps -A
+
+# 查看系统服务
+adb shell dumpsys
+
+# 查看特定服务
+adb shell dumpsys activity
+adb shell dumpsys window
+adb shell dumpsys package
+</code></pre>
+<h3 id="ctsvts">CTS/VTS测试</h3>
+<p><strong>1. CTS测试</strong></p>
+<pre><code class="language-bash"># 下载CTS测试套件
+# https://source.android.com/compatibility/cts/downloads
+
+# 运行CTS测试
+cd android-cts
+./tools/cts-tradefed
+
+# 在cts-tf控制台中
+run cts --plan CTS
+
+# 运行特定模块
+run cts -m CtsMediaTestCases
+
+# 查看测试结果
+ls results/
+</code></pre>
+<p><strong>2. VTS测试</strong></p>
+<pre><code class="language-bash"># 运行VTS测试
+cd android-vts
+./tools/vts-tradefed
+
+# 在vts-tf控制台中
+run vts
+
+# 运行特定HAL测试
+run vts -m VtsHalAudioV6_0Target
+</code></pre>
+<h2 id="_17">总结</h2>
+<p>通过本教程，你应该已经掌握了：</p>
+<ul>
+<li>✅ Android系统架构和AOSP项目结构</li>
+<li>✅ AOSP源码下载和编译流程</li>
+<li>✅ Android系统定制和功能裁剪</li>
+<li>✅ BSP适配方法和HAL层开发</li>
+<li>✅ 系统性能优化技术</li>
+<li>✅ OTA升级系统的设计与实现</li>
+<li>✅ 系统调试和测试方法</li>
+</ul>
+<h3 id="_18">关键要点</h3>
+<ol>
+<li>
+<p><strong>AOSP编译</strong>
+   - 环境准备和依赖安装
+   - 源码下载和同步
+   - 编译配置和优化
+   - 常见问题解决</p>
+</li>
+<li>
+<p><strong>系统定制</strong>
+   - 设备配置创建
+   - 产品属性定制
+   - 资源覆盖机制
+   - 初始化脚本配置</p>
+</li>
+<li>
+<p><strong>BSP适配</strong>
+   - 内核配置和编译
+   - 设备树配置
+   - HAL层实现
+   - 驱动集成</p>
+</li>
+<li>
+<p><strong>系统优化</strong>
+   - 启动时间优化
+   - 性能调优
+   - 内存管理
+   - 电源管理</p>
+</li>
+<li>
+<p><strong>OTA升级</strong>
+   - OTA包制作
+   - 升级脚本编写
+   - Recovery实现
+   - 应用层触发</p>
+</li>
+</ol>
+<h2 id="_19">实践练习</h2>
+<h3 id="1aosp">练习1：编译AOSP</h3>
+<p><strong>任务</strong>：下载并编译AOSP源码</p>
+<p><strong>要求</strong>：
+1. 配置编译环境
+2. 下载Android 13源码
+3. 选择合适的编译目标
+4. 成功编译系统镜像
+5. 在模拟器中运行</p>
+<p><strong>提示</strong>：
+- 确保足够的磁盘空间
+- 使用ccache加速编译
+- 记录编译时间和遇到的问题</p>
+<h3 id="2">练习2：创建自定义设备</h3>
+<p><strong>任务</strong>：创建一个自定义Android设备配置</p>
+<p><strong>要求</strong>：
+1. 创建设备配置目录
+2. 编写产品配置文件
+3. 定制系统属性
+4. 添加自定义应用
+5. 编译并测试</p>
+<p><strong>提示</strong>：
+- 参考现有设备配置
+- 使用overlay覆盖资源
+- 测试所有功能</p>
+<h3 id="3ota">练习3：实现OTA升级</h3>
+<p><strong>任务</strong>：实现完整的OTA升级功能</p>
+<p><strong>要求</strong>：
+1. 制作OTA升级包
+2. 实现升级检查功能
+3. 实现下载和安装
+4. 测试升级流程
+5. 处理升级失败情况</p>
+<p><strong>提示</strong>：
+- 使用增量OTA减小包大小
+- 实现断点续传
+- 添加升级进度显示
+- 实现回滚机制</p>
+<h2 id="_20">下一步学习</h2>
+<p>建议按以下顺序继续学习：</p>
+<h3 id="1">1. 深入学习</h3>
+<ul>
+<li>Android Framework源码分析</li>
+<li>Android性能优化高级技术</li>
+<li>Android安全机制详解</li>
+<li>Android虚拟化技术</li>
+</ul>
+<h3 id="2_1">2. 相关主题</h3>
+<ul>
+<li><a href="../intermediate/02-android-driver.html">Android驱动开发</a></li>
+<li><a href="../intermediate/01-android-hal.html">Android HAL层开发</a></li>
+<li><a href="../../05-embedded-linux/advanced/01-complete-linux-system.html">Linux系统构建</a></li>
+</ul>
+<h3 id="3">3. 实战项目</h3>
+<ul>
+<li>定制Android车载系统</li>
+<li>开发Android IoT设备</li>
+<li>实现Android TV系统</li>
+<li>构建Android工业控制系统</li>
+</ul>
+<h2 id="_21">参考资料</h2>
+<h3 id="_22">官方文档</h3>
+<ol>
+<li>
+<p><strong>Android开源项目</strong>
+   - https://source.android.com/
+   - AOSP官方文档</p>
+</li>
+<li>
+<p><strong>Android兼容性</strong>
+   - https://source.android.com/compatibility
+   - CTS/VTS测试文档</p>
+</li>
+<li>
+<p><strong>Android安全</strong>
+   - https://source.android.com/security
+   - 安全最佳实践</p>
+</li>
+</ol>
+<h3 id="_23">推荐书籍</h3>
+<ol>
+<li>
+<p><strong>《深入理解Android内核设计思想》</strong>
+   - 作者：林学森
+   - Android内核详解</p>
+</li>
+<li>
+<p><strong>《Android系统源代码情景分析》</strong>
+   - 作者：罗升阳
+   - 源码分析经典</p>
+</li>
+<li>
+<p><strong>《Android Internals》</strong>
+   - 作者：Jonathan Levin
+   - 系统内部机制</p>
+</li>
+</ol>
+<h3 id="_24">在线资源</h3>
+<ol>
+<li>
+<p><strong>AOSP源码在线浏览</strong>
+   - https://cs.android.com/
+   - 源码搜索和浏览</p>
+</li>
+<li>
+<p><strong>Android开发者社区</strong>
+   - https://developer.android.com/
+   - 官方开发文档</p>
+</li>
+<li>
+<p><strong>XDA Developers</strong>
+   - https://www.xda-developers.com/
+   - ROM开发社区</p>
+</li>
+</ol>
+<h3 id="_25">开发工具</h3>
+<p><strong>必备工具</strong>：
+- Android Studio
+- Android SDK
+- Android NDK
+- Repo工具</p>
+<p><strong>编译工具</strong>：
+- GCC/Clang交叉编译器
+- Make/Ninja构建系统
+- Python脚本工具
+- Git版本控制</p>
+<p><strong>调试工具</strong>：
+- ADB（Android Debug Bridge）
+- Logcat日志工具
+- Systrace性能分析
+- Perfetto跟踪工具</p>
+<p><strong>测试工具</strong>：
+- CTS（Compatibility Test Suite）
+- VTS（Vendor Test Suite）
+- GTS（GMS Test Suite）
+- Monkey压力测试</p>
+<h2 id="_26">常见问题解答</h2>
+<h3 id="q1-aosp">Q1: AOSP编译需要多长时间？</h3>
+<p><strong>A</strong>: </p>
+<p>编译时间取决于多个因素：</p>
+<p><strong>硬件配置影响</strong>：
+- CPU核心数：越多越快
+- 内存大小：建议32GB以上
+- 硬盘类型：SSD比HDD快很多
+- 网络速度：影响源码下载</p>
+<p><strong>典型编译时间</strong>：
+- 高配置（32核/64GB/NVMe SSD）：1-2小时
+- 中配置（16核/32GB/SATA SSD）：2-4小时
+- 低配置（8核/16GB/HDD）：6-12小时</p>
+<p><strong>加速方法</strong>：
+- 使用ccache缓存
+- 增量编译
+- 使用预编译工具链
+- 分布式编译</p>
+<h3 id="q2">Q2: 如何解决编译错误？</h3>
+<p><strong>A</strong>: </p>
+<p><strong>常见错误类型</strong>：</p>
+<ol>
+<li><strong>依赖缺失</strong>：</li>
+</ol>
+<pre><code class="language-bash"># 安装缺失的依赖
+sudo apt-get install &lt;package_name&gt;
+</code></pre>
+<ol start="2">
+<li><strong>内存不足</strong>：</li>
+</ol>
+<pre><code class="language-bash"># 减少并行任务
+make -j4
+
+# 增加swap
+sudo fallocate -l 16G /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+</code></pre>
+<ol start="3">
+<li><strong>磁盘空间不足</strong>：</li>
+</ol>
+<pre><code class="language-bash"># 清理编译输出
+make clean
+
+# 删除不需要的文件
+rm -rf out/target/common/obj/JAVA_LIBRARIES
+</code></pre>
+<ol start="4">
+<li><strong>代码错误</strong>：</li>
+</ol>
+<pre><code class="language-bash"># 查看详细错误
+make showcommands
+
+# 单独编译失败模块
+make &lt;module_name&gt;
+</code></pre>
+<h3 id="q3-ui">Q3: 如何定制系统UI？</h3>
+<p><strong>A</strong>: </p>
+<p><strong>定制方法</strong>：</p>
+<ol>
+<li><strong>使用Overlay</strong>：</li>
+</ol>
+<pre><code>device/vendor/product/overlay/
+└── frameworks/base/core/res/res/
+    ├── values/
+    │   ├── colors.xml
+    │   ├── dimens.xml
+    │   └── styles.xml
+    └── drawable/
+        └── custom_icon.png
+</code></pre>
+<ol start="2">
+<li><strong>修改SystemUI</strong>：</li>
+</ol>
+<pre><code class="language-java">// frameworks/base/packages/SystemUI/src/
+// 修改状态栏、导航栏等
+</code></pre>
+<ol start="3">
+<li><strong>自定义Launcher</strong>：</li>
+</ol>
+<pre><code>// 开发自己的Launcher应用
+// 设置为默认Launcher
+</code></pre>
+<ol start="4">
+<li><strong>主题定制</strong>：</li>
+</ol>
+<pre><code class="language-xml">&lt;!-- 定义主题 --&gt;
+&lt;style name=&quot;CustomTheme&quot; parent=&quot;@android:style/Theme.Material&quot;&gt;
+    &lt;item name=&quot;android:colorPrimary&quot;&gt;@color/custom_primary&lt;/item&gt;
+    &lt;item name=&quot;android:colorAccent&quot;&gt;@color/custom_accent&lt;/item&gt;
+&lt;/style&gt;
+</code></pre>
+<h3 id="q4">Q4: 如何优化系统性能？</h3>
+<p><strong>A</strong>: </p>
+<p><strong>优化策略</strong>：</p>
+<ol>
+<li>
+<p><strong>启动优化</strong>：
+   - 并行启动服务
+   - 延迟加载非关键组件
+   - 优化预加载类列表
+   - 减少启动动画时间</p>
+</li>
+<li>
+<p><strong>运行时优化</strong>：
+   - 调整虚拟机参数
+   - 优化内存管理
+   - 配置CPU调度器
+   - 优化I/O调度</p>
+</li>
+<li>
+<p><strong>应用优化</strong>：
+   - 移除不需要的系统应用
+   - 优化应用启动
+   - 减少后台服务
+   - 限制自启动应用</p>
+</li>
+<li>
+<p><strong>图形优化</strong>：
+   - 启用硬件加速
+   - 优化渲染管线
+   - 减少过度绘制
+   - 使用GPU合成</p>
+</li>
+</ol>
+<h3 id="q5">Q5: 如何保证系统安全？</h3>
+<p><strong>A</strong>: </p>
+<p><strong>安全措施</strong>：</p>
+<ol>
+<li>
+<p><strong>SELinux配置</strong>：
+   - 使用enforcing模式
+   - 编写完善的策略
+   - 定期审计策略
+   - 测试策略有效性</p>
+</li>
+<li>
+<p><strong>权限管理</strong>：
+   - 最小权限原则
+   - 运行时权限检查
+   - 签名验证
+   - 权限审计</p>
+</li>
+<li>
+<p><strong>加密保护</strong>：
+   - 全盘加密
+   - 文件级加密
+   - 安全启动
+   - 密钥管理</p>
+</li>
+<li>
+<p><strong>更新机制</strong>：
+   - 及时安全更新
+   - OTA签名验证
+   - 回滚保护
+   - 更新日志</p>
+</li>
+</ol>
+<hr />
+<p><strong>反馈与支持</strong>：</p>
+<p>如果你在学习过程中遇到问题：
+- 💬 在评论区留言讨论
+- 📧 发送邮件到：support@embedded-platform.com
+- 🐛 报告问题：<a href="https://github.com/your-repo/issues">GitHub Issues</a></p>
+<p><strong>贡献内容</strong>：
+欢迎提交改进建议和补充内容！</p>
+<hr />
+<p><strong>版权声明</strong>：本文采用 <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a> 许可协议。</p>
+<p><strong>最后更新</strong>：2024-01-15<br />
+<strong>文档版本</strong>：1.0</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

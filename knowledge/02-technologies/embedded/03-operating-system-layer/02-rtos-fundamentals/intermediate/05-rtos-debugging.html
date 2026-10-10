@@ -1,0 +1,1171 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>RTOS调试技巧与工具：高效定位和解决RTOS问题 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/">03-operating-system-layer</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/">02-rtos-fundamentals</a> / <a href="/knowledge/02-technologies/embedded/03-operating-system-layer/02-rtos-fundamentals/intermediate/">intermediate</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_1">概述</a><ul>
+<li><a href="#rtos">什么是RTOS调试？</a></li>
+<li><a href="#rtos_1">为什么RTOS调试很重要？</a></li>
+<li><a href="#rtos_2">RTOS调试的挑战</a></li>
+</ul>
+</li>
+<li><a href="#rtos_3">常见RTOS问题类型</a><ul>
+<li><a href="#1">1. 堆栈溢出</a></li>
+<li><a href="#2">2. 死锁</a></li>
+<li><a href="#3">3. 优先级反转</a></li>
+<li><a href="#4">4. 内存泄漏</a></li>
+</ul>
+</li>
+<li><a href="#rtos_4">RTOS调试工具</a><ul>
+<li><a href="#1-freertos">1. FreeRTOS内置调试功能</a><ul>
+<li><a href="#11">1.1 任务列表查看</a></li>
+<li><a href="#12">1.2 运行时统计</a></li>
+</ul>
+</li>
+<li><a href="#2_1">2. 调试器工具</a><ul>
+<li><a href="#21-segger-systemview">2.1 SEGGER SystemView</a></li>
+<li><a href="#22-j-link">2.2 J-Link调试器</a></li>
+</ul>
+</li>
+<li><a href="#3_1">3. 日志系统</a><ul>
+<li><a href="#31">3.1 分级日志</a></li>
+<li><a href="#32">3.2 环形缓冲日志</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_2">调试技巧和最佳实践</a><ul>
+<li><a href="#1_1">1. 断言机制</a></li>
+<li><a href="#2_2">2. 看门狗监控</a></li>
+<li><a href="#3_2">3. 性能分析</a></li>
+<li><a href="#4_1">4. 内存调试</a></li>
+</ul>
+</li>
+<li><a href="#_3">调试流程和方法</a><ul>
+<li><a href="#1_2">1. 问题定位流程</a></li>
+<li><a href="#2_3">2. 系统崩溃分析</a></li>
+<li><a href="#3_3">3. 死锁分析</a></li>
+</ul>
+</li>
+<li><a href="#_4">常见问题解决</a><ul>
+<li><a href="#1_3">问题1：任务无响应</a></li>
+<li><a href="#2_4">问题2：系统随机重启</a></li>
+<li><a href="#3_4">问题3：性能下降</a></li>
+</ul>
+</li>
+<li><a href="#_5">调试最佳实践</a><ul>
+<li><a href="#1_4">1. 开发阶段</a></li>
+<li><a href="#2_5">2. 测试阶段</a></li>
+<li><a href="#3_5">3. 生产阶段</a></li>
+<li><a href="#4_2">4. 代码规范</a></li>
+</ul>
+</li>
+<li><a href="#_6">总结</a><ul>
+<li><a href="#_7">关键要点</a></li>
+<li><a href="#_8">进一步学习</a></li>
+</ul>
+</li>
+<li><a href="#_9">参考资料</a><ul>
+<li><a href="#_10">官方文档</a></li>
+<li><a href="#_11">推荐阅读</a></li>
+<li><a href="#_12">在线资源</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="rtosrtos">RTOS调试技巧与工具：高效定位和解决RTOS问题</h1>
+<h2 id="_1">概述</h2>
+<h3 id="rtos">什么是RTOS调试？</h3>
+<p>RTOS调试是指在实时操作系统环境下，识别、定位和解决软件问题的过程。与传统的单线程程序调试相比，RTOS调试面临更多挑战：</p>
+<p><strong>RTOS调试的特点</strong>：</p>
+<ol>
+<li>
+<p><strong>多任务并发</strong>
+   - 多个任务同时运行
+   - 任务间存在复杂的交互
+   - 问题可能由任务切换引起</p>
+</li>
+<li>
+<p><strong>时序敏感</strong>
+   - 问题可能与时序相关
+   - 调试器介入会改变时序
+   - 难以重现的间歇性问题</p>
+</li>
+<li>
+<p><strong>资源竞争</strong>
+   - 多任务共享资源
+   - 可能出现死锁和优先级反转
+   - 资源泄漏难以发现</p>
+</li>
+<li>
+<p><strong>实时性要求</strong>
+   - 调试不能影响实时性
+   - 需要非侵入式的调试方法
+   - 性能分析要求高</p>
+</li>
+</ol>
+<h3 id="rtos_1">为什么RTOS调试很重要？</h3>
+<p><strong>常见的RTOS问题</strong>：</p>
+<pre><code>问题类型分布：
+┌─────────────────────────────────────┐
+│ 堆栈溢出        ████████████ 30%    │
+│ 死锁/优先级反转  ████████ 20%       │
+│ 内存泄漏        ██████ 15%          │
+│ 任务同步错误    ██████ 15%          │
+│ 时序问题        ████ 10%            │
+│ 其他            ████ 10%            │
+└─────────────────────────────────────┘
+</code></pre>
+<p><strong>调试的价值</strong>：
+- 快速定位问题，节省开发时间
+- 提高系统稳定性和可靠性
+- 优化系统性能
+- 降低维护成本</p>
+<h3 id="rtos_2">RTOS调试的挑战</h3>
+<p><strong>主要挑战</strong>：</p>
+<ol>
+<li>
+<p><strong>Heisenbug效应</strong>
+   - 调试器介入改变系统行为
+   - 问题在调试时消失
+   - 需要非侵入式调试方法</p>
+</li>
+<li>
+<p><strong>时序相关问题</strong>
+   - 问题难以重现
+   - 与任务调度顺序相关
+   - 需要记录和分析时序</p>
+</li>
+<li>
+<p><strong>资源限制</strong>
+   - 嵌入式系统资源有限
+   - 调试信息占用内存
+   - 需要权衡调试功能和资源</p>
+</li>
+<li>
+<p><strong>多任务复杂性</strong>
+   - 任务间交互复杂
+   - 问题可能跨多个任务
+   - 需要全局视角分析</p>
+</li>
+</ol>
+<h2 id="rtos_3">常见RTOS问题类型</h2>
+<h3 id="1">1. 堆栈溢出</h3>
+<p><strong>问题描述</strong>：
+任务堆栈空间不足，导致堆栈数据被覆盖，引起系统崩溃或异常行为。</p>
+<p><strong>典型症状</strong>：
+- 系统随机崩溃或重启
+- 任务行为异常
+- 变量值被意外修改
+- HardFault异常</p>
+<p><strong>原因分析</strong>：</p>
+<pre><code class="language-c">// 堆栈溢出的常见原因
+1. 堆栈分配太小
+2. 局部变量过大（大数组）
+3. 函数调用层次过深
+4. 递归调用
+5. 中断嵌套过多
+</code></pre>
+<p><strong>检测方法</strong>：</p>
+<pre><code class="language-c">// 方法1：使用FreeRTOS堆栈检查功能
+// FreeRTOSConfig.h
+#define configCHECK_FOR_STACK_OVERFLOW  2  // 启用堆栈检查
+
+// 堆栈溢出钩子函数
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
+    printf(&quot;ERROR: Stack overflow in task: %s\n&quot;, pcTaskName);
+    // 记录错误信息
+    // 进入安全模式或重启
+    while(1);  // 停止系统
+}
+
+// 方法2：运行时检查剩余堆栈
+void MonitorTask(void *param) {
+    while(1) {
+        UBaseType_t stack_remaining = uxTaskGetStackHighWaterMark(NULL);
+        printf(&quot;Task stack remaining: %d words\n&quot;, stack_remaining);
+
+        if(stack_remaining &lt; 50) {
+            printf(&quot;WARNING: Low stack space!\n&quot;);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 方法3：检查所有任务的堆栈使用情况
+void CheckAllTasksStack(void) {
+    TaskStatus_t *task_array;
+    UBaseType_t task_count;
+
+    // 获取任务数量
+    task_count = uxTaskGetNumberOfTasks();
+
+    // 分配内存
+    task_array = pvPortMalloc(task_count * sizeof(TaskStatus_t));
+
+    if(task_array != NULL) {
+        // 获取任务状态
+        task_count = uxTaskGetSystemState(task_array, task_count, NULL);
+
+        printf(&quot;\nTask Stack Usage:\n&quot;);
+        printf(&quot;%-15s %10s %10s\n&quot;, &quot;Task&quot;, &quot;Stack Size&quot;, &quot;Remaining&quot;);
+
+        for(UBaseType_t i = 0; i &lt; task_count; i++) {
+            printf(&quot;%-15s %10d %10d\n&quot;,
+                   task_array[i].pcTaskName,
+                   task_array[i].usStackHighWaterMark * 4,  // 转换为字节
+                   task_array[i].usStackHighWaterMark);
+        }
+
+        vPortFree(task_array);
+    }
+}
+</code></pre>
+<p><strong>解决方法</strong>：
+- 增加任务堆栈大小
+- 减少局部变量使用
+- 避免深层递归
+- 使用动态内存分配（谨慎）</p>
+<h3 id="2">2. 死锁</h3>
+<p><strong>问题描述</strong>：
+两个或多个任务相互等待对方释放资源，导致所有任务都无法继续执行。</p>
+<p><strong>典型症状</strong>：
+- 系统停止响应
+- 某些任务永久阻塞
+- 看门狗超时重启</p>
+<p><strong>检测方法</strong>：</p>
+<pre><code class="language-c">// 使用超时机制检测死锁
+BaseType_t result = xSemaphoreTake(mutex, pdMS_TO_TICKS(5000));
+if(result != pdTRUE) {
+    printf(&quot;ERROR: Timeout acquiring mutex - possible deadlock\n&quot;);
+
+    // 打印任务状态
+    char buffer[512];
+    vTaskList(buffer);
+    printf(&quot;Task Status:\n%s\n&quot;, buffer);
+}
+</code></pre>
+<p><strong>预防方法</strong>：
+- 使用固定的资源获取顺序
+- 使用超时机制
+- 避免嵌套获取多个互斥量
+- 使用死锁检测工具</p>
+<h3 id="3">3. 优先级反转</h3>
+<p><strong>问题描述</strong>：
+高优先级任务被低优先级任务间接阻塞，导致实时性下降。</p>
+<p><strong>检测方法</strong>：</p>
+<pre><code class="language-c">// 监控任务响应时间
+void HighPriorityTask(void *param) {
+    while(1) {
+        uint32_t start = xTaskGetTickCount();
+
+        xSemaphoreTake(mutex, portMAX_DELAY);
+
+        uint32_t wait_time = xTaskGetTickCount() - start;
+
+        if(wait_time &gt; 10) {  // 超过预期时间
+            printf(&quot;WARNING: High priority task delayed %d ms\n&quot;, wait_time);
+        }
+
+        xSemaphoreGive(mutex);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<p><strong>解决方法</strong>：
+- 使用互斥量（支持优先级继承）
+- 避免使用信号量保护共享资源
+- 缩短临界区执行时间</p>
+<h3 id="4">4. 内存泄漏</h3>
+<p><strong>问题描述</strong>：
+动态分配的内存没有被释放，导致可用内存逐渐减少。</p>
+<p><strong>检测方法</strong>：</p>
+<pre><code class="language-c">// 监控堆内存使用
+void MemoryMonitorTask(void *param) {
+    size_t last_free_heap = xPortGetFreeHeapSize();
+
+    while(1) {
+        size_t current_free_heap = xPortGetFreeHeapSize();
+        size_t min_free_heap = xPortGetMinimumEverFreeHeapSize();
+
+        printf(&quot;Heap: Current=%d, Min=%d, Change=%d\n&quot;,
+               current_free_heap,
+               min_free_heap,
+               (int)(current_free_heap - last_free_heap));
+
+        if(current_free_heap &lt; last_free_heap - 100) {
+            printf(&quot;WARNING: Possible memory leak detected!\n&quot;);
+        }
+
+        last_free_heap = current_free_heap;
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+}
+</code></pre>
+<h2 id="rtos_4">RTOS调试工具</h2>
+<h3 id="1-freertos">1. FreeRTOS内置调试功能</h3>
+<h4 id="11">1.1 任务列表查看</h4>
+<pre><code class="language-c">// 启用任务列表功能
+// FreeRTOSConfig.h
+#define configUSE_TRACE_FACILITY  1
+#define configUSE_STATS_FORMATTING_FUNCTIONS  1
+
+// 获取任务列表
+void PrintTaskList(void) {
+    char buffer[512];
+
+    vTaskList(buffer);
+    printf(&quot;\nTask List:\n&quot;);
+    printf(&quot;Name          State  Priority  Stack  Num\n&quot;);
+    printf(&quot;%s\n&quot;, buffer);
+}
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Task List:
+Name          State  Priority  Stack  Num
+IDLE          R      0         100    1
+Monitor       B      2         200    2
+Sensor        B      3         180    3
+Display       R      2         220    4
+</code></pre>
+<p><strong>状态说明</strong>：
+- R (Running): 运行中
+- B (Blocked): 阻塞
+- S (Suspended): 挂起
+- D (Deleted): 已删除</p>
+<h4 id="12">1.2 运行时统计</h4>
+<pre><code class="language-c">// 启用运行时统计
+// FreeRTOSConfig.h
+#define configGENERATE_RUN_TIME_STATS  1
+#define configUSE_STATS_FORMATTING_FUNCTIONS  1
+
+// 配置运行时计数器（使用定时器）
+#define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS()  ConfigureTimerForStats()
+#define portGET_RUN_TIME_COUNTER_VALUE()  GetRunTimeCounterValue()
+
+// 获取运行时统计
+void PrintRuntimeStats(void) {
+    char buffer[512];
+
+    vTaskGetRunTimeStats(buffer);
+    printf(&quot;\nRuntime Stats:\n&quot;);
+    printf(&quot;Task            Abs Time      %% Time\n&quot;);
+    printf(&quot;%s\n&quot;, buffer);
+}
+</code></pre>
+<p><strong>输出示例</strong>：</p>
+<pre><code>Runtime Stats:
+Task            Abs Time      % Time
+IDLE            9500          95%
+Monitor         300           3%
+Sensor          150           1.5%
+Display         50            0.5%
+</code></pre>
+<h3 id="2_1">2. 调试器工具</h3>
+<h4 id="21-segger-systemview">2.1 SEGGER SystemView</h4>
+<p><strong>功能特点</strong>：
+- 实时任务可视化
+- 事件记录和分析
+- 性能分析
+- 非侵入式调试</p>
+<p><strong>使用示例</strong>：</p>
+<pre><code class="language-c">// 1. 添加SystemView支持
+#include &quot;SEGGER_SYSVIEW.h&quot;
+
+// 2. 在main函数中初始化
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+
+    // 初始化SystemView
+    SEGGER_SYSVIEW_Conf();
+
+    // 创建任务
+    xTaskCreate(Task1, &quot;Task1&quot;, 256, NULL, 2, NULL);
+    xTaskCreate(Task2, &quot;Task2&quot;, 256, NULL, 3, NULL);
+
+    // 启动调度器
+    vTaskStartScheduler();
+
+    while(1);
+}
+
+// 3. 在任务中添加标记
+void Task1(void *param) {
+    while(1) {
+        SEGGER_SYSVIEW_PrintfHost(&quot;Task1: Processing data\n&quot;);
+
+        // 任务代码
+        ProcessData();
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<p><strong>SystemView可以显示</strong>：
+- 任务切换时序图
+- CPU使用率
+- 中断响应时间
+- 任务阻塞原因
+- 资源使用情况</p>
+<h4 id="22-j-link">2.2 J-Link调试器</h4>
+<p><strong>实时终端(RTT)</strong>：</p>
+<pre><code class="language-c">// 使用RTT进行调试输出
+#include &quot;SEGGER_RTT.h&quot;
+
+// 初始化RTT
+SEGGER_RTT_Init();
+
+// 输出调试信息
+SEGGER_RTT_printf(0, &quot;Task started, tick=%d\n&quot;, xTaskGetTickCount());
+
+// 读取输入
+char input[32];
+int bytes = SEGGER_RTT_Read(0, input, sizeof(input));
+if(bytes &gt; 0) {
+    printf(&quot;Received: %s\n&quot;, input);
+}
+</code></pre>
+<p><strong>优势</strong>：
+- 不占用UART资源
+- 速度快，不影响实时性
+- 支持双向通信
+- 可以在中断中使用</p>
+<h3 id="3_1">3. 日志系统</h3>
+<h4 id="31">3.1 分级日志</h4>
+<pre><code class="language-c">// 日志级别定义
+typedef enum {
+    LOG_LEVEL_ERROR = 0,
+    LOG_LEVEL_WARNING,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_DEBUG
+} LogLevel_t;
+
+// 当前日志级别
+static LogLevel_t current_log_level = LOG_LEVEL_INFO;
+
+// 日志宏
+#define LOG_ERROR(fmt, ...)   Log(LOG_LEVEL_ERROR, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_WARNING(fmt, ...) Log(LOG_LEVEL_WARNING, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_INFO(fmt, ...)    Log(LOG_LEVEL_INFO, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+#define LOG_DEBUG(fmt, ...)   Log(LOG_LEVEL_DEBUG, __FILE__, __LINE__, fmt, ##__VA_ARGS__)
+
+// 日志函数
+void Log(LogLevel_t level, const char *file, int line, const char *fmt, ...) {
+    if(level &gt; current_log_level) {
+        return;  // 过滤低优先级日志
+    }
+
+    const char *level_str[] = {&quot;ERROR&quot;, &quot;WARNING&quot;, &quot;INFO&quot;, &quot;DEBUG&quot;};
+
+    // 输出时间戳和任务名
+    printf(&quot;[%d][%s][%s:%d] &quot;,
+           xTaskGetTickCount(),
+           pcTaskGetName(NULL),
+           file,
+           line);
+
+    // 输出日志级别
+    printf(&quot;[%s] &quot;, level_str[level]);
+
+    // 输出日志内容
+    va_list args;
+    va_start(args, fmt);
+    vprintf(fmt, args);
+    va_end(args);
+
+    printf(&quot;\n&quot;);
+}
+
+// 使用示例
+void SensorTask(void *param) {
+    LOG_INFO(&quot;Sensor task started&quot;);
+
+    while(1) {
+        float temp = ReadTemperature();
+
+        if(temp &gt; 80.0f) {
+            LOG_ERROR(&quot;Temperature too high: %.1f&quot;, temp);
+        } else if(temp &gt; 60.0f) {
+            LOG_WARNING(&quot;Temperature high: %.1f&quot;, temp);
+        } else {
+            LOG_DEBUG(&quot;Temperature normal: %.1f&quot;, temp);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<h4 id="32">3.2 环形缓冲日志</h4>
+<pre><code class="language-c">// 环形缓冲区日志（避免阻塞）
+#define LOG_BUFFER_SIZE 1024
+
+typedef struct {
+    char buffer[LOG_BUFFER_SIZE];
+    uint32_t write_index;
+    uint32_t read_index;
+    SemaphoreHandle_t mutex;
+} LogBuffer_t;
+
+static LogBuffer_t log_buffer;
+
+// 初始化日志缓冲区
+void LogBufferInit(void) {
+    log_buffer.write_index = 0;
+    log_buffer.read_index = 0;
+    log_buffer.mutex = xSemaphoreCreateMutex();
+}
+
+// 写入日志（非阻塞）
+void LogWrite(const char *message) {
+    if(xSemaphoreTake(log_buffer.mutex, 0) == pdTRUE) {
+        uint32_t len = strlen(message);
+
+        for(uint32_t i = 0; i &lt; len; i++) {
+            log_buffer.buffer[log_buffer.write_index] = message[i];
+            log_buffer.write_index = (log_buffer.write_index + 1) % LOG_BUFFER_SIZE;
+
+            // 如果缓冲区满，覆盖旧数据
+            if(log_buffer.write_index == log_buffer.read_index) {
+                log_buffer.read_index = (log_buffer.read_index + 1) % LOG_BUFFER_SIZE;
+            }
+        }
+
+        xSemaphoreGive(log_buffer.mutex);
+    }
+}
+
+// 日志输出任务
+void LogOutputTask(void *param) {
+    char output_buffer[128];
+
+    while(1) {
+        if(xSemaphoreTake(log_buffer.mutex, portMAX_DELAY) == pdTRUE) {
+            uint32_t count = 0;
+
+            // 读取日志
+            while(log_buffer.read_index != log_buffer.write_index &amp;&amp; count &lt; sizeof(output_buffer) - 1) {
+                output_buffer[count++] = log_buffer.buffer[log_buffer.read_index];
+                log_buffer.read_index = (log_buffer.read_index + 1) % LOG_BUFFER_SIZE;
+            }
+
+            xSemaphoreGive(log_buffer.mutex);
+
+            // 输出日志
+            if(count &gt; 0) {
+                output_buffer[count] = '\0';
+                printf(&quot;%s&quot;, output_buffer);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<h2 id="_2">调试技巧和最佳实践</h2>
+<h3 id="1_1">1. 断言机制</h3>
+<pre><code class="language-c">// 自定义断言宏
+#define ASSERT(condition) \
+    do { \
+        if(!(condition)) { \
+            printf(&quot;ASSERT FAILED: %s, file %s, line %d\n&quot;, \
+                   #condition, __FILE__, __LINE__); \
+            taskDISABLE_INTERRUPTS(); \
+            while(1); \
+        } \
+    } while(0)
+
+// 使用示例
+void ProcessData(uint8_t *data, uint32_t len) {
+    ASSERT(data != NULL);
+    ASSERT(len &gt; 0);
+    ASSERT(len &lt;= MAX_DATA_SIZE);
+
+    // 处理数据
+}
+
+// FreeRTOS配置断言
+// FreeRTOSConfig.h
+#define configASSERT(x) \
+    if((x) == 0) { \
+        taskDISABLE_INTERRUPTS(); \
+        printf(&quot;configASSERT failed: %s:%d\n&quot;, __FILE__, __LINE__); \
+        for(;;); \
+    }
+</code></pre>
+<h3 id="2_2">2. 看门狗监控</h3>
+<pre><code class="language-c">// 任务看门狗
+typedef struct {
+    TaskHandle_t task_handle;
+    uint32_t last_feed_time;
+    uint32_t timeout_ms;
+    bool enabled;
+} TaskWatchdog_t;
+
+#define MAX_WATCHED_TASKS 10
+static TaskWatchdog_t watchdogs[MAX_WATCHED_TASKS];
+static uint8_t watchdog_count = 0;
+
+// 注册任务到看门狗
+void WatchdogRegisterTask(TaskHandle_t task, uint32_t timeout_ms) {
+    if(watchdog_count &lt; MAX_WATCHED_TASKS) {
+        watchdogs[watchdog_count].task_handle = task;
+        watchdogs[watchdog_count].last_feed_time = xTaskGetTickCount();
+        watchdogs[watchdog_count].timeout_ms = timeout_ms;
+        watchdogs[watchdog_count].enabled = true;
+        watchdog_count++;
+    }
+}
+
+// 喂狗
+void WatchdogFeed(void) {
+    TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+
+    for(uint8_t i = 0; i &lt; watchdog_count; i++) {
+        if(watchdogs[i].task_handle == current_task) {
+            watchdogs[i].last_feed_time = xTaskGetTickCount();
+            break;
+        }
+    }
+}
+
+// 看门狗监控任务
+void WatchdogMonitorTask(void *param) {
+    while(1) {
+        uint32_t current_time = xTaskGetTickCount();
+
+        for(uint8_t i = 0; i &lt; watchdog_count; i++) {
+            if(watchdogs[i].enabled) {
+                uint32_t elapsed = current_time - watchdogs[i].last_feed_time;
+
+                if(elapsed &gt; watchdogs[i].timeout_ms) {
+                    const char *task_name = pcTaskGetName(watchdogs[i].task_handle);
+                    printf(&quot;ERROR: Task %s watchdog timeout!\n&quot;, task_name);
+
+                    // 采取恢复措施
+                    // 1. 记录错误
+                    // 2. 重启任务或系统
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+// 任务中使用
+void SensorTask(void *param) {
+    // 注册到看门狗
+    WatchdogRegisterTask(xTaskGetCurrentTaskHandle(), 5000);
+
+    while(1) {
+        // 执行任务
+        ReadSensor();
+        ProcessData();
+
+        // 喂狗
+        WatchdogFeed();
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<h3 id="3_2">3. 性能分析</h3>
+<pre><code class="language-c">// 性能计数器
+typedef struct {
+    const char *name;
+    uint32_t count;
+    uint32_t total_time;
+    uint32_t min_time;
+    uint32_t max_time;
+} PerfCounter_t;
+
+#define MAX_PERF_COUNTERS 20
+static PerfCounter_t perf_counters[MAX_PERF_COUNTERS];
+static uint8_t perf_counter_count = 0;
+
+// 创建性能计数器
+PerfCounter_t* PerfCounterCreate(const char *name) {
+    if(perf_counter_count &lt; MAX_PERF_COUNTERS) {
+        PerfCounter_t *counter = &amp;perf_counters[perf_counter_count++];
+        counter-&gt;name = name;
+        counter-&gt;count = 0;
+        counter-&gt;total_time = 0;
+        counter-&gt;min_time = 0xFFFFFFFF;
+        counter-&gt;max_time = 0;
+        return counter;
+    }
+    return NULL;
+}
+
+// 开始计时
+uint32_t PerfCounterStart(void) {
+    return DWT-&gt;CYCCNT;  // 使用DWT计数器
+}
+
+// 结束计时
+void PerfCounterEnd(PerfCounter_t *counter, uint32_t start_time) {
+    uint32_t end_time = DWT-&gt;CYCCNT;
+    uint32_t elapsed = end_time - start_time;
+
+    counter-&gt;count++;
+    counter-&gt;total_time += elapsed;
+
+    if(elapsed &lt; counter-&gt;min_time) {
+        counter-&gt;min_time = elapsed;
+    }
+
+    if(elapsed &gt; counter-&gt;max_time) {
+        counter-&gt;max_time = elapsed;
+    }
+}
+
+// 打印性能统计
+void PerfCounterPrint(void) {
+    printf(&quot;\nPerformance Statistics:\n&quot;);
+    printf(&quot;%-20s %10s %10s %10s %10s %10s\n&quot;,
+           &quot;Name&quot;, &quot;Count&quot;, &quot;Total(us)&quot;, &quot;Avg(us)&quot;, &quot;Min(us)&quot;, &quot;Max(us)&quot;);
+
+    for(uint8_t i = 0; i &lt; perf_counter_count; i++) {
+        PerfCounter_t *c = &amp;perf_counters[i];
+        uint32_t avg = c-&gt;count &gt; 0 ? c-&gt;total_time / c-&gt;count : 0;
+
+        // 转换为微秒（假设72MHz）
+        uint32_t total_us = c-&gt;total_time / 72;
+        uint32_t avg_us = avg / 72;
+        uint32_t min_us = c-&gt;min_time / 72;
+        uint32_t max_us = c-&gt;max_time / 72;
+
+        printf(&quot;%-20s %10d %10d %10d %10d %10d\n&quot;,
+               c-&gt;name, c-&gt;count, total_us, avg_us, min_us, max_us);
+    }
+}
+
+// 使用示例
+PerfCounter_t *sensor_perf = NULL;
+
+void SensorTask(void *param) {
+    sensor_perf = PerfCounterCreate(&quot;Sensor Read&quot;);
+
+    while(1) {
+        uint32_t start = PerfCounterStart();
+
+        // 执行操作
+        float temp = ReadTemperature();
+        ProcessData(temp);
+
+        PerfCounterEnd(sensor_perf, start);
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+</code></pre>
+<h3 id="4_1">4. 内存调试</h3>
+<pre><code class="language-c">// 内存分配跟踪
+typedef struct {
+    void *address;
+    size_t size;
+    const char *file;
+    int line;
+    uint32_t timestamp;
+} MemAlloc_t;
+
+#define MAX_ALLOCS 100
+static MemAlloc_t alloc_table[MAX_ALLOCS];
+static uint32_t alloc_count = 0;
+
+// 包装malloc
+void* DebugMalloc(size_t size, const char *file, int line) {
+    void *ptr = pvPortMalloc(size);
+
+    if(ptr != NULL &amp;&amp; alloc_count &lt; MAX_ALLOCS) {
+        alloc_table[alloc_count].address = ptr;
+        alloc_table[alloc_count].size = size;
+        alloc_table[alloc_count].file = file;
+        alloc_table[alloc_count].line = line;
+        alloc_table[alloc_count].timestamp = xTaskGetTickCount();
+        alloc_count++;
+
+        printf(&quot;MALLOC: %p, size=%d, %s:%d\n&quot;, ptr, size, file, line);
+    }
+
+    return ptr;
+}
+
+// 包装free
+void DebugFree(void *ptr, const char *file, int line) {
+    // 查找并移除记录
+    for(uint32_t i = 0; i &lt; alloc_count; i++) {
+        if(alloc_table[i].address == ptr) {
+            printf(&quot;FREE: %p, %s:%d\n&quot;, ptr, file, line);
+
+            // 移除记录
+            for(uint32_t j = i; j &lt; alloc_count - 1; j++) {
+                alloc_table[j] = alloc_table[j + 1];
+            }
+            alloc_count--;
+            break;
+        }
+    }
+
+    vPortFree(ptr);
+}
+
+// 宏定义
+#define MALLOC(size) DebugMalloc(size, __FILE__, __LINE__)
+#define FREE(ptr) DebugFree(ptr, __FILE__, __LINE__)
+
+// 打印内存泄漏报告
+void PrintMemoryLeaks(void) {
+    printf(&quot;\nMemory Leak Report:\n&quot;);
+    printf(&quot;Total allocations: %d\n&quot;, alloc_count);
+
+    if(alloc_count &gt; 0) {
+        printf(&quot;%-10s %-10s %-20s %-10s %-10s\n&quot;,
+               &quot;Address&quot;, &quot;Size&quot;, &quot;File&quot;, &quot;Line&quot;, &quot;Time&quot;);
+
+        for(uint32_t i = 0; i &lt; alloc_count; i++) {
+            printf(&quot;%-10p %-10d %-20s %-10d %-10d\n&quot;,
+                   alloc_table[i].address,
+                   alloc_table[i].size,
+                   alloc_table[i].file,
+                   alloc_table[i].line,
+                   alloc_table[i].timestamp);
+        }
+    } else {
+        printf(&quot;No memory leaks detected!\n&quot;);
+    }
+}
+</code></pre>
+<h2 id="_3">调试流程和方法</h2>
+<h3 id="1_2">1. 问题定位流程</h3>
+<pre><code>问题发生
+    ↓
+收集信息（日志、任务状态、堆栈）
+    ↓
+分析症状（崩溃、死锁、性能）
+    ↓
+提出假设
+    ↓
+验证假设（添加日志、断点）
+    ↓
+定位根因
+    ↓
+修复问题
+    ↓
+验证修复
+    ↓
+回归测试
+</code></pre>
+<h3 id="2_3">2. 系统崩溃分析</h3>
+<pre><code class="language-c">// HardFault处理函数
+void HardFault_Handler(void) {
+    // 保存寄存器
+    __asm volatile (
+        &quot;TST LR, #4 \n&quot;
+        &quot;ITE EQ \n&quot;
+        &quot;MRSEQ R0, MSP \n&quot;
+        &quot;MRSNE R0, PSP \n&quot;
+        &quot;B HardFault_Handler_C \n&quot;
+    );
+}
+
+// C语言处理函数
+void HardFault_Handler_C(uint32_t *hardfault_args) {
+    volatile uint32_t stacked_r0;
+    volatile uint32_t stacked_r1;
+    volatile uint32_t stacked_r2;
+    volatile uint32_t stacked_r3;
+    volatile uint32_t stacked_r12;
+    volatile uint32_t stacked_lr;
+    volatile uint32_t stacked_pc;
+    volatile uint32_t stacked_psr;
+
+    stacked_r0 = ((uint32_t)hardfault_args[0]);
+    stacked_r1 = ((uint32_t)hardfault_args[1]);
+    stacked_r2 = ((uint32_t)hardfault_args[2]);
+    stacked_r3 = ((uint32_t)hardfault_args[3]);
+    stacked_r12 = ((uint32_t)hardfault_args[4]);
+    stacked_lr = ((uint32_t)hardfault_args[5]);
+    stacked_pc = ((uint32_t)hardfault_args[6]);
+    stacked_psr = ((uint32_t)hardfault_args[7]);
+
+    printf(&quot;\n[HardFault]\n&quot;);
+    printf(&quot;R0  = 0x%08X\n&quot;, stacked_r0);
+    printf(&quot;R1  = 0x%08X\n&quot;, stacked_r1);
+    printf(&quot;R2  = 0x%08X\n&quot;, stacked_r2);
+    printf(&quot;R3  = 0x%08X\n&quot;, stacked_r3);
+    printf(&quot;R12 = 0x%08X\n&quot;, stacked_r12);
+    printf(&quot;LR  = 0x%08X\n&quot;, stacked_lr);
+    printf(&quot;PC  = 0x%08X\n&quot;, stacked_pc);
+    printf(&quot;PSR = 0x%08X\n&quot;, stacked_psr);
+
+    // 打印当前任务
+    TaskHandle_t current_task = xTaskGetCurrentTaskHandle();
+    if(current_task != NULL) {
+        printf(&quot;Current Task: %s\n&quot;, pcTaskGetName(current_task));
+    }
+
+    // 打印任务列表
+    char buffer[512];
+    vTaskList(buffer);
+    printf(&quot;\nTask List:\n%s\n&quot;, buffer);
+
+    // 停止系统
+    while(1);
+}
+</code></pre>
+<h3 id="3_3">3. 死锁分析</h3>
+<pre><code class="language-c">// 死锁检测器
+typedef struct {
+    TaskHandle_t task;
+    SemaphoreHandle_t waiting_for;
+    uint32_t wait_start_time;
+} TaskWaitInfo_t;
+
+#define MAX_TASKS 10
+static TaskWaitInfo_t task_wait_info[MAX_TASKS];
+static uint8_t task_wait_count = 0;
+
+// 记录任务等待
+void RecordTaskWait(SemaphoreHandle_t sem) {
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+
+    for(uint8_t i = 0; i &lt; task_wait_count; i++) {
+        if(task_wait_info[i].task == current) {
+            task_wait_info[i].waiting_for = sem;
+            task_wait_info[i].wait_start_time = xTaskGetTickCount();
+            return;
+        }
+    }
+
+    if(task_wait_count &lt; MAX_TASKS) {
+        task_wait_info[task_wait_count].task = current;
+        task_wait_info[task_wait_count].waiting_for = sem;
+        task_wait_info[task_wait_count].wait_start_time = xTaskGetTickCount();
+        task_wait_count++;
+    }
+}
+
+// 清除任务等待记录
+void ClearTaskWait(void) {
+    TaskHandle_t current = xTaskGetCurrentTaskHandle();
+
+    for(uint8_t i = 0; i &lt; task_wait_count; i++) {
+        if(task_wait_info[i].task == current) {
+            task_wait_info[i].waiting_for = NULL;
+            break;
+        }
+    }
+}
+
+// 检测死锁
+void DeadlockDetectorTask(void *param) {
+    while(1) {
+        uint32_t current_time = xTaskGetTickCount();
+
+        for(uint8_t i = 0; i &lt; task_wait_count; i++) {
+            if(task_wait_info[i].waiting_for != NULL) {
+                uint32_t wait_time = current_time - task_wait_info[i].wait_start_time;
+
+                if(wait_time &gt; 5000) {  // 等待超过5秒
+                    printf(&quot;WARNING: Possible deadlock detected!\n&quot;);
+                    printf(&quot;Task: %s\n&quot;, pcTaskGetName(task_wait_info[i].task));
+                    printf(&quot;Waiting for: %p\n&quot;, task_wait_info[i].waiting_for);
+                    printf(&quot;Wait time: %d ms\n&quot;, wait_time);
+
+                    // 打印所有任务状态
+                    char buffer[512];
+                    vTaskList(buffer);
+                    printf(&quot;\nTask List:\n%s\n&quot;, buffer);
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+</code></pre>
+<h2 id="_4">常见问题解决</h2>
+<h3 id="1_3">问题1：任务无响应</h3>
+<p><strong>症状</strong>：某个任务停止工作，不再执行</p>
+<p><strong>排查步骤</strong>：</p>
+<ol>
+<li>检查任务状态</li>
+</ol>
+<pre><code class="language-c">char buffer[512];
+vTaskList(buffer);
+printf(&quot;%s\n&quot;, buffer);
+// 查看任务是否处于Blocked或Suspended状态
+</code></pre>
+<ol start="2">
+<li>检查是否死锁</li>
+</ol>
+<pre><code class="language-c">// 使用超时机制
+if(xSemaphoreTake(mutex, pdMS_TO_TICKS(5000)) != pdTRUE) {
+    printf(&quot;Task blocked on mutex\n&quot;);
+}
+</code></pre>
+<ol start="3">
+<li>检查堆栈是否溢出</li>
+</ol>
+<pre><code class="language-c">UBaseType_t stack = uxTaskGetStackHighWaterMark(task_handle);
+printf(&quot;Stack remaining: %d\n&quot;, stack);
+</code></pre>
+<h3 id="2_4">问题2：系统随机重启</h3>
+<p><strong>症状</strong>：系统运行一段时间后随机重启</p>
+<p><strong>排查步骤</strong>：</p>
+<ol>
+<li>检查看门狗配置</li>
+<li>检查堆栈溢出</li>
+<li>检查内存泄漏</li>
+<li>添加HardFault处理函数记录崩溃信息</li>
+</ol>
+<h3 id="3_4">问题3：性能下降</h3>
+<p><strong>症状</strong>：系统响应变慢，任务执行时间增加</p>
+<p><strong>排查步骤</strong>：</p>
+<ol>
+<li>使用运行时统计分析CPU使用率</li>
+<li>检查是否有任务占用过多CPU</li>
+<li>检查中断频率是否过高</li>
+<li>使用性能计数器测量关键函数执行时间</li>
+</ol>
+<h2 id="_5">调试最佳实践</h2>
+<h3 id="1_4">1. 开发阶段</h3>
+<ul>
+<li>启用所有调试功能（堆栈检查、断言等）</li>
+<li>使用详细的日志输出</li>
+<li>定期检查任务状态和资源使用</li>
+<li>使用静态分析工具</li>
+</ul>
+<h3 id="2_5">2. 测试阶段</h3>
+<ul>
+<li>进行压力测试</li>
+<li>长时间运行测试</li>
+<li>边界条件测试</li>
+<li>使用调试工具记录和分析</li>
+</ul>
+<h3 id="3_5">3. 生产阶段</h3>
+<ul>
+<li>保留关键日志</li>
+<li>实现错误恢复机制</li>
+<li>记录崩溃信息</li>
+<li>支持远程调试</li>
+</ul>
+<h3 id="4_2">4. 代码规范</h3>
+<pre><code class="language-c">// 好的实践
+✅ 使用断言检查参数
+✅ 检查返回值
+✅ 使用超时机制
+✅ 添加详细注释
+✅ 使用有意义的变量名
+
+// 避免的做法
+❌ 忽略返回值
+❌ 使用无限等待
+❌ 缺少错误处理
+❌ 代码缺少注释
+❌ 使用魔术数字
+</code></pre>
+<h2 id="_6">总结</h2>
+<h3 id="_7">关键要点</h3>
+<ol>
+<li>
+<p><strong>RTOS调试的特殊性</strong>
+   - 多任务并发带来的复杂性
+   - 时序敏感的问题难以重现
+   - 需要专门的调试工具和方法</p>
+</li>
+<li>
+<p><strong>常见问题类型</strong>
+   - 堆栈溢出：最常见，需要监控堆栈使用
+   - 死锁：使用超时和固定顺序避免
+   - 优先级反转：使用互斥量解决
+   - 内存泄漏：监控堆内存使用</p>
+</li>
+<li>
+<p><strong>调试工具</strong>
+   - FreeRTOS内置功能：任务列表、运行时统计
+   - 专业工具：SystemView、J-Link RTT
+   - 自定义工具：日志系统、性能计数器</p>
+</li>
+<li>
+<p><strong>调试技巧</strong>
+   - 使用断言机制
+   - 实现看门狗监控
+   - 性能分析和优化
+   - 内存调试和泄漏检测</p>
+</li>
+<li>
+<p><strong>最佳实践</strong>
+   - 开发阶段启用所有调试功能
+   - 使用分级日志系统
+   - 定期检查系统健康状态
+   - 保持代码规范和可维护性</p>
+</li>
+</ol>
+<h3 id="_8">进一步学习</h3>
+<ul>
+<li>学习高级调试工具的使用</li>
+<li>深入理解RTOS内核实现</li>
+<li>学习实时系统分析方法</li>
+<li>研究典型的RTOS问题案例</li>
+</ul>
+<h2 id="_9">参考资料</h2>
+<h3 id="_10">官方文档</h3>
+<ul>
+<li><a href="https://www.freertos.org/Documentation/RTOS_book.html">FreeRTOS官方文档</a></li>
+<li><a href="https://www.segger.com/products/development-tools/systemview/">SEGGER SystemView用户手册</a></li>
+<li><a href="https://developer.arm.com/documentation/">ARM Cortex-M调试指南</a></li>
+</ul>
+<h3 id="_11">推荐阅读</h3>
+<ul>
+<li>《嵌入式实时操作系统调试技术》</li>
+<li>《FreeRTOS内核实现与应用开发实战》</li>
+<li>《ARM Cortex-M3权威指南》</li>
+</ul>
+<h3 id="_12">在线资源</h3>
+<ul>
+<li>FreeRTOS官方论坛</li>
+<li>Stack Overflow RTOS标签</li>
+<li>嵌入式开发社区</li>
+</ul>
+<hr />
+<p><strong>相关内容</strong>：
+- <a href="../beginner/02-rtos-task-management.html">RTOS任务管理基础</a>
+- <a href="03-priority-inversion.html">优先级反转问题与解决</a>
+- <a href="04-rtos-interrupt.html">RTOS中断管理与延迟处理</a>
+- <a href="01-rtos-memory.html">RTOS内存管理策略</a></p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

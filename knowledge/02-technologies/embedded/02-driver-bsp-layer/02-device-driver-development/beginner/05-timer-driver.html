@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>定时器驱动基础与应用 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/">02-driver-bsp-layer</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/">02-device-driver-development</a> / <a href="/knowledge/02-technologies/embedded/02-driver-bsp-layer/02-device-driver-development/beginner/">beginner</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">定时器的作用</a></li>
+<li><a href="#_5">定时器的分类</a></li>
+<li><a href="#_6">定时器的工作原理</a></li>
+<li><a href="#_7">定时器时钟计算</a></li>
+<li><a href="#pwm">PWM原理</a></li>
+<li><a href="#_8">输入捕获原理</a></li>
+</ul>
+</li>
+<li><a href="#_9">核心内容</a><ul>
+<li><a href="#1">1. 定时器基本配置</a></li>
+<li><a href="#2">2. 定时器中断配置</a></li>
+<li><a href="#3-pwm">3. PWM输出配置</a></li>
+<li><a href="#4">4. 输入捕获配置</a></li>
+<li><a href="#5">5. 定时器级联</a></li>
+</ul>
+</li>
+<li><a href="#_10">典型应用场景</a><ul>
+<li><a href="#1-">场景1：定时中断 - 周期任务调度</a></li>
+<li><a href="#2pwm-led">场景2：PWM输出 - LED调光</a></li>
+<li><a href="#3pwm-">场景3：PWM输出 - 电机控制</a></li>
+<li><a href="#4-">场景4：输入捕获 - 频率测量</a></li>
+<li><a href="#5-">场景5：输入捕获 - 脉宽测量</a></li>
+<li><a href="#6">场景6：编码器接口</a></li>
+</ul>
+</li>
+<li><a href="#_11">设计考虑</a><ul>
+<li><a href="#1_1">1. 定时器选择</a></li>
+<li><a href="#2_1">2. 时钟配置</a></li>
+<li><a href="#3">3. 中断优先级</a></li>
+<li><a href="#4_1">4. 资源管理</a></li>
+<li><a href="#5_1">5. 功耗优化</a></li>
+</ul>
+</li>
+<li><a href="#_12">常见问题</a><ul>
+<li><a href="#q1">Q1: 定时器中断不触发？</a></li>
+<li><a href="#q2-pwm">Q2: PWM输出没有波形？</a></li>
+<li><a href="#q3">Q3: 定时不准确？</a></li>
+<li><a href="#q4">Q4: 输入捕获测量不准确？</a></li>
+<li><a href="#q5">Q5: 多个定时器同时使用时出现冲突？</a></li>
+</ul>
+</li>
+<li><a href="#_13">最佳实践</a><ul>
+<li><a href="#1_2">1. 代码组织</a></li>
+<li><a href="#2_2">2. 参数检查</a></li>
+<li><a href="#3_1">3. 中断处理</a></li>
+<li><a href="#4_2">4. 资源释放</a></li>
+<li><a href="#5_2">5. 调试技巧</a></li>
+</ul>
+</li>
+<li><a href="#_14">进阶学习</a><ul>
+<li><a href="#1-dma">1. DMA与定时器结合</a></li>
+<li><a href="#2_3">2. 定时器同步</a></li>
+<li><a href="#3-pwm_1">3. 高级PWM技术</a></li>
+<li><a href="#4_3">4. 编码器接口</a></li>
+<li><a href="#5_3">5. 定时器级联应用</a></li>
+</ul>
+</li>
+<li><a href="#_15">学习资源</a><ul>
+<li><a href="#_16">官方文档</a></li>
+<li><a href="#_17">推荐工具</a></li>
+<li><a href="#_18">实践项目</a></li>
+</ul>
+</li>
+<li><a href="#_19">总结</a></li>
+<li><a href="#_20">相关内容</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">定时器驱动基础与应用</h1>
+<h2 id="_2">概述</h2>
+<p>定时器（Timer）是嵌入式系统中最重要的外设之一，它提供精确的时间基准和时序控制功能。定时器不仅可以用于产生精确的延时和周期性中断，还能实现PWM输出、输入捕获、编码器接口等高级功能。掌握定时器驱动开发是嵌入式工程师的必备技能。</p>
+<p>本文将系统介绍定时器的工作原理、配置方法和典型应用场景，帮助你建立对定时器驱动的全面理解。</p>
+<p>完成本文学习后，你将能够：</p>
+<ul>
+<li>理解定时器的工作原理和分类</li>
+<li>掌握定时器的基本配置方法</li>
+<li>实现定时器中断和精确延时</li>
+<li>配置PWM输出控制LED亮度或电机速度</li>
+<li>使用输入捕获测量脉冲宽度和频率</li>
+<li>理解定时器的高级应用场景</li>
+</ul>
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">定时器的作用</h3>
+<p>定时器在嵌入式系统中扮演着时间管理者的角色：</p>
+<ol>
+<li><strong>时间基准</strong>：为系统提供精确的时间参考</li>
+<li><strong>周期任务</strong>：定期执行特定任务（如数据采集、状态更新）</li>
+<li><strong>PWM输出</strong>：产生可调占空比的脉冲信号（电机控制、LED调光）</li>
+<li><strong>输入捕获</strong>：测量外部信号的频率和脉宽（编码器、超声波测距）</li>
+<li><strong>事件计数</strong>：统计外部事件发生次数</li>
+<li><strong>时序控制</strong>：实现精确的时序协议（如WS2812 LED驱动）</li>
+</ol>
+<h3 id="_5">定时器的分类</h3>
+<p>STM32微控制器通常包含多种类型的定时器：</p>
+<p><strong>1. 高级定时器（Advanced Timer）</strong></p>
+<ul>
+<li>型号：TIM1、TIM8</li>
+<li>特点：功能最强大，支持所有定时器功能</li>
+<li>通道数：4个独立通道</li>
+<li>特殊功能：互补输出、死区时间、刹车输入</li>
+<li>应用：电机控制、高级PWM</li>
+</ul>
+<p><strong>2. 通用定时器（General-purpose Timer）</strong></p>
+<ul>
+<li>型号：TIM2、TIM3、TIM4、TIM5</li>
+<li>特点：功能全面，最常用</li>
+<li>通道数：4个独立通道</li>
+<li>功能：PWM、输入捕获、输出比较、编码器接口</li>
+<li>应用：通用时序控制、PWM输出</li>
+</ul>
+<p><strong>3. 基本定时器（Basic Timer）</strong></p>
+<ul>
+<li>型号：TIM6、TIM7</li>
+<li>特点：功能简单，主要用于时间基准</li>
+<li>通道数：无独立通道</li>
+<li>功能：定时中断、DAC触发</li>
+<li>应用：系统时钟、周期任务</li>
+</ul>
+<p><strong>定时器对比表</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>类型</th>
+<th>型号</th>
+<th>位数</th>
+<th>通道数</th>
+<th>PWM</th>
+<th>输入捕获</th>
+<th>编码器</th>
+<th>互补输出</th>
+<th>死区</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>高级</td>
+<td>TIM1/8</td>
+<td>16</td>
+<td>4</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>通用</td>
+<td>TIM2-5</td>
+<td>16/32</td>
+<td>4</td>
+<td>✓</td>
+<td>✓</td>
+<td>✓</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+<tr>
+<td>基本</td>
+<td>TIM6/7</td>
+<td>16</td>
+<td>0</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+<td>✗</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">定时器的工作原理</h3>
+<p>定时器的核心是一个计数器，它按照预设的时钟频率递增或递减。</p>
+<p><strong>基本结构</strong>：</p>
+<pre><code>时钟源 → 预分频器 → 计数器 → 比较/捕获单元 → 输出
+         (PSC)      (CNT)     (CCR)
+</code></pre>
+<p><strong>计数过程</strong>：</p>
+<ol>
+<li><strong>时钟源</strong>：选择定时器的时钟来源（通常是APB时钟）</li>
+<li><strong>预分频器（PSC）</strong>：将时钟频率降低到合适的计数频率</li>
+<li><strong>计数器（CNT）</strong>：按照计数模式递增或递减</li>
+<li><strong>自动重载寄存器（ARR）</strong>：定义计数器的最大值</li>
+<li><strong>比较/捕获寄存器（CCR）</strong>：用于PWM输出或输入捕获</li>
+</ol>
+<p><strong>计数模式</strong>：</p>
+<pre><code>1. 向上计数模式（Up-counting）
+   CNT: 0 → 1 → 2 → ... → ARR → 0 → 1 → ...
+
+2. 向下计数模式（Down-counting）
+   CNT: ARR → ARR-1 → ... → 1 → 0 → ARR → ...
+
+3. 中心对齐模式（Center-aligned）
+   CNT: 0 → 1 → ... → ARR → ARR-1 → ... → 0 → ...
+</code></pre>
+<h3 id="_7">定时器时钟计算</h3>
+<p>理解定时器的时钟计算对于配置定时器至关重要。</p>
+<p><strong>时钟频率计算公式</strong>：</p>
+<pre><code>定时器时钟频率 = APB时钟频率 × 倍频系数
+
+计数器频率 = 定时器时钟频率 / (PSC + 1)
+
+更新频率 = 计数器频率 / (ARR + 1)
+
+定时周期 = 1 / 更新频率
+</code></pre>
+<p><strong>示例计算</strong>：</p>
+<p>假设APB1时钟为84MHz，要产生1ms的定时中断：</p>
+<pre><code>目标：1ms = 0.001s
+更新频率 = 1 / 0.001s = 1000Hz
+
+设置PSC = 8399，则：
+计数器频率 = 84MHz / (8399 + 1) = 10kHz
+
+设置ARR = 9，则：
+更新频率 = 10kHz / (9 + 1) = 1000Hz
+定时周期 = 1 / 1000Hz = 1ms ✓
+</code></pre>
+<h3 id="pwm">PWM原理</h3>
+<p>PWM（Pulse Width Modulation，脉宽调制）通过改变脉冲的占空比来控制平均功率。</p>
+<p><strong>PWM参数</strong>：</p>
+<ul>
+<li><strong>周期（Period）</strong>：一个完整脉冲的时间长度</li>
+<li><strong>占空比（Duty Cycle）</strong>：高电平时间占整个周期的百分比</li>
+<li><strong>频率（Frequency）</strong>：1秒内脉冲的个数</li>
+</ul>
+<p><strong>PWM波形</strong>：</p>
+<pre><code>占空比 = 25%
+    ___     ___     ___
+___|   |___|   |___|   |___
+   |&lt;-&gt;|
+   25% |&lt;---100%----&gt;|
+
+占空比 = 50%
+    _____   _____   _____
+___|     |_|     |_|     |_
+   |&lt;---&gt;|
+    50%  |&lt;---100%----&gt;|
+
+占空比 = 75%
+    _______   _______
+___|       |_|       |_____
+   |&lt;-----&gt;|
+     75%   |&lt;---100%----&gt;|
+</code></pre>
+<p><strong>PWM频率选择</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>应用</th>
+<th>推荐频率</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LED调光</td>
+<td>1-10kHz</td>
+<td>避免闪烁</td>
+</tr>
+<tr>
+<td>电机控制</td>
+<td>10-20kHz</td>
+<td>超出人耳听觉范围</td>
+</tr>
+<tr>
+<td>舵机控制</td>
+<td>50Hz</td>
+<td>标准舵机频率</td>
+</tr>
+<tr>
+<td>开关电源</td>
+<td>50-500kHz</td>
+<td>提高效率</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">输入捕获原理</h3>
+<p>输入捕获（Input Capture）用于测量外部信号的频率、脉宽和占空比。</p>
+<p><strong>工作原理</strong>：</p>
+<ol>
+<li>定时器计数器持续运行</li>
+<li>当输入引脚检测到指定边沿（上升沿/下降沿）时</li>
+<li>自动将当前计数器值保存到捕获寄存器（CCR）</li>
+<li>可选触发中断</li>
+</ol>
+<p><strong>测量方法</strong>：</p>
+<pre><code>测量频率：
+    捕获两次上升沿，计算时间差
+    频率 = 1 / 时间差
+
+测量脉宽：
+    捕获上升沿和下降沿，计算时间差
+    脉宽 = 下降沿时间 - 上升沿时间
+
+测量占空比：
+    占空比 = 高电平时间 / 周期时间
+</code></pre>
+<h2 id="_9">核心内容</h2>
+<h3 id="1">1. 定时器基本配置</h3>
+<p>定时器的基本配置包括时钟使能、预分频器和自动重载值设置。</p>
+<p><strong>配置步骤</strong>：</p>
+<ol>
+<li>使能定时器时钟</li>
+<li>配置预分频器（PSC）</li>
+<li>配置自动重载值（ARR）</li>
+<li>选择计数模式</li>
+<li>使能定时器</li>
+</ol>
+<p><strong>寄存器说明</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>全称</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CR1</td>
+<td>Control Register 1</td>
+<td>控制寄存器：使能、计数模式</td>
+</tr>
+<tr>
+<td>CR2</td>
+<td>Control Register 2</td>
+<td>控制寄存器2：主模式选择</td>
+</tr>
+<tr>
+<td>DIER</td>
+<td>DMA/Interrupt Enable Register</td>
+<td>中断和DMA使能</td>
+</tr>
+<tr>
+<td>SR</td>
+<td>Status Register</td>
+<td>状态寄存器</td>
+</tr>
+<tr>
+<td>CNT</td>
+<td>Counter</td>
+<td>计数器当前值</td>
+</tr>
+<tr>
+<td>PSC</td>
+<td>Prescaler</td>
+<td>预分频器</td>
+</tr>
+<tr>
+<td>ARR</td>
+<td>Auto-Reload Register</td>
+<td>自动重载值</td>
+</tr>
+<tr>
+<td>CCR1-4</td>
+<td>Capture/Compare Register</td>
+<td>捕获/比较寄存器</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2">2. 定时器中断配置</h3>
+<p>定时器中断是最基本也是最常用的功能。</p>
+<p><strong>中断类型</strong>：</p>
+<ul>
+<li><strong>更新中断（Update Interrupt）</strong>：计数器溢出时触发</li>
+<li><strong>捕获中断（Capture Interrupt）</strong>：输入捕获时触发</li>
+<li><strong>比较中断（Compare Interrupt）</strong>：计数器值等于比较值时触发</li>
+<li><strong>触发中断（Trigger Interrupt）</strong>：外部触发时触发</li>
+</ul>
+<p><strong>配置要点</strong>：</p>
+<ol>
+<li>使能定时器更新中断</li>
+<li>配置NVIC中断优先级</li>
+<li>编写中断服务函数</li>
+<li>在中断中清除标志位</li>
+</ol>
+<h3 id="3-pwm">3. PWM输出配置</h3>
+<p>PWM输出是定时器最常用的功能之一。</p>
+<p><strong>PWM模式</strong>：</p>
+<ul>
+<li><strong>PWM模式1</strong>：CNT &lt; CCR时输出高电平，CNT ≥ CCR时输出低电平</li>
+<li><strong>PWM模式2</strong>：CNT &lt; CCR时输出低电平，CNT ≥ CCR时输出高电平</li>
+</ul>
+<p><strong>占空比计算</strong>：</p>
+<pre><code>占空比 = CCR / (ARR + 1) × 100%
+
+例如：ARR = 999, CCR = 500
+占空比 = 500 / 1000 × 100% = 50%
+</code></pre>
+<p><strong>配置步骤</strong>：</p>
+<ol>
+<li>配置GPIO为复用功能（定时器通道）</li>
+<li>配置定时器基本参数（PSC、ARR）</li>
+<li>配置通道为PWM模式</li>
+<li>设置比较值（CCR）控制占空比</li>
+<li>使能输出和定时器</li>
+</ol>
+<h3 id="4">4. 输入捕获配置</h3>
+<p>输入捕获用于测量外部信号的时序参数。</p>
+<p><strong>捕获模式</strong>：</p>
+<ul>
+<li><strong>直接模式</strong>：输入信号直接连接到捕获单元</li>
+<li><strong>间接模式</strong>：输入信号交叉连接（用于测量PWM）</li>
+<li><strong>TRC模式</strong>：由内部触发信号触发</li>
+</ul>
+<p><strong>边沿选择</strong>：</p>
+<ul>
+<li>上升沿触发</li>
+<li>下降沿触发</li>
+<li>双边沿触发</li>
+</ul>
+<p><strong>配置步骤</strong>：</p>
+<ol>
+<li>配置GPIO为复用功能（定时器通道）</li>
+<li>配置定时器基本参数</li>
+<li>配置通道为输入捕获模式</li>
+<li>选择捕获边沿</li>
+<li>使能捕获中断</li>
+<li>在中断中读取捕获值</li>
+</ol>
+<h3 id="5">5. 定时器级联</h3>
+<p>多个定时器可以级联使用，实现更长的定时周期或更复杂的功能。</p>
+<p><strong>级联方式</strong>：</p>
+<ul>
+<li><strong>主从模式</strong>：一个定时器的溢出触发另一个定时器</li>
+<li><strong>外部时钟模式</strong>：一个定时器的输出作为另一个的时钟源</li>
+</ul>
+<p><strong>应用场景</strong>：</p>
+<ul>
+<li>超长定时（秒级、分钟级）</li>
+<li>精确的频率分频</li>
+<li>复杂的时序控制</li>
+</ul>
+<h2 id="_10">典型应用场景</h2>
+<h3 id="1-">场景1：定时中断 - 周期任务调度</h3>
+<p>使用定时器中断实现周期性任务，如每1ms读取传感器数据。</p>
+<p><strong>应用示例</strong>：
+- 系统时钟（SysTick的替代方案）
+- 周期性数据采集
+- LED闪烁
+- 按键扫描
+- 状态机更新</p>
+<p><strong>实现要点</strong>：
+- 选择合适的定时周期（通常1ms-100ms）
+- 中断服务函数要简短高效
+- 避免在中断中执行耗时操作
+- 使用标志位与主循环配合</p>
+<h3 id="2pwm-led">场景2：PWM输出 - LED调光</h3>
+<p>通过改变PWM占空比实现LED亮度调节。</p>
+<p><strong>应用示例</strong>：
+- LED呼吸灯效果
+- RGB LED颜色控制
+- 背光亮度调节
+- 指示灯状态显示</p>
+<p><strong>实现要点</strong>：
+- PWM频率选择1-10kHz（避免闪烁）
+- 占空比范围0-100%
+- 可使用查表法实现非线性调光
+- 多通道可实现RGB混色</p>
+<h3 id="3pwm-">场景3：PWM输出 - 电机控制</h3>
+<p>使用PWM控制直流电机的转速。</p>
+<p><strong>应用示例</strong>：
+- 直流电机调速
+- 舵机角度控制
+- 风扇转速控制
+- 小车运动控制</p>
+<p><strong>实现要点</strong>：
+- 电机PWM频率通常10-20kHz
+- 舵机PWM频率固定50Hz
+- 需要配合H桥驱动电路
+- 注意电机启动电流</p>
+<h3 id="4-">场景4：输入捕获 - 频率测量</h3>
+<p>测量外部信号的频率，如编码器脉冲、超声波回波。</p>
+<p><strong>应用示例</strong>：
+- 编码器测速
+- 超声波测距
+- 频率计
+- 转速测量</p>
+<p><strong>实现要点</strong>：
+- 捕获两次上升沿计算周期
+- 使用定时器溢出计数处理低频信号
+- 滤波处理提高精度
+- 注意计数器溢出问题</p>
+<h3 id="5-">场景5：输入捕获 - 脉宽测量</h3>
+<p>测量脉冲信号的宽度，如红外遥控、超声波回波。</p>
+<p><strong>应用示例</strong>：
+- 红外遥控解码
+- 超声波测距
+- PPM信号解码
+- 脉宽调制信号分析</p>
+<p><strong>实现要点</strong>：
+- 捕获上升沿和下降沿
+- 计算两次捕获值的差值
+- 处理计数器溢出情况
+- 使用双通道可同时测量周期和脉宽</p>
+<h3 id="6">场景6：编码器接口</h3>
+<p>使用定时器的编码器模式读取旋转编码器。</p>
+<p><strong>应用示例</strong>：
+- 电机位置反馈
+- 旋钮输入
+- 机器人定位
+- 精密测量</p>
+<p><strong>实现要点</strong>：
+- 使用定时器的编码器模式
+- 两个通道分别连接A相和B相
+- 计数器值直接反映位置
+- 可检测旋转方向和速度</p>
+<h2 id="_11">设计考虑</h2>
+<h3 id="1_1">1. 定时器选择</h3>
+<p>根据应用需求选择合适的定时器：</p>
+<p><strong>选择依据</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>需求</th>
+<th>推荐定时器</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>简单定时中断</td>
+<td>基本定时器（TIM6/7）</td>
+<td>资源占用少</td>
+</tr>
+<tr>
+<td>PWM输出</td>
+<td>通用定时器（TIM2-5）</td>
+<td>4个独立通道</td>
+</tr>
+<tr>
+<td>电机控制</td>
+<td>高级定时器（TIM1/8）</td>
+<td>支持互补输出和死区</td>
+</tr>
+<tr>
+<td>编码器接口</td>
+<td>通用定时器（TIM2-5）</td>
+<td>支持编码器模式</td>
+</tr>
+<tr>
+<td>32位计数</td>
+<td>TIM2/TIM5</td>
+<td>32位计数器</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2_1">2. 时钟配置</h3>
+<p>合理配置定时器时钟以满足精度和范围要求：</p>
+<p><strong>配置原则</strong>：</p>
+<ol>
+<li><strong>精度优先</strong>：需要高精度时，使用较小的预分频值</li>
+<li><strong>范围优先</strong>：需要长时间定时时，使用较大的预分频值</li>
+<li><strong>平衡选择</strong>：在精度和范围之间找到平衡点</li>
+</ol>
+<p><strong>示例</strong>：</p>
+<pre><code>需求：1ms定时，APB1时钟84MHz
+
+方案1（高精度）：
+PSC = 83, ARR = 999
+计数器频率 = 84MHz / 84 = 1MHz
+分辨率 = 1μs
+
+方案2（平衡）：
+PSC = 8399, ARR = 9
+计数器频率 = 84MHz / 8400 = 10kHz
+分辨率 = 100μs
+
+方案3（大范围）：
+PSC = 41999, ARR = 1
+计数器频率 = 84MHz / 42000 = 2kHz
+分辨率 = 500μs
+</code></pre>
+<h3 id="3">3. 中断优先级</h3>
+<p>定时器中断的优先级设置影响系统的实时性：</p>
+<p><strong>优先级原则</strong>：</p>
+<ol>
+<li><strong>高频定时器</strong>：优先级应该较高（如1ms系统时钟）</li>
+<li><strong>低频定时器</strong>：优先级可以较低（如1s周期任务）</li>
+<li><strong>PWM定时器</strong>：通常不需要中断，优先级最低</li>
+<li><strong>输入捕获</strong>：根据实时性要求设置</li>
+</ol>
+<p><strong>示例配置</strong>：</p>
+<pre><code>优先级0（最高）：系统时钟（1ms SysTick）
+优先级1：高速输入捕获（编码器）
+优先级2：通用定时中断（10ms任务）
+优先级3：低速定时中断（100ms任务）
+</code></pre>
+<h3 id="4_1">4. 资源管理</h3>
+<p>合理分配定时器资源，避免冲突：</p>
+<p><strong>资源规划</strong>：</p>
+<ol>
+<li><strong>统计需求</strong>：列出所有需要定时器的功能</li>
+<li><strong>分配定时器</strong>：根据功能特点分配合适的定时器</li>
+<li><strong>通道复用</strong>：一个定时器的多个通道可以独立使用</li>
+<li><strong>预留资源</strong>：为未来扩展预留定时器</li>
+</ol>
+<p><strong>示例规划</strong>：</p>
+<pre><code>TIM1: 电机PWM控制（4通道）
+TIM2: 编码器接口（2通道）
+TIM3: LED PWM调光（3通道）
+TIM4: 输入捕获（2通道）
+TIM6: 系统时钟（1ms中断）
+TIM7: 周期任务（100ms中断）
+</code></pre>
+<h3 id="5_1">5. 功耗优化</h3>
+<p>在低功耗应用中，合理使用定时器可以降低功耗：</p>
+<p><strong>优化策略</strong>：</p>
+<ol>
+<li><strong>按需使能</strong>：不使用时关闭定时器时钟</li>
+<li><strong>降低频率</strong>：在满足需求的前提下使用较低的时钟频率</li>
+<li><strong>减少中断</strong>：合并多个定时任务，减少中断次数</li>
+<li><strong>睡眠模式</strong>：使用低功耗定时器（LPTIM）在睡眠模式下工作</li>
+</ol>
+<h2 id="_12">常见问题</h2>
+<h3 id="q1">Q1: 定时器中断不触发？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>定时器时钟未使能</li>
+<li>中断未使能（DIER寄存器）</li>
+<li>NVIC中断未配置</li>
+<li>定时器未启动（CR1的CEN位）</li>
+<li>中断标志未清除</li>
+</ol>
+<p><strong>排查步骤</strong>：</p>
+<ol>
+<li>检查时钟使能：<code>RCC-&gt;APB1ENR</code>或<code>RCC-&gt;APB2ENR</code></li>
+<li>检查中断使能：<code>TIMx-&gt;DIER |= TIM_DIER_UIE</code></li>
+<li>检查NVIC配置：<code>NVIC_EnableIRQ(TIMx_IRQn)</code></li>
+<li>检查定时器启动：<code>TIMx-&gt;CR1 |= TIM_CR1_CEN</code></li>
+<li>在中断中清除标志：<code>TIMx-&gt;SR &amp;= ~TIM_SR_UIF</code></li>
+</ol>
+<h3 id="q2-pwm">Q2: PWM输出没有波形？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>GPIO未配置为复用功能</li>
+<li>通道未使能（CCER寄存器）</li>
+<li>主输出未使能（高级定时器需要）</li>
+<li>CCR值设置不当（等于0或大于ARR）</li>
+<li>PWM模式配置错误</li>
+</ol>
+<p><strong>排查步骤</strong>：</p>
+<ol>
+<li>检查GPIO配置：复用功能、推挽输出</li>
+<li>检查通道使能：<code>TIMx-&gt;CCER |= TIM_CCER_CC1E</code></li>
+<li>检查主输出（TIM1/8）：<code>TIMx-&gt;BDTR |= TIM_BDTR_MOE</code></li>
+<li>检查CCR值：<code>0 &lt; CCR &lt; ARR</code></li>
+<li>检查PWM模式：<code>TIMx-&gt;CCMR1 |= TIM_CCMR1_OC1M_1 | TIM_CCMR1_OC1M_2</code></li>
+</ol>
+<h3 id="q3">Q3: 定时不准确？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>时钟频率计算错误</li>
+<li>PSC或ARR设置不当</li>
+<li>系统时钟配置错误</li>
+<li>中断响应延迟</li>
+<li>中断服务函数耗时过长</li>
+</ol>
+<p><strong>解决方案</strong>：</p>
+<ol>
+<li>重新计算并验证时钟参数</li>
+<li>使用示波器或逻辑分析仪测量实际频率</li>
+<li>检查系统时钟配置（HSE、PLL）</li>
+<li>优化中断服务函数，减少执行时间</li>
+<li>提高定时器中断优先级</li>
+</ol>
+<h3 id="q4">Q4: 输入捕获测量不准确？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>输入信号频率过高或过低</li>
+<li>计数器溢出未处理</li>
+<li>边沿检测不稳定（抖动）</li>
+<li>滤波器配置不当</li>
+</ol>
+<p><strong>解决方案</strong>：</p>
+<ol>
+<li>调整预分频器以适应信号频率</li>
+<li>使用溢出计数器处理低频信号</li>
+<li>配置输入滤波器：<code>TIMx-&gt;CCMR1 |= TIM_CCMR1_IC1F</code></li>
+<li>硬件上添加施密特触发器或RC滤波</li>
+<li>软件滤波：多次测量取平均值</li>
+</ol>
+<h3 id="q5">Q5: 多个定时器同时使用时出现冲突？</h3>
+<p><strong>可能原因</strong>：</p>
+<ol>
+<li>中断优先级设置不当</li>
+<li>中断服务函数耗时过长</li>
+<li>共享资源访问冲突</li>
+<li>定时器级联配置错误</li>
+</ol>
+<p><strong>解决方案</strong>：</p>
+<ol>
+<li>合理设置中断优先级</li>
+<li>优化中断服务函数，使用标志位与主循环配合</li>
+<li>使用互斥机制保护共享资源</li>
+<li>检查定时器级联的主从配置</li>
+</ol>
+<h2 id="_13">最佳实践</h2>
+<h3 id="1_2">1. 代码组织</h3>
+<p><strong>模块化设计</strong>：</p>
+<pre><code class="language-c">// timer_driver.h - 定时器驱动接口
+void TIM_Init(TIM_TypeDef *TIMx, uint16_t psc, uint16_t arr);
+void TIM_Start(TIM_TypeDef *TIMx);
+void TIM_Stop(TIM_TypeDef *TIMx);
+void TIM_SetPWM(TIM_TypeDef *TIMx, uint8_t channel, uint16_t duty);
+uint32_t TIM_GetCapture(TIM_TypeDef *TIMx, uint8_t channel);
+
+// timer_driver.c - 定时器驱动实现
+// 实现具体功能
+
+// app_timer.c - 应用层
+// 使用定时器驱动接口
+</code></pre>
+<h3 id="2_2">2. 参数检查</h3>
+<p>在驱动函数中添加参数检查：</p>
+<pre><code class="language-c">void TIM_SetPWM(TIM_TypeDef *TIMx, uint8_t channel, uint16_t duty) {
+    // 参数检查
+    if (TIMx == NULL) return;
+    if (channel &lt; 1 || channel &gt; 4) return;
+    if (duty &gt; 100) duty = 100;
+
+    // 计算CCR值
+    uint16_t ccr = (TIMx-&gt;ARR + 1) * duty / 100;
+
+    // 设置CCR
+    switch (channel) {
+        case 1: TIMx-&gt;CCR1 = ccr; break;
+        case 2: TIMx-&gt;CCR2 = ccr; break;
+        case 3: TIMx-&gt;CCR3 = ccr; break;
+        case 4: TIMx-&gt;CCR4 = ccr; break;
+    }
+}
+</code></pre>
+<h3 id="3_1">3. 中断处理</h3>
+<p><strong>中断服务函数要简短</strong>：</p>
+<pre><code class="language-c">// 不好的做法：在中断中执行复杂操作
+void TIM6_IRQHandler(void) {
+    if (TIM6-&gt;SR &amp; TIM_SR_UIF) {
+        TIM6-&gt;SR &amp;= ~TIM_SR_UIF;
+
+        // ❌ 不要在中断中执行耗时操作
+        ReadSensor();
+        ProcessData();
+        SendToUART();
+    }
+}
+
+// 好的做法：使用标志位
+volatile uint8_t g_timer_flag = 0;
+
+void TIM6_IRQHandler(void) {
+    if (TIM6-&gt;SR &amp; TIM_SR_UIF) {
+        TIM6-&gt;SR &amp;= ~TIM_SR_UIF;
+        g_timer_flag = 1;  // ✓ 只设置标志位
+    }
+}
+
+// 在主循环中处理
+int main(void) {
+    while (1) {
+        if (g_timer_flag) {
+            g_timer_flag = 0;
+            ReadSensor();
+            ProcessData();
+            SendToUART();
+        }
+    }
+}
+</code></pre>
+<h3 id="4_2">4. 资源释放</h3>
+<p>不使用时关闭定时器以节省功耗：</p>
+<pre><code class="language-c">void TIM_DeInit(TIM_TypeDef *TIMx) {
+    // 停止定时器
+    TIMx-&gt;CR1 &amp;= ~TIM_CR1_CEN;
+
+    // 禁用中断
+    TIMx-&gt;DIER = 0;
+
+    // 清除标志
+    TIMx-&gt;SR = 0;
+
+    // 关闭时钟（根据定时器选择）
+    if (TIMx == TIM2) {
+        RCC-&gt;APB1ENR &amp;= ~RCC_APB1ENR_TIM2EN;
+    }
+    // ... 其他定时器
+}
+</code></pre>
+<h3 id="5_2">5. 调试技巧</h3>
+<p><strong>使用GPIO输出调试</strong>：</p>
+<pre><code class="language-c">// 在中断中翻转GPIO，用示波器观察
+void TIM6_IRQHandler(void) {
+    if (TIM6-&gt;SR &amp; TIM_SR_UIF) {
+        TIM6-&gt;SR &amp;= ~TIM_SR_UIF;
+
+        // 翻转调试引脚
+        GPIOA-&gt;ODR ^= GPIO_ODR_OD0;
+    }
+}
+</code></pre>
+<p><strong>打印调试信息</strong>：</p>
+<pre><code class="language-c">void TIM_PrintConfig(TIM_TypeDef *TIMx) {
+    printf(&quot;Timer Configuration:\r\n&quot;);
+    printf(&quot;  PSC: %d\r\n&quot;, TIMx-&gt;PSC);
+    printf(&quot;  ARR: %d\r\n&quot;, TIMx-&gt;ARR);
+    printf(&quot;  CNT: %d\r\n&quot;, TIMx-&gt;CNT);
+    printf(&quot;  CR1: 0x%04X\r\n&quot;, TIMx-&gt;CR1);
+    printf(&quot;  DIER: 0x%04X\r\n&quot;, TIMx-&gt;DIER);
+    printf(&quot;  SR: 0x%04X\r\n&quot;, TIMx-&gt;SR);
+}
+</code></pre>
+<h2 id="_14">进阶学习</h2>
+<h3 id="1-dma">1. DMA与定时器结合</h3>
+<p>使用DMA可以实现定时器的高效数据传输，无需CPU干预。</p>
+<p><strong>应用场景</strong>：
+- PWM波形表输出（音频播放）
+- 高速ADC采样（定时器触发）
+- WS2812 LED驱动（PWM+DMA）</p>
+<h3 id="2_3">2. 定时器同步</h3>
+<p>多个定时器可以同步工作，实现复杂的时序控制。</p>
+<p><strong>同步方式</strong>：
+- 主从模式（Master-Slave）
+- 外部触发模式
+- 门控模式</p>
+<h3 id="3-pwm_1">3. 高级PWM技术</h3>
+<p><strong>互补PWM输出</strong>：
+- 用于H桥电机驱动
+- 自动插入死区时间
+- 刹车保护功能</p>
+<p><strong>相位移PWM</strong>：
+- 多相电机控制
+- 开关电源控制
+- 降低EMI干扰</p>
+<h3 id="4_3">4. 编码器接口</h3>
+<p>定时器的编码器模式可以直接解码正交编码器信号。</p>
+<p><strong>优势</strong>：
+- 硬件解码，无需软件干预
+- 自动判断方向
+- 高速响应
+- 抗干扰能力强</p>
+<h3 id="5_3">5. 定时器级联应用</h3>
+<p>通过级联可以实现超长定时和复杂分频。</p>
+<p><strong>示例</strong>：
+- 32位定时器（两个16位定时器级联）
+- 精确的秒级定时
+- 复杂的频率合成</p>
+<h2 id="_15">学习资源</h2>
+<h3 id="_16">官方文档</h3>
+<ol>
+<li>
+<p><strong>STM32参考手册</strong>
+   - 定时器章节详细说明
+   - 寄存器定义和配置
+   - 时序图和波形图</p>
+</li>
+<li>
+<p><strong>STM32数据手册</strong>
+   - 定时器电气特性
+   - 引脚复用功能
+   - 时钟树结构</p>
+</li>
+<li>
+<p><strong>应用笔记</strong>
+   - AN4013: STM32定时器概述
+   - AN4776: 通用定时器手册
+   - AN4776: PWM生成技术</p>
+</li>
+</ol>
+<h3 id="_17">推荐工具</h3>
+<ol>
+<li>
+<p><strong>STM32CubeMX</strong>
+   - 图形化配置定时器
+   - 自动生成初始化代码
+   - 时钟树可视化</p>
+</li>
+<li>
+<p><strong>示波器/逻辑分析仪</strong>
+   - 观察PWM波形
+   - 测量频率和占空比
+   - 调试输入捕获</p>
+</li>
+<li>
+<p><strong>Keil MDK调试器</strong>
+   - 实时查看寄存器
+   - 设置断点调试
+   - 观察变量变化</p>
+</li>
+</ol>
+<h3 id="_18">实践项目</h3>
+<ol>
+<li>
+<p><strong>LED呼吸灯</strong>
+   - 使用PWM实现渐变效果
+   - 学习占空比控制
+   - 难度：⭐</p>
+</li>
+<li>
+<p><strong>超声波测距</strong>
+   - 使用输入捕获测量回波
+   - 计算距离
+   - 难度：⭐⭐</p>
+</li>
+<li>
+<p><strong>直流电机调速</strong>
+   - PWM控制电机转速
+   - H桥驱动电路
+   - 难度：⭐⭐</p>
+</li>
+<li>
+<p><strong>编码器测速</strong>
+   - 使用编码器模式
+   - 计算转速和位置
+   - 难度：⭐⭐⭐</p>
+</li>
+<li>
+<p><strong>四轴飞行器电机控制</strong>
+   - 4路PWM输出
+   - 精确的速度控制
+   - 难度：⭐⭐⭐⭐</p>
+</li>
+</ol>
+<h2 id="_19">总结</h2>
+<p>定时器是嵌入式系统中最重要的外设之一，掌握定时器驱动开发是每个嵌入式工程师的必备技能。</p>
+<p><strong>核心要点回顾</strong>：</p>
+<ol>
+<li><strong>定时器分类</strong>：高级定时器、通用定时器、基本定时器各有特点</li>
+<li><strong>时钟计算</strong>：理解PSC、ARR与定时周期的关系</li>
+<li><strong>中断配置</strong>：正确配置中断使能和优先级</li>
+<li><strong>PWM输出</strong>：掌握占空比计算和通道配置</li>
+<li><strong>输入捕获</strong>：理解边沿触发和捕获值读取</li>
+<li><strong>资源管理</strong>：合理分配定时器资源，避免冲突</li>
+</ol>
+<p><strong>学习建议</strong>：</p>
+<ol>
+<li><strong>从简单开始</strong>：先掌握基本的定时中断</li>
+<li><strong>动手实践</strong>：通过实际项目加深理解</li>
+<li><strong>阅读手册</strong>：仔细阅读芯片参考手册</li>
+<li><strong>使用工具</strong>：善用示波器和调试器</li>
+<li><strong>循序渐进</strong>：逐步学习高级功能</li>
+</ol>
+<p><strong>下一步学习</strong>：</p>
+<ul>
+<li>深入学习高级定时器的互补输出和死区控制</li>
+<li>掌握定时器与DMA的结合使用</li>
+<li>学习定时器在电机控制中的应用</li>
+<li>研究定时器的低功耗模式</li>
+</ul>
+<p>定时器驱动是连接软件和硬件的桥梁，熟练掌握定时器将为你的嵌入式开发之路打开新的大门！</p>
+<h2 id="_20">相关内容</h2>
+<ul>
+<li><a href="01-gpio-driver.html">GPIO驱动开发：LED控制实战</a> - 学习GPIO基础</li>
+<li><a href="02-uart-driver.html">UART串口驱动开发与调试</a> - 串口通信基础</li>
+<li>通用定时器高级应用 - 定时器进阶</li>
+<li><a href="07-pwm-driver.html">PWM驱动开发：电机调速控制</a> - PWM深入应用</li>
+<li><a href="../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html">中断系统基础概念</a> - 中断原理</li>
+</ul>
+<hr />
+<p><strong>版权声明</strong>：本文档由嵌入式知识平台创建，采用 CC BY-NC-SA 4.0 许可协议。</p>
+<p><strong>更新日志</strong>：
+- 2024-01-15: 初始版本发布</p>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>

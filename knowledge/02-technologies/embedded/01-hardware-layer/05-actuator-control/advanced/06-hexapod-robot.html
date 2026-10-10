@@ -1,0 +1,2160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="generator" content="工程师知识库静态转换">
+<title>六足机器人：步态规划与多舵机协调控制 · 工程师知识库</title>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="stylesheet" href="/knowledge/kb-style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="kb-page">
+  <div class="kb-topbar">
+    <a class="kb-home" href="/knowledge/">← 知识库首页</a>
+    <span class="kb-crumb"><a href="/knowledge/02-technologies/">技术层</a> / <a href="/knowledge/02-technologies/embedded/">嵌入式</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/">硬件层</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/">05-actuator-control</a> / <a href="/knowledge/02-technologies/embedded/01-hardware-layer/05-actuator-control/advanced/">advanced</a></span>
+  </div>
+  <details class="kb-toc" open><summary>📑 本页目录</summary><div class="toc">
+<ul>
+<li><a href="#_2">概述</a></li>
+<li><a href="#_3">背景知识</a><ul>
+<li><a href="#_4">六足机器人稳定性理论</a><ul>
+<li><a href="#static-stability">静态稳定性（Static Stability）</a></li>
+<li><a href="#dynamic-stability">动态稳定性（Dynamic Stability）</a></li>
+<li><a href="#_5">稳定裕度计算代码</a></li>
+</ul>
+</li>
+<li><a href="#pca9685-pwm">PCA9685 PWM控制器深度解析</a><ul>
+<li><a href="#_6">芯片架构</a></li>
+<li><a href="#12">12位分辨率详解</a></li>
+<li><a href="#i2c">I2C级联（多片扩展）</a></li>
+<li><a href="#pca9685">完整PCA9685驱动（增强版）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_7">项目概述</a></li>
+<li><a href="#pca9685_1">PCA9685驱动</a></li>
+<li><a href="#_8">腿部运动学</a></li>
+<li><a href="#_9">步态规划</a><ul>
+<li><a href="#tripod-gait">三角步态（Tripod Gait）</a></li>
+<li><a href="#wave-gait">波形步态（Wave Gait）</a></li>
+</ul>
+</li>
+<li><a href="#_10">机体姿态控制</a><ul>
+<li><a href="#_11">姿态变换原理</a></li>
+<li><a href="#_12">姿态控制示例</a></li>
+<li><a href="#_13">地形自适应算法</a></li>
+<li><a href="#_14">步态切换逻辑（三角→波形→涟漪）</a></li>
+</ul>
+</li>
+<li><a href="#_15">深入原理</a><ul>
+<li><a href="#_16">重心计算与稳定多边形</a><ul>
+<li><a href="#_17">机器人重心计算</a></li>
+<li><a href="#_18">稳定多边形可视化</a></li>
+<li><a href="#_19">步态规划中的稳定性保证</a></li>
+</ul>
+</li>
+<li><a href="#imu">基于IMU的地形跟随</a></li>
+</ul>
+</li>
+<li><a href="#_20">完整项目实战</a><ul>
+<li><a href="#ps2">项目：PS2手柄遥控六足机器人（含地形自适应）</a><ul>
+<li><a href="#bom">硬件清单（BOM）</a></li>
+<li><a href="#_21">系统架构图</a></li>
+<li><a href="#ps2_1">PS2手柄驱动</a></li>
+<li><a href="#_22">完整主程序</a></li>
+<li><a href="#_23">调试与校准流程</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_24">性能调优</a></li>
+<li><a href="#_25">常见问题与调试</a><ul>
+<li><a href="#1servo-overload">问题1：舵机过载（Servo Overload）</a></li>
+<li><a href="#2gait-instability">问题2：步态不稳定（Gait Instability）</a></li>
+<li><a href="#3i2ci2c-bus-contention">问题3：I2C总线竞争（I2C Bus Contention）</a></li>
+<li><a href="#4">问题4：步态切换时腿部抖动</a></li>
+<li><a href="#5imu">问题5：IMU漂移导致机体倾斜</a></li>
+<li><a href="#_26">常见错误速查表</a></li>
+</ul>
+</li>
+<li><a href="#_27">测试与验证</a><ul>
+<li><a href="#_28">逆运动学正确性验证</a></li>
+<li><a href="#_29">稳定性验证</a></li>
+</ul>
+</li>
+<li><a href="#_30">延伸阅读</a></li>
+<li><a href="#_31">参考资料</a></li>
+</ul>
+</div>
+</details>
+  <article class="kb-article">
+<h1 id="_1">六足机器人：步态规划与多舵机协调控制</h1>
+<h2 id="_2">概述</h2>
+<p>本文是六足仿生机器人（Hexapod Robot）的完整技术参考，涵盖从稳定性理论到完整项目实战的全部内容。读者将学习：</p>
+<table>
+<thead>
+<tr>
+<th>学习目标</th>
+<th>技能等级</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>六足机器人稳定性分析（静态/动态稳定裕度）</td>
+<td>⭐⭐⭐⭐</td>
+</tr>
+<tr>
+<td>PCA9685 PWM控制器深度解析（12位分辨率、I2C级联）</td>
+<td>⭐⭐⭐</td>
+</tr>
+<tr>
+<td>机体姿态控制（横滚/俯仰/偏航/高度）</td>
+<td>⭐⭐⭐⭐</td>
+</tr>
+<tr>
+<td>地形自适应算法与步态切换逻辑</td>
+<td>⭐⭐⭐⭐⭐</td>
+</tr>
+<tr>
+<td>重心计算与稳定多边形分析</td>
+<td>⭐⭐⭐⭐</td>
+</tr>
+<tr>
+<td>基于IMU的地形跟随</td>
+<td>⭐⭐⭐⭐⭐</td>
+</tr>
+<tr>
+<td>PS2手柄遥控完整项目</td>
+<td>⭐⭐⭐⭐</td>
+</tr>
+</tbody>
+</table>
+<p><strong>前置知识</strong>：
+- <a href="05-robot-arm-project.html">四自由度机械臂</a> — 逆运动学基础
+- <a href="../beginner/03-servo-motor-control.html">舵机控制基础</a> — PWM控制原理
+- <a href="03-multi-axis-sync.html">多轴同步控制</a> — 多轴协调运动</p>
+<hr />
+<h2 id="_3">背景知识</h2>
+<h3 id="_4">六足机器人稳定性理论</h3>
+<h4 id="static-stability">静态稳定性（Static Stability）</h4>
+<p>静态稳定性描述机器人在静止或准静态运动时不倒塌的能力。核心概念是<strong>支撑多边形</strong>（Support Polygon）：</p>
+<pre><code>静态稳定条件：
+  机器人重心（CoM）的垂直投影必须落在支撑多边形内部
+
+支撑多边形 = 所有接地足端点构成的凸包（Convex Hull）
+
+静态稳定裕度（SSM, Static Stability Margin）：
+  SSM = min(重心投影到支撑多边形各边的距离)
+  SSM &gt; 0 → 稳定
+  SSM = 0 → 临界（即将倾倒）
+  SSM &lt; 0 → 不稳定
+</code></pre>
+<p><strong>三角步态的静态稳定性分析</strong>：</p>
+<pre><code>三角步态中，3条腿同时抬起，3条腿支撑：
+
+支撑腿（B组）：FR(前右), ML(中左), RR(后右)
+
+俯视图：
+    FL●        ●FR  ← 支撑
+      ╲        ╱
+  ML●  ╲      ╱  ●MR
+  支撑  ╲    ╱
+      RL●  ●RR  ← 支撑
+
+支撑三角形（虚线）：
+    ┌─────────────────┐
+    │    ●FR           │
+    │   ╱ ╲            │
+    │  ╱   ╲           │
+    │ ╱  ★  ╲  ← CoM  │
+    │╱         ╲       │
+    │●ML─────●RR│
+    └─────────────────┘
+
+SSM = 重心到最近边的距离
+典型值：SSM ≈ 15~30mm（取决于机体尺寸和步长）
+</code></pre>
+<h4 id="dynamic-stability">动态稳定性（Dynamic Stability）</h4>
+<p>动态稳定性考虑机器人运动时的惯性效应，使用<strong>零力矩点</strong>（ZMP, Zero Moment Point）理论：</p>
+<pre><code>ZMP定义：
+  地面上使合力矩为零的点
+  ZMP = 重心投影 + 惯性修正项
+
+ZMP坐标：
+  x_zmp = x_com - (z_com / g) * ẍ_com
+  y_zmp = y_com - (z_com / g) * ÿ_com
+
+其中：
+  (x_com, y_com, z_com) = 重心位置
+  (ẍ_com, ÿ_com) = 重心水平加速度
+  g = 9.81 m/s²
+
+动态稳定条件：ZMP落在支撑多边形内部
+</code></pre>
+<p><strong>稳定裕度对比</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>步态</th>
+<th>同时抬腿数</th>
+<th>支撑腿数</th>
+<th>静态SSM</th>
+<th>最大速度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>波形步态</td>
+<td>1</td>
+<td>5</td>
+<td>最大</td>
+<td>最慢</td>
+</tr>
+<tr>
+<td>涟漪步态</td>
+<td>2</td>
+<td>4</td>
+<td>中等</td>
+<td>中等</td>
+</tr>
+<tr>
+<td>三角步态</td>
+<td>3</td>
+<td>3</td>
+<td>最小</td>
+<td>最快</td>
+</tr>
+<tr>
+<td>动态步态</td>
+<td>&gt;3</td>
+<td>&lt;3</td>
+<td>负（需ZMP控制）</td>
+<td>极快</td>
+</tr>
+</tbody>
+</table>
+<h4 id="_5">稳定裕度计算代码</h4>
+<pre><code class="language-c">#include &lt;math.h&gt;
+#include &lt;stdint.h&gt;
+
+typedef struct { float x, y; } Point2D;
+
+// 计算点到线段的距离（用于SSM计算）
+static float point_to_segment_dist(Point2D p, Point2D a, Point2D b) {
+    float dx = b.x - a.x, dy = b.y - a.y;
+    float len2 = dx*dx + dy*dy;
+    if (len2 &lt; 1e-6f) return hypotf(p.x - a.x, p.y - a.y);
+    float t = ((p.x - a.x)*dx + (p.y - a.y)*dy) / len2;
+    t = (t &lt; 0) ? 0 : (t &gt; 1) ? 1 : t;
+    float px = a.x + t*dx, py = a.y + t*dy;
+    return hypotf(p.x - px, p.y - py);
+}
+
+// 判断点是否在凸多边形内（叉积法）
+static int point_in_polygon(Point2D p, Point2D *poly, int n) {
+    for (int i = 0; i &lt; n; i++) {
+        Point2D a = poly[i], b = poly[(i+1) % n];
+        float cross = (b.x - a.x)*(p.y - a.y) - (b.y - a.y)*(p.x - a.x);
+        if (cross &lt; 0) return 0;  // 在边的右侧 → 在多边形外
+    }
+    return 1;
+}
+
+// 计算静态稳定裕度（mm）
+// support_feet: 支撑足端的地面投影坐标数组
+// n_support: 支撑腿数量
+// com: 重心的地面投影坐标
+float calc_static_stability_margin(Point2D *support_feet, int n_support, Point2D com) {
+    if (!point_in_polygon(com, support_feet, n_support)) {
+        return -1.0f;  // 重心在支撑多边形外，不稳定
+    }
+    float min_dist = 1e9f;
+    for (int i = 0; i &lt; n_support; i++) {
+        float d = point_to_segment_dist(com, support_feet[i],
+                                         support_feet[(i+1) % n_support]);
+        if (d &lt; min_dist) min_dist = d;
+    }
+    return min_dist;
+}
+</code></pre>
+<hr />
+<h3 id="pca9685-pwm">PCA9685 PWM控制器深度解析</h3>
+<h4 id="_6">芯片架构</h4>
+<p>PCA9685是NXP出品的16路12位PWM/舵机控制器，通过I2C接口控制：</p>
+<pre><code>PCA9685 内部架构：
+
+  I2C接口 (400kHz Fast-mode)
+      │
+      ▼
+  ┌─────────────────────────────────────┐
+  │  地址解码器 (A0~A5 → 6位地址)       │
+  │  寄存器文件 (70个寄存器)             │
+  │  ┌─────────────────────────────┐   │
+  │  │  预分频器 (PRE_SCALE)        │   │
+  │  │  25MHz内部振荡器 / 外部时钟  │   │
+  │  │         ↓                   │   │
+  │  │  12位计数器 (0~4095)         │   │
+  │  │         ↓                   │   │
+  │  │  16个比较器 (LEDn_ON/OFF)    │   │
+  │  └─────────────────────────────┘   │
+  │  16路开漏输出 (LED0~LED15)          │
+  └─────────────────────────────────────┘
+
+每路PWM由4个寄存器控制：
+  LEDn_ON_L  (低8位，上升沿计数值)
+  LEDn_ON_H  (高4位)
+  LEDn_OFF_L (低8位，下降沿计数值)
+  LEDn_OFF_H (高4位)
+</code></pre>
+<h4 id="12">12位分辨率详解</h4>
+<pre><code>PWM周期 = 4096个计数单位
+
+频率设置：
+  f_pwm = f_osc / (4096 × (PRE_SCALE + 1))
+  f_osc = 25MHz（内部振荡器）
+
+  50Hz舵机：PRE_SCALE = 25,000,000 / (4096 × 50) - 1 = 121.07 ≈ 121
+  实际频率：25,000,000 / (4096 × 122) = 50.03Hz ✓
+
+分辨率计算：
+  周期 = 20ms（50Hz）
+  最小步进 = 20ms / 4096 = 4.88μs
+
+舵机角度分辨率：
+  脉宽范围：500μs ~ 2500μs（2000μs范围）
+  角度范围：-90° ~ +90°（180°范围）
+  步进 = 4.88μs → 角度步进 = 180° × 4.88/2000 = 0.44°
+  → 12位分辨率对应约409个角度步进（足够精细）
+</code></pre>
+<h4 id="i2c">I2C级联（多片扩展）</h4>
+<pre><code>I2C总线级联最多支持62片PCA9685（6位地址，去掉全0和全1）：
+
+地址配置（A5~A0引脚）：
+  第1片：A5=0,A4=0,A3=0,A2=0,A1=0,A0=0 → 地址0x40
+  第2片：A5=0,A4=0,A3=0,A2=0,A1=0,A0=1 → 地址0x41
+  第3片：A5=0,A4=0,A3=0,A2=0,A1=1,A0=0 → 地址0x42
+  ...
+  第62片：地址0x7D
+
+六足机器人使用2片（18路舵机）：
+  ┌──────────────────────────────────────────┐
+  │  STM32                                   │
+  │  PB6(SCL) ──────────────────────────┐   │
+  │  PB7(SDA) ──────────────────────────┤   │
+  └─────────────────────────────────────┼───┘
+                                        │
+              ┌─────────────────────────┤
+              │                         │
+         ┌────┴────┐               ┌────┴────┐
+         │PCA9685  │               │PCA9685  │
+         │ADDR=0x40│               │ADDR=0x41│
+         │CH0~CH15 │               │CH0~CH1  │
+         │(腿0~4)  │               │(腿5)    │
+         └─────────┘               └─────────┘
+         16路PWM                   2路PWM
+         (腿0~4的18路中的16路)      (腿5的3路)
+
+注意：第2片只用CH0~CH2（3路），其余13路空闲
+</code></pre>
+<h4 id="pca9685">完整PCA9685驱动（增强版）</h4>
+<pre><code class="language-c">// pca9685.h - PCA9685完整驱动
+// 适用：STM32 HAL库，I2C1，400kHz
+// 版本：HAL 1.x，CubeMX配置I2C1为Fast Mode
+
+#ifndef PCA9685_H
+#define PCA9685_H
+
+#include &quot;stm32f4xx_hal.h&quot;
+
+// 寄存器定义
+#define PCA9685_MODE1       0x00
+#define PCA9685_MODE2       0x01
+#define PCA9685_SUBADR1     0x02
+#define PCA9685_SUBADR2     0x03
+#define PCA9685_SUBADR3     0x04
+#define PCA9685_ALLCALLADR  0x05
+#define PCA9685_LED0_ON_L   0x06  // 第0路PWM起始寄存器
+#define PCA9685_ALL_LED_ON_L  0xFA
+#define PCA9685_ALL_LED_OFF_L 0xFC
+#define PCA9685_PRE_SCALE   0xFE
+#define PCA9685_TESTMODE    0xFF
+
+// MODE1位定义
+#define MODE1_RESTART   (1 &lt;&lt; 7)
+#define MODE1_EXTCLK    (1 &lt;&lt; 6)
+#define MODE1_AI        (1 &lt;&lt; 5)  // 自动递增
+#define MODE1_SLEEP     (1 &lt;&lt; 4)
+#define MODE1_SUB1      (1 &lt;&lt; 3)
+#define MODE1_SUB2      (1 &lt;&lt; 2)
+#define MODE1_SUB3      (1 &lt;&lt; 1)
+#define MODE1_ALLCALL   (1 &lt;&lt; 0)
+
+// MODE2位定义
+#define MODE2_INVRT     (1 &lt;&lt; 4)  // 输出极性反转
+#define MODE2_OCH       (1 &lt;&lt; 3)  // 输出变化时机（ACK/STOP）
+#define MODE2_OUTDRV    (1 &lt;&lt; 2)  // 图腾柱输出（vs开漏）
+#define MODE2_OUTNE1    (1 &lt;&lt; 1)
+#define MODE2_OUTNE0    (1 &lt;&lt; 0)
+
+#define PCA9685_ADDR1   0x40
+#define PCA9685_ADDR2   0x41
+#define PCA9685_OSC_CLK 25000000UL  // 25MHz内部振荡器
+
+extern I2C_HandleTypeDef hi2c1;
+
+// 初始化PCA9685，设置PWM频率
+// freq_hz: PWM频率（舵机用50Hz）
+HAL_StatusTypeDef pca9685_init(uint8_t addr, uint16_t freq_hz);
+
+// 设置单路PWM（on_count: 上升沿计数，off_count: 下降沿计数）
+HAL_StatusTypeDef pca9685_set_pwm(uint8_t addr, uint8_t channel,
+                                   uint16_t on_count, uint16_t off_count);
+
+// 设置脉宽（微秒）
+HAL_StatusTypeDef pca9685_set_pulse_us(uint8_t addr, uint8_t channel,
+                                        uint16_t pulse_us);
+
+// 关闭所有输出
+HAL_StatusTypeDef pca9685_all_off(uint8_t addr);
+
+// 软件复位（广播地址）
+HAL_StatusTypeDef pca9685_software_reset(void);
+
+#endif // PCA9685_H
+</code></pre>
+<pre><code class="language-c">// pca9685.c - PCA9685驱动实现
+#include &quot;pca9685.h&quot;
+
+static HAL_StatusTypeDef i2c_write_reg(uint8_t addr, uint8_t reg, uint8_t val) {
+    uint8_t buf[2] = {reg, val};
+    return HAL_I2C_Master_Transmit(&amp;hi2c1, addr &lt;&lt; 1, buf, 2, 10);
+}
+
+static HAL_StatusTypeDef i2c_read_reg(uint8_t addr, uint8_t reg, uint8_t *val) {
+    HAL_StatusTypeDef ret;
+    ret = HAL_I2C_Master_Transmit(&amp;hi2c1, addr &lt;&lt; 1, &amp;reg, 1, 10);
+    if (ret != HAL_OK) return ret;
+    return HAL_I2C_Master_Receive(&amp;hi2c1, addr &lt;&lt; 1, val, 1, 10);
+}
+
+HAL_StatusTypeDef pca9685_init(uint8_t addr, uint16_t freq_hz) {
+    HAL_StatusTypeDef ret;
+
+    // 软复位
+    ret = i2c_write_reg(addr, PCA9685_MODE1, MODE1_SLEEP);
+    if (ret != HAL_OK) return ret;
+
+    // 计算预分频值
+    // PRE_SCALE = round(f_osc / (4096 * freq)) - 1
+    uint8_t prescale = (uint8_t)((PCA9685_OSC_CLK + (uint32_t)freq_hz * 2048)
+                                  / ((uint32_t)freq_hz * 4096) - 1);
+
+    ret = i2c_write_reg(addr, PCA9685_PRE_SCALE, prescale);
+    if (ret != HAL_OK) return ret;
+
+    // 退出睡眠，使能自动递增
+    ret = i2c_write_reg(addr, PCA9685_MODE1, MODE1_AI | MODE1_ALLCALL);
+    if (ret != HAL_OK) return ret;
+    HAL_Delay(1);  // 振荡器稳定需要500μs
+
+    // 使能RESTART位（清除SLEEP后需要）
+    uint8_t mode1;
+    i2c_read_reg(addr, PCA9685_MODE1, &amp;mode1);
+    if (mode1 &amp; MODE1_RESTART) {
+        i2c_write_reg(addr, PCA9685_MODE1, mode1 | MODE1_RESTART);
+    }
+
+    // MODE2：图腾柱输出，STOP时更新
+    return i2c_write_reg(addr, PCA9685_MODE2, MODE2_OUTDRV);
+}
+
+HAL_StatusTypeDef pca9685_set_pwm(uint8_t addr, uint8_t channel,
+                                   uint16_t on_count, uint16_t off_count) {
+    uint8_t reg = PCA9685_LED0_ON_L + 4 * channel;
+    uint8_t buf[5] = {
+        reg,
+        on_count  &amp; 0xFF, (on_count  &gt;&gt; 8) &amp; 0x0F,
+        off_count &amp; 0xFF, (off_count &gt;&gt; 8) &amp; 0x0F
+    };
+    return HAL_I2C_Master_Transmit(&amp;hi2c1, addr &lt;&lt; 1, buf, 5, 10);
+}
+
+HAL_StatusTypeDef pca9685_set_pulse_us(uint8_t addr, uint8_t channel,
+                                        uint16_t pulse_us) {
+    // 将微秒转换为4096计数单位（基于50Hz = 20000μs周期）
+    uint16_t off = (uint16_t)((uint32_t)pulse_us * 4096 / 20000);
+    return pca9685_set_pwm(addr, channel, 0, off);
+}
+
+HAL_StatusTypeDef pca9685_all_off(uint8_t addr) {
+    // ALL_LED_OFF_H bit4=1 → 强制所有输出为低
+    return i2c_write_reg(addr, PCA9685_ALL_LED_OFF_L + 1, 0x10);
+}
+
+HAL_StatusTypeDef pca9685_software_reset(void) {
+    // SWRST：向地址0x00发送0x06
+    uint8_t cmd = 0x06;
+    return HAL_I2C_Master_Transmit(&amp;hi2c1, 0x00, &amp;cmd, 1, 10);
+}
+</code></pre>
+<h2 id="_7">项目概述</h2>
+<p>六足机器人（Hexapod）模仿昆虫的六条腿运动方式，每条腿3个自由度（髋关节Coxa、股关节Femur、胫关节Tibia），共18个舵机。相比四足机器人，六足机器人在稳定性和容错性上更优（失去一条腿仍可行走）。</p>
+<p><strong>硬件架构</strong>：</p>
+<pre><code>STM32F407（主控）
+    │ I2C
+    ▼
+PCA9685（16路PWM扩展，2片）
+    │ PWM × 18路
+    ▼
+18个舵机（每腿3个）
+
+腿编号：
+  前左(FL) 前右(FR)
+  中左(ML) 中右(MR)
+  后左(RL) 后右(RR)
+</code></pre>
+<p><strong>硬件清单</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>型号</th>
+<th>数量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控</td>
+<td>STM32F407VET6</td>
+<td>1</td>
+</tr>
+<tr>
+<td>PWM扩展</td>
+<td>PCA9685</td>
+<td>2</td>
+</tr>
+<tr>
+<td>舵机（髋/股）</td>
+<td>MG996R</td>
+<td>12</td>
+</tr>
+<tr>
+<td>舵机（胫）</td>
+<td>SG90</td>
+<td>6</td>
+</tr>
+<tr>
+<td>电源</td>
+<td>7.4V锂电池 + 5V/10A降压</td>
+<td>1</td>
+</tr>
+<tr>
+<td>机体</td>
+<td>六足机器人铝合金套件</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<p><strong>连杆参数</strong>（典型值）：</p>
+<pre><code>Coxa  长度：52mm（髋关节到股关节）
+Femur 长度：66mm（股关节到胫关节）
+Tibia 长度：130mm（胫关节到足端）
+</code></pre>
+<h2 id="pca9685_1">PCA9685驱动</h2>
+<p>PCA9685是I2C接口的16路PWM扩展芯片，两片级联可驱动32路舵机：</p>
+<pre><code class="language-c">#include &quot;i2c.h&quot;
+
+#define PCA9685_ADDR1  0x40  // 第一片（A0~A5全接GND）
+#define PCA9685_ADDR2  0x41  // 第二片（A0接VCC）
+
+#define PCA9685_MODE1   0x00
+#define PCA9685_PRESCALE 0xFE
+#define PCA9685_LED0_ON_L 0x06
+
+void pca9685_init(uint8_t addr) {
+    // 设置50Hz PWM频率
+    // 预分频值 = 25MHz / (4096 × 50Hz) - 1 = 121
+    uint8_t prescale = 121;
+
+    // 进入睡眠模式才能设置预分频
+    i2c_write_reg(addr, PCA9685_MODE1, 0x10);  // SLEEP=1
+    i2c_write_reg(addr, PCA9685_PRESCALE, prescale);
+    i2c_write_reg(addr, PCA9685_MODE1, 0x00);  // SLEEP=0
+    HAL_Delay(1);
+    i2c_write_reg(addr, PCA9685_MODE1, 0xA0);  // AUTO_INCREMENT=1
+}
+
+// 设置指定通道的PWM脉宽（单位：us）
+void pca9685_set_pulse(uint8_t addr, uint8_t channel, uint16_t pulse_us) {
+    // 4096计数对应20ms，1计数 = 20000/4096 ≈ 4.88us
+    uint16_t on  = 0;
+    uint16_t off = (uint16_t)(pulse_us * 4096 / 20000);
+
+    uint8_t reg = PCA9685_LED0_ON_L + 4 * channel;
+    uint8_t buf[4] = {
+        on  &amp; 0xFF, (on  &gt;&gt; 8) &amp; 0x0F,
+        off &amp; 0xFF, (off &gt;&gt; 8) &amp; 0x0F
+    };
+    i2c_write_regs(addr, reg, buf, 4);
+}
+
+// 设置舵机角度（-90°~+90°）
+void servo_set_angle(uint8_t leg, uint8_t joint, float angle) {
+    // 映射：-90°→500us, 0°→1500us, +90°→2500us
+    uint16_t pulse = (uint16_t)(1500.0f + angle * (1000.0f / 90.0f));
+    pulse = (pulse &lt; 500) ? 500 : (pulse &gt; 2500) ? 2500 : pulse;
+
+    // 计算PCA9685地址和通道
+    uint8_t ch = leg * 3 + joint;  // 0~17
+    uint8_t addr = (ch &lt; 16) ? PCA9685_ADDR1 : PCA9685_ADDR2;
+    uint8_t pca_ch = ch % 16;
+    pca9685_set_pulse(addr, pca_ch, pulse);
+}
+</code></pre>
+<h2 id="_8">腿部运动学</h2>
+<p>每条腿的3个关节（Coxa/Femur/Tibia）控制足端在三维空间的位置：</p>
+<pre><code class="language-c">#define COXA_LEN   52.0f
+#define FEMUR_LEN  66.0f
+#define TIBIA_LEN  130.0f
+#define DEG2RAD    (3.14159265f / 180.0f)
+
+typedef struct { float x, y, z; } FootPos;  // 足端相对髋关节的位置
+
+// 腿部逆运动学：给定足端位置，求三个关节角度
+// 返回0成功，-1不可达
+int leg_ik(const FootPos *pos, float *coxa, float *femur, float *tibia) {
+    // Coxa角：水平面内旋转
+    *coxa = atan2f(pos-&gt;y, pos-&gt;x) / DEG2RAD;
+
+    // 在Coxa旋转平面内计算
+    float r = sqrtf(pos-&gt;x * pos-&gt;x + pos-&gt;y * pos-&gt;y) - COXA_LEN;
+    float h = pos-&gt;z;  // 高度（负值表示足端在髋关节下方）
+
+    float d = sqrtf(r * r + h * h);  // 股胫连线长度
+
+    if (d &gt; FEMUR_LEN + TIBIA_LEN) return -1;  // 不可达
+
+    // 余弦定理求Tibia角
+    float cos_t = (d*d - FEMUR_LEN*FEMUR_LEN - TIBIA_LEN*TIBIA_LEN)
+                  / (2.0f * FEMUR_LEN * TIBIA_LEN);
+    *tibia = acosf(cos_t) / DEG2RAD - 180.0f;  // 转换为相对角度
+
+    // 求Femur角
+    float alpha = atan2f(-h, r);  // 负号：z向下为正
+    float beta  = acosf((d*d + FEMUR_LEN*FEMUR_LEN - TIBIA_LEN*TIBIA_LEN)
+                        / (2.0f * d * FEMUR_LEN));
+    *femur = (alpha + beta) / DEG2RAD;
+
+    return 0;
+}
+
+// 设置腿部足端位置
+void leg_set_pos(uint8_t leg_id, const FootPos *pos) {
+    float coxa, femur, tibia;
+    if (leg_ik(pos, &amp;coxa, &amp;femur, &amp;tibia) == 0) {
+        servo_set_angle(leg_id, 0, coxa);
+        servo_set_angle(leg_id, 1, femur);
+        servo_set_angle(leg_id, 2, tibia);
+    }
+}
+</code></pre>
+<h2 id="_9">步态规划</h2>
+<h3 id="tripod-gait">三角步态（Tripod Gait）</h3>
+<p>最快的六足步态，将6条腿分为两组，交替抬起：</p>
+<pre><code>组A（同时抬起）：FL, MR, RL
+组B（同时抬起）：FR, ML, RR
+
+时序：
+  t=0: A组抬起并前移 → B组支撑推进
+  t=T/2: B组抬起并前移 → A组支撑推进
+  t=T: 循环
+</code></pre>
+<pre><code class="language-c">// 步态参数
+#define STEP_HEIGHT   30.0f   // 抬腿高度(mm)
+#define STEP_LENGTH   40.0f   // 步长(mm)
+#define BODY_HEIGHT  -80.0f   // 机体高度（足端相对髋关节Z值）
+
+// 6条腿的默认站立位置（相对各自髋关节）
+FootPos default_pos[6] = {
+    {80, 0, BODY_HEIGHT},  // FL
+    {80, 0, BODY_HEIGHT},  // FR
+    {80, 0, BODY_HEIGHT},  // ML
+    {80, 0, BODY_HEIGHT},  // MR
+    {80, 0, BODY_HEIGHT},  // RL
+    {80, 0, BODY_HEIGHT},  // RR
+};
+
+// 三角步态一个完整周期
+// direction: 前进方向角（0=前进，90=左移，-90=右移）
+void tripod_gait_cycle(float direction, uint32_t period_ms) {
+    float dx = STEP_LENGTH * cosf(direction * DEG2RAD);
+    float dy = STEP_LENGTH * sinf(direction * DEG2RAD);
+
+    uint8_t group_a[3] = {0, 3, 4};  // FL, MR, RL
+    uint8_t group_b[3] = {1, 2, 5};  // FR, ML, RR
+
+    uint32_t half = period_ms / 2;
+    uint32_t steps = 20;  // 每半周期20步
+
+    // 第一半周期：A组摆动，B组支撑
+    for (uint32_t i = 0; i &lt;= steps; i++) {
+        float t = (float)i / steps;
+        float swing_x = -STEP_LENGTH/2 + dx * t;
+        float swing_z = BODY_HEIGHT + STEP_HEIGHT * sinf(t * 3.14159f);
+        float support_x = STEP_LENGTH/2 - dx * t;
+
+        for (int j = 0; j &lt; 3; j++) {
+            FootPos pa = default_pos[group_a[j]];
+            pa.x += swing_x; pa.z = swing_z;
+            leg_set_pos(group_a[j], &amp;pa);
+
+            FootPos pb = default_pos[group_b[j]];
+            pb.x += support_x;
+            leg_set_pos(group_b[j], &amp;pb);
+        }
+        HAL_Delay(half / steps);
+    }
+
+    // 第二半周期：B组摆动，A组支撑
+    for (uint32_t i = 0; i &lt;= steps; i++) {
+        float t = (float)i / steps;
+        float swing_x = -STEP_LENGTH/2 + dx * t;
+        float swing_z = BODY_HEIGHT + STEP_HEIGHT * sinf(t * 3.14159f);
+        float support_x = STEP_LENGTH/2 - dx * t;
+
+        for (int j = 0; j &lt; 3; j++) {
+            FootPos pb = default_pos[group_b[j]];
+            pb.x += swing_x; pb.z = swing_z;
+            leg_set_pos(group_b[j], &amp;pb);
+
+            FootPos pa = default_pos[group_a[j]];
+            pa.x += support_x;
+            leg_set_pos(group_a[j], &amp;pa);
+        }
+        HAL_Delay(half / steps);
+    }
+}
+</code></pre>
+<h3 id="wave-gait">波形步态（Wave Gait）</h3>
+<p>稳定性最高的步态，每次只抬一条腿，适合复杂地形：</p>
+<pre><code class="language-c">// 波形步态：腿的抬起顺序 RR→MR→FR→FL→ML→RL
+uint8_t wave_order[6] = {5, 3, 1, 0, 2, 4};
+
+void wave_gait_cycle(float direction, uint32_t period_ms) {
+    uint32_t step_time = period_ms / 6;  // 每条腿的时间
+
+    for (int i = 0; i &lt; 6; i++) {
+        uint8_t swing_leg = wave_order[i];
+        uint32_t steps = 15;
+
+        for (uint32_t s = 0; s &lt;= steps; s++) {
+            float t = (float)s / steps;
+            float dx = STEP_LENGTH * cosf(direction * DEG2RAD);
+
+            // 摆动腿
+            FootPos ps = default_pos[swing_leg];
+            ps.x += -STEP_LENGTH/2 + dx * t;
+            ps.z  = BODY_HEIGHT + STEP_HEIGHT * sinf(t * 3.14159f);
+            leg_set_pos(swing_leg, &amp;ps);
+
+            // 其余5条腿缓慢后退（支撑推进）
+            for (int j = 0; j &lt; 6; j++) {
+                if (j == swing_leg) continue;
+                FootPos pp = default_pos[j];
+                pp.x -= dx * t / 5.0f;  // 分摊到5条支撑腿
+                leg_set_pos(j, &amp;pp);
+            }
+            HAL_Delay(step_time / steps);
+        }
+    }
+}
+</code></pre>
+<h2 id="_10">机体姿态控制</h2>
+<h3 id="_11">姿态变换原理</h3>
+<p>机体姿态控制通过调整所有腿的足端位置来实现机体的横滚（Roll）、俯仰（Pitch）、偏航（Yaw）和高度（Height）变化：</p>
+<pre><code>机体坐标系：
+  X轴：机体前方
+  Y轴：机体左方
+  Z轴：机体上方
+
+姿态变换：
+  足端在机体坐标系中的位置 = R(roll, pitch, yaw) × 足端默认位置 + 高度偏移
+
+旋转矩阵（ZYX欧拉角）：
+  R = Rz(yaw) × Ry(pitch) × Rx(roll)
+</code></pre>
+<pre><code class="language-c">// body_pose.h - 机体姿态控制
+#include &lt;math.h&gt;
+
+typedef struct {
+    float roll;    // 横滚角（绕X轴，单位：度）
+    float pitch;   // 俯仰角（绕Y轴，单位：度）
+    float yaw;     // 偏航角（绕Z轴，单位：度）
+    float height;  // 机体高度偏移（mm，正值升高）
+} BodyPose;
+
+typedef struct { float x, y, z; } Vec3;
+
+// 3D旋转矩阵乘向量（ZYX欧拉角）
+static Vec3 rotate_body(Vec3 v, float roll_deg, float pitch_deg, float yaw_deg) {
+    float r = roll_deg  * (float)M_PI / 180.0f;
+    float p = pitch_deg * (float)M_PI / 180.0f;
+    float y = yaw_deg   * (float)M_PI / 180.0f;
+
+    float cr = cosf(r), sr = sinf(r);
+    float cp = cosf(p), sp = sinf(p);
+    float cy = cosf(y), sy = sinf(y);
+
+    // R = Rz * Ry * Rx
+    Vec3 out;
+    out.x = (cy*cp)*v.x + (cy*sp*sr - sy*cr)*v.y + (cy*sp*cr + sy*sr)*v.z;
+    out.y = (sy*cp)*v.x + (sy*sp*sr + cy*cr)*v.y + (sy*sp*cr - cy*sr)*v.z;
+    out.z = (-sp)*v.x   + (cp*sr)*v.y            + (cp*cr)*v.z;
+    return out;
+}
+
+// 6条腿的髋关节在机体坐标系中的位置（mm）
+// 机体中心为原点，X轴朝前，Y轴朝左
+static const Vec3 hip_positions[6] = {
+    { 60.0f,  90.0f, 0.0f},  // FL（前左）
+    { 60.0f, -90.0f, 0.0f},  // FR（前右）
+    {  0.0f,  90.0f, 0.0f},  // ML（中左）
+    {  0.0f, -90.0f, 0.0f},  // MR（中右）
+    {-60.0f,  90.0f, 0.0f},  // RL（后左）
+    {-60.0f, -90.0f, 0.0f},  // RR（后右）
+};
+
+// 应用机体姿态：计算每条腿在髋关节坐标系中的目标足端位置
+// pose: 目标姿态
+// default_foot: 默认足端位置（相对各自髋关节，6条腿）
+// out_foot: 输出调整后的足端位置（相对各自髋关节）
+void apply_body_pose(const BodyPose *pose,
+                     const Vec3 default_foot[6],
+                     Vec3 out_foot[6]) {
+    for (int i = 0; i &lt; 6; i++) {
+        // 足端在机体坐标系中的绝对位置
+        Vec3 foot_body = {
+            hip_positions[i].x + default_foot[i].x,
+            hip_positions[i].y + default_foot[i].y,
+            default_foot[i].z - pose-&gt;height  // 高度：正值升高机体
+        };
+
+        // 对足端位置施加机体旋转的逆变换
+        // （机体旋转时，足端相对地面不动，所以足端相对机体的位置反向变化）
+        Vec3 rotated = rotate_body(foot_body,
+                                   -pose-&gt;roll, -pose-&gt;pitch, -pose-&gt;yaw);
+
+        // 转回髋关节坐标系
+        out_foot[i].x = rotated.x - hip_positions[i].x;
+        out_foot[i].y = rotated.y - hip_positions[i].y;
+        out_foot[i].z = rotated.z;
+    }
+}
+
+// 平滑过渡到目标姿态（插值）
+void interpolate_pose(BodyPose *current, const BodyPose *target,
+                      float alpha) {
+    current-&gt;roll   += (target-&gt;roll   - current-&gt;roll)   * alpha;
+    current-&gt;pitch  += (target-&gt;pitch  - current-&gt;pitch)  * alpha;
+    current-&gt;yaw    += (target-&gt;yaw    - current-&gt;yaw)    * alpha;
+    current-&gt;height += (target-&gt;height - current-&gt;height) * alpha;
+}
+</code></pre>
+<h3 id="_12">姿态控制示例</h3>
+<pre><code class="language-c">// 机体姿态演示：横滚15°
+void demo_body_roll(void) {
+    BodyPose pose = {0};
+    Vec3 adjusted_feet[6];
+
+    // 目标：横滚15°
+    BodyPose target = {.roll = 15.0f, .pitch = 0, .yaw = 0, .height = 0};
+
+    // 平滑过渡（50步）
+    for (int step = 0; step &lt; 50; step++) {
+        interpolate_pose(&amp;pose, &amp;target, 0.1f);
+        apply_body_pose(&amp;pose, default_pos_vec3, adjusted_feet);
+
+        for (int i = 0; i &lt; 6; i++) {
+            leg_set_pos(i, (FootPos*)&amp;adjusted_feet[i]);
+        }
+        HAL_Delay(20);
+    }
+}
+
+// 机体高度调节（下蹲/站立）
+void set_body_height(float height_mm) {
+    BodyPose pose = {0, 0, 0, height_mm};
+    Vec3 adjusted_feet[6];
+    apply_body_pose(&amp;pose, default_pos_vec3, adjusted_feet);
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, (FootPos*)&amp;adjusted_feet[i]);
+    }
+}
+</code></pre>
+<hr />
+<h3 id="_13">地形自适应算法</h3>
+<p>地形自适应使机器人能在不平坦地面上保持机体水平，每条腿独立感知地面高度：</p>
+<pre><code>地形自适应原理：
+
+  平坦地面：                不平坦地面（自适应后）：
+  ┌──────────────┐          ┌──────────────┐
+  │   机体水平   │          │   机体水平   │
+  └──────────────┘          └──────────────┘
+  ╱╲  ╱╲  ╱╲  ╱╲           ╱╲    ╱╲  ╱╲
+  腿等高                    腿高度各异（适应地形）
+
+算法步骤：
+  1. 每条腿向下探测地面（力传感器或电流检测）
+  2. 记录各腿的实际接地高度
+  3. 计算机体的最优水平姿态（最小二乘平面拟合）
+  4. 调整机体姿态使其水平
+  5. 调整各腿长度补偿地形高度差
+</code></pre>
+<pre><code class="language-c">// terrain_adapt.c - 地形自适应算法
+// 使用舵机电流检测判断是否接地（简化版）
+
+#define GROUND_DETECT_CURRENT_MA  300  // 接地时舵机电流阈值（mA）
+#define PROBE_STEP_MM             5.0f // 每步探测距离
+#define MAX_PROBE_DEPTH_MM        50.0f // 最大探测深度
+
+// 地形高度记录（相对默认站立高度的偏差，mm）
+float terrain_height[6] = {0};
+
+// 单腿地面探测（向下移动直到接地）
+// 返回接地时的Z偏移量（负值表示地面低于默认高度）
+float probe_ground(uint8_t leg_id) {
+    FootPos pos = default_pos[leg_id];
+    float original_z = pos.z;
+
+    for (float dz = 0; dz &lt;= MAX_PROBE_DEPTH_MM; dz += PROBE_STEP_MM) {
+        pos.z = original_z - dz;  // 向下移动
+        leg_set_pos(leg_id, &amp;pos);
+        HAL_Delay(50);
+
+        // 检测舵机电流（通过ADC读取电流传感器）
+        // 实际项目中需要实现 read_servo_current()
+        // uint16_t current = read_servo_current(leg_id, TIBIA_JOINT);
+        // if (current &gt; GROUND_DETECT_CURRENT_MA) return -dz;
+
+        // 简化版：使用固定深度（实际项目替换为电流检测）
+        if (dz &gt;= 20.0f) return -dz;  // 假设20mm处接地
+    }
+    return -MAX_PROBE_DEPTH_MM;  // 未检测到地面
+}
+
+// 最小二乘平面拟合（求机体最优水平姿态）
+// 输入：6个足端的地面高度
+// 输出：机体的roll和pitch补偿角度
+void fit_ground_plane(float heights[6], float *roll_comp, float *pitch_comp) {
+    // 足端X/Y位置（机体坐标系，mm）
+    float fx[6] = { 60, 60,  0,  0, -60, -60};
+    float fy[6] = { 90,-90, 90, -90,  90, -90};
+
+    // 最小二乘：拟合平面 z = ax + by + c
+    float sum_x=0, sum_y=0, sum_z=0;
+    float sum_xx=0, sum_xy=0, sum_yy=0;
+    float sum_xz=0, sum_yz=0;
+    int n = 6;
+
+    for (int i = 0; i &lt; n; i++) {
+        sum_x  += fx[i]; sum_y  += fy[i]; sum_z  += heights[i];
+        sum_xx += fx[i]*fx[i]; sum_xy += fx[i]*fy[i];
+        sum_yy += fy[i]*fy[i];
+        sum_xz += fx[i]*heights[i]; sum_yz += fy[i]*heights[i];
+    }
+
+    // 解3×3线性方程组（简化：忽略交叉项）
+    float a = (n*sum_xz - sum_x*sum_z) / (n*sum_xx - sum_x*sum_x);
+    float b = (n*sum_yz - sum_y*sum_z) / (n*sum_yy - sum_y*sum_y);
+
+    // 坡度转角度
+    *pitch_comp = atanf(a) * 180.0f / (float)M_PI;  // 前后坡度
+    *roll_comp  = atanf(b) * 180.0f / (float)M_PI;  // 左右坡度
+}
+
+// 完整地形自适应流程
+void terrain_adaptation(void) {
+    // 1. 逐腿探测地面高度
+    for (int i = 0; i &lt; 6; i++) {
+        terrain_height[i] = probe_ground(i);
+    }
+
+    // 2. 拟合地面平面，计算机体补偿姿态
+    float roll_comp, pitch_comp;
+    fit_ground_plane(terrain_height, &amp;roll_comp, &amp;pitch_comp);
+
+    // 3. 应用机体姿态补偿（使机体保持水平）
+    BodyPose comp_pose = {
+        .roll  = -roll_comp,
+        .pitch = -pitch_comp,
+        .yaw   = 0,
+        .height = 0
+    };
+
+    Vec3 adjusted_feet[6];
+    apply_body_pose(&amp;comp_pose, default_pos_vec3, adjusted_feet);
+
+    // 4. 同时补偿各腿高度差
+    for (int i = 0; i &lt; 6; i++) {
+        adjusted_feet[i].z += terrain_height[i];  // 补偿地形高度
+        leg_set_pos(i, (FootPos*)&amp;adjusted_feet[i]);
+    }
+}
+</code></pre>
+<hr />
+<h3 id="_14">步态切换逻辑（三角→波形→涟漪）</h3>
+<pre><code class="language-c">// gait_manager.c - 步态管理器
+
+typedef enum {
+    GAIT_TRIPOD  = 0,  // 三角步态：速度最快，稳定性最低
+    GAIT_RIPPLE  = 1,  // 涟漪步态：速度中等，稳定性中等
+    GAIT_WAVE    = 2,  // 波形步态：速度最慢，稳定性最高
+} GaitType;
+
+typedef struct {
+    GaitType type;
+    float    speed_mms;    // 当前速度（mm/s）
+    float    direction;    // 运动方向（度）
+    uint32_t period_ms;    // 步态周期（ms）
+    int      transitioning; // 是否正在切换步态
+} GaitManager;
+
+static GaitManager gait_mgr = {GAIT_TRIPOD, 0, 0, 400, 0};
+
+// 步态切换条件（基于速度和地形）
+GaitType select_gait(float speed_mms, float terrain_roughness) {
+    // terrain_roughness: 0=平坦, 1=崎岖（由地形探测计算）
+    if (terrain_roughness &gt; 0.5f) {
+        return GAIT_WAVE;    // 崎岖地形：波形步态
+    } else if (speed_mms &gt; 80.0f) {
+        return GAIT_TRIPOD;  // 高速：三角步态
+    } else if (speed_mms &gt; 40.0f) {
+        return GAIT_RIPPLE;  // 中速：涟漪步态
+    } else {
+        return GAIT_WAVE;    // 低速/精确：波形步态
+    }
+}
+
+// 步态切换过渡（先让所有腿回到默认位置，再切换）
+void gait_transition(GaitType new_gait) {
+    if (gait_mgr.type == new_gait) return;
+
+    gait_mgr.transitioning = 1;
+
+    // 过渡步骤1：完成当前步态的当前半周期
+    // （实际实现中需要等待当前步态周期结束）
+    HAL_Delay(gait_mgr.period_ms / 2);
+
+    // 过渡步骤2：所有腿回到默认站立位置
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, &amp;default_pos[i]);
+    }
+    HAL_Delay(300);  // 等待所有腿到位
+
+    // 过渡步骤3：切换步态参数
+    gait_mgr.type = new_gait;
+    switch (new_gait) {
+        case GAIT_TRIPOD: gait_mgr.period_ms = 400; break;
+        case GAIT_RIPPLE: gait_mgr.period_ms = 800; break;
+        case GAIT_WAVE:   gait_mgr.period_ms = 1200; break;
+    }
+
+    gait_mgr.transitioning = 0;
+}
+
+// 涟漪步态（Ripple Gait）：每次抬2条腿，6条腿分3组
+// 组序：(FL,RR) → (ML,FR) → (RL,MR)
+void ripple_gait_cycle(float direction, uint32_t period_ms) {
+    uint8_t groups[3][2] = {{0,5}, {2,1}, {4,3}};  // FL/RR, ML/FR, RL/MR
+    uint32_t phase_time = period_ms / 3;
+    uint32_t steps = 15;
+
+    float dx = STEP_LENGTH * cosf(direction * DEG2RAD);
+    float dy = STEP_LENGTH * sinf(direction * DEG2RAD);
+
+    for (int g = 0; g &lt; 3; g++) {
+        for (uint32_t s = 0; s &lt;= steps; s++) {
+            float t = (float)s / steps;
+
+            // 当前组：摆动
+            for (int j = 0; j &lt; 2; j++) {
+                uint8_t leg = groups[g][j];
+                FootPos ps = default_pos[leg];
+                ps.x += -STEP_LENGTH/2 + dx * t;
+                ps.y += -STEP_LENGTH/2 * sinf(direction * DEG2RAD) + dy * t;
+                ps.z  = BODY_HEIGHT + STEP_HEIGHT * sinf(t * (float)M_PI);
+                leg_set_pos(leg, &amp;ps);
+            }
+
+            // 其余4条腿：支撑后退
+            for (int i = 0; i &lt; 6; i++) {
+                int is_swing = (i == groups[g][0] || i == groups[g][1]);
+                if (!is_swing) {
+                    FootPos pp = default_pos[i];
+                    pp.x -= dx * t / 4.0f;
+                    leg_set_pos(i, &amp;pp);
+                }
+            }
+            HAL_Delay(phase_time / steps);
+        }
+    }
+}
+
+## 主控制循环
+
+```c
+typedef enum {
+    GAIT_STOP,
+    GAIT_TRIPOD_FORWARD,
+    GAIT_TRIPOD_BACKWARD,
+    GAIT_TURN_LEFT,
+    GAIT_TURN_RIGHT,
+    GAIT_WAVE
+} GaitMode;
+
+volatile GaitMode gait_mode = GAIT_STOP;
+
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();
+    i2c_init();
+    pca9685_init(PCA9685_ADDR1);
+    pca9685_init(PCA9685_ADDR2);
+
+    // 站立初始化
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, &amp;default_pos[i]);
+    }
+    HAL_Delay(1000);
+
+    while (1) {
+        switch (gait_mode) {
+            case GAIT_TRIPOD_FORWARD:
+                tripod_gait_cycle(0.0f, 400);    // 前进
+                break;
+            case GAIT_TRIPOD_BACKWARD:
+                tripod_gait_cycle(180.0f, 400);  // 后退
+                break;
+            case GAIT_TURN_LEFT:
+                // 原地转向：左侧腿前移，右侧腿后移
+                tripod_gait_cycle(90.0f, 500);
+                break;
+            case GAIT_TURN_RIGHT:
+                tripod_gait_cycle(-90.0f, 500);
+                break;
+            case GAIT_WAVE:
+                wave_gait_cycle(0.0f, 1200);
+                break;
+            case GAIT_STOP:
+            default:
+                HAL_Delay(100);
+                break;
+        }
+    }
+}
+</code></pre>
+<h2 id="_15">深入原理</h2>
+<h3 id="_16">重心计算与稳定多边形</h3>
+<h4 id="_17">机器人重心计算</h4>
+<p>六足机器人的重心由机体、腿部各连杆的质量分布决定：</p>
+<pre><code class="language-c">// com_calculator.c - 重心计算
+// 各部件质量（克）
+#define BODY_MASS_G      800.0f   // 机体（含主控、电池）
+#define COXA_MASS_G       30.0f   // 髋关节连杆
+#define FEMUR_MASS_G      45.0f   // 股关节连杆
+#define TIBIA_MASS_G      35.0f   // 胫关节连杆
+#define SERVO_MASS_G      55.0f   // 每个舵机（MG996R）
+
+// 计算单腿的重心位置（在机体坐标系中）
+// joint_angles: [coxa, femur, tibia]（度）
+// leg_id: 腿编号（0~5）
+Vec3 calc_leg_com(uint8_t leg_id, float coxa_deg, float femur_deg, float tibia_deg) {
+    float coxa  = coxa_deg  * (float)M_PI / 180.0f;
+    float femur = femur_deg * (float)M_PI / 180.0f;
+    float tibia = tibia_deg * (float)M_PI / 180.0f;
+
+    // 髋关节位置（机体坐标系）
+    Vec3 hip = hip_positions[leg_id];
+
+    // Coxa连杆中点（在髋关节坐标系中）
+    Vec3 coxa_mid = {
+        COXA_LEN/2 * cosf(coxa),
+        COXA_LEN/2 * sinf(coxa),
+        0
+    };
+
+    // Femur连杆中点
+    float femur_x = COXA_LEN * cosf(coxa) + FEMUR_LEN/2 * cosf(coxa) * cosf(femur);
+    float femur_y = COXA_LEN * sinf(coxa) + FEMUR_LEN/2 * sinf(coxa) * cosf(femur);
+    float femur_z = FEMUR_LEN/2 * sinf(femur);
+
+    // 各部件质量加权平均（简化：只考虑连杆中点）
+    float total_mass = COXA_MASS_G + FEMUR_MASS_G + TIBIA_MASS_G + 3*SERVO_MASS_G;
+    Vec3 leg_com = {
+        (COXA_MASS_G * (hip.x + coxa_mid.x) + FEMUR_MASS_G * (hip.x + femur_x)) / total_mass,
+        (COXA_MASS_G * (hip.y + coxa_mid.y) + FEMUR_MASS_G * (hip.y + femur_y)) / total_mass,
+        (FEMUR_MASS_G * femur_z) / total_mass
+    };
+    return leg_com;
+}
+
+// 计算整机重心
+Vec3 calc_total_com(float joint_angles[6][3]) {
+    float total_mass = BODY_MASS_G + 6 * (COXA_MASS_G + FEMUR_MASS_G + TIBIA_MASS_G + 3*SERVO_MASS_G);
+    Vec3 com = {0, 0, 0};
+
+    // 机体重心（假设在机体中心）
+    com.x += 0 * BODY_MASS_G;
+    com.y += 0 * BODY_MASS_G;
+    com.z += 0 * BODY_MASS_G;
+
+    // 各腿重心贡献
+    for (int i = 0; i &lt; 6; i++) {
+        float leg_mass = COXA_MASS_G + FEMUR_MASS_G + TIBIA_MASS_G + 3*SERVO_MASS_G;
+        Vec3 lc = calc_leg_com(i, joint_angles[i][0], joint_angles[i][1], joint_angles[i][2]);
+        com.x += lc.x * leg_mass;
+        com.y += lc.y * leg_mass;
+        com.z += lc.z * leg_mass;
+    }
+
+    com.x /= total_mass;
+    com.y /= total_mass;
+    com.z /= total_mass;
+    return com;
+}
+</code></pre>
+<h4 id="_18">稳定多边形可视化</h4>
+<pre><code>三角步态稳定多边形示意（俯视）：
+
+  Y轴（左）
+  ↑
+  │    ●FL(60,90)
+  │   ╱│
+  │  ╱ │
+  │ ╱  │
+  │╱   │
+  ●ML(0,90)
+  │╲   │
+  │ ╲  │
+  │  ╲ │
+  │   ╲│
+  │    ●RL(-60,90)
+  │
+  └──────────────→ X轴（前）
+
+支撑腿（B组）：FR(60,-90), ML(0,90), RR(-60,-90)
+
+稳定三角形：
+  FR ─────────── ML
+   ╲             ╱
+    ╲    ★CoM   ╱
+     ╲         ╱
+      ╲       ╱
+       RR ───
+
+SSM = 重心到最近边的距离
+当CoM在三角形中心时SSM最大（约30mm）
+</code></pre>
+<h4 id="_19">步态规划中的稳定性保证</h4>
+<pre><code class="language-c">// stability_check.c - 步态执行前的稳定性验证
+
+// 获取当前支撑腿的足端地面投影
+int get_support_polygon(uint8_t *support_legs, int n_support,
+                         Point2D *polygon) {
+    for (int i = 0; i &lt; n_support; i++) {
+        // 足端位置（机体坐标系）转地面投影
+        FootPos fp = current_foot_pos[support_legs[i]];
+        polygon[i].x = hip_positions[support_legs[i]].x + fp.x;
+        polygon[i].y = hip_positions[support_legs[i]].y + fp.y;
+    }
+    return n_support;
+}
+
+// 步态执行前验证稳定性
+int verify_gait_stability(uint8_t *swing_legs, int n_swing) {
+    // 确定支撑腿
+    uint8_t support_legs[6];
+    int n_support = 0;
+    for (int i = 0; i &lt; 6; i++) {
+        int is_swing = 0;
+        for (int j = 0; j &lt; n_swing; j++) {
+            if (swing_legs[j] == i) { is_swing = 1; break; }
+        }
+        if (!is_swing) support_legs[n_support++] = i;
+    }
+
+    // 获取支撑多边形
+    Point2D polygon[6];
+    get_support_polygon(support_legs, n_support, polygon);
+
+    // 计算重心投影（简化：使用机体中心）
+    Point2D com = {0, 0};  // 机体中心在机体坐标系原点
+
+    // 计算稳定裕度
+    float ssm = calc_static_stability_margin(polygon, n_support, com);
+
+    if (ssm &lt; 10.0f) {
+        // 稳定裕度不足10mm，拒绝执行
+        return 0;
+    }
+    return 1;
+}
+</code></pre>
+<hr />
+<h3 id="imu">基于IMU的地形跟随</h3>
+<p>IMU（惯性测量单元）实时测量机体姿态，用于主动补偿地形倾斜：</p>
+<pre><code>IMU地形跟随控制框图：
+
+  目标姿态（水平）
+       │
+       ▼
+  ┌─────────┐    误差    ┌─────────┐    补偿角度   ┌──────────┐
+  │  姿态   │──────────→│  PID    │─────────────→│  机体姿  │
+  │  设定值 │           │  控制器 │              │  态控制  │
+  └─────────┘           └─────────┘              └──────────┘
+                              ↑                        │
+                         实际姿态                      ▼
+                              │                  ┌──────────┐
+                         ┌────┴────┐             │  腿部IK  │
+                         │  MPU6050│             └──────────┘
+                         │  IMU    │                  │
+                         └─────────┘                  ▼
+                                                 ┌──────────┐
+                                                 │  舵机    │
+                                                 └──────────┘
+</code></pre>
+<pre><code class="language-c">// imu_terrain_follow.c - 基于MPU6050的地形跟随
+// 依赖：MPU6050驱动（参考加速度计陀螺仪文章）
+
+#include &quot;mpu6050.h&quot;
+
+#define IMU_KP  2.0f   // 姿态PID比例系数
+#define IMU_KI  0.01f  // 积分系数
+#define IMU_KD  0.5f   // 微分系数
+#define IMU_DT  0.02f  // 控制周期（20ms）
+
+typedef struct {
+    float roll_err_sum;   // 积分项
+    float pitch_err_sum;
+    float roll_err_prev;  // 上次误差（微分项）
+    float pitch_err_prev;
+} IMUController;
+
+static IMUController imu_ctrl = {0};
+
+// 从MPU6050读取姿态角（互补滤波）
+void read_imu_angles(float *roll, float *pitch) {
+    MPU6050_Data imu_data;
+    MPU6050_ReadAll(&amp;imu_data);
+
+    // 加速度计计算姿态角
+    float acc_roll  = atan2f(imu_data.accel_y, imu_data.accel_z) * 180.0f / (float)M_PI;
+    float acc_pitch = atan2f(-imu_data.accel_x,
+                              sqrtf(imu_data.accel_y*imu_data.accel_y +
+                                    imu_data.accel_z*imu_data.accel_z)) * 180.0f / (float)M_PI;
+
+    // 陀螺仪积分（度/s × 时间）
+    static float gyro_roll = 0, gyro_pitch = 0;
+    gyro_roll  += imu_data.gyro_x * IMU_DT;
+    gyro_pitch += imu_data.gyro_y * IMU_DT;
+
+    // 互补滤波：0.98陀螺仪 + 0.02加速度计
+    *roll  = 0.98f * gyro_roll  + 0.02f * acc_roll;
+    *pitch = 0.98f * gyro_pitch + 0.02f * acc_pitch;
+}
+
+// IMU地形跟随控制（20ms调用一次）
+void imu_terrain_follow_update(void) {
+    float actual_roll, actual_pitch;
+    read_imu_angles(&amp;actual_roll, &amp;actual_pitch);
+
+    // 目标：机体水平（roll=0, pitch=0）
+    float roll_err  = 0 - actual_roll;
+    float pitch_err = 0 - actual_pitch;
+
+    // PID计算
+    imu_ctrl.roll_err_sum  += roll_err  * IMU_DT;
+    imu_ctrl.pitch_err_sum += pitch_err * IMU_DT;
+
+    float roll_comp  = IMU_KP * roll_err
+                     + IMU_KI * imu_ctrl.roll_err_sum
+                     + IMU_KD * (roll_err  - imu_ctrl.roll_err_prev)  / IMU_DT;
+    float pitch_comp = IMU_KP * pitch_err
+                     + IMU_KI * imu_ctrl.pitch_err_sum
+                     + IMU_KD * (pitch_err - imu_ctrl.pitch_err_prev) / IMU_DT;
+
+    imu_ctrl.roll_err_prev  = roll_err;
+    imu_ctrl.pitch_err_prev = pitch_err;
+
+    // 限幅（最大补偿±20°）
+    roll_comp  = (roll_comp  &gt;  20) ?  20 : (roll_comp  &lt; -20) ? -20 : roll_comp;
+    pitch_comp = (pitch_comp &gt;  20) ?  20 : (pitch_comp &lt; -20) ? -20 : pitch_comp;
+
+    // 应用姿态补偿
+    BodyPose comp = {roll_comp, pitch_comp, 0, 0};
+    Vec3 adjusted_feet[6];
+    apply_body_pose(&amp;comp, default_pos_vec3, adjusted_feet);
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, (FootPos*)&amp;adjusted_feet[i]);
+    }
+}
+</code></pre>
+<h2 id="_20">完整项目实战</h2>
+<h3 id="ps2">项目：PS2手柄遥控六足机器人（含地形自适应）</h3>
+<h4 id="bom">硬件清单（BOM）</h4>
+<table>
+<thead>
+<tr>
+<th>器件</th>
+<th>型号/规格</th>
+<th>数量</th>
+<th>参考价格</th>
+<th>购买渠道</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主控板</td>
+<td>STM32F407VET6最小系统板</td>
+<td>1</td>
+<td>¥35</td>
+<td>立创商城</td>
+</tr>
+<tr>
+<td>PWM扩展</td>
+<td>PCA9685模块（含排针）</td>
+<td>2</td>
+<td>¥12/片</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>舵机（髋/股）</td>
+<td>MG996R金属齿轮舵机</td>
+<td>12</td>
+<td>¥18/个</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>舵机（胫）</td>
+<td>SG90塑料齿轮舵机</td>
+<td>6</td>
+<td>¥5/个</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>IMU模块</td>
+<td>MPU6050 GY-521模块</td>
+<td>1</td>
+<td>¥8</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>PS2手柄</td>
+<td>索尼PS2无线手柄+接收器</td>
+<td>1</td>
+<td>¥25</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>机体套件</td>
+<td>六足机器人铝合金套件（含舵机支架）</td>
+<td>1</td>
+<td>¥180</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>电源</td>
+<td>7.4V 3000mAh锂电池（2S）</td>
+<td>1</td>
+<td>¥45</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>降压模块</td>
+<td>LM2596 5V/10A可调降压</td>
+<td>1</td>
+<td>¥15</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td>电源开关</td>
+<td>带LED指示灯船型开关</td>
+<td>1</td>
+<td>¥3</td>
+<td>淌宝</td>
+</tr>
+<tr>
+<td>连接线</td>
+<td>杜邦线、舵机延长线</td>
+<td>若干</td>
+<td>¥10</td>
+<td>淘宝</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td></td>
+<td></td>
+<td><strong>≈¥430</strong></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<h4 id="_21">系统架构图</h4>
+<pre><code>                    ┌─────────────────────────────────────────┐
+                    │           STM32F407VET6                  │
+                    │                                          │
+  PS2手柄接收器 ───→│ SPI1(PA5/PA6/PA7/PA4)                   │
+  MPU6050 ─────────→│ I2C1(PB6/PB7)                           │
+                    │                                          │
+                    │ I2C2(PB10/PB11) ──→ PCA9685 #1 (0x40)  │
+                    │                         │ CH0~CH15       │
+                    │                         │ 腿0~4的16路舵机 │
+                    │                                          │
+                    │ I2C2(共享) ──────→ PCA9685 #2 (0x41)   │
+                    │                         │ CH0~CH2        │
+                    │                         │ 腿5的3路舵机   │
+                    │                                          │
+                    │ USART1(PA9/PA10) ──→ 调试串口           │
+                    │ TIM7(20ms中断) ──→ IMU控制周期          │
+                    └─────────────────────────────────────────┘
+
+电源分配：
+  7.4V锂电池 ──→ LM2596降压 ──→ 5V/10A ──→ 18个舵机（并联）
+                              └──→ 3.3V稳压 ──→ STM32/PCA9685/MPU6050
+</code></pre>
+<h4 id="ps2_1">PS2手柄驱动</h4>
+<pre><code class="language-c">// ps2_controller.c - PS2手柄SPI驱动
+// STM32 SPI1，软件片选，250kHz时钟
+
+#include &quot;stm32f4xx_hal.h&quot;
+
+// PS2手柄引脚定义
+#define PS2_CLK_PIN   GPIO_PIN_5   // PA5
+#define PS2_MOSI_PIN  GPIO_PIN_7   // PA7（DAT：手柄→主机）
+#define PS2_MISO_PIN  GPIO_PIN_6   // PA6（CMD：主机→手柄）
+#define PS2_CS_PIN    GPIO_PIN_4   // PA4（ATT：片选，低有效）
+#define PS2_GPIO_PORT GPIOA
+
+// 手柄按键位定义（data[3]和data[4]）
+#define PS2_SELECT    0x0001
+#define PS2_L3        0x0002
+#define PS2_R3        0x0004
+#define PS2_START     0x0008
+#define PS2_UP        0x0010
+#define PS2_RIGHT     0x0020
+#define PS2_DOWN      0x0040
+#define PS2_LEFT      0x0080
+#define PS2_L2        0x0100
+#define PS2_R2        0x0200
+#define PS2_L1        0x0400
+#define PS2_R1        0x0800
+#define PS2_TRIANGLE  0x1000
+#define PS2_CIRCLE    0x2000
+#define PS2_CROSS     0x4000
+#define PS2_SQUARE    0x8000
+
+typedef struct {
+    uint16_t buttons;    // 按键状态（0=按下，1=释放）
+    uint8_t  lx, ly;    // 左摇杆（0~255，128=中心）
+    uint8_t  rx, ry;    // 右摇杆
+    uint8_t  connected; // 是否连接
+} PS2State;
+
+static PS2State ps2_state = {0xFFFF, 128, 128, 128, 128, 0};
+
+// 软件SPI发送/接收一字节
+static uint8_t ps2_spi_byte(uint8_t cmd) {
+    uint8_t data = 0;
+    for (int i = 0; i &lt; 8; i++) {
+        // 设置MISO（CMD）
+        if (cmd &amp; (1 &lt;&lt; i))
+            HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_MISO_PIN, GPIO_PIN_SET);
+        else
+            HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_MISO_PIN, GPIO_PIN_RESET);
+
+        // 时钟下降沿
+        HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_CLK_PIN, GPIO_PIN_RESET);
+        __NOP(); __NOP(); __NOP(); __NOP();  // ~2μs延时
+
+        // 读取MOSI（DAT）
+        if (HAL_GPIO_ReadPin(PS2_GPIO_PORT, PS2_MOSI_PIN) == GPIO_PIN_SET)
+            data |= (1 &lt;&lt; i);
+
+        // 时钟上升沿
+        HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_CLK_PIN, GPIO_PIN_SET);
+        __NOP(); __NOP(); __NOP(); __NOP();
+    }
+    return data;
+}
+
+// 读取PS2手柄状态
+void ps2_read(void) {
+    uint8_t buf[9];
+
+    // 拉低CS（选中手柄）
+    HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_CS_PIN, GPIO_PIN_RESET);
+    HAL_Delay(1);
+
+    // 发送命令序列
+    buf[0] = ps2_spi_byte(0x01);  // 起始字节
+    buf[1] = ps2_spi_byte(0x42);  // 请求数据（0x42=读取模拟模式）
+    buf[2] = ps2_spi_byte(0x00);  // 填充
+
+    if (buf[1] == 0x73 || buf[1] == 0x41) {
+        // 模拟模式（0x73）或数字模式（0x41）
+        buf[3] = ps2_spi_byte(0x00);  // 按键高字节
+        buf[4] = ps2_spi_byte(0x00);  // 按键低字节
+        buf[5] = ps2_spi_byte(0x00);  // 右摇杆X
+        buf[6] = ps2_spi_byte(0x00);  // 右摇杆Y
+        buf[7] = ps2_spi_byte(0x00);  // 左摇杆X
+        buf[8] = ps2_spi_byte(0x00);  // 左摇杆Y
+
+        ps2_state.buttons   = (buf[3] | (buf[4] &lt;&lt; 8));
+        ps2_state.rx        = buf[5];
+        ps2_state.ry        = buf[6];
+        ps2_state.lx        = buf[7];
+        ps2_state.ly        = buf[8];
+        ps2_state.connected = 1;
+    } else {
+        ps2_state.connected = 0;
+    }
+
+    // 释放CS
+    HAL_GPIO_WritePin(PS2_GPIO_PORT, PS2_CS_PIN, GPIO_PIN_SET);
+}
+
+// 检查按键是否按下（低电平有效）
+int ps2_button_pressed(uint16_t button) {
+    return !(ps2_state.buttons &amp; button);
+}
+
+// 获取摇杆值（-100~+100）
+int ps2_joystick(uint8_t raw) {
+    int val = (int)raw - 128;
+    if (val &gt; -10 &amp;&amp; val &lt; 10) return 0;  // 死区
+    return val * 100 / 128;
+}
+</code></pre>
+<h4 id="_22">完整主程序</h4>
+<pre><code class="language-c">// main_hexapod.c - 六足机器人完整主程序
+// 功能：PS2手柄控制 + IMU地形跟随 + 步态切换
+
+#include &quot;stm32f4xx_hal.h&quot;
+#include &quot;pca9685.h&quot;
+#include &quot;mpu6050.h&quot;
+#include &quot;ps2_controller.h&quot;
+
+// 全局状态
+static GaitManager gait_mgr = {GAIT_TRIPOD, 0, 0, 400, 0};
+static BodyPose    body_pose = {0, 0, 0, 0};
+static uint8_t     terrain_follow_enabled = 0;
+
+// TIM7中断：20ms IMU控制周期
+void TIM7_IRQHandler(void) {
+    HAL_TIM_IRQHandler(&amp;htim7);
+    if (terrain_follow_enabled) {
+        imu_terrain_follow_update();
+    }
+}
+
+// 处理PS2手柄输入
+void process_ps2_input(void) {
+    ps2_read();
+    if (!ps2_state.connected) return;
+
+    int lx = ps2_joystick(ps2_state.lx);  // 左摇杆X：左右移动
+    int ly = ps2_joystick(ps2_state.ly);  // 左摇杆Y：前后移动
+    int rx = ps2_joystick(ps2_state.rx);  // 右摇杆X：偏航转向
+    int ry = ps2_joystick(ps2_state.ry);  // 右摇杆Y：机体高度
+
+    // 计算运动方向和速度
+    float speed = sqrtf((float)(lx*lx + ly*ly));
+    float direction = atan2f((float)lx, (float)(-ly)) * 180.0f / (float)M_PI;
+
+    // 步态切换
+    if (ps2_button_pressed(PS2_L1)) {
+        gait_transition(GAIT_WAVE);    // L1：波形步态（慢速稳定）
+    } else if (ps2_button_pressed(PS2_R1)) {
+        gait_transition(GAIT_TRIPOD); // R1：三角步态（快速）
+    } else if (ps2_button_pressed(PS2_L2)) {
+        gait_transition(GAIT_RIPPLE); // L2：涟漪步态（中速）
+    }
+
+    // 地形跟随开关
+    if (ps2_button_pressed(PS2_TRIANGLE)) {
+        terrain_follow_enabled = !terrain_follow_enabled;
+        HAL_Delay(300);  // 防抖
+    }
+
+    // 机体高度调节（右摇杆Y）
+    if (abs(ry) &gt; 10) {
+        body_pose.height += ry * 0.1f;
+        body_pose.height = (body_pose.height &gt; 30) ? 30 :
+                           (body_pose.height &lt; -30) ? -30 : body_pose.height;
+    }
+
+    // 机体偏航（右摇杆X）
+    if (abs(rx) &gt; 10) {
+        body_pose.yaw += rx * 0.05f;
+    }
+
+    // 执行步态
+    if (speed &gt; 15.0f) {
+        gait_mgr.speed_mms = speed;
+        gait_mgr.direction = direction;
+
+        switch (gait_mgr.type) {
+            case GAIT_TRIPOD:
+                tripod_gait_cycle(direction, gait_mgr.period_ms);
+                break;
+            case GAIT_RIPPLE:
+                ripple_gait_cycle(direction, gait_mgr.period_ms);
+                break;
+            case GAIT_WAVE:
+                wave_gait_cycle(direction, gait_mgr.period_ms);
+                break;
+        }
+    } else {
+        // 静止：应用机体姿态
+        Vec3 adjusted_feet[6];
+        apply_body_pose(&amp;body_pose, default_pos_vec3, adjusted_feet);
+        for (int i = 0; i &lt; 6; i++) {
+            leg_set_pos(i, (FootPos*)&amp;adjusted_feet[i]);
+        }
+    }
+
+    // 原地转向（十字键）
+    if (ps2_button_pressed(PS2_LEFT)) {
+        tripod_gait_cycle(90.0f, 600);   // 左转
+    } else if (ps2_button_pressed(PS2_RIGHT)) {
+        tripod_gait_cycle(-90.0f, 600);  // 右转
+    }
+
+    // 下蹲/站立（圆圈/叉键）
+    if (ps2_button_pressed(PS2_CIRCLE)) {
+        set_body_height(-20.0f);  // 下蹲
+        HAL_Delay(500);
+    } else if (ps2_button_pressed(PS2_CROSS)) {
+        set_body_height(0.0f);    // 站立
+        HAL_Delay(500);
+    }
+}
+
+int main(void) {
+    HAL_Init();
+    SystemClock_Config();  // 168MHz
+
+    // 外设初始化
+    MX_GPIO_Init();
+    MX_I2C1_Init();   // MPU6050
+    MX_I2C2_Init();   // PCA9685
+    MX_TIM7_Init();   // 20ms定时器
+    MX_USART1_UART_Init();  // 调试串口
+
+    // PCA9685初始化（50Hz）
+    pca9685_init(PCA9685_ADDR1, 50);
+    pca9685_init(PCA9685_ADDR2, 50);
+    HAL_Delay(100);
+
+    // MPU6050初始化
+    MPU6050_Init();
+
+    // PS2手柄GPIO初始化
+    ps2_gpio_init();
+
+    // 站立初始化（缓慢站起）
+    printf(&quot;Hexapod initializing...\r\n&quot;);
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, &amp;default_pos[i]);
+        HAL_Delay(100);  // 逐腿站起，避免电流冲击
+    }
+    HAL_Delay(1000);
+    printf(&quot;Ready! Waiting for PS2 controller...\r\n&quot;);
+
+    // 启动IMU定时器
+    HAL_TIM_Base_Start_IT(&amp;htim7);
+
+    while (1) {
+        process_ps2_input();
+        HAL_Delay(20);  // 主循环50Hz
+    }
+}
+</code></pre>
+<h4 id="_23">调试与校准流程</h4>
+<pre><code>分阶段调试步骤：
+
+阶段1：单腿IK验证
+  1. 注释掉其他5条腿的代码
+  2. 手动设置目标足端位置：(80, 0, -80)
+  3. 用量角器测量实际关节角度
+  4. 对比IK计算值，误差应&lt;2°
+
+阶段2：PCA9685通道映射验证
+  1. 逐通道发送1500μs脉宽（中位）
+  2. 确认每个舵机都能响应
+  3. 记录通道号与腿/关节的对应关系
+
+阶段3：舵机零位校准
+  1. 将所有舵机设置为中位（1500μs）
+  2. 手动调整机械安装角度，使腿部处于标准站立姿态
+  3. 记录每个舵机的角度偏移量，写入校准表
+
+阶段4：步态调试
+  1. 先测试三角步态（最简单）
+  2. 从低速（period=800ms）开始
+  3. 逐步提高速度，观察稳定性
+  4. 调整STEP_HEIGHT和STEP_LENGTH参数
+
+舵机校准表示例：
+</code></pre>
+<pre><code class="language-c">// 舵机零位偏移校准表（单位：度）
+// 正值：实际角度比期望角度偏大，需要减去偏移
+const float servo_offset[6][3] = {
+    // {coxa, femur, tibia}
+    { 2.0f, -3.0f,  1.5f},  // 腿0 FL
+    {-1.5f,  2.0f, -2.0f},  // 腿1 FR
+    { 0.5f, -1.0f,  3.0f},  // 腿2 ML
+    {-2.0f,  1.5f, -1.0f},  // 腿3 MR
+    { 1.0f, -2.5f,  2.0f},  // 腿4 RL
+    {-0.5f,  3.0f, -1.5f},  // 腿5 RR
+};
+
+// 带校准的舵机角度设置
+void servo_set_angle_calibrated(uint8_t leg, uint8_t joint, float angle) {
+    float calibrated = angle - servo_offset[leg][joint];
+    servo_set_angle(leg, joint, calibrated);
+}
+</code></pre>
+<p><strong>分阶段调试</strong>：
+1. 先调通单条腿的逆运动学（验证足端位置正确）
+2. 再调通6条腿同时站立（检查机体高度和稳定性）
+3. 最后调试步态（从慢速开始，逐步提高频率）</p>
+<p><strong>常见问题</strong>：
+- 腿部抖动：检查舵机供电是否充足（18个舵机峰值电流可达10A以上）
+- 步态不稳：调整 <code>STEP_HEIGHT</code> 和 <code>STEP_LENGTH</code>，确保支撑腿不打滑
+- 某条腿不动：检查PCA9685通道映射和I2C地址</p>
+<h2 id="_24">性能调优</h2>
+<h2 id="_25">常见问题与调试</h2>
+<h3 id="1servo-overload">问题1：舵机过载（Servo Overload）</h3>
+<p><strong>现象</strong>：舵机发热严重、发出嗡嗡声、机器人无法站立或行走时腿部颤抖</p>
+<p><strong>原因分析</strong>：</p>
+<pre><code>舵机过载的常见原因：
+
+1. 供电不足
+   症状：多个舵机同时动作时电压跌落，舵机失步
+   检测：用万用表测量舵机供电端，动作时电压应&gt;4.8V
+   解决：增大降压模块电流能力（至少10A），加大滤波电容（1000μF/10V）
+
+2. 机械卡死
+   症状：单个舵机持续过热，电流异常大
+   检测：手动转动关节，感受是否有阻力
+   解决：检查机械安装，确保关节活动范围内无干涉
+
+3. IK超出工作空间
+   症状：腿部到达极限位置后舵机持续施力
+   检测：打印IK计算结果，检查是否有-1返回值
+   解决：限制足端工作空间，添加IK失败保护
+
+4. 步态参数不合理
+   症状：步态执行时腿部抖动，舵机发热
+   检测：降低速度（增大period_ms），观察是否改善
+   解决：减小STEP_LENGTH，增大period_ms
+</code></pre>
+<pre><code class="language-c">// 舵机过载保护：软件限流
+// 通过限制舵机角速度来间接保护舵机
+
+#define MAX_ANGLE_CHANGE_PER_STEP  5.0f  // 每步最大角度变化（度）
+
+static float current_angles[6][3] = {0};  // 当前舵机角度
+
+void servo_set_angle_limited(uint8_t leg, uint8_t joint, float target_angle) {
+    float current = current_angles[leg][joint];
+    float diff = target_angle - current;
+
+    // 限制角速度
+    if (diff &gt; MAX_ANGLE_CHANGE_PER_STEP)
+        diff = MAX_ANGLE_CHANGE_PER_STEP;
+    else if (diff &lt; -MAX_ANGLE_CHANGE_PER_STEP)
+        diff = -MAX_ANGLE_CHANGE_PER_STEP;
+
+    float new_angle = current + diff;
+    current_angles[leg][joint] = new_angle;
+    servo_set_angle(leg, joint, new_angle);
+}
+</code></pre>
+<hr />
+<h3 id="2gait-instability">问题2：步态不稳定（Gait Instability）</h3>
+<p><strong>现象</strong>：机器人行走时左右摇晃、原地打转、或某条腿落地时机体剧烈抖动</p>
+<p><strong>排查流程</strong>：</p>
+<pre><code>步态不稳定排查流程：
+
+Step 1: 检查腿部IK精度
+  → 手动测量足端实际位置 vs 期望位置
+  → 误差&gt;5mm需要重新校准舵机零位
+
+Step 2: 检查步态时序
+  → 用逻辑分析仪或示波器抓取PWM信号
+  → 确认摆动腿和支撑腿的时序正确
+
+Step 3: 检查地面摩擦力
+  → 在光滑地面上支撑腿容易打滑
+  → 解决：在足端安装橡胶垫，或减小步长
+
+Step 4: 检查机体重心
+  → 重心偏移会导致某侧腿负载过大
+  → 解决：调整电池位置，使重心尽量居中
+
+Step 5: 检查步态参数
+  → STEP_HEIGHT太小：腿部拖地
+  → STEP_HEIGHT太大：机体上下抖动
+  → STEP_LENGTH太大：支撑腿打滑
+  → period_ms太小：舵机来不及响应
+
+推荐初始参数（平坦地面）：
+  STEP_HEIGHT = 25mm
+  STEP_LENGTH = 35mm
+  period_ms   = 500ms（三角步态）
+</code></pre>
+<hr />
+<h3 id="3i2ci2c-bus-contention">问题3：I2C总线竞争（I2C Bus Contention）</h3>
+<p><strong>现象</strong>：PCA9685偶发不响应、I2C通信超时、舵机随机抖动</p>
+<p><strong>原因与解决</strong>：</p>
+<pre><code>I2C总线问题排查：
+
+1. 上拉电阻检查
+   问题：上拉电阻过大（&gt;10kΩ）导致信号上升沿过慢
+   解决：使用4.7kΩ上拉电阻（3.3V系统）
+   验证：用示波器观察SCL/SDA波形，上升沿应&lt;1μs
+
+2. 总线电容检查
+   问题：多片PCA9685级联时总线电容增大
+   解决：使用I2C总线缓冲器（如PCA9517）隔离
+   限制：I2C总线电容不超过400pF（Fast Mode）
+
+3. 地址冲突检查
+   问题：两片PCA9685地址相同
+   解决：检查A0~A5引脚焊接，确认地址不同
+   验证：运行I2C总线扫描程序
+
+4. 时序问题
+   问题：I2C时钟频率过高，从机来不及响应
+   解决：降低I2C频率至100kHz（Standard Mode）
+</code></pre>
+<pre><code class="language-c">// I2C总线恢复（处理总线锁死）
+void i2c_bus_recovery(void) {
+    // 手动产生9个时钟脉冲，强制从机释放SDA
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin   = GPIO_PIN_10;  // PB10 = SCL
+    gpio.Mode  = GPIO_MODE_OUTPUT_OD;
+    gpio.Pull  = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &amp;gpio);
+
+    for (int i = 0; i &lt; 9; i++) {
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_RESET);
+        HAL_Delay(1);
+        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, GPIO_PIN_SET);
+        HAL_Delay(1);
+    }
+
+    // 重新初始化I2C和PCA9685
+    HAL_I2C_DeInit(&amp;hi2c2);
+    HAL_Delay(10);
+    MX_I2C2_Init();
+    pca9685_init(PCA9685_ADDR1, 50);
+    pca9685_init(PCA9685_ADDR2, 50);
+    printf(&quot;I2C总线已恢复\r\n&quot;);
+}
+</code></pre>
+<hr />
+<h3 id="4">问题4：步态切换时腿部抖动</h3>
+<p><strong>现象</strong>：步态切换瞬间某些腿突然跳到错误位置</p>
+<p><strong>原因</strong>：切换时腿部处于摆动相中途，被强制切换到新步态的初始位置</p>
+<p><strong>解决</strong>：</p>
+<pre><code class="language-c">// 安全步态切换：等待所有腿回到支撑相后再切换
+void safe_gait_transition(GaitType new_gait) {
+    if (gait_mgr.type == new_gait) return;
+    gait_mgr.transitioning = 1;
+
+    // 等待当前步态周期自然结束（最多2个周期）
+    HAL_Delay(2 * gait_mgr.period_ms);
+
+    // 所有腿回到默认站立位置
+    for (int i = 0; i &lt; 6; i++) {
+        leg_set_pos(i, &amp;default_pos[i]);
+    }
+    HAL_Delay(300);
+
+    gait_transition(new_gait);
+    gait_mgr.transitioning = 0;
+}
+</code></pre>
+<hr />
+<h3 id="5imu">问题5：IMU漂移导致机体倾斜</h3>
+<p><strong>现象</strong>：机器人静止时机体缓慢倾斜，IMU补偿越来越大</p>
+<p><strong>原因</strong>：陀螺仪积分漂移（Gyro Drift），长时间运行后误差累积</p>
+<p><strong>解决</strong>：</p>
+<pre><code class="language-c">// 陀螺仪零偏校准（上电后静止5秒）
+void calibrate_gyro_bias(void) {
+    float sum_x = 0, sum_y = 0;
+    int samples = 200;
+    printf(&quot;校准陀螺仪，请保持机器人静止...\r\n&quot;);
+    for (int i = 0; i &lt; samples; i++) {
+        MPU6050_Data d;
+        MPU6050_ReadAll(&amp;d);
+        sum_x += d.gyro_x;
+        sum_y += d.gyro_y;
+        HAL_Delay(5);
+    }
+    gyro_bias_x = sum_x / samples;
+    gyro_bias_y = sum_y / samples;
+    printf(&quot;零偏校准完成：X=%.3f, Y=%.3f deg/s\r\n&quot;, gyro_bias_x, gyro_bias_y);
+}
+</code></pre>
+<hr />
+<h3 id="_26">常见错误速查表</h3>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>可能原因</th>
+<th>快速解决</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>上电后某条腿不动</td>
+<td>PCA9685通道映射错误</td>
+<td>检查<code>ch = leg*3 + joint</code>计算</td>
+</tr>
+<tr>
+<td>所有舵机抖动</td>
+<td>供电电压不足</td>
+<td>测量5V轨，加大滤波电容</td>
+</tr>
+<tr>
+<td>IK返回-1</td>
+<td>足端位置超出工作空间</td>
+<td>减小STEP_LENGTH或BODY_HEIGHT</td>
+</tr>
+<tr>
+<td>步态向一侧偏转</td>
+<td>左右腿步长不对称</td>
+<td>检查髋关节安装角度</td>
+</tr>
+<tr>
+<td>I2C超时</td>
+<td>总线电容过大或上拉过大</td>
+<td>换4.7kΩ上拉，检查走线长度</td>
+</tr>
+<tr>
+<td>机体持续倾斜</td>
+<td>IMU陀螺仪漂移</td>
+<td>重新校准零偏，检查安装方向</td>
+</tr>
+<tr>
+<td>舵机发出嗡嗡声</td>
+<td>舵机在极限位置持续施力</td>
+<td>添加IK工作空间限制</td>
+</tr>
+<tr>
+<td>步态切换时腿部跳动</td>
+<td>切换时机不对</td>
+<td>使用safe_gait_transition()</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_27">测试与验证</h2>
+<h3 id="_28">逆运动学正确性验证</h3>
+<pre><code class="language-c">// 验证IK精度：正运动学 → 逆运动学 → 正运动学，结果应一致
+void test_ik_accuracy(void) {
+    FootPos test_cases[] = {
+        {80.0f,  0.0f, -80.0f},
+        {60.0f, 20.0f, -70.0f},
+        {100.0f, 0.0f, -60.0f},
+        {50.0f,  0.0f, -100.0f},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+    int pass = 0;
+
+    for (int i = 0; i &lt; n; i++) {
+        float coxa, femur, tibia;
+        int ret = leg_ik(&amp;test_cases[i], &amp;coxa, &amp;femur, &amp;tibia);
+        if (ret != 0) { printf(&quot;测试%d: IK不可达\r\n&quot;, i); continue; }
+
+        // 正运动学验证
+        float r = COXA_LEN + FEMUR_LEN * cosf(femur * DEG2RAD)
+                           + TIBIA_LEN * cosf((femur + tibia) * DEG2RAD);
+        float fk_x = r * cosf(coxa * DEG2RAD);
+        float fk_y = r * sinf(coxa * DEG2RAD);
+        float fk_z = FEMUR_LEN * sinf(femur * DEG2RAD)
+                   + TIBIA_LEN * sinf((femur + tibia) * DEG2RAD);
+
+        float err = sqrtf(powf(fk_x - test_cases[i].x, 2) +
+                          powf(fk_y - test_cases[i].y, 2) +
+                          powf(fk_z - test_cases[i].z, 2));
+
+        if (err &lt; 1.0f) { printf(&quot;测试%d: PASS (误差=%.2fmm)\r\n&quot;, i, err); pass++; }
+        else             { printf(&quot;测试%d: FAIL (误差=%.2fmm)\r\n&quot;, i, err); }
+    }
+    printf(&quot;IK测试：%d/%d 通过\r\n&quot;, pass, n);
+}
+</code></pre>
+<h3 id="_29">稳定性验证</h3>
+<pre><code class="language-c">// 验证三角步态静态稳定裕度
+void verify_tripod_stability(void) {
+    uint8_t support[3] = {1, 2, 5};  // FR, ML, RR
+    Point2D polygon[3];
+    for (int i = 0; i &lt; 3; i++) {
+        polygon[i].x = hip_positions[support[i]].x + default_pos[support[i]].x;
+        polygon[i].y = hip_positions[support[i]].y + default_pos[support[i]].y;
+    }
+    Point2D com = {0, 0};
+    float ssm = calc_static_stability_margin(polygon, 3, com);
+    printf(&quot;三角步态SSM：%.1fmm (%s)\r\n&quot;, ssm,
+           ssm &gt; 10.0f ? &quot;良好&quot; : ssm &gt; 0 ? &quot;临界&quot; : &quot;不稳定&quot;);
+}
+</code></pre>
+<hr />
+<h2 id="_30">延伸阅读</h2>
+<ul>
+<li><a href="05-robot-arm-project.html">四自由度机械臂</a> — 串联机械臂运动学与逆运动学</li>
+<li><a href="03-multi-axis-sync.html">多轴同步控制</a> — 多轴协调运动算法与插补</li>
+<li><a href="04-smart-gimbal-project.html">智能云台项目</a> — IMU姿态控制与PID调参</li>
+<li><a href="02-motion-control-algorithms.html">运动控制算法</a> — 梯形/S曲线加速度规划</li>
+<li><a href="../../04-sensor-technology/intermediate/04-accelerometer-gyroscope.html">加速度计与陀螺仪</a> — MPU6050驱动与姿态解算</li>
+<li><a href="../beginner/03-servo-motor-control.html">舵机控制基础</a> — PWM控制原理与舵机选型</li>
+</ul>
+<h2 id="_31">参考资料</h2>
+<ol>
+<li>《仿生机器人》— 谭民，机械工业出版社</li>
+<li>《步行机器人》— 马培荪，上海交通大学出版社</li>
+<li>《机器人步态规划》— 陈学东，华中科技大学出版社</li>
+<li>Lynxmotion Hexapod — 开源六足机器人参考设计，<a href="https://www.lynxmotion.com">lynxmotion.com</a></li>
+<li>Phoenix Code — 经典六足步态开源实现，<a href="https://github.com/KurtE/Arduino_Phoenix_Parts">GitHub</a></li>
+<li>PCA9685 Datasheet — NXP Semiconductors，Rev. 4，2015</li>
+<li>MPU-6050 Product Specification — InvenSense，Rev. 3.4</li>
+<li>Vukobratovic M., Borovac B. — "Zero-Moment Point — Thirty Five Years of Its Life"，<em>International Journal of Humanoid Robotics</em>，2004</li>
+<li>McGhee R.B., Frank A.A. — "On the Stability Properties of Quadruped Creeping Gaits"，<em>Mathematical Biosciences</em>，1968</li>
+<li>GRBL — 开源CNC运动控制固件，<a href="https://github.com/gnea/grbl">GitHub</a></li>
+</ol>
+  </article>
+  <div class="kb-footer"><a href="/knowledge/">← 返回工程师知识库</a></div>
+</div>
+<script>
+document.querySelectorAll('code.language-mermaid').forEach(function(c){{var p=c.parentNode;var m=document.createElement('pre');m.className='mermaid';m.textContent=c.textContent;p.parentNode.replaceChild(m,p);}});
+hljs.highlightAll();
+mermaid.initialize({{startOnLoad:true,theme:'dark'}});
+var bt=document.createElement('div');bt.className='kb-backtop';bt.textContent='↑';document.body.appendChild(bt);
+window.addEventListener('scroll',function(){{bt.classList.toggle('show',window.scrollY>400);}});
+bt.addEventListener('click',function(){{window.scrollTo({{top:0,behavior:'smooth'}});}});
+</script>
+</body>
+</html>
