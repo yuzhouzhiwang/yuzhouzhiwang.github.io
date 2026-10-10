@@ -205,7 +205,7 @@ def build_tree():
                 if e.name.lower() == "index.md":
                     node["has_index"] = True
                     node["index_md_path"] = e.path
-                    node["index_rel"] = relpath
+                    node["index_rel"] = rel
                 else:
                     page = {"type": "page", "name": e.name[:-3], "url": "/knowledge/" + relpath[:-3] + ".html",
                             "md_path": e.path, "rel": relpath[:-3]}
