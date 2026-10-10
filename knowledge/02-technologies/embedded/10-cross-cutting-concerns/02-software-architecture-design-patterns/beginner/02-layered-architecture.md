@@ -1,0 +1,1491 @@
+---
+title: "分层架构设计实践"
+description: "深入讲解嵌入式系统分层架构的设计原则和实践方法,包括HAL层、驱动层、中间件层和应用层的设计,通过完整的实例项目演示如何构建清晰、可维护的分层架构系统。"
+slug: "layered-architecture"
+
+# 分类信息
+domain: "横切关注点"
+module: "软件架构与设计模式"
+content_type: "tutorial"
+skill_level: "beginner"
+
+# 标签和关联
+tags:
+  - 分层架构
+  - 架构设计
+  - 模块化
+  - HAL层
+  - 接口设计
+prerequisites:
+  - "embedded-architecture-overview"
+related_contents: []
+
+# 学习信息
+estimated_time: 70
+difficulty_score: 3
+
+# 作者和版本
+author: "嵌入式知识平台"
+author_id: ""
+created_at: "2026-03-10"
+updated_at: "2026-03-10"
+version: "1.0"
+
+# 语言和本地化
+language: "zh-CN"
+translations: []
+
+# 状态和可见性
+status: "draft"
+is_featured: false
+is_premium: false
+
+# SEO和元数据
+keywords:
+  - 分层架构
+  - HAL层设计
+  - 驱动层
+  - 中间件层
+  - 接口定义
+cover_image: ""
+---
+
+# 分层架构设计实践
+
+
+## 概述
+
+分层架构是嵌入式系统中最常用且最重要的架构模式。通过将系统划分为不同的层次,每层负责特定的功能,可以大大提高代码的可维护性、可移植性和可测试性。本教程将通过一个完整的实例项目,带你深入理解和实践分层架构的设计方法。
+
+完成本教程后,你将能够:
+
+- 理解分层架构的核心原则和设计思想
+- 掌握HAL层(硬件抽象层)的设计和实现方法
+- 学会设计清晰的驱动层接口
+- 理解中间件层和应用层的职责划分
+- 能够独立设计和实现一个分层架构的嵌入式系统
+- 掌握层与层之间的接口定义和数据传递方法
+
+## 前置要求
+
+在开始本教程之前,你需要:
+
+- 掌握C语言基础知识(指针、结构体、函数指针)
+- 了解基本的嵌入式开发概念
+- 阅读过[嵌入式软件架构概述](01-embedded-architecture-overview.html)
+- 有一定的单片机开发经验(如STM32、Arduino等)
+
+## 准备工作
+
+### 硬件准备
+
+本教程使用以下硬件(可根据实际情况调整):
+
+- STM32开发板(或其他MCU开发板)
+- LED灯(至少2个)
+- 按键(至少1个)
+- 温湿度传感器(如DHT11或DHT22)
+- USB转串口模块(用于调试输出)
+
+### 软件准备
+
+- Keil MDK或STM32CubeIDE
+- 串口调试工具(如PuTTY、SecureCRT)
+- 代码编辑器(推荐VS Code)
+
+### 项目目标
+
+我们将构建一个环境监测系统,具备以下功能:
+
+- 定时读取温湿度传感器数据
+- 通过LED指示系统状态
+- 按键控制数据采集的启动和停止
+- 通过串口输出监测数据
+- 支持不同的工作模式切换
+
+
+## 步骤1: 理解分层架构的设计原则
+
+### 1.1 分层架构的基本结构
+
+在开始编码之前,我们先明确分层架构的基本结构。一个典型的嵌入式系统分层架构包含以下层次:
+
+```
+┌─────────────────────────────────────┐
+│         应用层 (Application)         │  业务逻辑、状态机、用户交互
+├─────────────────────────────────────┤
+│        中间件层 (Middleware)         │  协议栈、算法库、工具函数
+├─────────────────────────────────────┤
+│          驱动层 (Driver)             │  设备驱动、外设控制
+├─────────────────────────────────────┤
+│      硬件抽象层 (HAL)                │  寄存器操作、硬件初始化
+├─────────────────────────────────────┤
+│          硬件层 (Hardware)           │  MCU、外设、传感器
+└─────────────────────────────────────┘
+```
+
+### 1.2 各层的职责
+
+**硬件抽象层(HAL)**:
+- 封装寄存器操作
+- 提供硬件初始化接口
+- 屏蔽不同MCU的差异
+- 不包含业务逻辑
+
+**驱动层(Driver)**:
+- 基于HAL层实现设备驱动
+- 提供设备操作的高级接口
+- 管理设备状态
+- 处理设备相关的错误
+
+**中间件层(Middleware)**:
+- 提供通用的功能模块
+- 实现协议栈和算法
+- 数据处理和转换
+- 与具体硬件无关
+
+**应用层(Application)**:
+- 实现业务逻辑
+- 用户交互处理
+- 系统状态管理
+- 调用下层接口完成功能
+
+### 1.3 分层设计的核心原则
+
+**原则1: 单向依赖**
+- 上层可以调用下层接口
+- 下层不能直接调用上层
+- 通过回调函数实现下层向上层通知
+
+**原则2: 接口稳定**
+- 每层对外提供稳定的接口
+- 内部实现可以修改,接口尽量不变
+- 使用头文件定义接口
+
+**原则3: 职责单一**
+- 每层只负责特定的功能
+- 不要跨层调用
+- 避免层次混乱
+
+**原则4: 最小知识**
+- 每层只需要知道相邻层的接口
+- 不需要了解其他层的实现细节
+- 降低耦合度
+
+
+## 步骤2: 设计HAL层(硬件抽象层)
+
+### 2.1 HAL层的设计目标
+
+HAL层的主要目标是:
+- 封装所有寄存器操作
+- 提供统一的硬件接口
+- 便于移植到不同的MCU平台
+
+### 2.2 GPIO HAL层设计
+
+首先,我们设计GPIO的HAL层接口:
+
+```c
+// hal_gpio.h - GPIO硬件抽象层接口
+#ifndef HAL_GPIO_H
+#define HAL_GPIO_H
+
+#include <stdint.h>
+
+// GPIO端口定义
+typedef enum {
+    HAL_GPIO_PORT_A = 0,
+    HAL_GPIO_PORT_B,
+    HAL_GPIO_PORT_C,
+    HAL_GPIO_PORT_D
+} HAL_GPIO_Port_t;
+
+// GPIO引脚定义
+typedef enum {
+    HAL_GPIO_PIN_0 = 0,
+    HAL_GPIO_PIN_1,
+    HAL_GPIO_PIN_2,
+    HAL_GPIO_PIN_3,
+    HAL_GPIO_PIN_4,
+    HAL_GPIO_PIN_5,
+    // ... 其他引脚
+} HAL_GPIO_Pin_t;
+
+// GPIO模式定义
+typedef enum {
+    HAL_GPIO_MODE_INPUT = 0,
+    HAL_GPIO_MODE_OUTPUT,
+    HAL_GPIO_MODE_AF,        // 复用功能
+    HAL_GPIO_MODE_ANALOG     // 模拟模式
+} HAL_GPIO_Mode_t;
+
+// GPIO上下拉配置
+typedef enum {
+    HAL_GPIO_PULL_NONE = 0,
+    HAL_GPIO_PULL_UP,
+    HAL_GPIO_PULL_DOWN
+} HAL_GPIO_Pull_t;
+
+// GPIO配置结构体
+typedef struct {
+    HAL_GPIO_Port_t port;
+    HAL_GPIO_Pin_t pin;
+    HAL_GPIO_Mode_t mode;
+    HAL_GPIO_Pull_t pull;
+} HAL_GPIO_Config_t;
+
+// HAL层接口函数
+void HAL_GPIO_Init(const HAL_GPIO_Config_t *config);
+void HAL_GPIO_WritePin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin, uint8_t state);
+uint8_t HAL_GPIO_ReadPin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin);
+void HAL_GPIO_TogglePin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin);
+
+#endif // HAL_GPIO_H
+```
+
+### 2.3 GPIO HAL层实现
+
+```c
+// hal_gpio.c - GPIO硬件抽象层实现
+#include "hal_gpio.h"
+#include "stm32f4xx.h"  // 根据实际MCU修改
+
+// 端口映射表
+static GPIO_TypeDef* const GPIO_PORT_MAP[] = {
+    GPIOA, GPIOB, GPIOC, GPIOD
+};
+
+/**
+ * @brief  初始化GPIO引脚
+ * @param  config: GPIO配置结构体指针
+ * @retval None
+ */
+void HAL_GPIO_Init(const HAL_GPIO_Config_t *config) {
+    GPIO_TypeDef *GPIOx = GPIO_PORT_MAP[config->port];
+    uint32_t pin_pos = config->pin;
+    
+    // 1. 使能GPIO时钟
+    switch(config->port) {
+        case HAL_GPIO_PORT_A:
+            RCC->AHB1ENR |= RCC_AHB1ENR_GPIOAEN;
+            break;
+        case HAL_GPIO_PORT_B:
+            RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
+            break;
+        case HAL_GPIO_PORT_C:
+            RCC->AHB1ENR |= RCC_AHB1ENR_GPIOCEN;
+            break;
+        case HAL_GPIO_PORT_D:
+            RCC->AHB1ENR |= RCC_AHB1ENR_GPIODEN;
+            break;
+    }
+    
+    // 2. 配置GPIO模式
+    GPIOx->MODER &= ~(3U << (pin_pos * 2));
+    GPIOx->MODER |= (config->mode << (pin_pos * 2));
+    
+    // 3. 配置上下拉
+    GPIOx->PUPDR &= ~(3U << (pin_pos * 2));
+    GPIOx->PUPDR |= (config->pull << (pin_pos * 2));
+    
+    // 4. 配置输出速度(默认低速)
+    GPIOx->OSPEEDR &= ~(3U << (pin_pos * 2));
+}
+
+/**
+ * @brief  写GPIO引脚
+ * @param  port: GPIO端口
+ * @param  pin: GPIO引脚
+ * @param  state: 引脚状态(0或1)
+ * @retval None
+ */
+void HAL_GPIO_WritePin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin, uint8_t state) {
+    GPIO_TypeDef *GPIOx = GPIO_PORT_MAP[port];
+    
+    if (state) {
+        GPIOx->BSRR = (1U << pin);  // 设置引脚
+    } else {
+        GPIOx->BSRR = (1U << (pin + 16));  // 清除引脚
+    }
+}
+
+/**
+ * @brief  读GPIO引脚
+ * @param  port: GPIO端口
+ * @param  pin: GPIO引脚
+ * @retval 引脚状态(0或1)
+ */
+uint8_t HAL_GPIO_ReadPin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin) {
+    GPIO_TypeDef *GPIOx = GPIO_PORT_MAP[port];
+    return (GPIOx->IDR & (1U << pin)) ? 1 : 0;
+}
+
+/**
+ * @brief  翻转GPIO引脚
+ * @param  port: GPIO端口
+ * @param  pin: GPIO引脚
+ * @retval None
+ */
+void HAL_GPIO_TogglePin(HAL_GPIO_Port_t port, HAL_GPIO_Pin_t pin) {
+    GPIO_TypeDef *GPIOx = GPIO_PORT_MAP[port];
+    GPIOx->ODR ^= (1U << pin);
+}
+```
+
+### 2.4 UART HAL层设计
+
+接下来设计UART的HAL层接口:
+
+```c
+// hal_uart.h - UART硬件抽象层接口
+#ifndef HAL_UART_H
+#define HAL_UART_H
+
+#include <stdint.h>
+
+// UART端口定义
+typedef enum {
+    HAL_UART_1 = 0,
+    HAL_UART_2,
+    HAL_UART_3
+} HAL_UART_Port_t;
+
+// UART配置结构体
+typedef struct {
+    HAL_UART_Port_t port;
+    uint32_t baudrate;
+    uint8_t data_bits;    // 8 or 9
+    uint8_t stop_bits;    // 1 or 2
+    uint8_t parity;       // 0:None, 1:Odd, 2:Even
+} HAL_UART_Config_t;
+
+// HAL层接口函数
+void HAL_UART_Init(const HAL_UART_Config_t *config);
+void HAL_UART_SendByte(HAL_UART_Port_t port, uint8_t data);
+void HAL_UART_SendData(HAL_UART_Port_t port, const uint8_t *data, uint16_t len);
+uint8_t HAL_UART_ReceiveByte(HAL_UART_Port_t port);
+uint16_t HAL_UART_ReceiveData(HAL_UART_Port_t port, uint8_t *buffer, uint16_t max_len);
+
+#endif // HAL_UART_H
+```
+
+**设计要点**:
+- 使用枚举类型定义端口和配置选项
+- 使用结构体封装配置参数
+- 接口函数命名清晰,参数类型明确
+- 提供完整的注释说明
+
+
+## 步骤3: 设计驱动层
+
+### 3.1 驱动层的设计目标
+
+驱动层基于HAL层,提供更高级的设备操作接口:
+- 封装设备的初始化和配置
+- 提供设备的功能接口
+- 管理设备状态
+- 处理设备错误
+
+### 3.2 LED驱动设计
+
+```c
+// drv_led.h - LED驱动接口
+#ifndef DRV_LED_H
+#define DRV_LED_H
+
+#include <stdint.h>
+
+// LED ID定义
+typedef enum {
+    LED_STATUS = 0,    // 状态指示LED
+    LED_ERROR,         // 错误指示LED
+    LED_MAX
+} LED_ID_t;
+
+// LED状态定义
+typedef enum {
+    LED_STATE_OFF = 0,
+    LED_STATE_ON,
+    LED_STATE_BLINK_SLOW,   // 慢闪(1Hz)
+    LED_STATE_BLINK_FAST    // 快闪(5Hz)
+} LED_State_t;
+
+// 驱动层接口函数
+void DRV_LED_Init(void);
+void DRV_LED_SetState(LED_ID_t led, LED_State_t state);
+LED_State_t DRV_LED_GetState(LED_ID_t led);
+void DRV_LED_Process(void);  // 需要在主循环中定期调用
+
+#endif // DRV_LED_H
+```
+
+```c
+// drv_led.c - LED驱动实现
+#include "drv_led.h"
+#include "hal_gpio.h"
+
+// LED配置表
+typedef struct {
+    HAL_GPIO_Port_t port;
+    HAL_GPIO_Pin_t pin;
+    LED_State_t state;
+    uint16_t counter;
+    uint8_t output;
+} LED_Control_t;
+
+// LED控制数据
+static LED_Control_t led_ctrl[LED_MAX] = {
+    {HAL_GPIO_PORT_A, HAL_GPIO_PIN_5, LED_STATE_OFF, 0, 0},  // LED_STATUS
+    {HAL_GPIO_PORT_A, HAL_GPIO_PIN_6, LED_STATE_OFF, 0, 0}   // LED_ERROR
+};
+
+/**
+ * @brief  初始化LED驱动
+ * @retval None
+ */
+void DRV_LED_Init(void) {
+    HAL_GPIO_Config_t gpio_config;
+    
+    // 初始化所有LED引脚
+    for (int i = 0; i < LED_MAX; i++) {
+        gpio_config.port = led_ctrl[i].port;
+        gpio_config.pin = led_ctrl[i].pin;
+        gpio_config.mode = HAL_GPIO_MODE_OUTPUT;
+        gpio_config.pull = HAL_GPIO_PULL_NONE;
+        
+        HAL_GPIO_Init(&gpio_config);
+        HAL_GPIO_WritePin(led_ctrl[i].port, led_ctrl[i].pin, 0);
+    }
+}
+
+/**
+ * @brief  设置LED状态
+ * @param  led: LED ID
+ * @param  state: LED状态
+ * @retval None
+ */
+void DRV_LED_SetState(LED_ID_t led, LED_State_t state) {
+    if (led >= LED_MAX) return;
+    
+    led_ctrl[led].state = state;
+    led_ctrl[led].counter = 0;
+    
+    // 立即更新输出
+    if (state == LED_STATE_OFF) {
+        HAL_GPIO_WritePin(led_ctrl[led].port, led_ctrl[led].pin, 0);
+        led_ctrl[led].output = 0;
+    } else if (state == LED_STATE_ON) {
+        HAL_GPIO_WritePin(led_ctrl[led].port, led_ctrl[led].pin, 1);
+        led_ctrl[led].output = 1;
+    }
+}
+
+/**
+ * @brief  获取LED状态
+ * @param  led: LED ID
+ * @retval LED状态
+ */
+LED_State_t DRV_LED_GetState(LED_ID_t led) {
+    if (led >= LED_MAX) return LED_STATE_OFF;
+    return led_ctrl[led].state;
+}
+
+/**
+ * @brief  LED处理函数(需要定期调用,建议10ms)
+ * @retval None
+ */
+void DRV_LED_Process(void) {
+    for (int i = 0; i < LED_MAX; i++) {
+        LED_Control_t *ctrl = &led_ctrl[i];
+        
+        switch (ctrl->state) {
+            case LED_STATE_BLINK_SLOW:
+                // 慢闪: 500ms周期
+                ctrl->counter++;
+                if (ctrl->counter >= 50) {  // 500ms / 10ms
+                    ctrl->counter = 0;
+                    ctrl->output = !ctrl->output;
+                    HAL_GPIO_WritePin(ctrl->port, ctrl->pin, ctrl->output);
+                }
+                break;
+                
+            case LED_STATE_BLINK_FAST:
+                // 快闪: 100ms周期
+                ctrl->counter++;
+                if (ctrl->counter >= 10) {  // 100ms / 10ms
+                    ctrl->counter = 0;
+                    ctrl->output = !ctrl->output;
+                    HAL_GPIO_WritePin(ctrl->port, ctrl->pin, ctrl->output);
+                }
+                break;
+                
+            default:
+                // LED_STATE_OFF 和 LED_STATE_ON 不需要处理
+                break;
+        }
+    }
+}
+```
+
+### 3.3 按键驱动设计
+
+```c
+// drv_button.h - 按键驱动接口
+#ifndef DRV_BUTTON_H
+#define DRV_BUTTON_H
+
+#include <stdint.h>
+
+// 按键ID定义
+typedef enum {
+    BUTTON_USER = 0,
+    BUTTON_MAX
+} BUTTON_ID_t;
+
+// 按键事件定义
+typedef enum {
+    BUTTON_EVENT_NONE = 0,
+    BUTTON_EVENT_PRESS,      // 按下
+    BUTTON_EVENT_RELEASE,    // 释放
+    BUTTON_EVENT_CLICK,      // 单击
+    BUTTON_EVENT_LONG_PRESS  // 长按
+} BUTTON_Event_t;
+
+// 按键回调函数类型
+typedef void (*BUTTON_Callback_t)(BUTTON_ID_t button, BUTTON_Event_t event);
+
+// 驱动层接口函数
+void DRV_BUTTON_Init(void);
+void DRV_BUTTON_RegisterCallback(BUTTON_Callback_t callback);
+void DRV_BUTTON_Process(void);  // 需要在主循环中定期调用
+
+#endif // DRV_BUTTON_H
+```
+
+```c
+// drv_button.c - 按键驱动实现
+#include "drv_button.h"
+#include "hal_gpio.h"
+
+#define BUTTON_DEBOUNCE_TIME    20    // 消抖时间(ms)
+#define BUTTON_LONG_PRESS_TIME  1000  // 长按时间(ms)
+
+// 按键状态
+typedef enum {
+    BUTTON_STATE_IDLE = 0,
+    BUTTON_STATE_DEBOUNCE,
+    BUTTON_STATE_PRESSED,
+    BUTTON_STATE_LONG_PRESS
+} BUTTON_State_t;
+
+// 按键控制数据
+typedef struct {
+    HAL_GPIO_Port_t port;
+    HAL_GPIO_Pin_t pin;
+    BUTTON_State_t state;
+    uint16_t counter;
+    uint8_t last_level;
+} BUTTON_Control_t;
+
+// 按键配置
+static BUTTON_Control_t button_ctrl[BUTTON_MAX] = {
+    {HAL_GPIO_PORT_C, HAL_GPIO_PIN_13, BUTTON_STATE_IDLE, 0, 1}  // BUTTON_USER
+};
+
+// 按键回调函数
+static BUTTON_Callback_t button_callback = NULL;
+
+/**
+ * @brief  初始化按键驱动
+ * @retval None
+ */
+void DRV_BUTTON_Init(void) {
+    HAL_GPIO_Config_t gpio_config;
+    
+    // 初始化所有按键引脚
+    for (int i = 0; i < BUTTON_MAX; i++) {
+        gpio_config.port = button_ctrl[i].port;
+        gpio_config.pin = button_ctrl[i].pin;
+        gpio_config.mode = HAL_GPIO_MODE_INPUT;
+        gpio_config.pull = HAL_GPIO_PULL_UP;  // 上拉输入
+        
+        HAL_GPIO_Init(&gpio_config);
+    }
+}
+
+/**
+ * @brief  注册按键回调函数
+ * @param  callback: 回调函数指针
+ * @retval None
+ */
+void DRV_BUTTON_RegisterCallback(BUTTON_Callback_t callback) {
+    button_callback = callback;
+}
+
+/**
+ * @brief  按键处理函数(需要定期调用,建议10ms)
+ * @retval None
+ */
+void DRV_BUTTON_Process(void) {
+    for (int i = 0; i < BUTTON_MAX; i++) {
+        BUTTON_Control_t *ctrl = &button_ctrl[i];
+        uint8_t current_level = HAL_GPIO_ReadPin(ctrl->port, ctrl->pin);
+        
+        switch (ctrl->state) {
+            case BUTTON_STATE_IDLE:
+                if (current_level == 0) {  // 按键按下(低电平)
+                    ctrl->state = BUTTON_STATE_DEBOUNCE;
+                    ctrl->counter = 0;
+                }
+                break;
+                
+            case BUTTON_STATE_DEBOUNCE:
+                ctrl->counter++;
+                if (ctrl->counter >= BUTTON_DEBOUNCE_TIME / 10) {
+                    if (current_level == 0) {
+                        // 确认按下
+                        ctrl->state = BUTTON_STATE_PRESSED;
+                        ctrl->counter = 0;
+                        if (button_callback) {
+                            button_callback(i, BUTTON_EVENT_PRESS);
+                        }
+                    } else {
+                        // 抖动,返回空闲
+                        ctrl->state = BUTTON_STATE_IDLE;
+                    }
+                }
+                break;
+                
+            case BUTTON_STATE_PRESSED:
+                ctrl->counter++;
+                if (current_level == 1) {
+                    // 按键释放
+                    ctrl->state = BUTTON_STATE_IDLE;
+                    if (button_callback) {
+                        button_callback(i, BUTTON_EVENT_RELEASE);
+                        button_callback(i, BUTTON_EVENT_CLICK);
+                    }
+                } else if (ctrl->counter >= BUTTON_LONG_PRESS_TIME / 10) {
+                    // 长按
+                    ctrl->state = BUTTON_STATE_LONG_PRESS;
+                    if (button_callback) {
+                        button_callback(i, BUTTON_EVENT_LONG_PRESS);
+                    }
+                }
+                break;
+                
+            case BUTTON_STATE_LONG_PRESS:
+                if (current_level == 1) {
+                    // 按键释放
+                    ctrl->state = BUTTON_STATE_IDLE;
+                    if (button_callback) {
+                        button_callback(i, BUTTON_EVENT_RELEASE);
+                    }
+                }
+                break;
+        }
+        
+        ctrl->last_level = current_level;
+    }
+}
+```
+
+**驱动层设计要点**:
+- 封装设备的状态管理
+- 提供事件回调机制
+- 实现消抖、长按等高级功能
+- 接口简洁易用
+
+
+## 步骤4: 设计中间件层
+
+### 4.1 中间件层的设计目标
+
+中间件层提供与具体硬件无关的通用功能:
+- 数据处理和转换
+- 协议实现
+- 算法库
+- 工具函数
+
+### 4.2 数据格式化中间件
+
+```c
+// mid_format.h - 数据格式化中间件
+#ifndef MID_FORMAT_H
+#define MID_FORMAT_H
+
+#include <stdint.h>
+
+// 格式化缓冲区大小
+#define FORMAT_BUFFER_SIZE 128
+
+// 中间件接口函数
+int MID_FormatTemperature(char *buffer, uint16_t size, float temperature);
+int MID_FormatHumidity(char *buffer, uint16_t size, float humidity);
+int MID_FormatDateTime(char *buffer, uint16_t size, uint32_t timestamp);
+int MID_FormatSensorData(char *buffer, uint16_t size, float temp, float hum);
+
+#endif // MID_FORMAT_H
+```
+
+```c
+// mid_format.c - 数据格式化中间件实现
+#include "mid_format.h"
+#include <stdio.h>
+#include <string.h>
+
+/**
+ * @brief  格式化温度数据
+ * @param  buffer: 输出缓冲区
+ * @param  size: 缓冲区大小
+ * @param  temperature: 温度值
+ * @retval 格式化后的字符串长度
+ */
+int MID_FormatTemperature(char *buffer, uint16_t size, float temperature) {
+    return snprintf(buffer, size, "Temperature: %.1f°C", temperature);
+}
+
+/**
+ * @brief  格式化湿度数据
+ * @param  buffer: 输出缓冲区
+ * @param  size: 缓冲区大小
+ * @param  humidity: 湿度值
+ * @retval 格式化后的字符串长度
+ */
+int MID_FormatHumidity(char *buffer, uint16_t size, float humidity) {
+    return snprintf(buffer, size, "Humidity: %.1f%%", humidity);
+}
+
+/**
+ * @brief  格式化传感器数据
+ * @param  buffer: 输出缓冲区
+ * @param  size: 缓冲区大小
+ * @param  temp: 温度值
+ * @param  hum: 湿度值
+ * @retval 格式化后的字符串长度
+ */
+int MID_FormatSensorData(char *buffer, uint16_t size, float temp, float hum) {
+    return snprintf(buffer, size, 
+                    "[Sensor] Temp: %.1f°C, Hum: %.1f%%\r\n", 
+                    temp, hum);
+}
+```
+
+### 4.3 数据滤波中间件
+
+```c
+// mid_filter.h - 数据滤波中间件
+#ifndef MID_FILTER_H
+#define MID_FILTER_H
+
+#include <stdint.h>
+
+// 滑动平均滤波器
+typedef struct {
+    float *buffer;
+    uint16_t size;
+    uint16_t index;
+    uint16_t count;
+    float sum;
+} MovingAvgFilter_t;
+
+// 中间件接口函数
+void MID_Filter_Init(MovingAvgFilter_t *filter, float *buffer, uint16_t size);
+float MID_Filter_Update(MovingAvgFilter_t *filter, float value);
+void MID_Filter_Reset(MovingAvgFilter_t *filter);
+
+#endif // MID_FILTER_H
+```
+
+```c
+// mid_filter.c - 数据滤波中间件实现
+#include "mid_filter.h"
+#include <string.h>
+
+/**
+ * @brief  初始化滑动平均滤波器
+ * @param  filter: 滤波器结构体指针
+ * @param  buffer: 数据缓冲区
+ * @param  size: 缓冲区大小
+ * @retval None
+ */
+void MID_Filter_Init(MovingAvgFilter_t *filter, float *buffer, uint16_t size) {
+    filter->buffer = buffer;
+    filter->size = size;
+    filter->index = 0;
+    filter->count = 0;
+    filter->sum = 0.0f;
+    memset(buffer, 0, size * sizeof(float));
+}
+
+/**
+ * @brief  更新滤波器数据
+ * @param  filter: 滤波器结构体指针
+ * @param  value: 新的数据值
+ * @retval 滤波后的值
+ */
+float MID_Filter_Update(MovingAvgFilter_t *filter, float value) {
+    // 减去最旧的值
+    if (filter->count >= filter->size) {
+        filter->sum -= filter->buffer[filter->index];
+    }
+    
+    // 添加新值
+    filter->buffer[filter->index] = value;
+    filter->sum += value;
+    
+    // 更新索引和计数
+    filter->index = (filter->index + 1) % filter->size;
+    if (filter->count < filter->size) {
+        filter->count++;
+    }
+    
+    // 返回平均值
+    return filter->sum / filter->count;
+}
+
+/**
+ * @brief  重置滤波器
+ * @param  filter: 滤波器结构体指针
+ * @retval None
+ */
+void MID_Filter_Reset(MovingAvgFilter_t *filter) {
+    filter->index = 0;
+    filter->count = 0;
+    filter->sum = 0.0f;
+    memset(filter->buffer, 0, filter->size * sizeof(float));
+}
+```
+
+**中间件层设计要点**:
+- 与硬件无关,可复用
+- 提供通用的算法和工具
+- 接口清晰,易于测试
+- 可以独立开发和维护
+
+
+## 步骤5: 设计应用层
+
+### 5.1 应用层的设计目标
+
+应用层实现具体的业务逻辑:
+- 系统状态管理
+- 业务流程控制
+- 用户交互处理
+- 调用下层接口完成功能
+
+### 5.2 系统状态定义
+
+```c
+// app_main.h - 应用层主程序
+#ifndef APP_MAIN_H
+#define APP_MAIN_H
+
+#include <stdint.h>
+
+// 系统工作模式
+typedef enum {
+    SYS_MODE_IDLE = 0,      // 空闲模式
+    SYS_MODE_MONITORING,    // 监测模式
+    SYS_MODE_ERROR          // 错误模式
+} SystemMode_t;
+
+// 系统状态
+typedef struct {
+    SystemMode_t mode;
+    uint8_t is_running;
+    uint32_t sample_count;
+    float last_temperature;
+    float last_humidity;
+} SystemState_t;
+
+// 应用层接口函数
+void APP_Init(void);
+void APP_Process(void);
+SystemMode_t APP_GetMode(void);
+void APP_SetMode(SystemMode_t mode);
+
+#endif // APP_MAIN_H
+```
+
+### 5.3 应用层实现
+
+```c
+// app_main.c - 应用层主程序实现
+#include "app_main.h"
+#include "drv_led.h"
+#include "drv_button.h"
+#include "drv_sensor.h"  // 假设已实现传感器驱动
+#include "mid_format.h"
+#include "mid_filter.h"
+#include <stdio.h>
+
+// 系统状态
+static SystemState_t sys_state = {
+    .mode = SYS_MODE_IDLE,
+    .is_running = 0,
+    .sample_count = 0,
+    .last_temperature = 0.0f,
+    .last_humidity = 0.0f
+};
+
+// 滤波器缓冲区
+static float temp_filter_buffer[10];
+static float hum_filter_buffer[10];
+static MovingAvgFilter_t temp_filter;
+static MovingAvgFilter_t hum_filter;
+
+// 定时器计数
+static uint32_t sample_timer = 0;
+
+// 前向声明
+static void ButtonEventHandler(BUTTON_ID_t button, BUTTON_Event_t event);
+static void ProcessMonitoring(void);
+static void UpdateLEDStatus(void);
+
+/**
+ * @brief  应用层初始化
+ * @retval None
+ */
+void APP_Init(void) {
+    // 初始化驱动层
+    DRV_LED_Init();
+    DRV_BUTTON_Init();
+    DRV_SENSOR_Init();  // 假设已实现
+    
+    // 注册按键回调
+    DRV_BUTTON_RegisterCallback(ButtonEventHandler);
+    
+    // 初始化滤波器
+    MID_Filter_Init(&temp_filter, temp_filter_buffer, 10);
+    MID_Filter_Init(&hum_filter, hum_filter_buffer, 10);
+    
+    // 设置初始LED状态
+    DRV_LED_SetState(LED_STATUS, LED_STATE_BLINK_SLOW);
+    DRV_LED_SetState(LED_ERROR, LED_STATE_OFF);
+    
+    printf("System Initialized\r\n");
+}
+
+/**
+ * @brief  应用层主处理函数
+ * @retval None
+ */
+void APP_Process(void) {
+    // 更新LED状态
+    UpdateLEDStatus();
+    
+    // 根据模式执行不同的处理
+    switch (sys_state.mode) {
+        case SYS_MODE_IDLE:
+            // 空闲模式,等待用户操作
+            break;
+            
+        case SYS_MODE_MONITORING:
+            // 监测模式,定期采集数据
+            ProcessMonitoring();
+            break;
+            
+        case SYS_MODE_ERROR:
+            // 错误模式,等待恢复
+            break;
+    }
+}
+
+/**
+ * @brief  按键事件处理函数
+ * @param  button: 按键ID
+ * @param  event: 按键事件
+ * @retval None
+ */
+static void ButtonEventHandler(BUTTON_ID_t button, BUTTON_Event_t event) {
+    if (button == BUTTON_USER) {
+        if (event == BUTTON_EVENT_CLICK) {
+            // 单击:切换工作模式
+            if (sys_state.mode == SYS_MODE_IDLE) {
+                APP_SetMode(SYS_MODE_MONITORING);
+                printf("Start Monitoring\r\n");
+            } else if (sys_state.mode == SYS_MODE_MONITORING) {
+                APP_SetMode(SYS_MODE_IDLE);
+                printf("Stop Monitoring\r\n");
+            }
+        } else if (event == BUTTON_EVENT_LONG_PRESS) {
+            // 长按:重置系统
+            MID_Filter_Reset(&temp_filter);
+            MID_Filter_Reset(&hum_filter);
+            sys_state.sample_count = 0;
+            printf("System Reset\r\n");
+        }
+    }
+}
+
+/**
+ * @brief  监测模式处理
+ * @retval None
+ */
+static void ProcessMonitoring(void) {
+    sample_timer++;
+    
+    // 每2秒采集一次数据
+    if (sample_timer >= 200) {  // 2000ms / 10ms
+        sample_timer = 0;
+        
+        float temperature, humidity;
+        
+        // 读取传感器数据
+        if (DRV_SENSOR_Read(&temperature, &humidity) == 0) {
+            // 数据滤波
+            temperature = MID_Filter_Update(&temp_filter, temperature);
+            humidity = MID_Filter_Update(&hum_filter, humidity);
+            
+            // 保存数据
+            sys_state.last_temperature = temperature;
+            sys_state.last_humidity = humidity;
+            sys_state.sample_count++;
+            
+            // 格式化并输出数据
+            char buffer[128];
+            MID_FormatSensorData(buffer, sizeof(buffer), temperature, humidity);
+            printf("%s", buffer);
+            
+            // 检查异常情况
+            if (temperature > 40.0f || temperature < -10.0f) {
+                APP_SetMode(SYS_MODE_ERROR);
+                printf("Temperature out of range!\r\n");
+            }
+        } else {
+            // 读取失败
+            APP_SetMode(SYS_MODE_ERROR);
+            printf("Sensor read error!\r\n");
+        }
+    }
+}
+
+/**
+ * @brief  更新LED状态
+ * @retval None
+ */
+static void UpdateLEDStatus(void) {
+    switch (sys_state.mode) {
+        case SYS_MODE_IDLE:
+            DRV_LED_SetState(LED_STATUS, LED_STATE_BLINK_SLOW);
+            DRV_LED_SetState(LED_ERROR, LED_STATE_OFF);
+            break;
+            
+        case SYS_MODE_MONITORING:
+            DRV_LED_SetState(LED_STATUS, LED_STATE_ON);
+            DRV_LED_SetState(LED_ERROR, LED_STATE_OFF);
+            break;
+            
+        case SYS_MODE_ERROR:
+            DRV_LED_SetState(LED_STATUS, LED_STATE_OFF);
+            DRV_LED_SetState(LED_ERROR, LED_STATE_BLINK_FAST);
+            break;
+    }
+}
+
+/**
+ * @brief  获取系统模式
+ * @retval 系统模式
+ */
+SystemMode_t APP_GetMode(void) {
+    return sys_state.mode;
+}
+
+/**
+ * @brief  设置系统模式
+ * @param  mode: 系统模式
+ * @retval None
+ */
+void APP_SetMode(SystemMode_t mode) {
+    sys_state.mode = mode;
+    sample_timer = 0;
+}
+```
+
+### 5.4 主函数实现
+
+```c
+// main.c - 主函数
+#include "app_main.h"
+#include "drv_led.h"
+#include "drv_button.h"
+#include "hal_systick.h"  // 假设已实现系统滴答定时器
+
+int main(void) {
+    // 系统初始化
+    SystemInit();
+    HAL_SysTick_Init();  // 初始化系统滴答定时器(1ms)
+    
+    // 应用层初始化
+    APP_Init();
+    
+    // 主循环
+    while (1) {
+        // 应用层处理
+        APP_Process();
+        
+        // 驱动层处理(每10ms调用一次)
+        static uint32_t last_tick = 0;
+        uint32_t current_tick = HAL_GetTick();
+        if (current_tick - last_tick >= 10) {
+            last_tick = current_tick;
+            DRV_LED_Process();
+            DRV_BUTTON_Process();
+        }
+        
+        // 可以添加低功耗处理
+        // __WFI();  // 等待中断
+    }
+}
+```
+
+**应用层设计要点**:
+- 实现业务逻辑和状态管理
+- 调用下层接口,不直接操作硬件
+- 使用回调函数处理异步事件
+- 代码清晰,易于理解和维护
+
+
+## 步骤6: 项目目录结构组织
+
+### 6.1 推荐的目录结构
+
+```
+project/
+├── HAL/                    # 硬件抽象层
+│   ├── hal_gpio.h
+│   ├── hal_gpio.c
+│   ├── hal_uart.h
+│   ├── hal_uart.c
+│   ├── hal_systick.h
+│   └── hal_systick.c
+├── Driver/                 # 驱动层
+│   ├── drv_led.h
+│   ├── drv_led.c
+│   ├── drv_button.h
+│   ├── drv_button.c
+│   ├── drv_sensor.h
+│   └── drv_sensor.c
+├── Middleware/             # 中间件层
+│   ├── mid_format.h
+│   ├── mid_format.c
+│   ├── mid_filter.h
+│   └── mid_filter.c
+├── Application/            # 应用层
+│   ├── app_main.h
+│   └── app_main.c
+├── Config/                 # 配置文件
+│   └── system_config.h
+├── Docs/                   # 文档
+│   ├── architecture.md
+│   └── api_reference.md
+└── main.c                  # 主函数
+```
+
+### 6.2 头文件包含规则
+
+**规则1: 只包含必要的头文件**
+```c
+// 不好的做法
+#include "hal_gpio.h"
+#include "hal_uart.h"
+#include "hal_i2c.h"  // 未使用
+
+// 好的做法
+#include "hal_gpio.h"
+#include "hal_uart.h"
+```
+
+**规则2: 使用包含保护**
+```c
+#ifndef HAL_GPIO_H
+#define HAL_GPIO_H
+
+// 头文件内容
+
+#endif // HAL_GPIO_H
+```
+
+**规则3: 避免循环包含**
+- 使用前向声明
+- 在.c文件中包含头文件
+- 重新设计模块依赖关系
+
+### 6.3 编译配置
+
+在Makefile或IDE中配置包含路径:
+
+```makefile
+# Makefile示例
+INC_DIRS = -I./HAL \
+           -I./Driver \
+           -I./Middleware \
+           -I./Application \
+           -I./Config
+
+CFLAGS = $(INC_DIRS) -Wall -O2
+```
+
+## 步骤7: 验证和测试
+
+### 7.1 编译验证
+
+**步骤**:
+1. 清理项目: `make clean`
+2. 编译项目: `make all`
+3. 检查编译警告和错误
+4. 确保所有层次的代码都能正确编译
+
+**预期结果**:
+- 无编译错误
+- 无编译警告(或只有可接受的警告)
+- 生成可执行文件
+
+### 7.2 功能测试
+
+**测试用例1: LED控制测试**
+```
+测试步骤:
+1. 上电后,状态LED应该慢闪
+2. 错误LED应该熄灭
+
+预期结果:
+- 状态LED以1Hz频率闪烁
+- 错误LED保持熄灭
+```
+
+**测试用例2: 按键功能测试**
+```
+测试步骤:
+1. 短按用户按键
+2. 观察系统状态变化
+3. 再次短按用户按键
+
+预期结果:
+- 第一次短按:进入监测模式,状态LED常亮
+- 第二次短按:退出监测模式,状态LED慢闪
+```
+
+**测试用例3: 数据采集测试**
+```
+测试步骤:
+1. 短按按键进入监测模式
+2. 观察串口输出
+3. 等待至少3次数据采集
+
+预期结果:
+- 每2秒输出一次温湿度数据
+- 数据格式正确
+- 数据值在合理范围内
+```
+
+**测试用例4: 异常处理测试**
+```
+测试步骤:
+1. 模拟传感器故障(断开连接)
+2. 观察系统响应
+
+预期结果:
+- 系统进入错误模式
+- 错误LED快闪
+- 串口输出错误信息
+```
+
+### 7.3 性能测试
+
+**测试项1: 响应时间**
+- 按键响应时间应小于50ms
+- LED状态更新应实时
+
+**测试项2: CPU占用率**
+- 空闲模式下CPU占用率应小于5%
+- 监测模式下CPU占用率应小于20%
+
+**测试项3: 内存使用**
+- 检查栈使用情况
+- 检查堆使用情况
+- 确保无内存泄漏
+
+
+## 故障排除
+
+### 问题1: 编译错误 - 找不到头文件
+
+**现象**:
+```
+fatal error: hal_gpio.h: No such file or directory
+```
+
+**原因**:
+- 头文件路径配置不正确
+- 头文件名称拼写错误
+
+**解决方案**:
+1. 检查Makefile或IDE的包含路径配置
+2. 确认头文件确实存在于指定目录
+3. 检查头文件名称大小写
+
+### 问题2: 链接错误 - 未定义的引用
+
+**现象**:
+```
+undefined reference to `HAL_GPIO_Init'
+```
+
+**原因**:
+- 对应的.c文件未添加到编译列表
+- 函数声明和定义不匹配
+
+**解决方案**:
+1. 确认.c文件已添加到Makefile或IDE项目中
+2. 检查函数声明和定义是否一致
+3. 检查是否有拼写错误
+
+### 问题3: LED不闪烁
+
+**现象**:
+- LED始终亮或始终灭
+- LED不按预期闪烁
+
+**排查步骤**:
+1. 检查GPIO初始化是否正确
+2. 确认DRV_LED_Process()是否被定期调用
+3. 使用调试器查看LED状态变量
+4. 检查硬件连接是否正确
+
+### 问题4: 按键无响应
+
+**现象**:
+- 按下按键没有任何反应
+
+**排查步骤**:
+1. 检查GPIO配置(输入模式、上下拉)
+2. 确认DRV_BUTTON_Process()是否被定期调用
+3. 检查回调函数是否正确注册
+4. 使用万用表测试按键硬件
+
+### 问题5: 数据采集异常
+
+**现象**:
+- 传感器数据始终为0或异常值
+
+**排查步骤**:
+1. 检查传感器驱动初始化
+2. 确认I2C或SPI通信是否正常
+3. 使用逻辑分析仪查看通信波形
+4. 检查传感器供电是否正常
+
+## 总结
+
+通过本教程,我们完成了一个完整的分层架构嵌入式系统设计:
+
+**关键要点**:
+
+1. **HAL层**: 封装硬件操作,提供统一接口,便于移植
+2. **驱动层**: 实现设备驱动,管理设备状态,提供高级功能
+3. **中间件层**: 提供通用算法和工具,与硬件无关
+4. **应用层**: 实现业务逻辑,调用下层接口
+
+**设计原则**:
+
+- 单向依赖:上层调用下层,下层通过回调通知上层
+- 接口稳定:每层提供清晰稳定的接口
+- 职责单一:每层只负责特定功能
+- 最小知识:每层只了解相邻层的接口
+
+**实践收获**:
+
+- 掌握了分层架构的设计方法
+- 学会了如何设计清晰的接口
+- 理解了各层的职责和交互方式
+- 能够独立设计分层架构系统
+
+**下一步建议**:
+
+- 尝试添加新的功能模块(如显示屏驱动)
+- 实践移植到不同的MCU平台
+- 学习更多的设计模式
+- 深入学习RTOS架构
+
+## 延伸阅读
+
+- [模块化设计原则](03-modular-design-principles.html) - 深入学习模块化设计
+- [状态机设计模式](04-state-machine-pattern.html) - 学习状态机在应用层的应用
+- [观察者模式](05-observer-pattern.html) - 学习事件驱动的设计方法
+- [接口设计最佳实践](../intermediate/02-interface-oriented-programming.html) - 高级接口设计技巧
+
+## 参考资料
+
+1. "Embedded Software Development: The Open-Source Approach" - Ivan Cibrario Bertolotti
+2. "Design Patterns for Embedded Systems in C" - Bruce Powel Douglass
+3. "Making Embedded Systems" - Elecia White
+4. ARM CMSIS标准文档
+5. STM32 HAL库设计文档
+
+## 练习题
+
+### 练习1: 添加新的LED
+
+**任务**: 在系统中添加第三个LED,用于指示数据采集状态
+
+**要求**:
+- 在驱动层添加LED_DATA定义
+- 数据采集时LED闪烁
+- 空闲时LED熄灭
+
+**提示**:
+- 修改drv_led.h和drv_led.c
+- 在应用层更新LED控制逻辑
+
+### 练习2: 实现数据存储功能
+
+**任务**: 添加数据存储功能,将采集的数据保存到Flash
+
+**要求**:
+- 设计Flash HAL层接口
+- 实现数据存储驱动
+- 在应用层添加存储逻辑
+
+**提示**:
+- 参考GPIO HAL层的设计方法
+- 考虑数据格式和存储策略
+- 注意Flash写入次数限制
+
+### 练习3: 移植到不同平台
+
+**任务**: 将项目移植到Arduino或ESP32平台
+
+**要求**:
+- 只修改HAL层代码
+- 其他层代码保持不变
+- 功能完全一致
+
+**提示**:
+- 分析目标平台的GPIO和UART接口
+- 重新实现HAL层函数
+- 测试验证所有功能
+
+### 练习4: 添加命令行接口
+
+**任务**: 通过串口实现简单的命令行接口
+
+**要求**:
+- 支持查询当前状态
+- 支持设置采集间隔
+- 支持启动/停止监测
+
+**提示**:
+- 在中间件层实现命令解析
+- 在应用层处理命令
+- 使用状态机管理命令处理流程
+
+---
+
+**恭喜你完成了分层架构设计实践教程!** 
+
+现在你已经掌握了嵌入式系统分层架构的核心设计方法。继续实践和探索,你将能够设计出更加优雅和强大的嵌入式系统。
+
+**下一步**: 建议学习[模块化设计原则](03-modular-design-principles.html),进一步提升你的架构设计能力。
+

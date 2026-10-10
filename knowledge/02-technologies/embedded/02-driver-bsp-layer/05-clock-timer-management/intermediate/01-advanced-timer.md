@@ -1,0 +1,2108 @@
+---
+title: "通用定时器高级应用实战"
+description: "本教程深入讲解STM32通用定时器的高级功能，包括输入捕获、输出比较、PWM生成、编码器接口等，通过实战项目掌握定时器的多种工作模式"
+slug: "advanced-timer-applications"
+
+# 分类信息
+domain: "驱动与BSP层"
+module: "时钟与定时器管理"
+content_type: "tutorial"
+skill_level: "intermediate"
+
+# 标签和关联
+tags:
+  - 通用定时器
+  - 输入捕获
+  - 输出比较
+  - PWM
+  - 编码器接口
+  - STM32
+prerequisites: []
+related_contents: []
+
+# 学习信息
+estimated_time: 75
+difficulty_score: 3
+
+# 作者和版本
+author: "嵌入式知识平台"
+author_id: ""
+created_at: "2026-03-08"
+updated_at: "2026-03-08"
+version: "1.0"
+
+# 语言和本地化
+language: "zh-CN"
+translations: []
+
+# 状态和可见性
+status: "draft"
+is_featured: false
+is_premium: false
+
+# SEO和元数据
+keywords:
+  - 通用定时器
+  - 输入捕获
+  - 输出比较
+  - PWM生成
+  - 编码器接口
+  - 定时器高级功能
+cover_image: ""
+---
+
+# 通用定时器高级应用实战
+
+
+## 学习目标
+
+完成本教程后，你将能够：
+
+- [ ] 理解通用定时器的工作模式和高级功能
+- [ ] 掌握输入捕获模式测量信号频率和脉宽
+- [ ] 掌握输出比较模式生成精确的时序信号
+- [ ] 使用PWM模式控制电机和LED亮度
+- [ ] 配置编码器接口读取旋转编码器
+- [ ] 实现定时器级联和同步功能
+
+## 前置要求
+
+在开始本教程之前，你需要：
+
+**知识要求**：
+- 熟悉C语言编程（指针、结构体、位操作）
+- 了解STM32基本外设配置
+- 掌握定时器基础概念
+- 了解中断处理机制
+
+**技能要求**：
+- 能够使用STM32CubeIDE或Keil MDK
+- 会使用示波器或逻辑分析仪
+- 能够阅读芯片数据手册
+- 掌握基本的调试技巧
+
+**建议先学习**：
+- [定时器驱动基础](../../02-device-driver-development/beginner/05-timer-driver.html)
+- [SysTick系统滴答定时器](../beginner/02-systick-timer.html)
+- [中断系统基础](../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html)
+
+## 准备工作
+
+### 硬件准备
+
+| 名称 | 数量 | 说明 | 参考链接 |
+|------|------|------|----------|
+| STM32开发板 | 1 | STM32F4系列，带通用定时器 | - |
+| LED灯 | 2 | 用于PWM演示 | - |
+| 按键 | 1 | 用于输入捕获演示 | - |
+| 旋转编码器 | 1 | 用于编码器接口演示 | - |
+| 示波器/逻辑分析仪 | 1 | 用于信号测量（可选） | - |
+| USB数据线 | 1 | 用于下载和供电 | - |
+
+### 软件准备
+
+- **开发环境**：STM32CubeIDE v1.10+ 或 Keil MDK v5.30+
+- **HAL库**：STM32F4 HAL Driver v1.27+
+- **驱动程序**：ST-Link驱动
+- **辅助工具**：串口调试助手、示波器软件
+
+### 环境配置
+
+1. 安装开发环境和HAL库
+2. 连接开发板并测试ST-Link连接
+3. 准备示波器或逻辑分析仪（可选）
+4. 连接LED、按键和编码器到指定引脚
+
+
+## 通用定时器简介
+
+### 什么是通用定时器
+
+通用定时器（General-purpose Timer）是STM32中功能最丰富的定时器类型，相比基本定时器和SysTick，它提供了更多的高级功能，包括输入捕获、输出比较、PWM生成、编码器接口等。
+
+**STM32F4系列通用定时器特点**：
+- 16位或32位自动重装载计数器
+- 16位可编程预分频器（分频系数1-65536）
+- 4个独立通道，可用于：
+  - 输入捕获
+  - 输出比较
+  - PWM生成
+  - 单脉冲模式输出
+- 支持编码器接口
+- 支持定时器级联和同步
+- 支持DMA请求
+- 支持外部触发输入
+
+**STM32F4常用通用定时器**：
+- TIM2、TIM5：32位定时器
+- TIM3、TIM4：16位定时器
+- TIM9-TIM14：16位定时器（功能简化）
+
+### 通用定时器工作模式
+
+```mermaid
+graph TB
+    A[通用定时器] --> B[基本计数模式]
+    A --> C[输入捕获模式]
+    A --> D[输出比较模式]
+    A --> E[PWM模式]
+    A --> F[编码器接口模式]
+    A --> G[单脉冲模式]
+    
+    B --> B1[向上计数]
+    B --> B2[向下计数]
+    B --> B3[中央对齐计数]
+    
+    C --> C1[测量频率]
+    C --> C2[测量脉宽]
+    C --> C3[测量占空比]
+    
+    D --> D1[定时翻转]
+    D --> D2[定时置位/复位]
+    D --> D3[PWM生成]
+    
+    E --> E1[PWM模式1]
+    E --> E2[PWM模式2]
+    
+    F --> F1[编码器模式1]
+    F --> F2[编码器模式2]
+    F --> F3[编码器模式3]
+```
+
+### 定时器通道功能
+
+每个通用定时器有4个独立通道（CH1-CH4），每个通道可以配置为不同的功能：
+
+| 通道 | 输入捕获 | 输出比较 | PWM输出 | 编码器输入 |
+|------|----------|----------|---------|------------|
+| CH1  | ✓        | ✓        | ✓       | ✓          |
+| CH2  | ✓        | ✓        | ✓       | ✓          |
+| CH3  | ✓        | ✓        | ✓       | -          |
+| CH4  | ✓        | ✓        | ✓       | -          |
+
+
+## 步骤1：输入捕获模式
+
+### 1.1 输入捕获原理
+
+输入捕获（Input Capture）模式用于测量外部信号的频率、脉宽、占空比等参数。当检测到输入信号的边沿（上升沿或下降沿）时，定时器会自动将当前计数值保存到捕获寄存器中。
+
+**工作原理**：
+```mermaid
+sequenceDiagram
+    participant Signal as 外部信号
+    participant Pin as GPIO引脚
+    participant IC as 输入捕获单元
+    participant Counter as 计数器
+    participant CCR as 捕获寄存器
+    
+    Signal->>Pin: 信号边沿
+    Pin->>IC: 触发捕获
+    IC->>Counter: 读取计数值
+    Counter->>CCR: 保存到CCR
+    IC->>CPU: 产生中断
+```
+
+**应用场景**：
+- 测量PWM信号的频率和占空比
+- 测量超声波模块的回波时间
+- 测量按键按下时间
+- 测量电机转速（霍尔传感器）
+
+### 1.2 测量信号频率
+
+使用输入捕获测量外部信号频率的基本方法：
+
+```c
+/**
+ * @brief  配置TIM2 CH1为输入捕获模式
+ * @param  None
+ * @retval None
+ */
+void TIM2_IC_Init(void)
+{
+    // 1. 使能TIM2和GPIO时钟
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 2. 配置GPIO为复用功能
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_0;           // PA0 -> TIM2_CH1
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;     // 复用推挽输出
+    GPIO_InitStruct.Pull = GPIO_NOPULL;         // 无上下拉
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;  // 复用为TIM2
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置定时器基本参数
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 84 - 1;              // 预分频：84MHz/84 = 1MHz
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 0xFFFFFFFF;             // 32位最大值
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_IC_Init(&htim2);
+    
+    // 4. 配置输入捕获通道
+    TIM_IC_InitTypeDef sConfigIC = {0};
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;  // 上升沿捕获
+    sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;        // 直接映射到TI1
+    sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;                  // 不分频
+    sConfigIC.ICFilter = 0;                                  // 无滤波
+    HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1);
+    
+    // 5. 使能捕获中断
+    HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+}
+
+// 全局变量
+static uint32_t capture_value1 = 0;  // 第一次捕获值
+static uint32_t capture_value2 = 0;  // 第二次捕获值
+static uint8_t capture_state = 0;    // 捕获状态：0=等待第一次，1=等待第二次
+static uint32_t signal_freq = 0;     // 测量到的频率
+
+/**
+ * @brief  输入捕获中断回调函数
+ * @param  htim: 定时器句柄
+ * @retval None
+ */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+    {
+        if (capture_state == 0)
+        {
+            // 第一次捕获
+            capture_value1 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            capture_state = 1;
+        }
+        else
+        {
+            // 第二次捕获
+            capture_value2 = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            
+            // 计算两次捕获之间的计数值（处理溢出）
+            uint32_t capture_diff;
+            if (capture_value2 >= capture_value1)
+            {
+                capture_diff = capture_value2 - capture_value1;
+            }
+            else
+            {
+                // 发生溢出
+                capture_diff = (0xFFFFFFFF - capture_value1) + capture_value2;
+            }
+            
+            // 计算频率：f = 定时器频率 / 计数差值
+            // 定时器频率 = 84MHz / 84 = 1MHz
+            if (capture_diff > 0)
+            {
+                signal_freq = 1000000 / capture_diff;  // Hz
+            }
+            
+            capture_state = 0;  // 重新开始
+        }
+    }
+}
+
+/**
+ * @brief  获取测量到的频率
+ * @param  None
+ * @retval 频率值（Hz）
+ */
+uint32_t Get_Signal_Frequency(void)
+{
+    return signal_freq;
+}
+```
+
+**代码说明**：
+- 第7-13行：配置GPIO为定时器复用功能
+- 第17-21行：配置定时器基本参数，预分频后频率为1MHz
+- 第25-29行：配置输入捕获通道，上升沿触发
+- 第45-72行：中断回调函数，计算两次捕获之间的时间差
+- 第60-64行：处理计数器溢出情况
+- 第67-70行：根据时间差计算频率
+
+
+### 1.3 测量PWM信号占空比
+
+使用两个通道同时捕获上升沿和下降沿，可以测量PWM信号的周期和占空比：
+
+```c
+/**
+ * @brief  配置TIM3测量PWM占空比
+ * @param  None
+ * @retval None
+ * @note   CH1捕获上升沿，CH2捕获下降沿
+ */
+void TIM3_PWM_Measure_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 2. 配置GPIO（PA6 -> TIM3_CH1）
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置定时器
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 84 - 1;              // 1MHz
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 0xFFFF;
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_IC_Init(&htim3);
+    
+    // 4. 配置CH1捕获上升沿
+    TIM_IC_InitTypeDef sConfigIC = {0};
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+    sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+    sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+    sConfigIC.ICFilter = 0;
+    HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_1);
+    
+    // 5. 配置CH2捕获下降沿（使用同一输入TI1）
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+    sConfigIC.ICSelection = TIM_ICSELECTION_INDIRECTTI;  // 间接映射
+    HAL_TIM_IC_ConfigChannel(&htim3, &sConfigIC, TIM_CHANNEL_2);
+    
+    // 6. 配置从模式：复位模式
+    TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+    sSlaveConfig.SlaveMode = TIM_SLAVEMODE_RESET;
+    sSlaveConfig.InputTrigger = TIM_TS_TI1FP1;
+    HAL_TIM_SlaveConfigSynchro(&htim3, &sSlaveConfig);
+    
+    // 7. 使能捕获中断
+    HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_IC_Start_IT(&htim3, TIM_CHANNEL_2);
+}
+
+// 全局变量
+static uint32_t pwm_period = 0;      // PWM周期（us）
+static uint32_t pwm_high_time = 0;   // 高电平时间（us）
+static uint32_t pwm_duty = 0;        // 占空比（0-100）
+
+/**
+ * @brief  PWM测量中断回调
+ * @param  htim: 定时器句柄
+ * @retval None
+ */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM3)
+    {
+        if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+        {
+            // CH1捕获上升沿 -> 获取周期
+            pwm_period = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+        }
+        else if (htim->Channel == HAL_TIM_ACTIVE_CHANNEL_2)
+        {
+            // CH2捕获下降沿 -> 获取高电平时间
+            pwm_high_time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_2);
+            
+            // 计算占空比
+            if (pwm_period > 0)
+            {
+                pwm_duty = (pwm_high_time * 100) / pwm_period;
+            }
+        }
+    }
+}
+
+/**
+ * @brief  获取PWM参数
+ * @param  period: 输出周期（us）
+ * @param  duty: 输出占空比（0-100）
+ * @retval None
+ */
+void Get_PWM_Parameters(uint32_t *period, uint32_t *duty)
+{
+    *period = pwm_period;
+    *duty = pwm_duty;
+}
+```
+
+**代码说明**：
+- 第38-41行：CH2配置为间接映射，捕获同一输入的下降沿
+- 第44-47行：配置从模式为复位模式，上升沿时自动复位计数器
+- 第69-72行：CH1捕获上升沿，读取的值就是PWM周期
+- 第73-82行：CH2捕获下降沿，读取的值就是高电平时间
+
+**关键技术**：
+- 使用两个通道捕获同一输入信号的不同边沿
+- 从模式自动复位计数器，简化周期测量
+- 通过周期和高电平时间计算占空比
+
+
+## 步骤2：输出比较模式
+
+### 2.1 输出比较原理
+
+输出比较（Output Compare）模式用于在特定时刻产生输出信号。当计数器值等于比较寄存器（CCR）的值时，可以触发输出引脚的电平变化或产生中断。
+
+**工作原理**：
+```mermaid
+graph LR
+    A[计数器CNT] --> B{CNT == CCR?}
+    B -->|是| C[触发输出动作]
+    B -->|否| D[继续计数]
+    C --> E[翻转/置位/复位]
+    C --> F[产生中断]
+```
+
+**输出动作类型**：
+- 冻结：保持当前输出状态
+- 匹配时置位：CNT=CCR时输出高电平
+- 匹配时复位：CNT=CCR时输出低电平
+- 匹配时翻转：CNT=CCR时输出电平翻转
+- 强制为高/低：强制输出特定电平
+
+### 2.2 生成精确延时信号
+
+使用输出比较模式生成精确的延时信号：
+
+```c
+/**
+ * @brief  配置TIM4 CH1为输出比较模式
+ * @param  None
+ * @retval None
+ */
+void TIM4_OC_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM4_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    
+    // 2. 配置GPIO（PB6 -> TIM4_CH1）
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM4;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    // 3. 配置定时器基本参数
+    TIM_HandleTypeDef htim4;
+    htim4.Instance = TIM4;
+    htim4.Init.Prescaler = 84 - 1;              // 1MHz
+    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim4.Init.Period = 10000 - 1;              // 10ms周期
+    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_OC_Init(&htim4);
+    
+    // 4. 配置输出比较通道
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_TOGGLE;       // 匹配时翻转
+    sConfigOC.Pulse = 5000;                     // 比较值：5ms
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    HAL_TIM_OC_ConfigChannel(&htim4, &sConfigOC, TIM_CHANNEL_1);
+    
+    // 5. 启动输出比较
+    HAL_TIM_OC_Start(&htim4, TIM_CHANNEL_1);
+}
+
+/**
+ * @brief  动态修改输出比较值
+ * @param  pulse_us: 比较值（微秒）
+ * @retval None
+ */
+void TIM4_Set_Compare(uint32_t pulse_us)
+{
+    __HAL_TIM_SET_COMPARE(&htim4, TIM_CHANNEL_1, pulse_us);
+}
+```
+
+**代码说明**：
+- 第32行：配置为翻转模式，每次匹配时输出电平翻转
+- 第33行：设置比较值为5000，即5ms时翻转
+- 第26行：周期为10ms，所以输出频率为100Hz，占空比50%
+
+### 2.3 生成多路同步信号
+
+使用多个通道生成相位不同的同步信号：
+
+```c
+/**
+ * @brief  配置TIM3生成4路相位不同的信号
+ * @param  None
+ * @retval None
+ */
+void TIM3_Multi_OC_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    
+    // 2. 配置GPIO
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    // PA6 -> TIM3_CH1
+    GPIO_InitStruct.Pin = GPIO_PIN_6;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // PA7 -> TIM3_CH2
+    GPIO_InitStruct.Pin = GPIO_PIN_7;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // PB0 -> TIM3_CH3
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    // PB1 -> TIM3_CH4
+    GPIO_InitStruct.Pin = GPIO_PIN_1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    // 3. 配置定时器
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 84 - 1;
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 1000 - 1;               // 1ms周期
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_OC_Init(&htim3);
+    
+    // 4. 配置4个通道，相位依次相差90度
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_TOGGLE;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    
+    // CH1: 0度相位
+    sConfigOC.Pulse = 0;
+    HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1);
+    
+    // CH2: 90度相位（250us延时）
+    sConfigOC.Pulse = 250;
+    HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2);
+    
+    // CH3: 180度相位（500us延时）
+    sConfigOC.Pulse = 500;
+    HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3);
+    
+    // CH4: 270度相位（750us延时）
+    sConfigOC.Pulse = 750;
+    HAL_TIM_OC_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4);
+    
+    // 5. 启动所有通道
+    HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_2);
+    HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_3);
+    HAL_TIM_OC_Start(&htim3, TIM_CHANNEL_4);
+}
+```
+
+**代码说明**：
+- 4个通道使用相同的周期（1ms）
+- 通过设置不同的比较值实现相位差
+- 每个通道相位相差90度（250us）
+- 适用于步进电机驱动、多相信号生成等场景
+
+
+## 步骤3：PWM模式
+
+### 3.1 PWM原理
+
+PWM（Pulse Width Modulation，脉宽调制）是输出比较模式的特殊应用，通过改变脉冲宽度来控制平均输出功率。
+
+**PWM模式1和模式2的区别**：
+- PWM模式1：CNT < CCR时输出有效电平，CNT ≥ CCR时输出无效电平
+- PWM模式2：CNT < CCR时输出无效电平，CNT ≥ CCR时输出有效电平
+
+**PWM参数计算**：
+```
+PWM频率 = 定时器时钟频率 / (PSC + 1) / (ARR + 1)
+占空比 = CCR / (ARR + 1) × 100%
+分辨率 = ARR + 1
+```
+
+### 3.2 LED呼吸灯效果
+
+使用PWM控制LED亮度，实现呼吸灯效果：
+
+```c
+/**
+ * @brief  配置TIM2 CH1输出PWM控制LED
+ * @param  None
+ * @retval None
+ */
+void TIM2_PWM_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 2. 配置GPIO（PA0 -> TIM2_CH1）
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置定时器
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 84 - 1;              // 1MHz
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 1000 - 1;               // PWM频率 = 1kHz
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_PWM_Init(&htim2);
+    
+    // 4. 配置PWM通道
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;         // PWM模式1
+    sConfigOC.Pulse = 0;                        // 初始占空比0%
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH; // 高电平有效
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    HAL_TIM_PWM_ConfigChannel(&htim2, &sConfigOC, TIM_CHANNEL_1);
+    
+    // 5. 启动PWM输出
+    HAL_TIM_PWM_Start(&htim2, TIM_CHANNEL_1);
+}
+
+/**
+ * @brief  设置PWM占空比
+ * @param  duty: 占空比（0-100）
+ * @retval None
+ */
+void TIM2_Set_PWM_Duty(uint8_t duty)
+{
+    uint32_t pulse = (duty * 1000) / 100;  // 计算CCR值
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, pulse);
+}
+
+/**
+ * @brief  呼吸灯效果
+ * @param  None
+ * @retval None
+ */
+void LED_Breathing_Effect(void)
+{
+    static uint8_t duty = 0;
+    static int8_t direction = 1;  // 1=变亮，-1=变暗
+    
+    // 更新占空比
+    duty += direction * 5;
+    
+    // 改变方向
+    if (duty >= 100)
+    {
+        duty = 100;
+        direction = -1;
+    }
+    else if (duty <= 0)
+    {
+        duty = 0;
+        direction = 1;
+    }
+    
+    // 设置PWM
+    TIM2_Set_PWM_Duty(duty);
+}
+
+// 在主循环或定时器中调用
+void main_loop(void)
+{
+    while (1)
+    {
+        LED_Breathing_Effect();
+        HAL_Delay(20);  // 20ms更新一次
+    }
+}
+```
+
+**代码说明**：
+- 第26行：设置PWM频率为1kHz，人眼无法察觉闪烁
+- 第33行：初始占空比为0，LED熄灭
+- 第58-78行：呼吸灯算法，占空比在0-100%之间循环变化
+- 第85行：每20ms更新一次，实现平滑的呼吸效果
+
+### 3.3 电机调速控制
+
+使用PWM控制直流电机转速：
+
+```c
+/**
+ * @brief  配置TIM3 CH1和CH2控制双路电机
+ * @param  None
+ * @retval None
+ */
+void TIM3_Motor_PWM_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 2. 配置GPIO
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;  // PA6, PA7
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置定时器
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 84 - 1;
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 2000 - 1;               // PWM频率 = 500Hz
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_PWM_Init(&htim3);
+    
+    // 4. 配置PWM通道
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 0;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    
+    // 配置CH1（电机1）
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1);
+    
+    // 配置CH2（电机2）
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2);
+    
+    // 5. 启动PWM
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+}
+
+/**
+ * @brief  设置电机速度
+ * @param  motor: 电机编号（1或2）
+ * @param  speed: 速度（0-100）
+ * @retval None
+ */
+void Motor_Set_Speed(uint8_t motor, uint8_t speed)
+{
+    // 限制速度范围
+    if (speed > 100) speed = 100;
+    
+    // 计算CCR值
+    uint32_t pulse = (speed * 2000) / 100;
+    
+    // 设置对应通道的PWM
+    if (motor == 1)
+    {
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pulse);
+    }
+    else if (motor == 2)
+    {
+        __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pulse);
+    }
+}
+
+/**
+ * @brief  电机加速示例
+ * @param  None
+ * @retval None
+ */
+void Motor_Acceleration_Demo(void)
+{
+    // 电机1从0加速到100
+    for (uint8_t speed = 0; speed <= 100; speed += 10)
+    {
+        Motor_Set_Speed(1, speed);
+        HAL_Delay(200);
+    }
+    
+    // 保持最高速度2秒
+    HAL_Delay(2000);
+    
+    // 电机1从100减速到0
+    for (uint8_t speed = 100; speed > 0; speed -= 10)
+    {
+        Motor_Set_Speed(1, speed);
+        HAL_Delay(200);
+    }
+    Motor_Set_Speed(1, 0);
+}
+```
+
+**代码说明**：
+- 第26行：PWM频率设置为500Hz，适合电机控制
+- 第54-69行：根据速度百分比计算PWM占空比
+- 第76-93行：演示电机加速和减速过程
+
+**注意事项**：
+- 电机驱动需要使用H桥或电机驱动芯片
+- PWM频率不宜过高（建议500Hz-2kHz）
+- 需要考虑电机的启动电流和保护
+
+
+## 步骤4：编码器接口模式
+
+### 4.1 编码器接口原理
+
+编码器接口模式专门用于读取旋转编码器（Rotary Encoder）的位置和方向。旋转编码器输出两路相位相差90度的方波信号（A相和B相），通过检测两路信号的相位关系可以判断旋转方向。
+
+**编码器信号时序**：
+```mermaid
+sequenceDiagram
+    participant A as A相信号
+    participant B as B相信号
+    participant Dir as 旋转方向
+    
+    Note over A,Dir: 正向旋转
+    A->>A: ↑上升沿
+    B->>B: 低电平
+    Note over Dir: 计数器递增
+    
+    Note over A,Dir: 反向旋转
+    A->>A: ↑上升沿
+    B->>B: 高电平
+    Note over Dir: 计数器递减
+```
+
+**编码器模式**：
+- 模式1：仅在TI1边沿计数
+- 模式2：仅在TI2边沿计数
+- 模式3：在TI1和TI2边沿都计数（4倍频）
+
+### 4.2 配置编码器接口
+
+```c
+/**
+ * @brief  配置TIM2为编码器接口模式
+ * @param  None
+ * @retval None
+ */
+void TIM2_Encoder_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    // 2. 配置GPIO
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    // PA0 -> TIM2_CH1 (A相)
+    // PA1 -> TIM2_CH2 (B相)
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;         // 上拉，增强抗干扰
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置定时器为编码器模式
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 0;                   // 不分频
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 0xFFFFFFFF;             // 32位最大值
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Encoder_Init(&htim2, &sConfig);
+    
+    // 4. 配置编码器接口
+    TIM_Encoder_InitTypeDef sConfig = {0};
+    sConfig.EncoderMode = TIM_ENCODERMODE_TI12; // 模式3：TI1和TI2都计数
+    sConfig.IC1Polarity = TIM_ICPOLARITY_RISING;
+    sConfig.IC1Selection = TIM_ICSELECTION_DIRECTTI;
+    sConfig.IC1Prescaler = TIM_ICPSC_DIV1;
+    sConfig.IC1Filter = 10;                     // 滤波，消除抖动
+    sConfig.IC2Polarity = TIM_ICPOLARITY_RISING;
+    sConfig.IC2Selection = TIM_ICSELECTION_DIRECTTI;
+    sConfig.IC2Prescaler = TIM_ICPSC_DIV1;
+    sConfig.IC2Filter = 10;
+    HAL_TIM_Encoder_Init(&htim2, &sConfig);
+    
+    // 5. 设置初始计数值为中间值
+    __HAL_TIM_SET_COUNTER(&htim2, 0x7FFFFFFF);
+    
+    // 6. 启动编码器接口
+    HAL_TIM_Encoder_Start(&htim2, TIM_CHANNEL_ALL);
+}
+
+/**
+ * @brief  读取编码器位置
+ * @param  None
+ * @retval 编码器计数值
+ */
+int32_t Encoder_Get_Position(void)
+{
+    // 读取计数器值，减去初始值得到相对位置
+    int32_t count = (int32_t)__HAL_TIM_GET_COUNTER(&htim2);
+    return count - 0x7FFFFFFF;
+}
+
+/**
+ * @brief  复位编码器位置
+ * @param  None
+ * @retval None
+ */
+void Encoder_Reset_Position(void)
+{
+    __HAL_TIM_SET_COUNTER(&htim2, 0x7FFFFFFF);
+}
+
+/**
+ * @brief  获取编码器旋转方向
+ * @param  None
+ * @retval 1=正向，-1=反向，0=静止
+ */
+int8_t Encoder_Get_Direction(void)
+{
+    static int32_t last_position = 0;
+    int32_t current_position = Encoder_Get_Position();
+    int8_t direction = 0;
+    
+    if (current_position > last_position)
+    {
+        direction = 1;   // 正向
+    }
+    else if (current_position < last_position)
+    {
+        direction = -1;  // 反向
+    }
+    
+    last_position = current_position;
+    return direction;
+}
+```
+
+**代码说明**：
+- 第18行：配置GPIO为上拉模式，增强抗干扰能力
+- 第34行：使用模式3（TI12），在两路信号的所有边沿都计数，实现4倍频
+- 第38、43行：设置滤波器，消除机械抖动
+- 第47行：设置初始值为中间值，避免溢出
+- 第58-62行：读取相对位置，支持正负值
+
+### 4.3 编码器应用示例
+
+使用编码器控制LED亮度或菜单选择：
+
+```c
+/**
+ * @brief  使用编码器控制LED亮度
+ * @param  None
+ * @retval None
+ */
+void Encoder_Control_LED_Demo(void)
+{
+    static int32_t last_position = 0;
+    static uint8_t led_brightness = 50;  // 初始亮度50%
+    
+    // 读取编码器位置变化
+    int32_t current_position = Encoder_Get_Position();
+    int32_t delta = current_position - last_position;
+    
+    if (delta != 0)
+    {
+        // 每转动一格，亮度变化5%
+        int16_t new_brightness = led_brightness + (delta * 5);
+        
+        // 限制范围
+        if (new_brightness < 0) new_brightness = 0;
+        if (new_brightness > 100) new_brightness = 100;
+        
+        led_brightness = new_brightness;
+        
+        // 更新LED PWM
+        TIM2_Set_PWM_Duty(led_brightness);
+        
+        // 更新位置
+        last_position = current_position;
+        
+        // 打印信息
+        printf("编码器位置: %ld, LED亮度: %d%%\n", 
+               current_position, led_brightness);
+    }
+}
+
+/**
+ * @brief  使用编码器进行菜单选择
+ * @param  None
+ * @retval None
+ */
+void Encoder_Menu_Selection_Demo(void)
+{
+    static int32_t last_position = 0;
+    static uint8_t menu_index = 0;
+    const uint8_t menu_count = 5;
+    const char* menu_items[] = {
+        "1. 系统设置",
+        "2. 网络配置",
+        "3. 显示设置",
+        "4. 关于",
+        "5. 退出"
+    };
+    
+    // 读取编码器位置变化
+    int32_t current_position = Encoder_Get_Position();
+    int32_t delta = current_position - last_position;
+    
+    if (delta != 0)
+    {
+        // 更新菜单索引
+        int16_t new_index = menu_index + delta;
+        
+        // 循环菜单
+        if (new_index < 0)
+        {
+            new_index = menu_count - 1;
+        }
+        else if (new_index >= menu_count)
+        {
+            new_index = 0;
+        }
+        
+        menu_index = new_index;
+        last_position = current_position;
+        
+        // 显示当前菜单项
+        printf("当前选择: %s\n", menu_items[menu_index]);
+    }
+}
+```
+
+**代码说明**：
+- 第13行：计算位置变化量（delta）
+- 第18行：根据变化量调整LED亮度
+- 第58-68行：实现循环菜单选择
+- 编码器提供了直观的旋转控制方式
+
+**编码器分辨率计算**：
+```
+单圈脉冲数 = 编码器线数 × 倍频系数
+例如：360线编码器，4倍频模式
+单圈脉冲数 = 360 × 4 = 1440
+角度分辨率 = 360° / 1440 = 0.25°
+```
+
+
+## 步骤5：定时器级联与同步
+
+### 5.1 定时器级联原理
+
+定时器级联（Timer Cascading）允许一个定时器的溢出触发另一个定时器计数，从而实现更长的计时周期或更复杂的定时功能。
+
+**级联模式**：
+- 主从模式：一个定时器作为主定时器，另一个作为从定时器
+- 触发源：主定时器的更新事件触发从定时器
+- 应用：扩展计数范围、实现长时间延时
+
+**级联示意图**：
+```mermaid
+graph LR
+    A[TIM2主定时器] -->|溢出事件| B[TIM3从定时器]
+    B -->|溢出事件| C[TIM4从定时器]
+    C --> D[产生中断]
+```
+
+### 5.2 实现长时间延时
+
+使用两个定时器级联实现超长延时：
+
+```c
+/**
+ * @brief  配置TIM2和TIM3级联，实现长时间延时
+ * @param  None
+ * @retval None
+ * @note   TIM2作为主定时器，TIM3作为从定时器
+ */
+void TIM_Cascade_Init(void)
+{
+    // 1. 配置TIM2（主定时器）
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 84 - 1;              // 1MHz
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 1000 - 1;               // 1ms溢出一次
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Base_Init(&htim2);
+    
+    // 配置TIM2为主模式，更新事件作为触发输出
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
+    HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig);
+    
+    // 2. 配置TIM3（从定时器）
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 0;                   // 不分频
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 60000 - 1;              // 计数60000次
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Base_Init(&htim3);
+    
+    // 配置TIM3为从模式，由TIM2触发
+    TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+    sSlaveConfig.SlaveMode = TIM_SLAVEMODE_EXTERNAL1;
+    sSlaveConfig.InputTrigger = TIM_TS_ITR1;    // TIM2的TRGO连接到TIM3的ITR1
+    HAL_TIM_SlaveConfigSynchro(&htim3, &sSlaveConfig);
+    
+    // 3. 使能TIM3中断
+    HAL_NVIC_SetPriority(TIM3_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(TIM3_IRQn);
+    __HAL_TIM_ENABLE_IT(&htim3, TIM_IT_UPDATE);
+    
+    // 4. 启动定时器
+    HAL_TIM_Base_Start(&htim2);
+    HAL_TIM_Base_Start(&htim3);
+}
+
+/**
+ * @brief  TIM3中断服务函数
+ * @param  None
+ * @retval None
+ */
+void TIM3_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&htim3, TIM_FLAG_UPDATE))
+    {
+        __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE);
+        
+        // TIM2每1ms溢出一次，TIM3计数60000次
+        // 总延时 = 1ms × 60000 = 60秒
+        printf("60秒定时到达!\n");
+    }
+}
+```
+
+**代码说明**：
+- 第22行：配置TIM2的触发输出为更新事件
+- 第39行：配置TIM3的触发输入为TIM2的输出
+- TIM2每1ms溢出一次，触发TIM3计数
+- TIM3计数60000次后产生中断，总延时60秒
+
+**级联计算**：
+```
+总延时 = (TIM2_PSC + 1) × (TIM2_ARR + 1) × (TIM3_ARR + 1) / 定时器时钟
+       = 84 × 1000 × 60000 / 84MHz
+       = 60秒
+```
+
+### 5.3 定时器同步
+
+多个定时器同步启动，用于需要精确时序的应用：
+
+```c
+/**
+ * @brief  配置多个定时器同步启动
+ * @param  None
+ * @retval None
+ */
+void TIM_Synchronization_Init(void)
+{
+    // 1. 配置TIM2为主定时器
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 84 - 1;
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 1000 - 1;
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Base_Init(&htim2);
+    
+    // 配置为主模式
+    TIM_MasterConfigTypeDef sMasterConfig = {0};
+    sMasterConfig.MasterOutputTrigger = TIM_TRGO_ENABLE;  // 使能信号作为触发
+    sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_ENABLE;
+    HAL_TIMEx_MasterConfigSynchronization(&htim2, &sMasterConfig);
+    
+    // 2. 配置TIM3为从定时器
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 84 - 1;
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 2000 - 1;
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Base_Init(&htim3);
+    
+    // 配置为从模式，由TIM2触发启动
+    TIM_SlaveConfigTypeDef sSlaveConfig = {0};
+    sSlaveConfig.SlaveMode = TIM_SLAVEMODE_TRIGGER;
+    sSlaveConfig.InputTrigger = TIM_TS_ITR1;
+    HAL_TIM_SlaveConfigSynchro(&htim3, &sSlaveConfig);
+    
+    // 3. 配置TIM4为从定时器
+    __HAL_RCC_TIM4_CLK_ENABLE();
+    
+    TIM_HandleTypeDef htim4;
+    htim4.Instance = TIM4;
+    htim4.Init.Prescaler = 84 - 1;
+    htim4.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim4.Init.Period = 3000 - 1;
+    htim4.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_Base_Init(&htim4);
+    
+    // 配置为从模式
+    sSlaveConfig.InputTrigger = TIM_TS_ITR1;
+    HAL_TIM_SlaveConfigSynchro(&htim4, &sSlaveConfig);
+    
+    // 4. 启动主定时器，从定时器会自动同步启动
+    HAL_TIM_Base_Start(&htim2);
+}
+```
+
+**代码说明**：
+- 第21行：主定时器的使能信号作为触发源
+- 第38、54行：从定时器配置为触发模式，由主定时器启动
+- 所有定时器在主定时器启动时同步开始计数
+- 适用于需要精确时序关系的多路信号生成
+
+
+## 步骤6：综合应用项目
+
+### 6.1 项目：超声波测距系统
+
+使用输入捕获测量超声波模块的回波时间，计算距离：
+
+```c
+/**
+ * @brief  超声波测距系统
+ * @param  None
+ * @retval None
+ */
+
+// 全局变量
+static uint32_t ultrasonic_start_time = 0;
+static uint32_t ultrasonic_end_time = 0;
+static uint8_t ultrasonic_state = 0;  // 0=等待上升沿，1=等待下降沿
+static float ultrasonic_distance = 0.0f;
+
+/**
+ * @brief  配置超声波测距
+ * @param  None
+ * @retval None
+ * @note   Trig引脚：PB0（普通GPIO）
+ *         Echo引脚：PA0（TIM2_CH1输入捕获）
+ */
+void Ultrasonic_Init(void)
+{
+    // 1. 配置Trig引脚为输出
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    
+    // 2. 配置Echo引脚为输入捕获
+    __HAL_RCC_TIM2_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // 3. 配置TIM2输入捕获
+    TIM_HandleTypeDef htim2;
+    htim2.Instance = TIM2;
+    htim2.Init.Prescaler = 84 - 1;              // 1MHz = 1us分辨率
+    htim2.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim2.Init.Period = 0xFFFFFFFF;
+    htim2.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_IC_Init(&htim2);
+    
+    // 配置为双边沿捕获
+    TIM_IC_InitTypeDef sConfigIC = {0};
+    sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;  // 双边沿
+    sConfigIC.ICSelection = TIM_ICSELECTION_DIRECTTI;
+    sConfigIC.ICPrescaler = TIM_ICPSC_DIV1;
+    sConfigIC.ICFilter = 0;
+    HAL_TIM_IC_ConfigChannel(&htim2, &sConfigIC, TIM_CHANNEL_1);
+    
+    // 启动输入捕获
+    HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+}
+
+/**
+ * @brief  触发超声波测距
+ * @param  None
+ * @retval None
+ */
+void Ultrasonic_Trigger(void)
+{
+    // 发送10us高电平脉冲
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_SET);
+    delay_us(10);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0, GPIO_PIN_RESET);
+    
+    ultrasonic_state = 0;  // 重置状态
+}
+
+/**
+ * @brief  输入捕获中断回调
+ * @param  htim: 定时器句柄
+ * @retval None
+ */
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM2 && htim->Channel == HAL_TIM_ACTIVE_CHANNEL_1)
+    {
+        if (ultrasonic_state == 0)
+        {
+            // 捕获上升沿 - 回波开始
+            ultrasonic_start_time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            ultrasonic_state = 1;
+        }
+        else
+        {
+            // 捕获下降沿 - 回波结束
+            ultrasonic_end_time = HAL_TIM_ReadCapturedValue(htim, TIM_CHANNEL_1);
+            
+            // 计算时间差（us）
+            uint32_t time_diff;
+            if (ultrasonic_end_time >= ultrasonic_start_time)
+            {
+                time_diff = ultrasonic_end_time - ultrasonic_start_time;
+            }
+            else
+            {
+                time_diff = (0xFFFFFFFF - ultrasonic_start_time) + ultrasonic_end_time;
+            }
+            
+            // 计算距离（cm）
+            // 距离 = (时间 × 声速) / 2
+            // 声速 = 340m/s = 0.034cm/us
+            ultrasonic_distance = (time_diff * 0.034f) / 2.0f;
+            
+            ultrasonic_state = 0;
+        }
+    }
+}
+
+/**
+ * @brief  获取测量距离
+ * @param  None
+ * @retval 距离（cm）
+ */
+float Ultrasonic_Get_Distance(void)
+{
+    return ultrasonic_distance;
+}
+
+/**
+ * @brief  超声波测距主循环
+ * @param  None
+ * @retval None
+ */
+void Ultrasonic_Main_Loop(void)
+{
+    while (1)
+    {
+        // 触发测距
+        Ultrasonic_Trigger();
+        
+        // 等待测量完成
+        HAL_Delay(100);
+        
+        // 读取距离
+        float distance = Ultrasonic_Get_Distance();
+        printf("距离: %.2f cm\n", distance);
+        
+        // 每秒测量10次
+        HAL_Delay(100);
+    }
+}
+```
+
+**代码说明**：
+- 第53行：配置为双边沿捕获，同时捕获上升沿和下降沿
+- 第72-74行：发送10us触发脉冲
+- 第90-92行：捕获上升沿，记录开始时间
+- 第96-98行：捕获下降沿，记录结束时间
+- 第112行：根据声速和时间计算距离
+
+### 6.2 项目：四路PWM舵机控制
+
+使用4个PWM通道同时控制4个舵机：
+
+```c
+/**
+ * @brief  舵机控制系统
+ * @param  None
+ * @retval None
+ */
+
+/**
+ * @brief  初始化4路舵机PWM
+ * @param  None
+ * @retval None
+ * @note   舵机PWM频率50Hz，周期20ms
+ *         脉宽0.5ms-2.5ms对应角度0-180度
+ */
+void Servo_Init(void)
+{
+    // 1. 使能时钟
+    __HAL_RCC_TIM3_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    
+    // 2. 配置GPIO
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    // PA6, PA7 -> TIM3_CH1, CH2
+    GPIO_InitStruct.Pin = GPIO_PIN_6 | GPIO_PIN_7;
+    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate = GPIO_AF2_TIM3;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+    
+    // PB0, PB1 -> TIM3_CH3, CH4
+    GPIO_InitStruct.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+    
+    // 3. 配置定时器
+    TIM_HandleTypeDef htim3;
+    htim3.Instance = TIM3;
+    htim3.Init.Prescaler = 84 - 1;              // 1MHz
+    htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim3.Init.Period = 20000 - 1;              // 20ms周期 = 50Hz
+    htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    HAL_TIM_PWM_Init(&htim3);
+    
+    // 4. 配置4个PWM通道
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 1500;                     // 初始位置：中间（90度）
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1);
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_2);
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_3);
+    HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4);
+    
+    // 5. 启动PWM
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
+    HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_4);
+}
+
+/**
+ * @brief  设置舵机角度
+ * @param  channel: 通道号（1-4）
+ * @param  angle: 角度（0-180）
+ * @retval None
+ */
+void Servo_Set_Angle(uint8_t channel, uint8_t angle)
+{
+    // 限制角度范围
+    if (angle > 180) angle = 180;
+    
+    // 计算脉宽：0度=0.5ms(500us)，180度=2.5ms(2500us)
+    // pulse = 500 + (angle / 180) * 2000
+    uint32_t pulse = 500 + (angle * 2000) / 180;
+    
+    // 设置对应通道的PWM
+    switch (channel)
+    {
+        case 1:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_1, pulse);
+            break;
+        case 2:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_2, pulse);
+            break;
+        case 3:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_3, pulse);
+            break;
+        case 4:
+            __HAL_TIM_SET_COMPARE(&htim3, TIM_CHANNEL_4, pulse);
+            break;
+    }
+}
+
+/**
+ * @brief  舵机扫描演示
+ * @param  None
+ * @retval None
+ */
+void Servo_Sweep_Demo(void)
+{
+    // 4个舵机依次从0度扫描到180度
+    for (uint8_t angle = 0; angle <= 180; angle += 10)
+    {
+        Servo_Set_Angle(1, angle);
+        Servo_Set_Angle(2, 180 - angle);  // 反向
+        Servo_Set_Angle(3, angle);
+        Servo_Set_Angle(4, 180 - angle);  // 反向
+        HAL_Delay(50);
+    }
+}
+```
+
+**代码说明**：
+- 第39行：PWM周期20ms，频率50Hz（舵机标准频率）
+- 第46行：初始脉宽1.5ms，对应90度中间位置
+- 第76行：角度到脉宽的线性转换公式
+- 第105-111行：4个舵机同步运动演示
+
+
+## 验证测试
+
+### 测试1：输入捕获频率测量
+
+**测试步骤**：
+1. 使用信号发生器产生1kHz方波信号
+2. 连接到输入捕获引脚
+3. 运行频率测量程序
+4. 读取测量结果
+
+**预期结果**：
+- 测量频率：1000Hz ± 10Hz
+- 误差 < 1%
+- 稳定可靠，无丢失
+
+**验证代码**：
+```c
+void Test_Input_Capture(void)
+{
+    printf("输入捕获频率测量测试\n");
+    printf("请连接1kHz信号到PA0引脚\n");
+    
+    HAL_Delay(2000);  // 等待信号稳定
+    
+    for (int i = 0; i < 10; i++)
+    {
+        uint32_t freq = Get_Signal_Frequency();
+        printf("测量 %d: %lu Hz\n", i+1, freq);
+        HAL_Delay(500);
+    }
+}
+```
+
+### 测试2：PWM输出验证
+
+**测试步骤**：
+1. 连接LED到PWM输出引脚
+2. 设置不同的占空比（0%, 25%, 50%, 75%, 100%）
+3. 观察LED亮度变化
+4. 使用示波器测量PWM波形
+
+**预期结果**：
+- LED亮度随占空比线性变化
+- PWM频率准确（1kHz）
+- 占空比误差 < 2%
+
+**验证代码**：
+```c
+void Test_PWM_Output(void)
+{
+    printf("PWM输出测试\n");
+    
+    uint8_t duty_levels[] = {0, 25, 50, 75, 100};
+    
+    for (int i = 0; i < 5; i++)
+    {
+        printf("设置占空比: %d%%\n", duty_levels[i]);
+        TIM2_Set_PWM_Duty(duty_levels[i]);
+        HAL_Delay(2000);
+    }
+}
+```
+
+### 测试3：编码器接口测试
+
+**测试步骤**：
+1. 连接旋转编码器到TIM2_CH1和CH2
+2. 正向旋转编码器10圈
+3. 反向旋转编码器10圈
+4. 检查计数值
+
+**预期结果**：
+- 正向旋转：计数值递增
+- 反向旋转：计数值递减
+- 旋转10圈后回到初始位置，计数值为0
+- 无丢步现象
+
+**验证代码**：
+```c
+void Test_Encoder(void)
+{
+    printf("编码器接口测试\n");
+    printf("请旋转编码器...\n");
+    
+    Encoder_Reset_Position();
+    
+    while (1)
+    {
+        int32_t position = Encoder_Get_Position();
+        int8_t direction = Encoder_Get_Direction();
+        
+        printf("位置: %ld, 方向: %s\n", 
+               position, 
+               direction == 1 ? "正向" : (direction == -1 ? "反向" : "静止"));
+        
+        HAL_Delay(100);
+    }
+}
+```
+
+## 故障排除
+
+### 问题1：输入捕获无法触发
+
+**可能原因**：
+- GPIO复用功能配置错误
+- 输入信号电平不匹配
+- 捕获极性设置错误
+- 中断未使能
+
+**解决方法**：
+1. 检查GPIO复用配置
+```c
+// 确认复用功能正确
+GPIO_InitStruct.Alternate = GPIO_AF1_TIM2;  // 查阅数据手册确认
+```
+
+2. 检查输入信号
+```c
+// 使用万用表或示波器测量输入信号
+// 确保信号电平在0-3.3V范围内
+```
+
+3. 检查捕获极性
+```c
+// 上升沿捕获
+sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_RISING;
+// 下降沿捕获
+sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_FALLING;
+// 双边沿捕获
+sConfigIC.ICPolarity = TIM_INPUTCHANNELPOLARITY_BOTHEDGE;
+```
+
+4. 确认中断使能
+```c
+HAL_TIM_IC_Start_IT(&htim2, TIM_CHANNEL_1);
+HAL_NVIC_EnableIRQ(TIM2_IRQn);
+```
+
+### 问题2：PWM输出频率不正确
+
+**可能原因**：
+- 预分频器设置错误
+- 自动重装载值计算错误
+- 定时器时钟源配置错误
+
+**解决方法**：
+1. 确认定时器时钟频率
+```c
+// STM32F4系列，APB1定时器时钟通常为84MHz
+uint32_t timer_clock = HAL_RCC_GetPCLK1Freq() * 2;
+printf("定时器时钟: %lu Hz\n", timer_clock);
+```
+
+2. 重新计算参数
+```c
+// 目标PWM频率：1kHz
+// 定时器时钟：84MHz
+// PSC = 84 - 1 (分频到1MHz)
+// ARR = 1000 - 1 (周期1ms)
+// 实际频率 = 84MHz / 84 / 1000 = 1kHz
+```
+
+3. 使用示波器验证
+```c
+// 测量实际输出频率
+// 调整PSC和ARR直到达到目标频率
+```
+
+### 问题3：编码器计数不准确
+
+**可能原因**：
+- 编码器信号抖动
+- 滤波器设置不当
+- 编码器模式选择错误
+- 接线松动或干扰
+
+**解决方法**：
+1. 增加输入滤波
+```c
+sConfig.IC1Filter = 10;  // 增加滤波器值
+sConfig.IC2Filter = 10;
+```
+
+2. 检查编码器模式
+```c
+// 模式3提供最高分辨率（4倍频）
+sConfig.EncoderMode = TIM_ENCODERMODE_TI12;
+```
+
+3. 改善接线
+```c
+// 使用屏蔽线
+// 缩短连接距离
+// 添加上拉电阻
+GPIO_InitStruct.Pull = GPIO_PULLUP;
+```
+
+4. 软件去抖
+```c
+// 在读取位置时进行平滑处理
+int32_t Get_Filtered_Position(void)
+{
+    static int32_t last_pos = 0;
+    int32_t current_pos = Encoder_Get_Position();
+    
+    // 简单的一阶滤波
+    int32_t filtered = (last_pos * 3 + current_pos) / 4;
+    last_pos = filtered;
+    
+    return filtered;
+}
+```
+
+### 问题4：定时器级联不工作
+
+**可能原因**：
+- 主从模式配置错误
+- 触发源选择错误
+- 定时器连接关系错误
+
+**解决方法**：
+1. 检查触发源配置
+```c
+// 主定时器配置
+sMasterConfig.MasterOutputTrigger = TIM_TRGO_UPDATE;
+
+// 从定时器配置
+sSlaveConfig.InputTrigger = TIM_TS_ITR1;  // 查阅参考手册确认连接关系
+```
+
+2. 确认定时器连接关系
+```
+STM32F4定时器内部触发连接：
+TIM1 -> ITR0 of TIM2, TIM3, TIM4
+TIM2 -> ITR1 of TIM1, TIM3, TIM4
+TIM3 -> ITR2 of TIM1, TIM2, TIM4
+TIM4 -> ITR3 of TIM1, TIM2, TIM3
+```
+
+3. 验证级联功能
+```c
+// 在从定时器中断中打印信息
+void TIM3_IRQHandler(void)
+{
+    if (__HAL_TIM_GET_FLAG(&htim3, TIM_FLAG_UPDATE))
+    {
+        __HAL_TIM_CLEAR_FLAG(&htim3, TIM_FLAG_UPDATE);
+        printf("从定时器溢出\n");
+    }
+}
+```
+
+## 进阶技巧
+
+### 技巧1：使用DMA提高效率
+
+对于高频率的输入捕获或PWM更新，使用DMA可以减少CPU负担：
+
+```c
+/**
+ * @brief  配置输入捕获使用DMA
+ * @param  None
+ * @retval None
+ */
+void TIM_IC_DMA_Init(void)
+{
+    // 配置DMA
+    __HAL_RCC_DMA1_CLK_ENABLE();
+    
+    DMA_HandleTypeDef hdma_tim2_ch1;
+    hdma_tim2_ch1.Instance = DMA1_Stream5;
+    hdma_tim2_ch1.Init.Channel = DMA_CHANNEL_3;
+    hdma_tim2_ch1.Init.Direction = DMA_PERIPH_TO_MEMORY;
+    hdma_tim2_ch1.Init.PeriphInc = DMA_PINC_DISABLE;
+    hdma_tim2_ch1.Init.MemInc = DMA_MINC_ENABLE;
+    hdma_tim2_ch1.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
+    hdma_tim2_ch1.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
+    hdma_tim2_ch1.Init.Mode = DMA_CIRCULAR;
+    hdma_tim2_ch1.Init.Priority = DMA_PRIORITY_HIGH;
+    HAL_DMA_Init(&hdma_tim2_ch1);
+    
+    // 关联DMA和定时器
+    __HAL_LINKDMA(&htim2, hdma[TIM_DMA_ID_CC1], hdma_tim2_ch1);
+    
+    // 启动DMA传输
+    uint32_t capture_buffer[100];
+    HAL_TIM_IC_Start_DMA(&htim2, TIM_CHANNEL_1, capture_buffer, 100);
+}
+```
+
+### 技巧2：定时器输出比较实现精确延时
+
+不使用阻塞延时，而是使用输出比较实现非阻塞延时：
+
+```c
+/**
+ * @brief  非阻塞延时
+ * @param  delay_us: 延时时间（微秒）
+ * @retval None
+ */
+void Non_Blocking_Delay_Start(uint32_t delay_us)
+{
+    uint32_t current = __HAL_TIM_GET_COUNTER(&htim2);
+    uint32_t target = current + delay_us;
+    __HAL_TIM_SET_COMPARE(&htim2, TIM_CHANNEL_1, target);
+    __HAL_TIM_ENABLE_IT(&htim2, TIM_IT_CC1);
+}
+
+// 在中断中处理延时到达事件
+void HAL_TIM_OC_DelayElapsedCallback(TIM_HandleTypeDef *htim)
+{
+    if (htim->Instance == TIM2)
+    {
+        // 延时到达，执行相应操作
+        __HAL_TIM_DISABLE_IT(htim, TIM_IT_CC1);
+    }
+}
+```
+
+### 技巧3：PWM互补输出与死区时间
+
+用于电机驱动的H桥控制：
+
+```c
+/**
+ * @brief  配置互补PWM输出
+ * @param  None
+ * @retval None
+ * @note   用于H桥电机驱动
+ */
+void TIM1_Complementary_PWM_Init(void)
+{
+    // TIM1支持互补输出
+    TIM_HandleTypeDef htim1;
+    htim1.Instance = TIM1;
+    htim1.Init.Prescaler = 84 - 1;
+    htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+    htim1.Init.Period = 1000 - 1;
+    htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+    htim1.Init.RepetitionCounter = 0;
+    HAL_TIM_PWM_Init(&htim1);
+    
+    // 配置PWM通道
+    TIM_OC_InitTypeDef sConfigOC = {0};
+    sConfigOC.OCMode = TIM_OCMODE_PWM1;
+    sConfigOC.Pulse = 500;
+    sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
+    sConfigOC.OCNPolarity = TIM_OCNPOLARITY_HIGH;  // 互补输出极性
+    sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
+    sConfigOC.OCIdleState = TIM_OCIDLESTATE_RESET;
+    sConfigOC.OCNIdleState = TIM_OCNIDLESTATE_RESET;
+    HAL_TIM_PWM_ConfigChannel(&htim1, &sConfigOC, TIM_CHANNEL_1);
+    
+    // 配置死区时间
+    TIM_BreakDeadTimeConfigTypeDef sBreakDeadTimeConfig = {0};
+    sBreakDeadTimeConfig.OffStateRunMode = TIM_OSSR_DISABLE;
+    sBreakDeadTimeConfig.OffStateIDLEMode = TIM_OSSI_DISABLE;
+    sBreakDeadTimeConfig.LockLevel = TIM_LOCKLEVEL_OFF;
+    sBreakDeadTimeConfig.DeadTime = 100;  // 死区时间
+    sBreakDeadTimeConfig.BreakState = TIM_BREAK_DISABLE;
+    sBreakDeadTimeConfig.BreakPolarity = TIM_BREAKPOLARITY_HIGH;
+    sBreakDeadTimeConfig.AutomaticOutput = TIM_AUTOMATICOUTPUT_DISABLE;
+    HAL_TIMEx_ConfigBreakDeadTime(&htim1, &sBreakDeadTimeConfig);
+    
+    // 启动互补PWM
+    HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_1);
+    HAL_TIMEx_PWMN_Start(&htim1, TIM_CHANNEL_1);  // 启动互补输出
+}
+```
+
+## 注意事项
+
+### 1. 定时器资源分配
+
+**资源冲突**：
+- 同一定时器的不同通道共享计数器和预分频器
+- 不同功能模式可能互相冲突
+- 合理规划定时器资源使用
+
+**建议**：
+```
+TIM1: 高级定时器，用于电机控制（互补PWM）
+TIM2/TIM5: 32位定时器，用于长时间计数或编码器
+TIM3/TIM4: 通用定时器，用于PWM输出或输入捕获
+TIM9-TIM14: 简化定时器，用于简单的PWM或计数
+```
+
+### 2. 中断优先级设置
+
+**优先级规划**：
+```c
+// 高优先级：实时性要求高的任务
+HAL_NVIC_SetPriority(TIM2_IRQn, 0, 0);  // 输入捕获
+
+// 中优先级：一般任务
+HAL_NVIC_SetPriority(TIM3_IRQn, 1, 0);  // PWM更新
+
+// 低优先级：非实时任务
+HAL_NVIC_SetPriority(TIM4_IRQn, 2, 0);  // 周期性任务
+```
+
+### 3. 定时器时钟源
+
+**时钟配置**：
+- APB1定时器：TIM2-TIM7, TIM12-TIM14
+- APB2定时器：TIM1, TIM8-TIM11
+- 注意APB1和APB2的时钟频率可能不同
+
+**时钟倍频**：
+```c
+// 当APB预分频器≠1时，定时器时钟自动×2
+// 例如：APB1 = 42MHz，定时器时钟 = 84MHz
+```
+
+### 4. 浮点运算优化
+
+**避免在中断中使用浮点运算**：
+```c
+// 不推荐：在中断中使用浮点
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    float distance = (time_diff * 0.034f) / 2.0f;  // 慢
+}
+
+// 推荐：使用整数运算
+void HAL_TIM_IC_CaptureCallback(TIM_HandleTypeDef *htim)
+{
+    uint32_t distance_mm = (time_diff * 34) / 200;  // 快
+}
+```
+
+## 总结
+
+通过本教程，你学习了：
+
+- ✅ 通用定时器的工作模式和高级功能
+- ✅ 输入捕获模式测量信号频率、脉宽和占空比
+- ✅ 输出比较模式生成精确的时序信号
+- ✅ PWM模式控制LED亮度和电机速度
+- ✅ 编码器接口读取旋转编码器位置
+- ✅ 定时器级联实现长时间延时
+- ✅ 综合应用：超声波测距和舵机控制
+
+**关键要点**：
+1. 通用定时器功能丰富，一个定时器可实现多种功能
+2. 输入捕获适合测量外部信号参数
+3. PWM是控制模拟量的有效方法
+4. 编码器接口专门用于旋转编码器
+5. 定时器级联可扩展计数范围
+6. 合理规划定时器资源和中断优先级
+
+## 进阶挑战
+
+尝试以下挑战来巩固学习：
+
+1. **挑战1**：实现一个频率计
+   - 测量范围：1Hz - 1MHz
+   - 自动切换测量模式
+   - 显示频率和占空比
+
+2. **挑战2**：实现RGB LED调色
+   - 使用3个PWM通道控制RGB
+   - 实现颜色渐变效果
+   - 支持HSV到RGB转换
+
+3. **挑战3**：实现步进电机控制
+   - 使用4个PWM通道
+   - 支持全步、半步、微步
+   - 实现加减速控制
+
+4. **挑战4**：实现示波器功能
+   - 使用输入捕获采集信号
+   - 使用DMA高速传输
+   - 在LCD上显示波形
+
+## 完整代码
+
+完整的示例代码可以在这里下载：
+
+- 输入捕获示例
+- PWM控制示例
+- 编码器接口示例
+- 超声波测距项目
+- 舵机控制项目
+
+## 下一步
+
+建议继续学习：
+
+- [时钟精度优化与校准](02-clock-calibration.html) - 提高定时精度
+- [低功耗时钟管理](../advanced/01-low-power-clock.html) - 降低功耗
+- [DMA驱动开发](../../02-device-driver-development/intermediate/01-dma-driver.html) - 高效数据传输
+- [PWM驱动开发](../../02-device-driver-development/beginner/07-pwm-driver.html) - PWM深入应用
+
+## 参考资料
+
+### 官方文档
+
+1. **STM32F4xx Reference Manual (RM0090)**
+   - 第13章：通用定时器（TIM2-TIM5）
+   - 第14章：通用定时器（TIM9-TIM14）
+   - 详细的寄存器说明和时序图
+
+2. **STM32F4xx HAL Driver User Manual**
+   - TIM HAL驱动API说明
+   - 配置示例和最佳实践
+
+3. **AN4013: STM32 Cross-series Timer Overview**
+   - 不同系列定时器对比
+   - 功能选择指南
+
+### 应用笔记
+
+1. **AN4776: General-purpose Timer Cookbook**
+   - 定时器应用实例
+   - 常见问题解决方案
+
+2. **AN4013: STM32 Timer Overview**
+   - 定时器功能详解
+   - 应用场景分析
+
+### 在线资源
+
+1. [STM32 Timer Tutorial](https://www.st.com/resource/en/application_note/dm00236305.pdf)
+2. [Input Capture Mode Explained](https://controllerstech.com/stm32-timer-input-capture/)
+3. [PWM Generation with STM32](https://deepbluembedded.com/stm32-pwm-example-timer-pwm-mode-tutorial/)
+
+### 相关教程
+
+- [定时器驱动基础](../../02-device-driver-development/beginner/05-timer-driver.html)
+- [中断系统基础](../../04-interrupt-exception-handling/beginner/01-interrupt-basics.html)
+- [PWM驱动开发](../../02-device-driver-development/beginner/07-pwm-driver.html)
+
+---
+
+**测试环境**:
+- 开发板：STM32F407 Discovery
+- IDE：STM32CubeIDE v1.10
+- HAL库版本：v1.27
+- 编译器：GCC ARM 10.3
+
+**反馈**：如果你在学习过程中遇到问题，欢迎在评论区留言或提交Issue！
+
+**版权声明**：本教程采用 [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) 许可协议。

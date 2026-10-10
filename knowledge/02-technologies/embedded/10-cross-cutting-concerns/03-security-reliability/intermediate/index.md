@@ -1,0 +1,50 @@
+---
+title: intermediate
+description: 本部分包含 进阶 级别的学习内容。
+---
+
+# intermediate
+
+!!! info "进阶 级别"
+    本部分包含 进阶 级别的学习内容。
+
+---
+
+## 文档列表
+
+- [fault detection diagnosis](01-fault-detection-diagnosis.html)
+- [watchdog system monitoring](02-watchdog-system-monitoring.html)
+- [redundancy fault tolerance](03-redundancy-fault-tolerance.html)
+- [secure communication protocols](04-secure-communication-protocols.html)
+- [penetration testing](05-penetration-testing.html)
+- [iso26262 automotive safety](06-iso26262-automotive-safety.html)
+
+---
+
+## 学习指南
+
+### 学习建议
+
+- 在掌握基础的前提下深入学习
+- 注重实践和项目经验
+- 学习最佳实践和设计模式
+- 关注性能优化和代码质量
+
+### 学习步骤
+
+1. **阅读理解** - 仔细阅读每篇文档，理解核心概念和原理
+2. **动手实践** - 跟随示例代码进行实际操作，加深理解
+3. **完成练习** - 独立完成文档中的练习题和小项目
+4. **总结回顾** - 定期回顾所学内容，整理知识点
+5. **实际应用** - 尝试在实际项目中应用所学知识
+
+### 学习资源
+
+- 📚 查阅官方文档深入理解技术细节
+- 💻 参考开源项目学习最佳实践
+- 💬 参与技术社区讨论交流经验
+- 🎥 观看视频教程加深理解
+
+---
+
+*最后更新：2026-03-16*

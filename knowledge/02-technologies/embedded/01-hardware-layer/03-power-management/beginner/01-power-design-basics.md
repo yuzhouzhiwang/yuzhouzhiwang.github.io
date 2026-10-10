@@ -1,0 +1,1658 @@
+---
+# 基础信息
+title: "嵌入式系统电源设计基础"
+description: "全面讲解嵌入式系统电源设计的基本原理和方法，包括电源需求分析、电源架构设计、电源树规划、功耗预算和电源时序，帮助初学者掌握电源系统设计的核心要点"
+slug: "embedded-power-design-basics"
+
+# 分类信息
+domain: "01-hardware-layer"
+module: "03-power-management"
+content_type: "article"
+skill_level: "beginner"
+
+# 标签和关联
+tags:
+  - 电源设计
+  - 电源架构
+  - 功耗管理
+  - 电源树
+  - 电源时序
+prerequisites: []
+related_contents: []
+
+# 学习信息
+estimated_time: 35
+difficulty_score: 2
+
+# 作者和版本
+author: "嵌入式知识平台内容团队"
+author_id: ""
+created_at: "2026-03-07"
+updated_at: "2026-03-07"
+version: "1.0.0"
+
+# 语言和本地化
+language: "zh-CN"
+translations: []
+
+# 状态和可见性
+status: "draft"
+is_featured: false
+is_premium: false
+
+# SEO和元数据
+keywords:
+  - 嵌入式电源设计
+  - 电源架构
+  - 功耗预算
+  - 电源管理
+  - 电源时序
+cover_image: ""
+---
+
+# 嵌入式系统电源设计基础
+
+## 学习目标
+
+完成本文学习后，你将能够：
+
+- [ ] 理解嵌入式系统电源设计的基本原则和流程
+- [ ] 掌握电源需求分析的方法和技巧
+- [ ] 能够设计合理的电源架构和电源树
+- [ ] 学会进行功耗预算和计算
+- [ ] 了解电源时序的重要性和设计方法
+- [ ] 掌握典型电源架构的设计案例
+
+
+## 前置要求
+
+在开始本文学习之前，你需要：
+
+**知识要求**：
+- 了解基本的电学概念（电压、电流、功率）
+- 熟悉欧姆定律和功率计算公式
+- 了解常见的电源元件（LDO、DC-DC、电容等）
+- 有一定的电路图阅读能力
+
+**技能要求**：
+- 能够阅读电路原理图
+- 了解基本的电路符号
+- 熟悉常用的单位换算（V、A、W）
+
+**推荐但非必需**：
+- 有使用万用表测量电压电流的经验
+- 了解微控制器的基本工作原理
+- 熟悉常见的嵌入式开发板
+
+## 概述
+
+电源系统是嵌入式系统的"心脏"，为所有电路提供稳定可靠的能量供应。一个设计良好的电源系统不仅能保证系统正常工作，还能提高效率、降低功耗、延长电池寿命。
+
+### 为什么电源设计如此重要
+
+1. **系统稳定性**：
+   - 电源波动会导致系统复位或死机
+   - 纹波噪声会影响模拟电路精度
+   - 电源故障可能损坏芯片
+
+2. **功耗优化**：
+   - 合理的电源架构可以降低功耗
+   - 电源效率直接影响电池寿命
+   - 功耗管理是移动设备的关键
+
+3. **成本控制**：
+   - 电源元件占据较大成本比例
+   - 合理选型可以降低BOM成本
+   - 避免过度设计
+
+4. **EMC性能**：
+   - 电源噪声是EMI的主要来源
+   - 良好的电源设计可以改善EMC
+   - 减少后期整改成本
+
+### 电源设计的基本流程
+
+```
+需求分析 → 架构设计 → 元件选型 → 电路设计 → 仿真验证 → 原型测试 → 优化改进
+    ↓          ↓          ↓          ↓          ↓          ↓          ↓
+ 功耗预算   电源树    稳压器     PCB布局    效率分析   实测验证   性能优化
+```
+
+
+## 第一部分：电源需求分析
+
+### 什么是电源需求分析
+
+电源需求分析是电源设计的第一步，需要明确系统中所有元件的电源需求，包括电压、电流、功率等参数。
+
+**需求分析的核心内容**：
+
+1. **电压需求**：
+   - 确定所需的电压等级（3.3V、5V、12V等）
+   - 电压精度要求（±5%、±3%、±1%）
+   - 电压范围（最小值、典型值、最大值）
+
+2. **电流需求**：
+   - 静态电流（待机状态）
+   - 动态电流（工作状态）
+   - 峰值电流（瞬态负载）
+
+3. **功率需求**：
+   - 平均功耗
+   - 峰值功耗
+   - 热设计功耗（TDP）
+
+### 如何进行需求分析
+
+#### 步骤1：列出所有用电元件
+
+创建一个完整的元件清单，包括：
+
+```
+元件清单示例：
+┌──────────────┬─────────┬──────────┬──────────┬─────────┐
+│ 元件名称     │ 电压(V) │ 电流(mA) │ 功率(mW) │ 数量    │
+├──────────────┼─────────┼──────────┼──────────┼─────────┤
+│ MCU (STM32)  │ 3.3     │ 50-150   │ 165-495  │ 1       │
+│ Flash存储器  │ 3.3     │ 10-30    │ 33-99    │ 1       │
+│ 无线模块     │ 3.3     │ 20-200   │ 66-660   │ 1       │
+│ 传感器       │ 3.3     │ 1-5      │ 3-17     │ 3       │
+│ LED指示灯    │ 3.3     │ 20       │ 66       │ 2       │
+│ LCD显示屏    │ 3.3     │ 10-50    │ 33-165   │ 1       │
+└──────────────┴─────────┴──────────┴──────────┴─────────┘
+```
+
+#### 步骤2：计算总功耗
+
+**功耗计算公式**：
+
+```c
+/**
+ * @brief  计算系统总功耗
+ * @param  components: 元件数组
+ * @param  count: 元件数量
+ * @param  mode: 工作模式（0=待机，1=正常，2=峰值）
+ * @retval 总功耗（W）
+ */
+typedef struct {
+    char name[32];
+    float voltage;      // 电压(V)
+    float current_idle; // 待机电流(A)
+    float current_norm; // 正常电流(A)
+    float current_peak; // 峰值电流(A)
+    int quantity;       // 数量
+} Component;
+
+float calculate_total_power(Component *components, int count, int mode) {
+    float total_power = 0;
+    
+    printf("\n功耗计算 - 模式: %s\n", 
+           mode == 0 ? "待机" : (mode == 1 ? "正常" : "峰值"));
+    printf("%-20s %8s %10s %10s\n", 
+           "元件", "电压(V)", "电流(A)", "功率(W)");
+    printf("─────────────────────────────────────────────\n");
+    
+    for (int i = 0; i < count; i++) {
+        float current;
+        switch(mode) {
+            case 0: current = components[i].current_idle; break;
+            case 1: current = components[i].current_norm; break;
+            case 2: current = components[i].current_peak; break;
+            default: current = components[i].current_norm;
+        }
+        
+        float power = components[i].voltage * current * components[i].quantity;
+        total_power += power;
+        
+        printf("%-20s %8.2f %10.3f %10.3f\n",
+               components[i].name,
+               components[i].voltage,
+               current * components[i].quantity,
+               power);
+    }
+    
+    printf("─────────────────────────────────────────────\n");
+    printf("总功耗: %.3f W\n", total_power);
+    
+    return total_power;
+}
+```
+
+
+#### 步骤3：确定电压等级
+
+**常见电压等级**：
+
+```
+嵌入式系统常用电压：
+- 1.2V：DDR内存、部分MCU内核
+- 1.8V：某些MCU内核、Flash存储器
+- 2.5V：部分FPGA内核
+- 3.3V：最常用，MCU、外设、通信接口
+- 5.0V：USB、部分传感器、电机驱动
+- 12V：电机、继电器、某些模拟电路
+- 24V：工业设备、电机驱动
+```
+
+**电压等级选择原则**：
+
+1. **尽量减少电压等级**：
+   - 每增加一个电压等级，就需要一个稳压器
+   - 增加成本和复杂度
+   - 增加PCB面积
+
+2. **考虑兼容性**：
+   - 3.3V和5V是最常用的电压
+   - 优先选择3.3V（现代芯片主流）
+   - 5V用于需要兼容老设备的场合
+
+3. **考虑效率**：
+   - 电压差越大，线性稳压器效率越低
+   - 大压差应使用DC-DC转换器
+
+#### 步骤4：考虑余量
+
+**设计余量原则**：
+
+```c
+/*
+ * 电源设计余量建议
+ * 
+ * 电流余量：
+ * - 正常工作：实际电流 × 1.2 - 1.5
+ * - 峰值电流：实际电流 × 1.5 - 2.0
+ * 
+ * 功率余量：
+ * - 稳压器：实际功率 × 1.3 - 1.5
+ * - 电源适配器：实际功率 × 1.5 - 2.0
+ * 
+ * 电压精度：
+ * - 数字电路：±5% 通常足够
+ * - 模拟电路：±3% 或更高
+ * - 精密电路：±1% 或更高
+ */
+
+/**
+ * @brief  计算所需电源容量（含余量）
+ * @param  actual_power: 实际功耗（W）
+ * @param  margin_factor: 余量系数（1.2-2.0）
+ * @retval 所需电源容量（W）
+ */
+float calculate_power_capacity(float actual_power, float margin_factor) {
+    float capacity = actual_power * margin_factor;
+    
+    printf("实际功耗: %.2f W\n", actual_power);
+    printf("余量系数: %.1f\n", margin_factor);
+    printf("所需容量: %.2f W\n", capacity);
+    printf("余量: %.2f W (%.0f%%)\n", 
+           capacity - actual_power,
+           (margin_factor - 1) * 100);
+    
+    return capacity;
+}
+
+// 使用示例
+void power_margin_example(void) {
+    // 实际功耗2W，留30%余量
+    float capacity = calculate_power_capacity(2.0, 1.3);
+    // 结果：2.6W，选择3W或5W电源
+}
+```
+
+
+## 第二部分：电源架构设计
+
+### 什么是电源架构
+
+电源架构是指从输入电源到各个负载之间的电源转换和分配方案。一个好的电源架构应该：
+
+1. **高效率**：减少能量损耗
+2. **低成本**：元件数量少，成本低
+3. **高可靠性**：稳定可靠，故障率低
+4. **易于实现**：设计简单，调试方便
+
+### 常见电源架构类型
+
+#### 1. 单级架构
+
+**适用场景**：
+- 简单系统，只需一个电压等级
+- 输入输出电压差不大
+- 功耗较小
+
+**架构示例**：
+
+```
+输入电源 ──→ LDO/DC-DC ──→ 3.3V ──→ 所有负载
+```
+
+**优点**：
+- 结构简单
+- 成本低
+- 调试容易
+
+**缺点**：
+- 灵活性差
+- 不适合多电压系统
+- 效率可能不高
+
+#### 2. 多级架构
+
+**适用场景**：
+- 需要多个电压等级
+- 输入输出电压差较大
+- 功耗较大
+
+**架构示例**：
+
+```
+输入电源(12V) ──→ DC-DC ──→ 5V ──┬──→ USB设备
+                                  │
+                                  ├──→ LDO ──→ 3.3V ──→ MCU
+                                  │
+                                  └──→ LDO ──→ 1.8V ──→ Flash
+```
+
+**优点**：
+- 灵活性高
+- 可以优化每级效率
+- 适合复杂系统
+
+**缺点**：
+- 成本较高
+- 设计复杂
+- 占用空间大
+
+#### 3. 分布式架构
+
+**适用场景**：
+- 大型系统
+- 多个功能模块
+- 需要独立控制
+
+**架构示例**：
+
+```
+输入电源 ──┬──→ DC-DC1 ──→ 模块A电源
+           │
+           ├──→ DC-DC2 ──→ 模块B电源
+           │
+           └──→ DC-DC3 ──→ 模块C电源
+```
+
+**优点**：
+- 模块化设计
+- 故障隔离
+- 易于扩展
+
+**缺点**：
+- 成本最高
+- 设计最复杂
+- 需要更多空间
+
+### 电源架构设计原则
+
+#### 原则1：从高到低
+
+```
+推荐：12V → 5V → 3.3V → 1.8V
+不推荐：12V → 1.8V（压差太大，效率低）
+```
+
+**原因**：
+- 逐级降压可以提高效率
+- 减少每级的压差
+- 降低热量产生
+
+#### 原则2：大电流用DC-DC
+
+```c
+/*
+ * LDO vs DC-DC 选择指南
+ * 
+ * 使用LDO的条件：
+ * - 压差小（<2V）
+ * - 电流小（<500mA）
+ * - 需要低噪声
+ * - 成本敏感
+ * 
+ * 使用DC-DC的条件：
+ * - 压差大（>2V）
+ * - 电流大（>500mA）
+ * - 需要高效率
+ * - 电池供电
+ * 
+ * 效率对比：
+ * LDO效率 = Vout / Vin
+ * DC-DC效率 = 85% - 95%
+ */
+
+/**
+ * @brief  计算LDO和DC-DC的效率和功耗
+ * @param  vin: 输入电压（V）
+ * @param  vout: 输出电压（V）
+ * @param  iout: 输出电流（A）
+ * @param  dcdc_eff: DC-DC效率（0-1）
+ */
+void compare_regulator_efficiency(float vin, float vout, 
+                                  float iout, float dcdc_eff) {
+    // LDO计算
+    float ldo_eff = vout / vin;
+    float ldo_pout = vout * iout;
+    float ldo_pin = vin * iout;
+    float ldo_loss = ldo_pin - ldo_pout;
+    
+    // DC-DC计算
+    float dcdc_pout = vout * iout;
+    float dcdc_pin = dcdc_pout / dcdc_eff;
+    float dcdc_loss = dcdc_pin - dcdc_pout;
+    
+    printf("\n电源转换效率对比\n");
+    printf("输入电压: %.1f V\n", vin);
+    printf("输出电压: %.1f V\n", vout);
+    printf("输出电流: %.2f A\n", iout);
+    printf("输出功率: %.2f W\n\n", vout * iout);
+    
+    printf("LDO方案：\n");
+    printf("  效率: %.1f%%\n", ldo_eff * 100);
+    printf("  输入功率: %.2f W\n", ldo_pin);
+    printf("  功率损耗: %.2f W\n", ldo_loss);
+    printf("  发热: %.2f W\n\n", ldo_loss);
+    
+    printf("DC-DC方案：\n");
+    printf("  效率: %.1f%%\n", dcdc_eff * 100);
+    printf("  输入功率: %.2f W\n", dcdc_pin);
+    printf("  功率损耗: %.2f W\n", dcdc_loss);
+    printf("  节省功耗: %.2f W (%.0f%%)\n", 
+           ldo_loss - dcdc_loss,
+           (1 - dcdc_loss/ldo_loss) * 100);
+}
+
+// 使用示例
+void regulator_comparison_example(void) {
+    // 12V转3.3V，1A输出
+    compare_regulator_efficiency(12.0, 3.3, 1.0, 0.90);
+    /*
+     * 结果：
+     * LDO: 27.5%效率，8.7W损耗
+     * DC-DC: 90%效率，0.37W损耗
+     * 节省8.33W（96%）
+     */
+}
+```
+
+
+#### 原则3：噪声敏感用LDO
+
+**噪声对比**：
+
+```
+DC-DC开关噪声：
+- 频率：几十kHz到几MHz
+- 幅度：几十mV到几百mV
+- 影响：干扰模拟电路、射频电路
+
+LDO噪声：
+- 频率：很低
+- 幅度：几μV到几十μV
+- 影响：很小
+
+推荐方案：
+DC-DC → LDO → 噪声敏感电路
+（DC-DC提供高效率，LDO提供低噪声）
+```
+
+### 典型电源架构案例
+
+#### 案例1：简单MCU系统
+
+**系统需求**：
+- MCU：STM32F103，3.3V，100mA
+- 外设：传感器、LED等，3.3V，50mA
+- 输入：5V USB供电
+
+**电源架构**：
+
+```
+5V USB ──→ LDO(3.3V) ──→ MCU + 外设
+
+选型：
+- LDO：AMS1117-3.3（800mA，压差1.2V）
+- 去耦电容：10μF + 0.1μF
+
+优点：
+- 简单可靠
+- 成本低（<1元）
+- 噪声低
+
+缺点：
+- 效率66%
+- 发热0.25W（可接受）
+```
+
+#### 案例2：电池供电物联网设备
+
+**系统需求**：
+- MCU：STM32L4，3.3V，10-50mA
+- 无线模块：3.3V，峰值200mA
+- 传感器：3.3V，5mA
+- 输入：3.7V锂电池
+
+**电源架构**：
+
+```
+3.7V电池 ──→ DC-DC(3.3V) ──→ MCU + 无线 + 传感器
+
+选型：
+- DC-DC：TPS62740（300mA，效率90%）
+- 输入电容：10μF
+- 输出电容：22μF
+- 电感：2.2μH
+
+优点：
+- 高效率（90%）
+- 延长电池寿命
+- 支持宽输入范围
+
+缺点：
+- 成本稍高（~3元）
+- 有开关噪声
+```
+
+#### 案例3：多电压工业设备
+
+**系统需求**：
+- MCU：3.3V，200mA
+- FPGA内核：1.2V，1A
+- FPGA IO：3.3V，500mA
+- 模拟电路：5V，100mA
+- 电机驱动：12V，2A
+- 输入：24V工业电源
+
+**电源架构**：
+
+```
+24V输入 ──┬──→ DC-DC(12V/3A) ──→ 电机驱动
+          │
+          ├──→ DC-DC(5V/2A) ──┬──→ 模拟电路
+          │                   │
+          │                   └──→ LDO(3.3V/1A) ──→ MCU + FPGA IO
+          │
+          └──→ DC-DC(1.2V/1.5A) ──→ FPGA内核
+
+选型说明：
+- 12V：Buck DC-DC，大电流
+- 5V：Buck DC-DC，中等电流
+- 3.3V：LDO，低噪声
+- 1.2V：Buck DC-DC，大电流低压
+
+优点：
+- 效率高
+- 噪声控制好
+- 模块化设计
+
+缺点：
+- 成本较高
+- 设计复杂
+- 需要仔细规划
+```
+
+
+## 第三部分：电源树规划
+
+### 什么是电源树
+
+电源树（Power Tree）是一个图形化的表示方法，展示从输入电源到各个负载的电源分配关系。
+
+**电源树的作用**：
+
+1. **可视化**：清晰展示电源架构
+2. **分析工具**：便于分析功耗和效率
+3. **文档记录**：作为设计文档的一部分
+4. **沟通工具**：便于团队沟通
+
+### 电源树的绘制方法
+
+#### 基本元素
+
+```
+电源树符号：
+┌─────────┐
+│ 输入电源 │  矩形：电源输入
+└────┬────┘
+     │
+     ├─────→  箭头：电源流向
+     │
+┌────┴────┐
+│ 稳压器  │  矩形：电源转换
+└────┬────┘
+     │
+     ├─────→  分支：多个输出
+     │
+┌────┴────┐
+│  负载   │  矩形：用电设备
+└─────────┘
+```
+
+#### 完整示例
+
+**STM32开发板电源树**：
+
+```
+                    ┌──────────────┐
+                    │  5V USB输入  │
+                    │   (500mA)    │
+                    └──────┬───────┘
+                           │
+                    ┌──────┴───────┐
+                    │ AMS1117-3.3  │
+                    │  LDO稳压器   │
+                    │  (800mA)     │
+                    └──────┬───────┘
+                           │
+                           │ 3.3V
+                           │
+           ┌───────────────┼───────────────┐
+           │               │               │
+    ┌──────┴──────┐ ┌─────┴─────┐ ┌──────┴──────┐
+    │  STM32F103  │ │  Flash    │ │   外设      │
+    │   (100mA)   │ │  (20mA)   │ │   (50mA)    │
+    └─────────────┘ └───────────┘ └─────────────┘
+    
+    总功耗：170mA × 3.3V = 561mW
+    输入功率：170mA × 5V = 850mW
+    效率：561/850 = 66%
+```
+
+### 电源树分析
+
+#### 功耗分析
+
+```c
+/**
+ * @brief  电源树节点结构
+ */
+typedef struct PowerNode {
+    char name[32];          // 节点名称
+    float voltage_in;       // 输入电压(V)
+    float voltage_out;      // 输出电压(V)
+    float current_out;      // 输出电流(A)
+    float efficiency;       // 效率(0-1)
+    int child_count;        // 子节点数量
+    struct PowerNode *children[10];  // 子节点
+} PowerNode;
+
+/**
+ * @brief  计算电源树节点功耗
+ * @param  node: 电源树节点
+ * @param  level: 层级（用于缩进）
+ */
+void analyze_power_tree(PowerNode *node, int level) {
+    // 计算输出功率
+    float power_out = node->voltage_out * node->current_out;
+    
+    // 计算输入功率
+    float power_in;
+    if (node->efficiency > 0) {
+        power_in = power_out / node->efficiency;
+    } else {
+        power_in = power_out;
+    }
+    
+    // 计算损耗
+    float power_loss = power_in - power_out;
+    
+    // 打印节点信息
+    for (int i = 0; i < level; i++) printf("  ");
+    printf("├─ %s\n", node->name);
+    
+    for (int i = 0; i < level; i++) printf("  ");
+    printf("│  输入: %.2fV, %.3fA, %.3fW\n", 
+           node->voltage_in, power_in/node->voltage_in, power_in);
+    
+    for (int i = 0; i < level; i++) printf("  ");
+    printf("│  输出: %.2fV, %.3fA, %.3fW\n", 
+           node->voltage_out, node->current_out, power_out);
+    
+    if (node->efficiency > 0) {
+        for (int i = 0; i < level; i++) printf("  ");
+        printf("│  效率: %.1f%%, 损耗: %.3fW\n", 
+               node->efficiency * 100, power_loss);
+    }
+    
+    // 递归分析子节点
+    for (int i = 0; i < node->child_count; i++) {
+        analyze_power_tree(node->children[i], level + 1);
+    }
+}
+```
+
+
+## 第四部分：功耗预算
+
+### 什么是功耗预算
+
+功耗预算（Power Budget）是对系统各部分功耗的详细规划和分配，确保总功耗不超过电源供应能力。
+
+**功耗预算的重要性**：
+
+1. **电池寿命**：
+   - 直接影响电池供电设备的续航时间
+   - 需要精确计算平均功耗
+
+2. **热设计**：
+   - 功耗转化为热量
+   - 需要考虑散热方案
+
+3. **电源选型**：
+   - 确定所需的电源容量
+   - 避免过度设计或容量不足
+
+### 功耗预算的计算方法
+
+#### 方法1：最坏情况法
+
+**适用场景**：
+- 安全关键系统
+- 需要保证最坏情况下正常工作
+
+**计算方法**：
+
+```c
+/**
+ * @brief  最坏情况功耗计算
+ * @param  components: 元件数组
+ * @param  count: 元件数量
+ * @retval 最大功耗（W）
+ */
+float calculate_worst_case_power(Component *components, int count) {
+    float total_power = 0;
+    
+    printf("\n最坏情况功耗预算\n");
+    printf("%-20s %10s %10s\n", "元件", "电流(A)", "功率(W)");
+    printf("────────────────────────────────────────\n");
+    
+    for (int i = 0; i < count; i++) {
+        // 使用峰值电流
+        float current = components[i].current_peak * components[i].quantity;
+        float power = components[i].voltage * current;
+        total_power += power;
+        
+        printf("%-20s %10.3f %10.3f\n",
+               components[i].name, current, power);
+    }
+    
+    printf("────────────────────────────────────────\n");
+    printf("总功耗（最坏情况）: %.3f W\n", total_power);
+    
+    return total_power;
+}
+```
+
+#### 方法2：平均功耗法
+
+**适用场景**：
+- 电池供电设备
+- 需要估算电池寿命
+
+**计算方法**：
+
+```c
+/**
+ * @brief  工作模式定义
+ */
+typedef struct {
+    char name[32];
+    float duration;     // 持续时间(s)
+    float power;        // 功率(W)
+} WorkMode;
+
+/**
+ * @brief  计算平均功耗
+ * @param  modes: 工作模式数组
+ * @param  count: 模式数量
+ * @retval 平均功耗（W）
+ */
+float calculate_average_power(WorkMode *modes, int count) {
+    float total_energy = 0;
+    float total_time = 0;
+    
+    printf("\n平均功耗计算\n");
+    printf("%-15s %10s %10s %12s\n", 
+           "模式", "时间(s)", "功率(W)", "能量(J)");
+    printf("───────────────────────────────────────────────\n");
+    
+    for (int i = 0; i < count; i++) {
+        float energy = modes[i].power * modes[i].duration;
+        total_energy += energy;
+        total_time += modes[i].duration;
+        
+        printf("%-15s %10.1f %10.3f %12.3f\n",
+               modes[i].name,
+               modes[i].duration,
+               modes[i].power,
+               energy);
+    }
+    
+    float avg_power = total_energy / total_time;
+    
+    printf("───────────────────────────────────────────────\n");
+    printf("总时间: %.1f s\n", total_time);
+    printf("总能量: %.3f J\n", total_energy);
+    printf("平均功耗: %.3f W\n", avg_power);
+    
+    return avg_power;
+}
+
+// 使用示例
+void average_power_example(void) {
+    WorkMode modes[] = {
+        {"深度睡眠", 50.0, 0.001},  // 50s, 1mW
+        {"待机", 5.0, 0.010},        // 5s, 10mW
+        {"工作", 4.0, 0.500},        // 4s, 500mW
+        {"峰值", 1.0, 1.000}         // 1s, 1W
+    };
+    
+    float avg = calculate_average_power(modes, 4);
+    // 结果：约42mW平均功耗
+}
+```
+
+#### 方法3：占空比法
+
+**适用场景**：
+- 周期性工作的设备
+- 间歇工作模式
+
+**计算公式**：
+
+```c
+/**
+ * @brief  占空比功耗计算
+ * @param  power_active: 工作功耗（W）
+ * @param  power_sleep: 睡眠功耗（W）
+ * @param  duty_cycle: 占空比（0-1）
+ * @retval 平均功耗（W）
+ */
+float calculate_duty_cycle_power(float power_active, 
+                                 float power_sleep, 
+                                 float duty_cycle) {
+    float avg_power = power_active * duty_cycle + 
+                      power_sleep * (1 - duty_cycle);
+    
+    printf("\n占空比功耗计算\n");
+    printf("工作功耗: %.3f W\n", power_active);
+    printf("睡眠功耗: %.3f W\n", power_sleep);
+    printf("占空比: %.1f%%\n", duty_cycle * 100);
+    printf("平均功耗: %.3f W\n", avg_power);
+    
+    // 计算节能效果
+    float saving = (power_active - avg_power) / power_active * 100;
+    printf("节能: %.1f%%\n", saving);
+    
+    return avg_power;
+}
+
+// 使用示例
+void duty_cycle_example(void) {
+    // 工作500mW，睡眠1mW，占空比10%
+    float avg = calculate_duty_cycle_power(0.5, 0.001, 0.1);
+    // 结果：51mW，节能90%
+}
+```
+
+
+### 电池寿命计算
+
+**电池容量单位**：
+- mAh（毫安时）：常用单位
+- Wh（瓦时）：能量单位
+
+**电池寿命计算公式**：
+
+```c
+/**
+ * @brief  计算电池寿命
+ * @param  battery_capacity: 电池容量（mAh）
+ * @param  avg_current: 平均电流（mA）
+ * @param  efficiency: 放电效率（0-1，通常0.8-0.9）
+ * @retval 电池寿命（小时）
+ */
+float calculate_battery_life(float battery_capacity, 
+                             float avg_current, 
+                             float efficiency) {
+    // 考虑放电效率
+    float effective_capacity = battery_capacity * efficiency;
+    
+    // 计算寿命（小时）
+    float lifetime_hours = effective_capacity / avg_current;
+    
+    // 转换为天
+    float lifetime_days = lifetime_hours / 24;
+    
+    printf("\n电池寿命计算\n");
+    printf("电池容量: %.0f mAh\n", battery_capacity);
+    printf("平均电流: %.2f mA\n", avg_current);
+    printf("放电效率: %.0f%%\n", efficiency * 100);
+    printf("有效容量: %.0f mAh\n", effective_capacity);
+    printf("─────────────────────────\n");
+    printf("理论寿命: %.1f 小时\n", lifetime_hours);
+    printf("理论寿命: %.1f 天\n", lifetime_days);
+    
+    // 实际寿命通常是理论值的70-80%
+    printf("\n实际寿命估算:\n");
+    printf("  保守估计: %.1f 天 (70%%)\n", lifetime_days * 0.7);
+    printf("  乐观估计: %.1f 天 (80%%)\n", lifetime_days * 0.8);
+    
+    return lifetime_hours;
+}
+
+// 使用示例
+void battery_life_example(void) {
+    // 2000mAh电池，平均10mA电流，85%效率
+    float life = calculate_battery_life(2000, 10, 0.85);
+    // 结果：170小时 = 7.1天
+}
+
+/**
+ * @brief  根据目标寿命计算允许的平均电流
+ * @param  battery_capacity: 电池容量（mAh）
+ * @param  target_days: 目标寿命（天）
+ * @param  efficiency: 放电效率（0-1）
+ * @retval 允许的平均电流（mA）
+ */
+float calculate_max_current(float battery_capacity, 
+                           float target_days, 
+                           float efficiency) {
+    float effective_capacity = battery_capacity * efficiency;
+    float target_hours = target_days * 24;
+    float max_current = effective_capacity / target_hours;
+    
+    printf("\n功耗预算计算\n");
+    printf("电池容量: %.0f mAh\n", battery_capacity);
+    printf("目标寿命: %.0f 天\n", target_days);
+    printf("放电效率: %.0f%%\n", efficiency * 100);
+    printf("─────────────────────────\n");
+    printf("允许平均电流: %.2f mA\n", max_current);
+    printf("允许平均功耗: %.3f W (@ 3.7V)\n", max_current * 3.7 / 1000);
+    
+    return max_current;
+}
+
+// 使用示例
+void power_budget_example(void) {
+    // 2000mAh电池，目标30天寿命
+    float max_i = calculate_max_current(2000, 30, 0.85);
+    // 结果：2.36mA，即8.7mW @ 3.7V
+}
+```
+
+
+## 第五部分：电源时序
+
+### 什么是电源时序
+
+电源时序（Power Sequencing）是指多个电源按照特定顺序上电和断电的过程。正确的电源时序对系统稳定性至关重要。
+
+**为什么需要电源时序**：
+
+1. **避免闩锁效应**：
+   - IO电压高于内核电压可能导致闩锁
+   - 需要先上内核电源，再上IO电源
+
+2. **保护芯片**：
+   - 某些芯片对上电顺序有严格要求
+   - 违反顺序可能损坏芯片
+
+3. **系统稳定性**：
+   - 正确的时序保证系统可靠启动
+   - 避免出现未定义状态
+
+4. **功能需求**：
+   - 某些功能模块依赖其他模块先启动
+   - 需要按依赖关系排序
+
+### 常见电源时序要求
+
+#### 1. FPGA电源时序
+
+**典型要求**：
+
+```
+FPGA电源上电顺序：
+1. 内核电源（Vcore，如1.2V）
+2. 辅助电源（Vaux，如1.8V）
+3. IO电源（Vio，如3.3V）
+
+时序要求：
+- 内核电源必须先于IO电源
+- 各电源间延迟：1-100ms
+- 上电斜率：0.1-10V/ms
+
+断电顺序：
+与上电顺序相反
+```
+
+**时序图**：
+
+```
+Vcore (1.2V)  ─────┐
+                   │ 10ms
+Vaux (1.8V)   ─────┼────┐
+                   │    │ 10ms
+Vio (3.3V)    ─────┼────┼────┐
+                   │    │    │
+              t0   t1   t2   t3
+```
+
+#### 2. DDR内存电源时序
+
+**典型要求**：
+
+```
+DDR3电源上电顺序：
+1. VDD (1.5V) - 主电源
+2. VDDQ (1.5V) - IO电源
+3. VTT (0.75V) - 终端电源
+4. VREF (0.75V) - 参考电压
+
+时序要求：
+- VDD和VDDQ可以同时上电
+- VTT必须在VDD之后
+- 各电源间延迟：<200ms
+- 复位信号在电源稳定后拉高
+```
+
+#### 3. MCU电源时序
+
+**典型要求**：
+
+```
+多电压MCU上电顺序：
+1. 内核电源（如1.2V）
+2. IO电源（如3.3V）
+3. 模拟电源（如3.3V）
+
+时序要求：
+- 内核电源先于IO电源
+- 模拟电源可以与IO同时
+- 延迟：通常无严格要求（1-10ms）
+- 复位信号在所有电源稳定后释放
+```
+
+### 电源时序实现方法
+
+#### 方法1：使用延迟电路
+
+**RC延迟**：
+
+```c
+/*
+ * RC延迟电路
+ * 
+ * EN1 ──→ 稳压器1 ──→ Vout1
+ *                      │
+ *                      ├── R ──┬── EN2 ──→ 稳压器2
+ *                              │
+ *                              C
+ *                              │
+ *                             GND
+ * 
+ * 延迟时间：t ≈ 2.2 × R × C
+ * 
+ * 示例：
+ * R = 100kΩ, C = 1μF
+ * t ≈ 2.2 × 100k × 1μ = 220ms
+ */
+
+/**
+ * @brief  计算RC延迟时间
+ * @param  R: 电阻值（Ω）
+ * @param  C: 电容值（F）
+ * @param  threshold: 阈值电压比例（0-1）
+ * @retval 延迟时间（s）
+ */
+float calculate_rc_delay_time(float R, float C, float threshold) {
+    // t = -R × C × ln(1 - threshold)
+    float delay = -R * C * log(1 - threshold);
+    
+    printf("RC延迟计算\n");
+    printf("R = %.0f Ω\n", R);
+    printf("C = %.2e F = %.1f μF\n", C, C * 1e6);
+    printf("阈值 = %.0f%%\n", threshold * 100);
+    printf("延迟时间 = %.3f s = %.0f ms\n", delay, delay * 1000);
+    
+    return delay;
+}
+
+// 使用示例
+void rc_delay_example(void) {
+    // 100kΩ, 1μF, 63%阈值
+    float delay = calculate_rc_delay_time(100000, 1e-6, 0.63);
+    // 结果：约100ms
+}
+```
+
+#### 方法2：使用时序控制芯片
+
+**专用时序芯片**：
+
+```
+常用时序控制芯片：
+- TPS65023：多路输出，可编程时序
+- LTC2937：4路时序控制
+- MAX16602：双路时序控制
+
+优点：
+- 精确控制时序
+- 可编程延迟
+- 故障检测
+- 集成度高
+
+缺点：
+- 成本较高
+- 需要额外芯片
+```
+
+#### 方法3：使用MCU控制
+
+**软件控制时序**：
+
+```c
+/**
+ * @brief  电源时序控制
+ * @note   使用GPIO控制稳压器使能引脚
+ */
+void power_sequence_control(void) {
+    printf("开始电源上电时序...\n");
+    
+    // 步骤1：使能内核电源（1.2V）
+    printf("1. 使能内核电源 (1.2V)\n");
+    GPIO_SetBits(GPIOA, GPIO_Pin_0);  // EN_VCORE = 1
+    HAL_Delay(10);  // 延迟10ms
+    
+    // 步骤2：检查内核电源是否稳定
+    if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_1) == 0) {
+        printf("   错误：内核电源未稳定！\n");
+        return;
+    }
+    printf("   内核电源稳定\n");
+    
+    // 步骤3：使能IO电源（3.3V）
+    printf("2. 使能IO电源 (3.3V)\n");
+    GPIO_SetBits(GPIOA, GPIO_Pin_2);  // EN_VIO = 1
+    HAL_Delay(10);  // 延迟10ms
+    
+    // 步骤4：检查IO电源是否稳定
+    if (GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_3) == 0) {
+        printf("   错误：IO电源未稳定！\n");
+        return;
+    }
+    printf("   IO电源稳定\n");
+    
+    // 步骤5：释放复位信号
+    printf("3. 释放复位信号\n");
+    GPIO_SetBits(GPIOA, GPIO_Pin_4);  // RESET = 1
+    HAL_Delay(1);  // 延迟1ms
+    
+    printf("电源上电时序完成！\n");
+}
+
+/**
+ * @brief  电源断电时序控制
+ */
+void power_shutdown_sequence(void) {
+    printf("开始电源断电时序...\n");
+    
+    // 步骤1：拉低复位信号
+    printf("1. 拉低复位信号\n");
+    GPIO_ResetBits(GPIOA, GPIO_Pin_4);  // RESET = 0
+    HAL_Delay(1);
+    
+    // 步骤2：关闭IO电源
+    printf("2. 关闭IO电源\n");
+    GPIO_ResetBits(GPIOA, GPIO_Pin_2);  // EN_VIO = 0
+    HAL_Delay(10);
+    
+    // 步骤3：关闭内核电源
+    printf("3. 关闭内核电源\n");
+    GPIO_ResetBits(GPIOA, GPIO_Pin_0);  // EN_VCORE = 0
+    
+    printf("电源断电时序完成！\n");
+}
+```
+
+
+### 电源时序设计要点
+
+#### 1. 确定时序要求
+
+**查阅数据手册**：
+- 芯片数据手册的"Power Supply"章节
+- 应用笔记（Application Note）
+- 参考设计（Reference Design）
+
+**关键参数**：
+- 上电顺序
+- 延迟时间
+- 上电斜率
+- 复位时序
+
+#### 2. 设计时序电路
+
+**设计检查清单**：
+
+```
+□ 确认所有电源的上电顺序
+□ 计算所需的延迟时间
+□ 选择合适的实现方法
+□ 添加电源监控功能
+□ 设计故障保护机制
+□ 考虑断电时序
+□ 预留调试接口
+```
+
+#### 3. 验证时序
+
+**测试方法**：
+
+```c
+/**
+ * @brief  电源时序测试程序
+ * @note   使用示波器监测各电源上电波形
+ */
+void test_power_sequence(void) {
+    printf("\n=== 电源时序测试 ===\n");
+    
+    // 测试项1：上电顺序
+    printf("\n测试1：上电顺序\n");
+    printf("  - 使用示波器同时监测所有电源\n");
+    printf("  - 确认上电顺序正确\n");
+    printf("  - 测量各电源间的延迟时间\n");
+    
+    // 测试项2：上电斜率
+    printf("\n测试2：上电斜率\n");
+    printf("  - 测量电压上升时间\n");
+    printf("  - 计算上电斜率 (V/ms)\n");
+    printf("  - 确认符合芯片要求\n");
+    
+    // 测试项3：复位时序
+    printf("\n测试3：复位时序\n");
+    printf("  - 确认复位信号在电源稳定后释放\n");
+    printf("  - 测量复位脉冲宽度\n");
+    printf("  - 验证系统正常启动\n");
+    
+    // 测试项4：断电时序
+    printf("\n测试4：断电时序\n");
+    printf("  - 确认断电顺序正确\n");
+    printf("  - 验证无反向供电\n");
+    printf("  - 测试多次上下电\n");
+    
+    // 测试项5：故障测试
+    printf("\n测试5：故障测试\n");
+    printf("  - 模拟电源故障\n");
+    printf("  - 验证保护机制\n");
+    printf("  - 测试恢复功能\n");
+}
+```
+
+## 第六部分：实用设计案例
+
+### 案例1：USB供电的STM32系统
+
+**系统需求**：
+- MCU：STM32F103，3.3V，100mA
+- 外设：传感器、LED等，3.3V，50mA
+- 输入：5V USB，最大500mA
+
+**设计方案**：
+
+```
+5V USB (500mA)
+    │
+    ├─── 保护电路（TVS、保险丝）
+    │
+    ├─── AMS1117-3.3 (LDO)
+    │    输入：10μF
+    │    输出：10μF + 0.1μF
+    │
+    ├─── 3.3V (150mA)
+    │
+    ├─── MCU去耦：0.1μF × 4
+    │
+    └─── 外设去耦：0.1μF × N
+
+功耗分析：
+- 输出功率：3.3V × 0.15A = 0.495W
+- 输入功率：5V × 0.15A = 0.75W
+- 效率：66%
+- 发热：0.255W（可接受）
+
+成本分析：
+- LDO：¥0.5
+- 电容：¥0.3
+- 保护器件：¥0.5
+- 总计：¥1.3
+```
+
+### 案例2：锂电池供电的物联网节点
+
+**系统需求**：
+- MCU：STM32L4，3.3V，10-50mA
+- 无线模块：3.3V，峰值200mA
+- 传感器：3.3V，5mA
+- 电池：3.7V锂电池，2000mAh
+- 目标寿命：30天
+
+**设计方案**：
+
+```
+3.7V锂电池 (2000mAh)
+    │
+    ├─── 充电管理（TP4056）
+    │
+    ├─── 保护电路（过充、过放、过流）
+    │
+    ├─── TPS62740 (Buck DC-DC)
+    │    输入：10μF
+    │    输出：22μF
+    │    电感：2.2μH
+    │    效率：90%
+    │
+    ├─── 3.3V
+    │
+    ├─── MCU + 无线 + 传感器
+    │
+    └─── 去耦电容：0.1μF × N
+
+功耗预算：
+- 深度睡眠：1mA，90%时间
+- 工作：50mA，9%时间
+- 峰值：200mA，1%时间
+- 平均电流：1×0.9 + 50×0.09 + 200×0.01 = 7.4mA
+
+电池寿命：
+- 有效容量：2000mAh × 0.85 = 1700mAh
+- 理论寿命：1700 / 7.4 = 230小时 = 9.6天
+- 实际寿命：9.6 × 0.75 = 7.2天
+
+优化方案：
+- 降低睡眠电流到0.5mA
+- 减少工作时间到5%
+- 优化后平均电流：3.2mA
+- 优化后寿命：33天（达到目标）
+```
+
+
+### 案例3：工业设备多电压系统
+
+**系统需求**：
+- MCU：3.3V，200mA
+- FPGA内核：1.2V，1A
+- FPGA IO：3.3V，500mA
+- 模拟电路：5V，100mA
+- 电机驱动：12V，2A
+- 输入：24V工业电源
+
+**设计方案**：
+
+```
+24V工业电源
+    │
+    ├─── EMI滤波（共模电感 + 电容）
+    │
+    ├─── 保护电路（TVS、保险丝）
+    │
+    ├─── Buck DC-DC (12V/3A)
+    │    │
+    │    └─── 电机驱动
+    │
+    ├─── Buck DC-DC (5V/2A)
+    │    │
+    │    ├─── 模拟电路
+    │    │
+    │    └─── LDO (3.3V/1A)
+    │         │
+    │         ├─── MCU
+    │         │
+    │         └─── FPGA IO
+    │
+    └─── Buck DC-DC (1.2V/1.5A)
+         │
+         └─── FPGA内核
+
+电源时序：
+1. 1.2V FPGA内核（t=0）
+2. 延迟10ms
+3. 3.3V FPGA IO（t=10ms）
+4. 延迟5ms
+5. 释放FPGA复位（t=15ms）
+6. 5V和12V可以随时上电
+
+功耗分析：
+- 12V：2A × 12V = 24W
+- 5V：0.1A × 5V = 0.5W
+- 3.3V：0.7A × 3.3V = 2.31W
+- 1.2V：1A × 1.2V = 1.2W
+- 总输出功率：28W
+
+效率分析：
+- 24V→12V：90%，输入26.7W
+- 24V→5V：85%，输入0.59W
+- 5V→3.3V：66%，输入3.5W
+- 24V→1.2V：80%，输入1.5W
+- 总输入功率：32.3W
+- 整体效率：28/32.3 = 87%
+
+成本分析：
+- DC-DC模块：¥15
+- LDO：¥2
+- 电容电感：¥5
+- 保护器件：¥3
+- 总计：¥25
+```
+
+## 总结
+
+本文全面介绍了嵌入式系统电源设计的基础知识。
+
+### 核心要点
+
+1. **电源需求分析**：
+   - 列出所有用电元件
+   - 计算总功耗（待机、正常、峰值）
+   - 确定电压等级
+   - 预留设计余量
+
+2. **电源架构设计**：
+   - 选择合适的架构类型
+   - 遵循从高到低原则
+   - 大电流用DC-DC，小电流用LDO
+   - 噪声敏感电路用LDO
+
+3. **电源树规划**：
+   - 绘制清晰的电源树图
+   - 分析各级功耗和效率
+   - 优化电源转换路径
+
+4. **功耗预算**：
+   - 使用合适的计算方法
+   - 考虑不同工作模式
+   - 计算电池寿命
+   - 优化功耗设计
+
+5. **电源时序**：
+   - 遵循芯片数据手册要求
+   - 选择合适的实现方法
+   - 验证时序正确性
+   - 考虑故障保护
+
+### 设计流程总结
+
+```
+1. 需求分析
+   ├─ 列出元件清单
+   ├─ 计算功耗
+   ├─ 确定电压等级
+   └─ 预留余量
+
+2. 架构设计
+   ├─ 选择架构类型
+   ├─ 选择稳压器类型
+   ├─ 绘制电源树
+   └─ 优化效率
+
+3. 详细设计
+   ├─ 选择具体器件
+   ├─ 设计外围电路
+   ├─ 设计时序控制
+   └─ 添加保护电路
+
+4. 验证测试
+   ├─ 仿真分析
+   ├─ 原型测试
+   ├─ 效率测试
+   └─ 可靠性测试
+
+5. 优化改进
+   ├─ 功耗优化
+   ├─ 成本优化
+   ├─ 性能优化
+   └─ 可靠性优化
+```
+
+### 最佳实践
+
+1. **设计原则**：
+   - 安全第一，留足余量
+   - 效率优先，降低功耗
+   - 成本控制，避免过度设计
+   - 可靠性高，考虑故障保护
+
+2. **常见错误**：
+   - ❌ 功耗计算不准确
+   - ❌ 电压余量不足
+   - ❌ 忽略电源时序
+   - ❌ 去耦电容不足
+   - ❌ 没有保护电路
+
+3. **设计建议**：
+   - ✅ 仔细阅读数据手册
+   - ✅ 参考官方参考设计
+   - ✅ 使用仿真工具验证
+   - ✅ 预留测试点和调试接口
+   - ✅ 进行充分的测试验证
+
+## 延伸阅读
+
+推荐进一步学习的内容：
+
+1. **进阶主题**：
+   - [低功耗设计技术入门](02-low-power-design.html)
+   - [电池供电系统设计要点](03-battery-powered-system.html)
+   - [电源监控与保护电路设计](04-power-monitoring.html)
+
+2. **相关知识**：
+   - [电源电路设计：LDO与DC-DC选择](../../02-hardware-design-fundamentals/beginner/04-power-supply-design.html)
+   - [动态电源管理(DPM)技术](../intermediate/02-dynamic-power-management.html)
+   - [电源完整性分析与优化](../advanced/02-power-integrity.html)
+
+3. **实践项目**：
+   - 简易电源设计项目
+   - [电池管理系统设计](../intermediate/01-bms-design.html)
+
+## 参考资料
+
+1. 《电源设计基础》- Texas Instruments
+2. 《开关电源设计》- Abraham I. Pressman
+3. 《低功耗设计方法学》- Michael Keating
+4. 各芯片厂商应用笔记（TI、ADI、Maxim等）
+5. 《Power Supply Cookbook》- Marty Brown
+
+---
+
+**练习题**：
+
+1. 计算系统功耗：
+   - MCU：3.3V，50mA
+   - 无线模块：3.3V，100mA
+   - 传感器×3：3.3V，5mA each
+   - 计算总功耗和所需电源容量（留30%余量）
+
+2. 设计电源架构：
+   - 输入：12V
+   - 需要：5V/1A，3.3V/500mA，1.8V/200mA
+   - 选择合适的稳压器类型
+   - 绘制电源树
+
+3. 计算电池寿命：
+   - 电池：2000mAh，3.7V
+   - 平均电流：10mA
+   - 放电效率：85%
+   - 计算理论寿命和实际寿命
+
+4. 设计电源时序：
+   - FPGA需要先上1.2V内核，再上3.3V IO
+   - 延迟要求：10ms
+   - 设计RC延迟电路或软件控制方案
+
+**实践任务**：
+
+1. 分析一个现有开发板的电源设计
+2. 使用万用表测量各电源电压和电流
+3. 绘制该开发板的电源树
+4. 计算各级效率和总功耗
+5. 使用示波器观察电源上电波形
+
+**下一步**：建议学习 [低功耗设计技术入门](02-low-power-design.html)，了解如何进一步降低系统功耗，延长电池寿命。
+
+---
+
+**常见问题解答**：
+
+**Q: LDO和DC-DC如何选择？**
+
+A: 主要考虑以下因素：
+- 压差：>2V优先DC-DC
+- 电流：>500mA优先DC-DC
+- 噪声：需要低噪声用LDO
+- 效率：需要高效率用DC-DC
+- 成本：LDO更便宜
+- 空间：LDO更小
+
+**Q: 电源余量留多少合适？**
+
+A: 建议：
+- 电流余量：20-50%
+- 功率余量：30-50%
+- 电压精度：根据芯片要求
+- 宁可多留，不可不足
+
+**Q: 如何降低电源噪声？**
+
+A: 方法：
+- 使用LDO代替DC-DC
+- 增加滤波电容
+- 使用LC滤波器
+- 改善PCB布局
+- 使用屏蔽措施
+
+**Q: 电源时序为什么重要？**
+
+A: 原因：
+- 避免闩锁效应
+- 保护芯片不损坏
+- 保证系统稳定启动
+- 满足芯片规格要求
+- 提高系统可靠性
+
+**Q: 如何测试电源设计？**
+
+A: 测试项目：
+- 电压精度测试
+- 纹波噪声测试
+- 负载调整率测试
+- 效率测试
+- 温升测试
+- 时序测试
+- 可靠性测试
